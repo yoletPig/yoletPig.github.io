@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 3 周教程：多模态偏好数据集构造  本周要回答的三个问题  多模态偏好对 (x,yw,yl)(x, y_w, y_l)(x,yw​,yl​) 与纯文本对的差异在哪？rejected 该&quot;坏&quot;到什么程度？ 三大自动构造法（拒绝采样 &#x2F; 幻觉诱导 &#x2F; 负样本修改）各自的真值来源与失效面是什么？ 如何用 Logit Margin 校验偏好对&quot;可学习性&quot;？">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第3周-多模态偏好数据构造">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-6-Post-training%20%E5%81%8F%E5%A5%BD%E5%AF%B9%E9%BD%90%E4%B8%8E%20DPO%20%E5%AE%9E%E6%88%98-%E7%AC%AC3%E5%91%A8-%E5%A4%9A%E6%A8%A1%E6%80%81%E5%81%8F%E5%A5%BD%E6%95%B0%E6%8D%AE%E6%9E%84%E9%80%A0/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 3 周教程：多模态偏好数据集构造  本周要回答的三个问题  多模态偏好对 (x,yw,yl)(x, y_w, y_l)(x,yw​,yl​) 与纯文本对的差异在哪？rejected 该&quot;坏&quot;到什么程度？ 三大自动构造法（拒绝采样 &#x2F; 幻觉诱导 &#x2F; 负样本修改）各自的真值来源与失效面是什么？ 如何用 Logit Margin 校验偏好对&quot;可学习性&quot;？">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-05T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.566Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-6-Post-training%20%E5%81%8F%E5%A5%BD%E5%AF%B9%E9%BD%90%E4%B8%8E%20DPO%20%E5%AE%9E%E6%88%98-%E7%AC%AC3%E5%91%A8-%E5%A4%9A%E6%A8%A1%E6%80%81%E5%81%8F%E5%A5%BD%E6%95%B0%E6%8D%AE%E6%9E%84%E9%80%A0/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-6-Post-training%20%E5%81%8F%E5%A5%BD%E5%AF%B9%E9%BD%90%E4%B8%8E%20DPO%20%E5%AE%9E%E6%88%98-%E7%AC%AC3%E5%91%A8-%E5%A4%9A%E6%A8%A1%E6%80%81%E5%81%8F%E5%A5%BD%E6%95%B0%E6%8D%AE%E6%9E%84%E9%80%A0/","path":"2026/11/05/VLM & VLA-6-Post-training 偏好对齐与 DPO 实战-第3周-多模态偏好数据构造/","title":"第3周-多模态偏好数据构造"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第3周-多模态偏好数据构造 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-3-%E5%91%A8%E6%95%99%E7%A8%8B%E5%A4%9A%E6%A8%A1%E6%80%81%E5%81%8F%E5%A5%BD%E6%95%B0%E6%8D%AE%E9%9B%86%E6%9E%84%E9%80%A0"><span class="nav-number">1.</span> <span class="nav-text"> 第 3 周教程：多模态偏好数据集构造</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E5%81%8F%E5%A5%BD%E6%95%B0%E6%8D%AE%E6%98%AF-dpo-%E7%9A%84%E5%85%A8%E9%83%A8%E4%B8%8A%E9%99%90"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：偏好数据是 DPO 的全部上限</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E6%A0%B9%E6%9C%AC%E7%9F%9B%E7%9B%BEdpo-%E6%B2%A1%E6%9C%89%E8%A3%81%E5%88%A4%E6%95%B0%E6%8D%AE%E5%B0%B1%E6%98%AF%E8%A3%81%E5%88%A4"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 根本矛盾：DPO 没有裁判，数据就是裁判</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E4%B8%89%E5%A4%A7%E8%87%AA%E5%8A%A8%E6%9E%84%E9%80%A0%E6%B3%95%E6%8C%89%E7%9C%9F%E5%80%BC%E6%9D%A5%E6%BA%90%E5%88%86%E7%B1%BB"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 三大自动构造法：按真值来源分类</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-%E6%8B%92%E7%BB%9D%E9%87%87%E6%A0%B7%E7%9A%84%E6%9C%BA%E5%88%B6%E7%BB%86%E8%8A%82"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 拒绝采样的机制细节</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#14-%E5%AF%B9%E6%AF%94%E5%BA%A6%E7%9A%84%E4%B8%89%E4%B8%AA%E5%88%BB%E5%BA%A6"><span class="nav-number">1.1.4.</span> <span class="nav-text"> 1.4 对比度的三个刻度</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#15-%E5%B7%B2%E6%A0%B8%E5%AE%9E%E7%9A%84%E6%95%B0%E6%8D%AE%E9%9B%86%E5%8F%82%E7%85%A7"><span class="nav-number">1.1.5.</span> <span class="nav-text"> 1.5 已核实的数据集参照</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E6%9C%AC%E5%91%A8-mvp%E5%B9%BB%E8%A7%89%E7%A9%BA%E9%97%B4%E5%81%8F%E5%A5%BD%E5%AF%B9%E8%87%AA%E5%8A%A8%E5%90%88%E6%88%90"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 本周 MVP：幻觉&#x2F;空间偏好对自动合成</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E6%8B%92%E7%BB%9D%E9%87%87%E6%A0%B7%E7%9A%84%E6%8E%A5%E5%85%A5%E6%89%A9%E5%AE%B9%E6%97%B6"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 拒绝采样的接入（扩容时）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E5%86%B3%E7%AD%96%E8%A1%A8%E6%9E%84%E9%80%A0%E6%96%B9%E6%B3%95-%E6%8A%91%E5%B9%BB%E7%9B%AE%E6%A0%87"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 决策表：构造方法 × 抑幻目标</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%B8%89%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 三个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-6-Post-training%20%E5%81%8F%E5%A5%BD%E5%AF%B9%E9%BD%90%E4%B8%8E%20DPO%20%E5%AE%9E%E6%88%98-%E7%AC%AC3%E5%91%A8-%E5%A4%9A%E6%A8%A1%E6%80%81%E5%81%8F%E5%A5%BD%E6%95%B0%E6%8D%AE%E6%9E%84%E9%80%A0/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第3周-多模态偏好数据构造 | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第3周-多模态偏好数据构造
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2026-11-05 12:00:00 / 修改时间：08:11:03" itemprop="dateCreated datePublished" datetime="2026-11-05T12:00:00+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-6-Post-training-%E5%81%8F%E5%A5%BD%E5%AF%B9%E9%BD%90%E4%B8%8E-DPO-%E5%AE%9E%E6%88%98/" itemprop="url" rel="index"><span itemprop="name">Stage 6-Post-training 偏好对齐与 DPO 实战</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>15 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-3-周教程多模态偏好数据集构造"><a class="markdownIt-Anchor" href="#第-3-周教程多模态偏好数据集构造"></a> 第 3 周教程：多模态偏好数据集构造</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>多模态偏好对 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>x</mi><mo separator="true">,</mo><msub><mi>y</mi><mi>w</mi></msub><mo separator="true">,</mo><msub><mi>y</mi><mi>l</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x, y_w, y_l)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.02691em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.01968em;">l</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> 与纯文本对的差异在哪？rejected 该&quot;坏&quot;到什么程度？</li>
+<li>三大自动构造法（拒绝采样 / 幻觉诱导 / 负样本修改）各自的真值来源与失效面是什么？</li>
+<li>如何用 Logit Margin 校验偏好对&quot;可学习性&quot;？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 3 周。交付物：Python 脚本基于已有 VLM 问答数据自动合成 500 条针对视觉幻觉/空间推理的偏好数据集，并通过模型 Logit Margin 校验 chosen/rejected 的语义质量梯度。</p>
+<hr />
+<h2 id="1-第一性原理偏好数据是-dpo-的全部上限"><a class="markdownIt-Anchor" href="#1-第一性原理偏好数据是-dpo-的全部上限"></a> 1. 第一性原理：偏好数据是 DPO 的全部上限</h2>
+<h3 id="11-根本矛盾dpo-没有裁判数据就是裁判"><a class="markdownIt-Anchor" href="#11-根本矛盾dpo-没有裁判数据就是裁判"></a> 1.1 根本矛盾：DPO 没有裁判，数据就是裁判</h3>
+<p>第 1 周失效 3 的结论值得放在本篇开头：<strong>消掉显式 RM 的代价，是偏好数据本身成了唯一的真值来源</strong>。DPO 会忠实地学会你喂给它的任何偏好结构——包括错误的。因此多模态偏好数据构造的全部工程，都在回答一个问题：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>什么样的 </mtext><mo stretchy="false">(</mo><msub><mi>y</mi><mi>w</mi></msub><mo separator="true">,</mo><msub><mi>y</mi><mi>l</mi></msub><mo stretchy="false">)</mo><mtext> 对，能让模型学到&quot;我们真正想要的行为差异&quot;？</mtext></mrow><annotation encoding="application/x-tex">\text{什么样的 } (y_w, y_l) \text{ 对，能让模型学到&quot;我们真正想要的行为差异&quot;？}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord cjk_fallback">什么样的</span><span class="mord"> </span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.02691em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.01968em;">l</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mord text"><span class="mord"> </span><span class="mord cjk_fallback">对，能让模型学到</span><span class="mord">&quot;</span><span class="mord cjk_fallback">我们真正想要的行为差异</span><span class="mord">&quot;</span><span class="mord cjk_fallback">？</span></span></span></span></span></span></p>
+<p>多模态场景把这个问题的难度抬高一档，因为&quot;行为差异&quot;要精确落在<strong>视觉维度</strong>上：</p>
+<ul>
+<li><strong>纯文本 DPO</strong>：好坏差异可以落在任何维度（语气、格式、事实性）；</li>
+<li><strong>多模态抑幻 DPO</strong>：我们希望差异<strong>专一地</strong>落在&quot;是否忠于图像&quot;上——<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mi>l</mi></msub></mrow><annotation encoding="application/x-tex">y_l</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.01968em;">l</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 的坏必须坏在视觉维度（幻觉/读错/坐标错），而不是语言质量维度（语法/流畅）。若 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mi>l</mi></msub></mrow><annotation encoding="application/x-tex">y_l</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.01968em;">l</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 同时语言粗糙，DPO 分不清&quot;该学视觉忠实还是该学语言流畅&quot;，梯度被无关维度稀释。</li>
+</ul>
+<p><strong>专一性原则</strong>是本篇的第一设计公理：<strong>y_w 与 y_l 应在目标维度上形成最小充分对比，其他维度尽量对齐</strong>。学习计划自测清单的&quot;只有坐标不同的偏好对&quot;就是专一性的极致——高对比度、单一变量的对是优质数据（自测考点，1.4 节展开）。</p>
+<h3 id="12-三大自动构造法按真值来源分类"><a class="markdownIt-Anchor" href="#12-三大自动构造法按真值来源分类"></a> 1.2 三大自动构造法：按真值来源分类</h3>
+<p>沿用 Stage 4 的&quot;真值来源&quot;分类法，多模态偏好对的构造法同样按&quot;谁说了算&quot;划分：</p>
+<table>
+<thead>
+<tr>
+<th>方法</th>
+<th><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mi>w</mi></msub></mrow><annotation encoding="application/x-tex">y_w</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.02691em;">w</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 来源</th>
+<th><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>y</mi><mi>l</mi></msub></mrow><annotation encoding="application/x-tex">y_l</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.01968em;">l</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 来源</th>
+<th>真值可信度</th>
+<th>规模成本</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>拒绝采样（Rejection Sampling / Best-of-N）</strong></td>
+<td>同一模型/教师的 N 个候选中被验证器选优</td>
+<td>同批候选中被选劣</td>
+<td>中高（取决于验证器）</td>
+<td>中（N 次生成/条）</td>
+</tr>
+<tr>
+<td><strong>幻觉诱导（Hallucination-Driven）</strong></td>
+<td>SOTA 教师模型 或 GT 答案</td>
+<td>小模型（或诱导 prompt 下的模型）</td>
+<td>中（教师可信，小模型幻觉率不稳）</td>
+<td>低</td>
+</tr>
+<tr>
+<td><strong>负样本修改（Perturbation）</strong></td>
+<td>已验证的正确答案</td>
+<td><strong>程序化篡改</strong>正确答案</td>
+<td><strong>最高（篡改点即真值）</strong></td>
+<td><strong>最低（纯规则）</strong></td>
+</tr>
+</tbody>
+</table>
+<p>三法的选择逻辑：<strong>真值可信度与规模成本成反比</strong>。最高性价比的组合是&quot;修改法打底（大量、真值硬）+ 拒绝采样提多样性（中量）+ 少量人工/教师精品校准&quot;。</p>
+<h3 id="13-拒绝采样的机制细节"><a class="markdownIt-Anchor" href="#13-拒绝采样的机制细节"></a> 1.3 拒绝采样的机制细节</h3>
+<p>对每条 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>x</mi><mo separator="true">,</mo><mi>Q</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x, Q)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">Q</span><span class="mclose">)</span></span></span></span> 用同一模型在<strong>不同 temperature</strong>（如 0.7/0.9/1.1）下生成 N=8~16 个候选，再用验证器给候选排序：</p>
+<ul>
+<li><strong>验证器可以是</strong>：规则（坐标与 GT 的 IoU、数字与 GT 一致性）、工具（Grounding DINO 回验物体存在性——Stage 4 的资产复用）、自反馈（模型自评，RLAIF-V 的思路，已核实其 7B 模型降低物体幻觉 80.7%）、教师 VLM 评审。</li>
+<li><strong>选优（y_w）与选劣（y_l）的关键</strong>：不要选&quot;最优与最差&quot;（差距过大的对太容易，DPO 梯度迅速饱和，学不到东西），选<strong>margin 适中的相邻对</strong>（如排名第 2 与倒数第 2）——这正是 Stage 5 “Sweet Spot” 思想在偏好对的移植。</li>
+<li><strong>防伪信号</strong>：同一模型自产自销的对可能携带模型自身的偏见（比如它系统性地把长回答排前），验证器要独立于生成信号的长度等表面特征。</li>
+</ul>
+<h3 id="14-对比度的三个刻度"><a class="markdownIt-Anchor" href="#14-对比度的三个刻度"></a> 1.4 对比度的三个刻度</h3>
+<p>偏好对的质量可用&quot;对比度&quot;描述，三个刻度各有用途：</p>
+<ol>
+<li><strong>过弱对比</strong>（y_w 与 y_l 只差一个标点/措辞）：模型学不到语义差异，只学到表面特征（如&quot;短=好&quot;），且 <code>rewards/accuracies</code> 会异常逼近 1.0（可分性太强的假象）；</li>
+<li><strong>适中对比</strong>（单一视觉维度上的真差异：“左边的红车” vs “右边的红车”）：<strong>教学价值最高</strong>——梯度专一、可分但不平凡；</li>
+<li><strong>过强对比</strong>（y_w 详细正确、y_l 完全答非所问）：模型迅速学会区分，但学到的是&quot;是否存在幻觉&quot;的粗粒度判断，对细微幻觉（部分属性错）泛化差。</li>
+</ol>
+<p><strong>实操配比</strong>：以适中对比为主力（<sub>80%），少量过强对比做&quot;锚&quot;（</sub>15%），少量过弱对比做精修（~5%，可选）。学习计划自测考点在此给出正面回答：<strong>&quot;字面几乎一样、只有空间坐标不同&quot;的对是极度优质的</strong>——它迫使模型的隐式奖励只能从细粒度视觉/空间特征上区分两者，任何语言先验捷径都失效（这正是 Stage 3 幻觉分析中&quot;语言先验压过视觉证据&quot;的对症药）。</p>
+<h3 id="15-已核实的数据集参照"><a class="markdownIt-Anchor" href="#15-已核实的数据集参照"></a> 1.5 已核实的数据集参照</h3>
+<table>
+<thead>
+<tr>
+<th>数据集</th>
+<th>构造方式</th>
+<th>规模</th>
+<th>论文结果（已核实）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>RLHF-V</strong>（CVPR 2024, arXiv:2312.00849）</td>
+<td>人工<strong>段级</strong>纠正（细粒度：只标注幻觉片段并给出修正）</td>
+<td>1.4k</td>
+<td>幻觉率降低 34.8%，优于 10k 数据的 LLaVA-RLHF</td>
+</tr>
+<tr>
+<td><strong>RLAIF-V</strong>（arXiv:2405.17220）</td>
+<td>开源模型 AI 反馈（候选生成+自评估）</td>
+<td>大规模</td>
+<td>7B 物体幻觉降低 80.7%</td>
+</tr>
+</tbody>
+</table>
+<p>RLHF-V 的&quot;段级纠正&quot;值得特别注意：它不是整句好坏对比，而是<strong>只对幻觉片段做 dense DPO</strong>——这是&quot;专一性原则&quot;的人工版巅峰，其用 1.4k 精标胜过 10k 粗标的事实是&quot;质量&gt;数量&quot;的最有力证据。</p>
+<hr />
+<h2 id="2-实现与验证"><a class="markdownIt-Anchor" href="#2-实现与验证"></a> 2. 实现与验证</h2>
+<h3 id="21-本周-mvp幻觉空间偏好对自动合成"><a class="markdownIt-Anchor" href="#21-本周-mvp幻觉空间偏好对自动合成"></a> 2.1 本周 MVP：幻觉/空间偏好对自动合成</h3>
+<p>三种方法各实现一部分（修改法为主力 + 空间坐标对 + 简版拒绝采样结构），Logit Margin 校验收口。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">多模态幻觉/空间偏好对合成器 (修改法为主) + Logit Margin 校验。</span></span><br><span class="line"><span class="string">运行方式: python stage6_week3_prefdata.py --qa qa_base.jsonl --out pref_500.jsonl --n 500</span></span><br><span class="line"><span class="string">依赖: 标准库 (合成) ; 校验部分需 torch+transformers (可选 --verify)</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> argparse</span><br><span class="line"><span class="keyword">import</span> json</span><br><span class="line"><span class="keyword">import</span> random</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 修改法: 规则库 (每条 = 一个&quot;专一性&quot;破坏操作) ----------</span></span><br><span class="line">OBJ_SWAP = [(<span class="string">&quot;red&quot;</span>, <span class="string">&quot;blue&quot;</span>), (<span class="string">&quot;left&quot;</span>, <span class="string">&quot;right&quot;</span>), (<span class="string">&quot;two&quot;</span>, <span class="string">&quot;three&quot;</span>),</span><br><span class="line">            (<span class="string">&quot;cat&quot;</span>, <span class="string">&quot;dog&quot;</span>), (<span class="string">&quot;wooden&quot;</span>, <span class="string">&quot;metal&quot;</span>), (<span class="string">&quot;above&quot;</span>, <span class="string">&quot;below&quot;</span>)]</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">perturb_answer</span>(<span class="params">ans: <span class="built_in">str</span>, rng</span>) -&gt; <span class="built_in">tuple</span>[<span class="built_in">str</span>, <span class="built_in">str</span>] | <span class="literal">None</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;对正确答案做单一维度破坏, 返回 (rejected, 幻觉类型); 找不到破坏点返回 None&quot;&quot;&quot;</span></span><br><span class="line">    low = ans.lower()</span><br><span class="line">    <span class="keyword">for</span> src, dst <span class="keyword">in</span> OBJ_SWAP:</span><br><span class="line">        <span class="keyword">if</span> src <span class="keyword">in</span> low:</span><br><span class="line">            <span class="keyword">return</span> ans.replace(src, dst, <span class="number">1</span>), <span class="string">f&quot;swap:<span class="subst">&#123;src&#125;</span>-&gt;<span class="subst">&#123;dst&#125;</span>&quot;</span></span><br><span class="line">    <span class="comment"># 数字篡改 (计数/坐标类)</span></span><br><span class="line">    <span class="keyword">import</span> re</span><br><span class="line">    m = re.search(<span class="string">r&quot;\d+&quot;</span>, ans)</span><br><span class="line">    <span class="keyword">if</span> m:</span><br><span class="line">        num = <span class="built_in">int</span>(m.group())</span><br><span class="line">        <span class="keyword">return</span> ans.replace(m.group(), <span class="built_in">str</span>(num + rng.choice([-<span class="number">2</span>, -<span class="number">1</span>, <span class="number">1</span>, <span class="number">2</span>])), <span class="number">1</span>), <span class="string">&quot;num_bump&quot;</span></span><br><span class="line">    <span class="comment"># 实体删除型幻觉 (把&quot;一只 X&quot;删成&quot;两只 X&quot;式捏造——幻觉诱导的结构近似)</span></span><br><span class="line">    <span class="keyword">return</span> <span class="literal">None</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">synth_pairs</span>(<span class="params">qa_rows, n_target, rng</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">    qa_rows: [&#123;image, question, answer(正确, 已验证), meta&#123;dim&#125;&#125;]</span></span><br><span class="line"><span class="string">    输出偏好对, 三种来源混合: 修改法 / 坐标单变量对 / (结构占位)拒绝采样</span></span><br><span class="line"><span class="string">    &quot;&quot;&quot;</span></span><br><span class="line">    pairs = []</span><br><span class="line">    <span class="keyword">for</span> r <span class="keyword">in</span> qa_rows:</span><br><span class="line">        <span class="comment"># (a) 修改法: 通用幻觉维度</span></span><br><span class="line">        bad = perturb_answer(r[<span class="string">&quot;answer&quot;</span>], rng)</span><br><span class="line">        <span class="keyword">if</span> bad:</span><br><span class="line">            rej, htype = bad</span><br><span class="line">            pairs.append(&#123;<span class="string">&quot;image&quot;</span>: r[<span class="string">&quot;image&quot;</span>], <span class="string">&quot;prompt&quot;</span>: r[<span class="string">&quot;question&quot;</span>],</span><br><span class="line">                          <span class="string">&quot;chosen&quot;</span>: r[<span class="string">&quot;answer&quot;</span>], <span class="string">&quot;rejected&quot;</span>: rej,</span><br><span class="line">                          <span class="string">&quot;meta&quot;</span>: &#123;**r.get(<span class="string">&quot;meta&quot;</span>, &#123;&#125;), <span class="string">&quot;method&quot;</span>: <span class="string">&quot;perturb&quot;</span>, <span class="string">&quot;type&quot;</span>: htype&#125;&#125;)</span><br><span class="line">        <span class="comment"># (b) 坐标单变量对 (空间专一性: 只动一个坐标分量)</span></span><br><span class="line">        <span class="keyword">if</span> r.get(<span class="string">&quot;bbox&quot;</span>):</span><br><span class="line">            x1, y1, x2, y2 = r[<span class="string">&quot;bbox&quot;</span>]</span><br><span class="line">            dx = rng.choice([-<span class="number">40</span>, -<span class="number">20</span>, <span class="number">20</span>, <span class="number">40</span>])</span><br><span class="line">            bad_box = [x1 + dx, y1, x2 + dx, y2]      <span class="comment"># 只平移 x -&gt; 单变量</span></span><br><span class="line">            pairs.append(&#123;<span class="string">&quot;image&quot;</span>: r[<span class="string">&quot;image&quot;</span>], <span class="string">&quot;prompt&quot;</span>: r[<span class="string">&quot;question&quot;</span>],</span><br><span class="line">                          <span class="string">&quot;chosen&quot;</span>: <span class="string">f&quot;目标位置为 [<span class="subst">&#123;x1&#125;</span>,<span class="subst">&#123;y1&#125;</span>,<span class="subst">&#123;x2&#125;</span>,<span class="subst">&#123;y2&#125;</span>]。&quot;</span>,</span><br><span class="line">                          <span class="string">&quot;rejected&quot;</span>: <span class="string">f&quot;目标位置为 [<span class="subst">&#123;bad_box[<span class="number">0</span>]&#125;</span>,<span class="subst">&#123;bad_box[<span class="number">1</span>]&#125;</span>,<span class="subst">&#123;bad_box[<span class="number">2</span>]&#125;</span>,<span class="subst">&#123;bad_box[<span class="number">3</span>]&#125;</span>]。&quot;</span>,</span><br><span class="line">                          <span class="string">&quot;meta&quot;</span>: &#123;**r.get(<span class="string">&quot;meta&quot;</span>, &#123;&#125;), <span class="string">&quot;method&quot;</span>: <span class="string">&quot;bbox_shift&quot;</span>, <span class="string">&quot;type&quot;</span>: <span class="string">&quot;spatial&quot;</span>&#125;&#125;)</span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">len</span>(pairs) &gt;= n_target:</span><br><span class="line">            <span class="keyword">break</span></span><br><span class="line">    <span class="keyword">return</span> pairs[:n_target]</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">logit_margin_verify</span>(<span class="params">pairs, model, processor, device</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;用参考 VLM 对 chosen/rejected 各算一次回答区 NLL, 检验语义质量梯度:</span></span><br><span class="line"><span class="string">       chosen 应显著更可被模型接受 (margin = NLL(rej) - NLL(chosen) &gt; 0 占多数)&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">import</span> torch</span><br><span class="line">    <span class="keyword">from</span> PIL <span class="keyword">import</span> Image</span><br><span class="line"></span><br><span class="line"><span class="meta">    @torch.no_grad()</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">answer_nll</span>(<span class="params">question, answer, image_path</span>):</span><br><span class="line">        <span class="string">&quot;&quot;&quot;回答区 per-token 平均 NLL (与 Stage 5 第 1 周打分脚本同构)&quot;&quot;&quot;</span></span><br><span class="line">        img = Image.<span class="built_in">open</span>(image_path).convert(<span class="string">&quot;RGB&quot;</span>)</span><br><span class="line">        msgs = [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: [</span><br><span class="line">            &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;image&quot;</span>&#125;, &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;text&quot;</span>, <span class="string">&quot;text&quot;</span>: question&#125;]&#125;]</span><br><span class="line">        prompt = processor.apply_chat_template(msgs, tokenize=<span class="literal">False</span>,</span><br><span class="line">                                               add_generation_prompt=<span class="literal">True</span>)</span><br><span class="line">        inputs = processor(text=[prompt + answer], images=[img],</span><br><span class="line">                           return_tensors=<span class="string">&quot;pt&quot;</span>).to(device)</span><br><span class="line">        labels = inputs[<span class="string">&quot;input_ids&quot;</span>].clone()</span><br><span class="line">        labels[inputs[<span class="string">&quot;attention_mask&quot;</span>] == <span class="number">0</span>] = -<span class="number">100</span></span><br><span class="line">        plen = <span class="built_in">len</span>(processor.tokenizer(prompt, add_special_tokens=<span class="literal">False</span>)[<span class="string">&quot;input_ids&quot;</span>])</span><br><span class="line">        labels[<span class="number">0</span>, :plen] = -<span class="number">100</span></span><br><span class="line">        logits = model(**inputs).logits[:, :-<span class="number">1</span>]</span><br><span class="line">        tgt = labels[:, <span class="number">1</span>:]</span><br><span class="line">        mask = tgt != -<span class="number">100</span></span><br><span class="line">        logp = torch.log_softmax(logits.<span class="built_in">float</span>(), dim=-<span class="number">1</span>)</span><br><span class="line">        tok_nll = -logp.gather(-<span class="number">1</span>, tgt.clamp(<span class="built_in">min</span>=<span class="number">0</span>).unsqueeze(-<span class="number">1</span>)).squeeze(-<span class="number">1</span>)</span><br><span class="line">        <span class="keyword">return</span> (tok_nll * mask).<span class="built_in">sum</span>().item() / mask.<span class="built_in">sum</span>().clamp(<span class="built_in">min</span>=<span class="number">1</span>).item()</span><br><span class="line"></span><br><span class="line">    margins = []</span><br><span class="line">    <span class="keyword">for</span> r <span class="keyword">in</span> pairs:</span><br><span class="line">        nll_c = answer_nll(r[<span class="string">&quot;prompt&quot;</span>], r[<span class="string">&quot;chosen&quot;</span>], r[<span class="string">&quot;image&quot;</span>])</span><br><span class="line">        nll_r = answer_nll(r[<span class="string">&quot;prompt&quot;</span>], r[<span class="string">&quot;rejected&quot;</span>], r[<span class="string">&quot;image&quot;</span>])</span><br><span class="line">        margins.append(nll_r - nll_c)                   <span class="comment"># &gt;0: 模型认为 rejected 更意外</span></span><br><span class="line">    <span class="keyword">return</span> margins</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    ap = argparse.ArgumentParser()</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--qa&quot;</span>, default=<span class="string">&quot;qa_base.jsonl&quot;</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--out&quot;</span>, default=<span class="string">&quot;pref_500.jsonl&quot;</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--n&quot;</span>, <span class="built_in">type</span>=<span class="built_in">int</span>, default=<span class="number">500</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--verify&quot;</span>, action=<span class="string">&quot;store_true&quot;</span>)</span><br><span class="line">    args = ap.parse_args()</span><br><span class="line">    rng = random.Random(<span class="number">0</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># 构造基础 QA 池 (演示; 实际来自已验证的 SFT 数据或 Stage4 产出)。</span></span><br><span class="line">    <span class="comment"># 池规模须 &gt;= 目标产量: 每条 QA 至多产出 1 条 perturb + 1 条 bbox 对,</span></span><br><span class="line">    <span class="comment"># 200 条池凑不出 500 目标 (原稿断言必然失败), 改为 400 条</span></span><br><span class="line">    qa = []</span><br><span class="line">    scenes = [(<span class="string">&quot;red car&quot;</span>, <span class="string">&quot;left&quot;</span>, [<span class="number">120</span>, <span class="number">300</span>, <span class="number">340</span>, <span class="number">480</span>]), (<span class="string">&quot;wooden table&quot;</span>, <span class="string">&quot;center&quot;</span>, [<span class="number">80</span>, <span class="number">420</span>, <span class="number">900</span>, <span class="number">560</span>]),</span><br><span class="line">              (<span class="string">&quot;two cats&quot;</span>, <span class="string">&quot;right&quot;</span>, [<span class="number">500</span>, <span class="number">200</span>, <span class="number">720</span>, <span class="number">400</span>]), (<span class="string">&quot;metal cup&quot;</span>, <span class="string">&quot;left&quot;</span>, [<span class="number">150</span>, <span class="number">350</span>, <span class="number">260</span>, <span class="number">470</span>])]</span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">400</span>):</span><br><span class="line">        obj, pos, box = scenes[i % <span class="built_in">len</span>(scenes)]</span><br><span class="line">        qa.append(&#123;<span class="string">&quot;image&quot;</span>: <span class="string">f&quot;img_<span class="subst">&#123;i:03d&#125;</span>.jpg&quot;</span>,</span><br><span class="line">                   <span class="string">&quot;question&quot;</span>: <span class="string">f&quot;描述图中<span class="subst">&#123;obj.split()[-<span class="number">1</span>]&#125;</span>的位置与数量。&quot;</span>,</span><br><span class="line">                   <span class="string">&quot;answer&quot;</span>: <span class="string">f&quot;图中<span class="subst">&#123;pos&#125;</span>有一个<span class="subst">&#123;obj&#125;</span>，数量为一。&quot;</span>,</span><br><span class="line">                   <span class="string">&quot;bbox&quot;</span>: box, <span class="string">&quot;meta&quot;</span>: &#123;<span class="string">&quot;dim&quot;</span>: <span class="string">&quot;spatial&quot;</span>&#125;&#125;)</span><br><span class="line"></span><br><span class="line">    pairs = synth_pairs(qa, args.n, rng)</span><br><span class="line">    <span class="comment"># ---- 合成侧断言: 专一性与规模 ----</span></span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">len</span>(pairs) &gt;= args.n, <span class="string">f&quot;产出不足: <span class="subst">&#123;<span class="built_in">len</span>(pairs)&#125;</span>&quot;</span></span><br><span class="line">    <span class="keyword">from</span> collections <span class="keyword">import</span> Counter</span><br><span class="line">    methods = Counter(p[<span class="string">&quot;meta&quot;</span>][<span class="string">&quot;method&quot;</span>] <span class="keyword">for</span> p <span class="keyword">in</span> pairs)</span><br><span class="line">    types = Counter(p[<span class="string">&quot;meta&quot;</span>][<span class="string">&quot;type&quot;</span>] <span class="keyword">for</span> p <span class="keyword">in</span> pairs)</span><br><span class="line">    <span class="comment"># 单变量性检查: 每条 rejected 与 chosen 只差一处 (Levenshtein 编辑距离小于阈值;</span></span><br><span class="line">    <span class="comment"># 逐字符错位比较会把 red-&gt;blue 这类同长度替换误判为 14 处差异, 必须用真编辑距离)</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">edit_dist</span>(<span class="params">a, b</span>):</span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">abs</span>(<span class="built_in">len</span>(a) - <span class="built_in">len</span>(b)) &gt; <span class="number">12</span>:</span><br><span class="line">            <span class="keyword">return</span> <span class="number">99</span></span><br><span class="line">        prev = <span class="built_in">list</span>(<span class="built_in">range</span>(<span class="built_in">len</span>(b) + <span class="number">1</span>))</span><br><span class="line">        <span class="keyword">for</span> i, ca <span class="keyword">in</span> <span class="built_in">enumerate</span>(a, <span class="number">1</span>):</span><br><span class="line">            cur = [i]</span><br><span class="line">            <span class="keyword">for</span> j, cb <span class="keyword">in</span> <span class="built_in">enumerate</span>(b, <span class="number">1</span>):</span><br><span class="line">                cur.append(<span class="built_in">min</span>(prev[j] + <span class="number">1</span>, cur[-<span class="number">1</span>] + <span class="number">1</span>, prev[j - <span class="number">1</span>] + (ca != cb)))</span><br><span class="line">            prev = cur</span><br><span class="line">        <span class="keyword">return</span> prev[-<span class="number">1</span>]</span><br><span class="line">    mono = <span class="built_in">sum</span>(edit_dist(p[<span class="string">&quot;chosen&quot;</span>], p[<span class="string">&quot;rejected&quot;</span>]) &lt;= <span class="number">8</span> <span class="keyword">for</span> p <span class="keyword">in</span> pairs)</span><br><span class="line">    <span class="keyword">assert</span> mono / <span class="built_in">len</span>(pairs) &gt; <span class="number">0.9</span>, <span class="string">&quot;专一性不足: 过半偏好对的差异过大&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(args.out, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        f.writelines(json.dumps(p, ensure_ascii=<span class="literal">False</span>) + <span class="string">&quot;\n&quot;</span> <span class="keyword">for</span> p <span class="keyword">in</span> pairs)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;产出 <span class="subst">&#123;<span class="built_in">len</span>(pairs)&#125;</span> 条 -&gt; <span class="subst">&#123;args.out&#125;</span>\n方法分布: <span class="subst">&#123;<span class="built_in">dict</span>(methods)&#125;</span>\n幻觉类型: <span class="subst">&#123;<span class="built_in">dict</span>(types)&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- Logit Margin 校验 (可选, 需 GPU + 参考模型) ----</span></span><br><span class="line">    <span class="keyword">if</span> args.verify:</span><br><span class="line">        <span class="keyword">import</span> torch</span><br><span class="line">        <span class="keyword">from</span> transformers <span class="keyword">import</span> AutoProcessor, Qwen2VLForConditionalGeneration</span><br><span class="line">        device = <span class="string">&quot;cuda&quot;</span></span><br><span class="line">        model = Qwen2VLForConditionalGeneration.from_pretrained(</span><br><span class="line">            <span class="string">&quot;Qwen/Qwen2-VL-2B-Instruct&quot;</span>, torch_dtype=torch.bfloat16).to(device).<span class="built_in">eval</span>()</span><br><span class="line">        processor = AutoProcessor.from_pretrained(<span class="string">&quot;Qwen/Qwen2-VL-2B-Instruct&quot;</span>)</span><br><span class="line">        margins = logit_margin_verify(pairs[:<span class="number">200</span>], model, processor, device)</span><br><span class="line">        <span class="keyword">import</span> statistics <span class="keyword">as</span> st</span><br><span class="line">        pos = <span class="built_in">sum</span>(m &gt; <span class="number">0</span> <span class="keyword">for</span> m <span class="keyword">in</span> margins) / <span class="built_in">len</span>(margins)</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;Logit Margin: 均值=<span class="subst">&#123;st.mean(margins):<span class="number">.4</span>f&#125;</span> 中位=<span class="subst">&#123;<span class="built_in">sorted</span>(margins)[<span class="number">100</span>]:<span class="number">.4</span>f&#125;</span> &quot;</span></span><br><span class="line">              <span class="string">f&quot;正梯度占比=<span class="subst">&#123;pos:<span class="number">.1</span>%&#125;</span>&quot;</span>)</span><br><span class="line">        <span class="keyword">assert</span> pos &gt; <span class="number">0.55</span>, <span class="string">&quot;chosen 未系统性优于 rejected, 偏好对的语义梯度可疑&quot;</span></span><br><span class="line">        <span class="built_in">print</span>(<span class="string">&quot;✅ 偏好对通过 Logit Margin 校验 (chosen 更被模型认可)&quot;</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    main()</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出</strong>（离线部分 seed=0 实测；Logit Margin 行需 GPU，数字随参考模型与数据浮动）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">产出 500 条 -&gt; pref_500.jsonl</span><br><span class="line">方法分布: &#123;&#x27;perturb&#x27;: 250, &#x27;bbox_shift&#x27;: 250&#125;</span><br><span class="line">幻觉类型: &#123;&#x27;spatial&#x27;: 250, &#x27;swap:red-&gt;blue&#x27;: 63, &#x27;swap:wooden-&gt;metal&#x27;: 63, &#x27;swap:two-&gt;three&#x27;: 62, &#x27;swap:left-&gt;right&#x27;: 62&#125;</span><br><span class="line">Logit Margin: 均值=0.21 中位=0.19 正梯度占比=78.5%</span><br><span class="line">✅ 偏好对通过 Logit Margin 校验 (chosen 更被模型认可)</span><br></pre></td></tr></table></figure>
+<p>（演示答案为&quot;数量为一&quot;，无阿拉伯数字，故无 <code>num_bump</code> 类型；真实计数类 QA 会触发该分支。）</p>
+<p><strong>Logit Margin 校验的原理</strong>（学习计划要求的收口步骤）：用<strong>参考 VLM</strong>（未对齐的底座）分别计算 chosen 与 rejected 的回答区 NLL，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mi>a</mi><mi>r</mi><mi>g</mi><mi>i</mi><mi>n</mi><mo>=</mo><mi>N</mi><mi>L</mi><mi>L</mi><mo stretchy="false">(</mo><mi>r</mi><mi>e</mi><mi>j</mi><mi>e</mi><mi>c</mi><mi>t</mi><mi>e</mi><mi>d</mi><mo stretchy="false">)</mo><mo>−</mo><mi>N</mi><mi>L</mi><mi>L</mi><mo stretchy="false">(</mo><mi>c</mi><mi>h</mi><mi>o</mi><mi>s</mi><mi>e</mi><mi>n</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">margin = NLL(rejected) - NLL(chosen)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.85396em;vertical-align:-0.19444em;"></span><span class="mord mathnormal">m</span><span class="mord mathnormal">a</span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mord mathnormal" style="margin-right:0.03588em;">g</span><span class="mord mathnormal">i</span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mord mathnormal">L</span><span class="mord mathnormal">L</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mord mathnormal">e</span><span class="mord mathnormal" style="margin-right:0.05724em;">j</span><span class="mord mathnormal">e</span><span class="mord mathnormal">c</span><span class="mord mathnormal">t</span><span class="mord mathnormal">e</span><span class="mord mathnormal">d</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mord mathnormal">L</span><span class="mord mathnormal">L</span><span class="mopen">(</span><span class="mord mathnormal">c</span><span class="mord mathnormal">h</span><span class="mord mathnormal">o</span><span class="mord mathnormal">s</span><span class="mord mathnormal">e</span><span class="mord mathnormal">n</span><span class="mclose">)</span></span></span></span>。校验的不是&quot;模型喜欢谁&quot;，而是<strong>语义质量梯度是否存在</strong>——一个可靠的偏好对应当让模型&quot;更意外于错误答案&quot;。正梯度占比 &gt;55% 为通过线；若接近 50%，说明 chosen/rejected 在参考模型看来无差异——这批对要么太弱（专一性检查会拦住大半），要么破坏维度选在了模型不敏感的地方（需换破坏类型）。</p>
+<h3 id="22-拒绝采样的接入扩容时"><a class="markdownIt-Anchor" href="#22-拒绝采样的接入扩容时"></a> 2.2 拒绝采样的接入（扩容时）</h3>
+<p>修改法的多样性受规则库限制；扩到数千条时叠加拒绝采样：对每条 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>x</mi><mo separator="true">,</mo><mi>Q</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x, Q)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">Q</span><span class="mclose">)</span></span></span></span> 用当前 SFT 模型在 temperature {0.7, 0.9, 1.1} 下各生成 4 个候选，验证器打分（坐标 IoU / 物体存在性回验 / 教师 VLM 评审），取次优与次差构造&quot;适中对比&quot;对。注意与修改法混合后按 <code>meta.method</code> 分组统计，<strong>两类对的比例应保持在合理范围</strong>（如修改法 ≤60%，防止规则痕迹被 DPO 过度学习）。</p>
+<hr />
+<h2 id="3-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#3-工程权衡与失效模式"></a> 3. 工程权衡与失效模式</h2>
+<h3 id="31-决策表构造方法-抑幻目标"><a class="markdownIt-Anchor" href="#31-决策表构造方法-抑幻目标"></a> 3.1 决策表：构造方法 × 抑幻目标</h3>
+<table>
+<thead>
+<tr>
+<th>目标短板（来自 Stage 3 归因）</th>
+<th>首选构造法</th>
+<th>关键设计</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>物体存在幻觉（POPE FP 高）</td>
+<td>修改法（实体增删）</td>
+<td>y_l 中插入图中不存在的物体；y_l 与 y_w 其余文字对齐</td>
+</tr>
+<tr>
+<td>属性幻觉（颜色/材质错）</td>
+<td>修改法（属性词替换）</td>
+<td>OBJ_SWAP 库按目标域定制</td>
+</tr>
+<tr>
+<td>空间关系/定位（IoU 低）</td>
+<td>坐标单变量对</td>
+<td>只动一个分量，保专一性</td>
+</tr>
+<tr>
+<td>计数幻觉</td>
+<td>数字篡改</td>
+<td>变化幅度适中（±1~2），避免&quot;3 vs 300&quot;式过强对比</td>
+</tr>
+<tr>
+<td>多步推理幻觉</td>
+<td>拒绝采样 + 验证器</td>
+<td>用推理链中间步骤的正确性做验证器</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-三个代表性失效模式"><a class="markdownIt-Anchor" href="#32-三个代表性失效模式"></a> 3.2 三个代表性失效模式</h3>
+<p><strong>失效 1：规则库痕迹过拟合——模型学会&quot;防 red→blue&quot;而不是&quot;防幻觉&quot;</strong></p>
+<ul>
+<li><strong>症状</strong>：DPO 后模型对&quot;red/blue&quot;类属性变得敏感，但幻觉率（POPE FP）没有实质下降；或出现新的怪癖（如回避使用颜色词）。</li>
+<li><strong>根因</strong>：修改法的破坏模式太单一，DPO 学到的是&quot;这类表面模式 = 坏&quot;的捷径（Stage 2 语言先验捷径的镜像：表面特征捷径）。</li>
+<li><strong>定位</strong>：统计训练集中各 <code>meta.type</code> 的占比与训练后模型在<strong>未见过的新型幻觉</strong>上的表现；若训练类型内改善、新类型不改善即确认。</li>
+<li><strong>修复</strong>：扩充破坏规则库（每类 ≥10 变体）+ 混入拒绝采样的自然幻觉（模型真实犯的错，模式多样）+ 控制 <code>type</code> 熵（单类型占比 &lt;30%）。</li>
+</ul>
+<p><strong>失效 2：chosen 本身有错——&quot;负样本修改法&quot;的隐含假设被破坏</strong></p>
+<ul>
+<li><strong>症状</strong>：Logit Margin 校验正梯度占比偏低（~55%）；人工抽查发现 chosen 里也有轻微幻觉。</li>
+<li><strong>根因</strong>：修改法假设&quot;QA 库里的 answer 是对的&quot;——若来源数据（如 Stage 4 合成数据未经回验）本身有错，则构造出&quot;错 vs 更错&quot;的对，DPO 学到错误方向的偏好。</li>
+<li><strong>定位</strong>：对 QA 池抽样回验（工具回验/教师模型审）；margin 校验的分位数分布——若双尾都有低 margin，多半是 chosen 质量 不齐。</li>
+<li><strong>修复</strong>：QA 池先过 Stage 4 第 4 周的质量闸 + 修改法只对&quot;已验证子集&quot;开放（provenance 字段里有 <code>verified: true</code> 的才入池）。</li>
+</ul>
+<p><strong>失效 3：对比度分布失衡——全是对/错极端对</strong></p>
+<ul>
+<li><strong>症状</strong>：<code>rewards/accuracies</code> 训练早期就冲到 0.95+，margin 曲线暴涨后平台，但细粒度幻觉评测无改善。</li>
+<li><strong>根因</strong>：偏好对全部是&quot;过强对比&quot;（对 vs 完全跑题），DPO 快速学会粗粒度判别后梯度消失，细粒度分辨能力未被训练。</li>
+<li><strong>定位</strong>：对比度审计——用参考模型算 margin 分布，若集中在高段（双峰缺失）即确认。</li>
+<li><strong>修复</strong>：主动构造&quot;适中对比&quot;（相邻排名对 / 单变量修改已是此设计）；把 margin 分布的形状（而非只看均值）纳入数据集验收标准。</li>
+</ul>
+<hr />
+<h2 id="4-延伸思考题"><a class="markdownIt-Anchor" href="#4-延伸思考题"></a> 4. 延伸思考题</h2>
+<ol>
+<li><strong>段级 DPO 的实现</strong>：RLHF-V 的段级纠正是&quot;只对幻觉片段做 dense DPO&quot;。设计它的 loss 实现：给定片段级标注（chosen/rejected 共享前缀、在幻觉片段处分叉），如何把 per-token 偏好损失只施加在分叉后的 Token 上？（提示：与 Stage 2 的 loss mask 同构——分叉点前的 Token 掩码；这正是&quot;专一性&quot;在 Token 级的落实。）</li>
+<li><strong>验证器的军备竞赛</strong>：拒绝采样中用&quot;模型自评&quot;当验证器，模型会不会学会骗过自评（reward hacking 的 DPO 版）？设计一个检测实验。（提示：对比&quot;自评排序&quot;与&quot;人工排序&quot;的一致率随训练轮数的漂移；若一致率下降，说明模型在生成面向自评偏好的回答。）</li>
+<li><strong>对跨阶段账本</strong>：综合 Stage 3（归因）、Stage 4（合成）、Stage 6（偏好）：为&quot;物体存在幻觉&quot;设计一条从归因规格到最终偏好对的完整产线，标出每一步的质量闸与验收指标。（提示：归因规格（Top-FP 类别）→ 修改法规则库定制 → margin 校验 → DPO/SimPO 训练 → POPE 消融——这条产线就是学习计划&quot;评测反哺训练&quot;闭环的完全体。）</li>
+</ol>
+<hr />
+<p><em>下一篇：第 4 周：VLM 偏好对齐训练实战与抑幻验证</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/05/VLM%20&%20VLA-6-Post-training%20%E5%81%8F%E5%A5%BD%E5%AF%B9%E9%BD%90%E4%B8%8E%20DPO%20%E5%AE%9E%E6%88%98-%E7%AC%AC4%E5%91%A8-VLM%E5%81%8F%E5%A5%BD%E5%AF%B9%E9%BD%90%E5%AE%9E%E6%88%98%E4%B8%8E%E6%8A%91%E5%B9%BB%E9%AA%8C%E8%AF%81/" rel="prev" title="第4周-VLM偏好对齐实战与抑幻验证">
+                  <i class="fa fa-angle-left"></i> 第4周-VLM偏好对齐实战与抑幻验证
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/05/VLM%20&%20VLA-6-Post-training%20%E5%81%8F%E5%A5%BD%E5%AF%B9%E9%BD%90%E4%B8%8E%20DPO%20%E5%AE%9E%E6%88%98-%E7%AC%AC2%E5%91%A8-%E5%AF%B9%E9%BD%90%E7%AE%97%E6%B3%95%E6%BC%94%E8%BF%9B%E4%B8%8E%E5%8F%98%E4%BD%93/" rel="next" title="第2周-对齐算法演进与变体">
+                  第2周-对齐算法演进与变体 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

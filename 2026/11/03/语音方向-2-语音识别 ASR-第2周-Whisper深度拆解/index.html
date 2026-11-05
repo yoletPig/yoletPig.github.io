@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 2 周教程：Whisper 深度拆解  本周要回答的四个问题  一段 30 秒音频，如何一步步变成 1500 个 Encoder Token？每一步的 Shape 是什么？ &lt;|transcribe|&gt;、&lt;|zh|&gt; 这些特殊 token 如何用一个模型统一 99 种语言 + 翻译 + 时间戳？ 手写推理循环里，KV cache 到底缓存了什么？为什么必须有它？ Wh">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第2周-Whisper深度拆解">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/03/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-2-%E8%AF%AD%E9%9F%B3%E8%AF%86%E5%88%AB%20ASR-%E7%AC%AC2%E5%91%A8-Whisper%E6%B7%B1%E5%BA%A6%E6%8B%86%E8%A7%A3/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 2 周教程：Whisper 深度拆解  本周要回答的四个问题  一段 30 秒音频，如何一步步变成 1500 个 Encoder Token？每一步的 Shape 是什么？ &lt;|transcribe|&gt;、&lt;|zh|&gt; 这些特殊 token 如何用一个模型统一 99 种语言 + 翻译 + 时间戳？ 手写推理循环里，KV cache 到底缓存了什么？为什么必须有它？ Wh">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-03T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.510Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="语音">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/03/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-2-%E8%AF%AD%E9%9F%B3%E8%AF%86%E5%88%AB%20ASR-%E7%AC%AC2%E5%91%A8-Whisper%E6%B7%B1%E5%BA%A6%E6%8B%86%E8%A7%A3/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/03/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-2-%E8%AF%AD%E9%9F%B3%E8%AF%86%E5%88%AB%20ASR-%E7%AC%AC2%E5%91%A8-Whisper%E6%B7%B1%E5%BA%A6%E6%8B%86%E8%A7%A3/","path":"2026/11/03/语音方向-2-语音识别 ASR-第2周-Whisper深度拆解/","title":"第2周-Whisper深度拆解"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第2周-Whisper深度拆解 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-2-%E5%91%A8%E6%95%99%E7%A8%8Bwhisper-%E6%B7%B1%E5%BA%A6%E6%8B%86%E8%A7%A3"><span class="nav-number">1.</span> <span class="nav-text"> 第 2 周教程：Whisper 深度拆解</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E7%94%A8%E5%BC%B1%E7%9B%91%E7%9D%A3%E5%A4%A7%E6%95%B0%E6%8D%AE%E6%9A%B4%E5%8A%9B%E7%A0%B4%E8%A7%A3%E9%B2%81%E6%A3%92%E6%80%A7"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：用&quot;弱监督大数据&quot;暴力破解鲁棒性</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E5%89%8D%E4%BB%A3%E7%93%B6%E9%A2%88"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 前代瓶颈</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-whisper-%E7%9A%84%E7%AD%94%E6%A1%88"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 Whisper 的答案</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-%E5%A4%9A%E4%BB%BB%E5%8A%A1%E7%BB%9F%E4%B8%80%E7%94%A8%E7%89%B9%E6%AE%8A-token-%E7%BC%96%E7%A8%8B"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 多任务统一：用特殊 token 编程</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E6%9E%B6%E6%9E%84%E4%B8%8E%E6%95%B0%E6%8D%AE%E6%B5%81%E9%80%90%E6%AD%A5%E8%BF%BD%E8%B8%AA-shape"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 架构与数据流：逐步追踪 Shape</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E6%95%B4%E4%BD%93%E7%BB%93%E6%9E%84"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 整体结构</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E7%89%B9%E5%BE%81%E6%8F%90%E5%8F%9630-%E7%A7%92-80-3000"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 特征提取：30 秒 → (80, 3000)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-cnn-%E4%B8%8B%E9%87%87%E6%A0%B7-280-3000-1500-d"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 CNN 下采样 2×：(80, 3000) → (1500, d)</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#24-encoder-%E4%B8%8E-decoder"><span class="nav-number">1.2.4.</span> <span class="nav-text"> 2.4 Encoder 与 Decoder</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%89%8B%E5%86%99%E6%8E%A8%E7%90%86%E5%BE%AA%E7%8E%AF%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 手写推理循环（交付核心）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E6%89%8B%E5%86%99"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 为什么要手写</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%B8%8E%E5%AE%98%E6%96%B9%E8%BE%93%E5%87%BA%E5%AF%B9%E9%BD%90%E9%AA%8C%E8%AF%81"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 与官方输出对齐验证</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-rtf-%E6%B5%8B%E9%87%8F%E4%BA%A4%E4%BB%98"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 RTF 测量（交付）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%B0%BA%E5%AF%B8%E8%B0%B1%E7%B3%BB%E4%B8%8E%E9%83%A8%E7%BD%B2%E8%BE%B9%E7%95%8C"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 尺寸谱系与部署边界</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E6%8E%A8%E7%90%86%E7%BB%86%E8%8A%82%E5%B7%A5%E7%A8%8B"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 推理细节工程</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#51-%E9%95%BF%E9%9F%B3%E9%A2%91%E5%A4%84%E7%90%86vad-%E5%88%86%E6%AE%B5"><span class="nav-number">1.5.1.</span> <span class="nav-text"> 5.1 长音频处理：VAD + 分段</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#52-%E8%A7%A3%E7%A0%81%E7%AD%96%E7%95%A5"><span class="nav-number">1.5.2.</span> <span class="nav-text"> 5.2 解码策略</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#53-%E6%97%B6%E9%97%B4%E6%88%B3%E5%A4%B4"><span class="nav-number">1.5.3.</span> <span class="nav-text"> 5.3 时间戳头</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#61-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.6.1.</span> <span class="nav-text"> 6.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#62-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.6.2.</span> <span class="nav-text"> 6.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.7.</span> <span class="nav-text"> 7. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.8.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/03/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-2-%E8%AF%AD%E9%9F%B3%E8%AF%86%E5%88%AB%20ASR-%E7%AC%AC2%E5%91%A8-Whisper%E6%B7%B1%E5%BA%A6%E6%8B%86%E8%A7%A3/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第2周-Whisper深度拆解 | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第2周-Whisper深度拆解
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-11-03 12:00:00" itemprop="dateCreated datePublished" datetime="2026-11-03T12:00:00+08:00">2026-11-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-05 08:11:03" itemprop="dateModified" datetime="2026-11-05T08:11:03+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91/" itemprop="url" rel="index"><span itemprop="name">语音方向</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91/Stage-2-%E8%AF%AD%E9%9F%B3%E8%AF%86%E5%88%AB-ASR/" itemprop="url" rel="index"><span itemprop="name">Stage 2-语音识别 ASR</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.3k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-2-周教程whisper-深度拆解"><a class="markdownIt-Anchor" href="#第-2-周教程whisper-深度拆解"></a> 第 2 周教程：Whisper 深度拆解</h1>
+<blockquote>
+<p><strong>本周要回答的四个问题</strong></p>
+<ol>
+<li>一段 30 秒音频，如何一步步变成 1500 个 Encoder Token？每一步的 Shape 是什么？</li>
+<li><code>&lt;|transcribe|&gt;</code>、<code>&lt;|zh|&gt;</code> 这些特殊 token 如何用一个模型统一 99 种语言 + 翻译 + 时间戳？</li>
+<li>手写推理循环里，KV cache 到底缓存了什么？为什么必须有它？</li>
+<li>Whisper 的尺寸谱系（tiny→large）如何决定云/端的部署边界？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 2 周。交付物：不用 <code>pipeline</code>，手写完整 Whisper 推理循环，打印每步 Tensor Shape，与官方输出对齐，记录 CPU/GPU 的 RTF。</p>
+<hr />
+<h2 id="1-第一性原理用弱监督大数据暴力破解鲁棒性"><a class="markdownIt-Anchor" href="#1-第一性原理用弱监督大数据暴力破解鲁棒性"></a> 1. 第一性原理：用&quot;弱监督大数据&quot;暴力破解鲁棒性</h2>
+<h3 id="11-前代瓶颈"><a class="markdownIt-Anchor" href="#11-前代瓶颈"></a> 1.1 前代瓶颈</h3>
+<p>Whisper 之前的 ASR 是&quot;窄而精&quot;：在干净、标注严格的域内数据上做到极致（如 LibriSpeech 2.7% WER），但<strong>换域即崩</strong>——口音、噪声、专业术语、低资源语言下性能暴跌。根因：训练数据太干净、太单一，模型学到了数据集的偏置而非&quot;听觉能力&quot;本身。</p>
+<h3 id="12-whisper-的答案"><a class="markdownIt-Anchor" href="#12-whisper-的答案"></a> 1.2 Whisper 的答案</h3>
+<p>OpenAI 收集了 <strong>68 万小时</strong>的多语言、带字幕互联网音频（弱监督：字幕不精确、有噪声；论文为 <a target="_blank" rel="noopener" href="https://arxiv.org/abs/2212.04356">Radford et al., 2022, arXiv:2212.04356</a>），不做精细清洗，而是用足够大的模型硬吃这些数据。核心洞察：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>数据多样性</mtext><mo>×</mo><mtext>数据规模</mtext><mtext>  </mtext><mo>≫</mo><mtext>  </mtext><mtext>标注精度</mtext></mrow><annotation encoding="application/x-tex">\text{数据多样性} \times \text{数据规模} \;\gg\; \text{标注精度}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord text"><span class="mord cjk_fallback">数据多样性</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72243em;vertical-align:-0.0391em;"></span><span class="mord text"><span class="mord cjk_fallback">数据规模</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≫</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">标注精度</span></span></span></span></span></span></p>
+<p><strong>这个式子在说什么</strong>：它不是数学等式，而是一句工程判断——对鲁棒性而言，数据的覆盖面（口音、噪声、领域）和总量，比每条标注的精确度重要得多。Whisper 团队有意放弃&quot;清洗到 LibriSpeech 那么干净&quot;，换来的是换域不崩。后缀事实：后续的 large-v3（2023-11 发布）更是用 100 万小时弱标注 + 400 万小时伪标注（用 large-v2 打的标签）继续验证这条路线。</p>
+<p>结果是一个对噪声、口音、领域都<strong>鲁棒</strong>的通用模型。这个&quot;数据工程优先于模型精巧&quot;的思路，与 VLM 时代的大规模弱监督预训练一脉相承。</p>
+<h3 id="13-多任务统一用特殊-token-编程"><a class="markdownIt-Anchor" href="#13-多任务统一用特殊-token-编程"></a> 1.3 多任务统一：用特殊 token 编程</h3>
+<p>Whisper 不用多个模型，而是用<strong>任务控制 token</strong> 在解码起始处指定行为。解码总是从 <code>&lt;|startoftranscript|&gt;</code> 开始，随后依次给出：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mo stretchy="false">⟨</mo><mi mathvariant="normal">∣</mi><mtext>startoftranscript</mtext><mi mathvariant="normal">∣</mi><mo stretchy="false">⟩</mo><mtext>  </mtext><mo stretchy="false">⟨</mo><mi mathvariant="normal">∣</mi><mtext>zh</mtext><mi mathvariant="normal">∣</mi><mo stretchy="false">⟩</mo><mtext>  </mtext><mo stretchy="false">⟨</mo><mi mathvariant="normal">∣</mi><mtext>transcribe</mtext><mi mathvariant="normal">∣</mi><mo stretchy="false">⟩</mo><mtext>  </mtext><mo stretchy="false">⟨</mo><mi mathvariant="normal">∣</mi><mtext>notimestamps</mtext><mi mathvariant="normal">∣</mi><mo stretchy="false">⟩</mo><mtext>  </mtext><mo>→</mo><mtext>  </mtext><mtext>文字</mtext></mrow><annotation encoding="application/x-tex">\langle|\text{startoftranscript}|\rangle \;\langle|\text{zh}|\rangle \;\langle|\text{transcribe}|\rangle \;\langle|\text{notimestamps}|\rangle \;\to\; \text{文字}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">⟨</span><span class="mord">∣</span><span class="mord text"><span class="mord">startoftranscript</span></span><span class="mord">∣</span><span class="mclose">⟩</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mopen">⟨</span><span class="mord">∣</span><span class="mord text"><span class="mord">zh</span></span><span class="mord">∣</span><span class="mclose">⟩</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mopen">⟨</span><span class="mord">∣</span><span class="mord text"><span class="mord">transcribe</span></span><span class="mord">∣</span><span class="mclose">⟩</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mopen">⟨</span><span class="mord">∣</span><span class="mord text"><span class="mord">notimestamps</span></span><span class="mord">∣</span><span class="mclose">⟩</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">文字</span></span></span></span></span></span></p>
+<p><strong>这行式子在干什么</strong>：它是给解码器的&quot;程序指令行&quot;。Decoder 是自回归的，每一步都在预测下一个 token——把语言、任务、时间戳开关做成词表里的特殊 token，等于让&quot;输出什么&quot;变成生成序列的一部分，模型自己&quot;读&quot;到 <code>&lt;|transcribe|&gt;</code> 就走转写分支，读到 <code>&lt;|translate|&gt;</code> 就走翻译分支：</p>
+<ul>
+<li><code>&lt;|en|&gt;</code> <code>&lt;|zh|&gt;</code> 等语言标签（99 种）→ 控制输出语言；</li>
+<li><code>&lt;|transcribe|&gt;</code> vs <code>&lt;|translate|&gt;</code> → 转写原语言，还是翻译成英文；</li>
+<li><code>&lt;|notimestamps|&gt;</code> 或省略它 → 是否输出 <code>&lt;|0.00|&gt;</code> 形式的时间戳 token。</li>
+</ul>
+<p>一个模型、多种行为，全靠前缀 token 条件化——这就是&quot;用 token 编程&quot;。</p>
+<hr />
+<h2 id="2-架构与数据流逐步追踪-shape"><a class="markdownIt-Anchor" href="#2-架构与数据流逐步追踪-shape"></a> 2. 架构与数据流：逐步追踪 Shape</h2>
+<h3 id="21-整体结构"><a class="markdownIt-Anchor" href="#21-整体结构"></a> 2.1 整体结构</h3>
+<p>Whisper 是标准的 <strong>Encoder-Decoder Transformer</strong>（不是纯 Decoder）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>波形</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>Log-Mel</mtext></mpadded></mover><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>CNN 下采样</mtext></mpadded></mover><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>Encoder</mtext></mpadded></mover><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>Decoder (AR)</mtext></mpadded></mover><mtext>文字</mtext></mrow><annotation encoding="application/x-tex">\text{波形} \xrightarrow{\text{Log-Mel}} \xrightarrow{\text{CNN 下采样}} \xrightarrow{\text{Encoder}} \xrightarrow{\text{Decoder (AR)}} \text{文字}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1191079999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">波形</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1081079999999999em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Log-Mel</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">CNN </span><span class="mord cjk_fallback mtight">下采样</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span></span><span class="base"><span class="strut" style="height:1.119108em;vertical-align:-0.01100000000000012em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1081079999999999em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Encoder</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.01100000000000012em;"><span></span></span></span></span></span></span><span class="base"><span class="strut" style="height:1.158em;vertical-align:-0.010999999999999899em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.147em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Decoder (AR)</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">文字</span></span></span></span></span></span></p>
+<h3 id="22-特征提取30-秒-80-3000"><a class="markdownIt-Anchor" href="#22-特征提取30-秒-80-3000"></a> 2.2 特征提取：30 秒 → (80, 3000)</h3>
+<ul>
+<li>输入固定 <strong>30 秒</strong>（不足补零，超过切段）；</li>
+<li>16 kHz × 30 s = 480000 样本；</li>
+<li>25 ms 窗、10 ms 移（win_length=400、hop_length=160、n_fft=400）的 80 维 Log-Mel → <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>80</mn><mo separator="true">,</mo><mn>3000</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(80, 3000)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">8</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">3</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mclose">)</span></span></span></span>。</li>
+</ul>
+<p><strong>Shape 怎么来的</strong>：帧数 = <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>480000</mn><mi mathvariant="normal">/</mi><mn>160</mn><mo>=</mo><mn>3000</mn></mrow><annotation encoding="application/x-tex">480000 / 160 = 3000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">4</span><span class="mord">8</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">/</span><span class="mord">1</span><span class="mord">6</span><span class="mord">0</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">3</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span></span></span></span>——特征提取器把&quot;每 10 ms 一帧&quot;拍平成除法；<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>80</mn></mrow><annotation encoding="application/x-tex">80</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">8</span><span class="mord">0</span></span></span></span> 是 Mel 滤波器组个数（第 1 周 Stage 1 的 Mel 频谱知识在此落地）。tiny 到 medium 都用 80 维；<strong>large-v3 改用 128 维</strong>，这是 v2→v3 少数的输入侧改动。所以完整的输入 shape 是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>1</mn><mo separator="true">,</mo><mn>80</mn><mo separator="true">,</mo><mn>3000</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(1, 80, 3000)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">8</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">3</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mclose">)</span></span></span></span>（batch=1），这就是官方 <code>WhisperFeatureExtractor</code> 输出的形状。</p>
+<h3 id="23-cnn-下采样-280-3000-1500-d"><a class="markdownIt-Anchor" href="#23-cnn-下采样-280-3000-1500-d"></a> 2.3 CNN 下采样 2×：(80, 3000) → (1500, d)</h3>
+<p>两层一维卷积 + GELU：<strong>第一层步长 1（kernel 3），第二层步长 2（kernel 3）</strong>，整体时间维减半：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mo stretchy="false">(</mo><mn>80</mn><mo separator="true">,</mo><mn>3000</mn><mo stretchy="false">)</mo><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>Conv1, stride 1</mtext></mpadded></mover><mo stretchy="false">(</mo><msub><mi>d</mi><mtext>model</mtext></msub><mo separator="true">,</mo><mn>3000</mn><mo stretchy="false">)</mo><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>Conv2, stride 2</mtext></mpadded></mover><mo stretchy="false">(</mo><mn>1500</mn><mo separator="true">,</mo><msub><mi>d</mi><mtext>model</mtext></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(80, 3000) \xrightarrow{\text{Conv1, stride 1}} (d_{\text{model}}, 3000) \xrightarrow{\text{Conv2, stride 2}} (1500, d_{\text{model}})
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.3581079999999999em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">8</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">3</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1081079999999999em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Conv1, stride 1</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.3581079999999999em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">model</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">3</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1081079999999999em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Conv2, stride 2</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mord">5</span><span class="mord">0</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">model</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span></p>
+<p><strong>这两层卷积在干什么</strong>：Transformer 的注意力是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><msup><mi>L</mi><mn>2</mn></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(L^2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> 的，3000 长度太贵；先用步长 2 的卷积把时间维砍半（3000→1500），同时把 80 维 Mel 通道混合升维到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>d</mi><mtext>model</mtext></msub></mrow><annotation encoding="application/x-tex">d_{\text{model}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">model</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>——相当于&quot;免费&quot;的一层局部特征提取（类比 Stage 1 学过的滤波器组+降采样）。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>d</mi><mtext>model</mtext></msub></mrow><annotation encoding="application/x-tex">d_{\text{model}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">model</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 随尺寸变化（small=768, large=1280）。</p>
+<p>随后加上<strong>正弦（sinusoidal）位置编码</strong>送入 Encoder——注意这是固定公式生成的正弦表，<strong>不是可学习参数</strong>（官方 <code>whisper/model.py</code> 中 Encoder 的 <code>positional_embedding</code> 是注册的 buffer；可学习位置编码在 Decoder 那一侧，易混淆，面试常考）。</p>
+<h3 id="24-encoder-与-decoder"><a class="markdownIt-Anchor" href="#24-encoder-与-decoder"></a> 2.4 Encoder 与 Decoder</h3>
+<ul>
+<li><strong>Encoder</strong>：标准 Transformer 块（Pre-LN 前置层归一化 + 末端 LayerNorm），输出 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>1500</mn><mo separator="true">,</mo><mi>d</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(1500, d)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mord">5</span><span class="mord">0</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">d</span><span class="mclose">)</span></span></span></span>；</li>
+<li><strong>Decoder</strong>：自回归生成，通过 <strong>cross-attention 看 Encoder 输出</strong>，自注意力带 <strong>KV cache</strong>。</li>
+</ul>
+<p><strong>Shape 链小结</strong>（以 small 为例，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>=</mo><mn>768</mn></mrow><annotation encoding="application/x-tex">d=768</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">7</span><span class="mord">6</span><span class="mord">8</span></span></span></span>）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><munder><munder><mn>480000</mn><mo stretchy="true">⏟</mo></munder><mtext>样本</mtext></munder><mo>→</mo><munder><munder><mrow><mo stretchy="false">(</mo><mn>80</mn><mo separator="true">,</mo><mn>3000</mn><mo stretchy="false">)</mo></mrow><mo stretchy="true">⏟</mo></munder><mtext>Log-Mel</mtext></munder><mo>→</mo><munder><munder><mrow><mo stretchy="false">(</mo><mn>1500</mn><mo separator="true">,</mo><mn>768</mn><mo stretchy="false">)</mo></mrow><mo stretchy="true">⏟</mo></munder><mtext>Encoder 输入</mtext></munder><mo>→</mo><munder><munder><mrow><mo stretchy="false">(</mo><mn>1500</mn><mo separator="true">,</mo><mn>768</mn><mo stretchy="false">)</mo></mrow><mo stretchy="true">⏟</mo></munder><mtext>Encoder 输出</mtext></munder><mo>→</mo><mtext>Decoder</mtext></mrow><annotation encoding="application/x-tex">\underbrace{480000}_{\text{样本}} \to \underbrace{(80, 3000)}_{\text{Log-Mel}} \to \underbrace{(1500, 768)}_{\text{Encoder 输入}} \to \underbrace{(1500, 768)}_{\text{Encoder 输出}} \to \text{Decoder}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.970771em;vertical-align:-1.3263310000000001em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6444399999999999em;"><span style="top:-1.6736689999999999em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">样本</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.64444em;"><span class="svg-align" style="top:-2.352em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">4</span><span class="mord">8</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.648em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.3263310000000001em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.4702159999999997em;vertical-align:-1.720216em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.75em;"><span style="top:-1.415892em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Log-Mel</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.75em;"><span class="svg-align" style="top:-2.102em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mopen">(</span><span class="mord">8</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">3</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.898em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.720216em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.334108em;vertical-align:-1.584108em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.75em;"><span style="top:-1.415892em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Encoder </span><span class="mord cjk_fallback mtight">输入</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.75em;"><span class="svg-align" style="top:-2.102em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mopen">(</span><span class="mord">1</span><span class="mord">5</span><span class="mord">0</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">7</span><span class="mord">6</span><span class="mord">8</span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.898em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.584108em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.334108em;vertical-align:-1.584108em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.75em;"><span style="top:-1.415892em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Encoder </span><span class="mord cjk_fallback mtight">输出</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.75em;"><span class="svg-align" style="top:-2.102em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mopen">(</span><span class="mord">1</span><span class="mord">5</span><span class="mord">0</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">7</span><span class="mord">6</span><span class="mord">8</span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.898em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.584108em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord text"><span class="mord">Decoder</span></span></span></span></span></span></p>
+<p><strong>自测题</strong>（第 6 周验收原题）：30 秒音频经 2× 下采样后 Encoder 序列长度 = <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>3000</mn><mi mathvariant="normal">/</mi><mn>2</mn><mo>=</mo><mn>1500</mn></mrow><annotation encoding="application/x-tex">3000/2 = 1500</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">3</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mord">/</span><span class="mord">2</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord">5</span><span class="mord">0</span><span class="mord">0</span></span></span></span>。</p>
+<hr />
+<h2 id="3-手写推理循环交付核心"><a class="markdownIt-Anchor" href="#3-手写推理循环交付核心"></a> 3. 手写推理循环（交付核心）</h2>
+<h3 id="31-为什么要手写"><a class="markdownIt-Anchor" href="#31-为什么要手写"></a> 3.1 为什么要手写</h3>
+<p><code>pipeline</code> 把特征提取、解码、KV cache 全藏起来了。手写一遍你才能回答面试必问的&quot;KV cache 怎么管理&quot;“解码每步算什么”。下面用 <code>transformers</code> 的模型权重，但<strong>自己写循环</strong>。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"><span class="keyword">from</span> transformers <span class="keyword">import</span> WhisperProcessor, WhisperForConditionalGeneration</span><br><span class="line"></span><br><span class="line">MODEL = <span class="string">&quot;openai/whisper-small&quot;</span></span><br><span class="line">device = <span class="string">&quot;cpu&quot;</span>        <span class="comment"># 本地无 GPU，CPU 推理；有云 GPU 时切 &quot;cuda&quot;</span></span><br><span class="line"></span><br><span class="line">processor = WhisperProcessor.from_pretrained(MODEL)</span><br><span class="line">model = WhisperForConditionalGeneration.from_pretrained(MODEL).to(device)</span><br><span class="line">model.<span class="built_in">eval</span>()</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 1. 载入音频（16 kHz 单声道，≤30s）----</span></span><br><span class="line"><span class="comment"># librosa.ex(&quot;trumpet&quot;) 是 librosa 自带示例（音乐，需联网下载），</span></span><br><span class="line"><span class="comment"># 这里只用于验证 Shape 与推理链路——音乐没有中文语音，识别文本本身无意义。</span></span><br><span class="line"><span class="comment"># 想测真实效果，把路径换成你自己的 16 kHz 中文录音。</span></span><br><span class="line"><span class="keyword">import</span> librosa</span><br><span class="line">wave, sr = librosa.load(librosa.ex(<span class="string">&quot;trumpet&quot;</span>), sr=<span class="number">16000</span>)</span><br><span class="line">wave = wave[:<span class="number">16000</span> * <span class="number">30</span>]</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;音频样本数: <span class="subst">&#123;<span class="built_in">len</span>(wave)&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 2. 特征提取：波形 -&gt; (80, 3000) ----</span></span><br><span class="line">inputs = processor(wave, sampling_rate=<span class="number">16000</span>, return_tensors=<span class="string">&quot;pt&quot;</span>)</span><br><span class="line">mel = inputs.input_features.to(device)          <span class="comment"># (1, 80, 3000)</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;Log-Mel shape:&quot;</span>, <span class="built_in">tuple</span>(mel.shape))      <span class="comment"># (1, 80, 3000)</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 3. Encoder 前向（一次）----</span></span><br><span class="line"><span class="keyword">with</span> torch.no_grad():</span><br><span class="line">    enc_out = model.get_encoder()(mel, return_dict=<span class="literal">True</span>)</span><br><span class="line">    enc_hidden = enc_out.last_hidden_state       <span class="comment"># (1, 1500, 768)</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;Encoder 输出:&quot;</span>, <span class="built_in">tuple</span>(enc_hidden.shape)) <span class="comment"># (1, 1500, 768)</span></span><br><span class="line"><span class="keyword">assert</span> enc_hidden.shape[<span class="number">1</span>] == <span class="number">1500</span>, <span class="string">&quot;下采样后应为 1500 帧&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 4. Decoder 自回归 + KV cache ----</span></span><br><span class="line">forced_decoder_ids = processor.get_decoder_prompt_ids(</span><br><span class="line">    language=<span class="string">&quot;zh&quot;</span>, task=<span class="string">&quot;transcribe&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">generate_step</span>(<span class="params">input_ids, past_kv, enc_hidden</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;单步解码：返回 logits 与更新后的 KV cache。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">with</span> torch.no_grad():</span><br><span class="line">        out = model.model.decoder(</span><br><span class="line">            input_ids=input_ids,</span><br><span class="line">            encoder_hidden_states=enc_hidden,</span><br><span class="line">            past_key_values=past_kv,</span><br><span class="line">            use_cache=<span class="literal">True</span>,</span><br><span class="line">        )</span><br><span class="line">    logits = model.proj_out(out.last_hidden_state)   <span class="comment"># -&gt; 词表</span></span><br><span class="line">    <span class="keyword">return</span> logits, out.past_key_values</span><br><span class="line"></span><br><span class="line"><span class="comment"># 起始 token：&lt;|startoftranscript|&gt;</span></span><br><span class="line">start_id = model.config.decoder_start_token_id</span><br><span class="line">input_ids = torch.tensor([[start_id]], device=device)</span><br><span class="line">past_kv = <span class="literal">None</span></span><br><span class="line">gen_ids = []</span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> step <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">220</span>):                    <span class="comment"># 最大解码步数</span></span><br><span class="line">    logits, past_kv = generate_step(input_ids, past_kv, enc_hidden)</span><br><span class="line">    next_logits = logits[:, -<span class="number">1</span>, :]         <span class="comment"># 取最后位置</span></span><br><span class="line">    <span class="comment"># 强制特殊 token（前几步按语言/任务约束）</span></span><br><span class="line">    <span class="comment"># forced_decoder_ids 是 (位置, token_id) 列表，位置从 1 开始计数</span></span><br><span class="line">    <span class="keyword">for</span> pos, tid <span class="keyword">in</span> forced_decoder_ids:</span><br><span class="line">        <span class="keyword">if</span> step + <span class="number">1</span> == pos:                <span class="comment"># 第 step 个新 token 处在位置 step+1</span></span><br><span class="line">            next_logits = torch.full_like(next_logits, -<span class="built_in">float</span>(<span class="string">&quot;inf&quot;</span>))</span><br><span class="line">            next_logits[<span class="number">0</span>, tid] = <span class="number">0</span></span><br><span class="line">    next_id = <span class="built_in">int</span>(next_logits.argmax(-<span class="number">1</span>))</span><br><span class="line">    gen_ids.append(next_id)</span><br><span class="line">    <span class="keyword">if</span> next_id == model.config.eos_token_id:</span><br><span class="line">        <span class="keyword">break</span></span><br><span class="line">    <span class="comment"># 关键：有 KV cache 时，下一步只喂新 token（增量输入）</span></span><br><span class="line">    input_ids = torch.tensor([[next_id]], device=device)</span><br><span class="line"></span><br><span class="line">text = processor.decode(gen_ids, skip_special_tokens=<span class="literal">True</span>)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;识别结果:&quot;</span>, text)</span><br></pre></td></tr></table></figure>
+<p><strong>关键观察点</strong>（务必在代码里打印验证）：</p>
+<ol>
+<li><strong>KV cache 的作用</strong>：第一次 <code>generate_step</code> 输入整段起始序列，之后每步 <code>input_ids</code> 只有 <strong>1 个新 token</strong>——因为历史 key/value 已缓存。若无 cache，每步要重新前向整个已生成序列，复杂度从 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mi>U</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(U)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.10903em;">U</span><span class="mclose">)</span></span></span></span> 变 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><msup><mi>U</mi><mn>2</mn></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(U^2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">U</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>。</li>
+<li><strong>cross-attention 的 KV</strong>：每步都要看 Encoder 的 1500 帧输出，这部分也被缓存。</li>
+<li><strong>强制解码</strong>：前几步按 <code>forced_decoder_ids</code> 锁定语言/任务 token，保证输出是中文转写而非翻译。</li>
+</ol>
+<h3 id="32-与官方输出对齐验证"><a class="markdownIt-Anchor" href="#32-与官方输出对齐验证"></a> 3.2 与官方输出对齐验证</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 官方 generate 作参照</span></span><br><span class="line"><span class="comment"># （新版 transformers 推荐直接传 language/task；上面那种</span></span><br><span class="line"><span class="comment">#   forced_decoder_ids 写法仍然有效，但会提示弃用警告）</span></span><br><span class="line">ref = model.generate(mel, language=<span class="string">&quot;zh&quot;</span>, task=<span class="string">&quot;transcribe&quot;</span>)</span><br><span class="line">ref_text = processor.batch_decode(ref, skip_special_tokens=<span class="literal">True</span>)[<span class="number">0</span>]</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;官方结果:&quot;</span>, ref_text)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;手写结果:&quot;</span>, text)</span><br><span class="line"><span class="comment"># 两者应高度一致（贪心下通常完全相同）</span></span><br></pre></td></tr></table></figure>
+<p>预期：贪心解码下手写与官方结果一致。若不一致，检查：① 是否漏了特殊 token 强制；② KV cache 是否正确传递；③ 终止条件。</p>
+<h3 id="33-rtf-测量交付"><a class="markdownIt-Anchor" href="#33-rtf-测量交付"></a> 3.3 RTF 测量（交付）</h3>
+<p>RTF（Real-Time Factor）= 处理时长 / 音频时长，&lt; 1 表示比实时快：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> time</span><br><span class="line">t0 = time.time()</span><br><span class="line">_ = model.generate(mel, forced_decoder_ids=forced_decoder_ids)</span><br><span class="line">cpu_time = time.time() - t0</span><br><span class="line">rtf = cpu_time / (<span class="built_in">len</span>(wave) / <span class="number">16000</span>)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;CPU 推理耗时 <span class="subst">&#123;cpu_time:<span class="number">.2</span>f&#125;</span>s, RTF = <span class="subst">&#123;rtf:<span class="number">.2</span>f&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>预期：CPU 上 small 模型 RTF 通常在 0.3–3 量级（强依赖 CPU 型号、线程数与 PyTorch 版本，<strong>务必以自己实测为准</strong>）。云 GPU 上可降到 0.05 以下。<strong>记录这个对比</strong>——它是你理解&quot;为什么端侧要换非自回归&quot;的定量依据：AR 模型在弱算力上太慢。</p>
+<hr />
+<h2 id="4-尺寸谱系与部署边界"><a class="markdownIt-Anchor" href="#4-尺寸谱系与部署边界"></a> 4. 尺寸谱系与部署边界</h2>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>参数量</th>
+<th>Mel 维</th>
+<th>Encoder 层/宽</th>
+<th>典型场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>tiny</td>
+<td>39 M</td>
+<td>80</td>
+<td>4 / 384</td>
+<td>极端端侧、唤醒级</td>
+</tr>
+<tr>
+<td>base</td>
+<td>74 M</td>
+<td>80</td>
+<td>6 / 512</td>
+<td>轻量端侧</td>
+</tr>
+<tr>
+<td>small</td>
+<td>244 M</td>
+<td>80</td>
+<td>12 / 768</td>
+<td>端侧/边缘（本教程用）</td>
+</tr>
+<tr>
+<td>medium</td>
+<td>769 M</td>
+<td>80</td>
+<td>24 / 1024</td>
+<td>云端高质量</td>
+</tr>
+<tr>
+<td>large-v3</td>
+<td>1550 M</td>
+<td><strong>128</strong></td>
+<td>32 / 1280</td>
+<td>云端最高精度</td>
+</tr>
+</tbody>
+</table>
+<p>（参数量与层数/宽度出自 Whisper 论文 [Radford et al., 2022] Table 及 <a target="_blank" rel="noopener" href="https://huggingface.co/openai/whisper-large-v3">large-v3 模型卡</a>。）</p>
+<p><strong>large-v3（2023-11 发布）相对 large-v2 的三处变化</strong>：① Mel 特征从 80 维换成 128 维；② 词表新增粤语（Cantonese）语言 token；③ 训练数据扩充到 100 万小时弱标注 + 400 万小时伪标注（large-v2 打标）。语言仍为 99 种。若你用 large-v3，<code>processor</code> 会自动用 128 维特征，<strong>但自研前端代码要相应改 <code>n_mels</code></strong>——这是迁移时最常踩的坑。</p>
+<p><strong>部署边界经验</strong>：端侧 NPU/CPU 通常止于 small；medium 以上需要 GPU（2024-10 的 large-v3-turbo 把 decoder 从 32 层砍到 4 层、参数量降到 809M，是云端兼顾速度的新选择）。这也解释了你的结课项目为何选 SenseVoice-Small（NAR，端侧友好）而非 Whisper-medium。</p>
+<hr />
+<h2 id="5-推理细节工程"><a class="markdownIt-Anchor" href="#5-推理细节工程"></a> 5. 推理细节工程</h2>
+<h3 id="51-长音频处理vad-分段"><a class="markdownIt-Anchor" href="#51-长音频处理vad-分段"></a> 5.1 长音频处理：VAD + 分段</h3>
+<p>Whisper 单次只吃 30 秒。长音频需：</p>
+<ol>
+<li><strong>VAD 分段</strong>：按静音切成 ≤30 秒片段；</li>
+<li><strong>逐段识别 + 时间戳对齐</strong>：每段带 <code>timestamps</code> 输出，拼回全局时间轴。</li>
+</ol>
+<p>不分段直接滑窗会在窗口边界切断词语，产生拼接错误。</p>
+<h3 id="52-解码策略"><a class="markdownIt-Anchor" href="#52-解码策略"></a> 5.2 解码策略</h3>
+<ul>
+<li><strong>贪心</strong>：快，端侧用；</li>
+<li><strong>beam search</strong>：官方 CLI 默认 <code>beam_size=5</code>（且仅在温度为 0 时启用；<code>transformers</code> 的 <code>generate</code> 默认贪心，需手动传 <code>num_beams</code>），更稳，云端用；</li>
+<li><strong>温度回退</strong>：置信度低时升温重试，抑制幻觉。</li>
+</ul>
+<h3 id="53-时间戳头"><a class="markdownIt-Anchor" href="#53-时间戳头"></a> 5.3 时间戳头</h3>
+<p>Whisper 用专门的<strong>时间戳 token</strong>（<code>&lt;|0.00|&gt;</code>…<code>&lt;|30.00|&gt;</code>，0.02 s 粒度）而非回归头。开时间戳模式时解码在文字与时间戳 token 间交替。</p>
+<hr />
+<h2 id="6-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#6-工程权衡与失效模式"></a> 6. 工程权衡与失效模式</h2>
+<h3 id="61-权衡"><a class="markdownIt-Anchor" href="#61-权衡"></a> 6.1 权衡</h3>
+<ul>
+<li><strong>30 秒窗口</strong>：固定窗口简化训练与位置编码，但长音频必须分段，引入边界问题；</li>
+<li><strong>AR 解码</strong>：质量高但延迟随长度增长——这正是 NAR（下周）要解决的；</li>
+<li><strong>模型尺寸</strong>：精度随尺寸单调上升，但端侧算力/内存是硬约束。</li>
+</ul>
+<h3 id="62-失效模式"><a class="markdownIt-Anchor" href="#62-失效模式"></a> 6.2 失效模式</h3>
+<ol>
+<li><strong>静音段幻觉</strong>：无语音输入时，模型&quot;脑补&quot;出重复文字或训练集片段。定位：看输入是否接近静音；修复：VAD 预过滤、温度回退、设置 <code>condition_on_previous_text=False</code>。</li>
+<li><strong>长文本重复循环</strong>：自回归陷入重复。修复：repetition penalty、no_repeat_ngram。</li>
+<li><strong>跨语言误判</strong>：中英混读时语言检测错误。修复：显式指定 <code>language</code>。</li>
+<li><strong>时间戳漂移</strong>：长音频分段拼接后时间戳错位。修复：以 VAD 全局时间为基准对齐。</li>
+</ol>
+<hr />
+<h2 id="7-延伸思考题含解析"><a class="markdownIt-Anchor" href="#7-延伸思考题含解析"></a> 7. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：30 秒 16 kHz 音频，Encoder 输入序列长度是多少？怎么算？<br />
+<strong>A</strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>30</mn><mtext>s</mtext><mo>×</mo><mn>100</mn><mtext>帧/s</mtext><mo>=</mo><mn>3000</mn></mrow><annotation encoding="application/x-tex">30\text{s} \times 100\text{帧/s} = 3000</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">3</span><span class="mord">0</span><span class="mord text"><span class="mord">s</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span><span class="mord text"><span class="mord cjk_fallback">帧</span><span class="mord">/s</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">3</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span></span></span></span> 帧（Log-Mel），经 2× 下采样 = <strong>1500</strong> 个 Encoder token。</p>
+<p><strong>Q2</strong>：KV cache 缓存了什么？没有它解码复杂度如何变化？<br />
+<strong>A</strong>：缓存已生成步的 Decoder 自注意力 key/value 与 cross-attention key/value。有 cache 每步只算新 token（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mn>1</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(1)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord">1</span><span class="mclose">)</span></span></span></span> 增量）；没有则每步重算整个前缀，总复杂度 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><msup><mi>U</mi><mn>2</mn></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(U^2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">U</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>。</p>
+<p><strong>Q3</strong>：为什么 Whisper 用固定 30 秒窗口而不是变长？<br />
+<strong>A</strong>：固定长度简化批处理与位置编码、训练高效；代价是长音频需分段。工程上通过 VAD 分段弥补。</p>
+<p><strong>Q4</strong>：特殊 token 如何做到&quot;一个模型多任务&quot;？如果让你加一个&quot;输出带标点&quot;的任务，怎么设计？<br />
+<strong>A</strong>：在解码起始处增加一个任务控制 token（如 <code>&lt;|punct|&gt;</code>），用带标点的字幕数据微调，让模型学会该前缀下输出标点。本质是条件化生成。</p>
+<p><strong>Q5</strong>：为什么 Whisper 在噪声下比传统模型鲁棒？<br />
+<strong>A</strong>：68 万小时弱监督互联网数据覆盖了海量真实噪声、口音、领域，模型学到的是泛化的听觉-文本映射而非干净域偏置。数据多样性是鲁棒性的来源。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 手写推理循环跑通，打印 Log-Mel <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>1</mn><mo separator="true">,</mo><mn>80</mn><mo separator="true">,</mo><mn>3000</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(1,80,3000)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">8</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">3</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mclose">)</span></span></span></span> → Encoder <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>1</mn><mo separator="true">,</mo><mn>1500</mn><mo separator="true">,</mo><mn>768</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(1,1500,768)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">1</span><span class="mord">5</span><span class="mord">0</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">7</span><span class="mord">6</span><span class="mord">8</span><span class="mclose">)</span></span></span></span> 的 Shape。</li>
+<li>[ ] 手写结果与官方 <code>generate</code> 对齐。</li>
+<li>[ ] 测量并记录 CPU RTF（有云 GPU 则同时记录 GPU RTF 对比）。</li>
+<li>[ ] 能闭卷回答：1500 帧怎么来的、KV cache 缓存了什么。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%AF%AD%E9%9F%B3/" rel="tag"># 语音</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/03/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-2-%E8%AF%AD%E9%9F%B3%E8%AF%86%E5%88%AB%20ASR-%E7%AC%AC3%E5%91%A8-SenseVoice%E4%B8%8EParaformer/" rel="prev" title="第3周-SenseVoice与Paraformer">
+                  <i class="fa fa-angle-left"></i> 第3周-SenseVoice与Paraformer
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/03/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-2-%E8%AF%AD%E9%9F%B3%E8%AF%86%E5%88%AB%20ASR-%E7%AC%AC1%E5%91%A8-ASR%E6%8A%80%E6%9C%AF%E5%8F%B2%E4%B8%8E%E5%AF%B9%E9%BD%90%E8%8C%83%E5%BC%8F/" rel="next" title="第1周-ASR技术史与对齐范式">
+                  第1周-ASR技术史与对齐范式 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

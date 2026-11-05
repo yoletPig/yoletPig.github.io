@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 5-6 周教程：工具箱整合与 AudioPipeline 构建  本周要回答的四个问题  前四周手写的组件，如何整合成一条可复用、可配置的标准流水线？ SpecAugment 的时间掩码&#x2F;频率掩码在做什么？为什么它几乎是 ASR 训练的标配？ torchaudio &#x2F; librosa &#x2F; soundfile 各自该用在什么场景？ 数据增广（加噪、混响、变速、变调）如何模拟真实世界的声学多样性">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第5-6周-工具箱整合与AudioPipeline构建">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-1-%E6%95%B0%E5%AD%97%E9%9F%B3%E9%A2%91%E4%B8%8E%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86%E5%9F%BA%E7%A1%80-%E7%AC%AC5-6%E5%91%A8-%E5%B7%A5%E5%85%B7%E7%AE%B1%E6%95%B4%E5%90%88%E4%B8%8EAudioPipeline%E6%9E%84%E5%BB%BA/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 5-6 周教程：工具箱整合与 AudioPipeline 构建  本周要回答的四个问题  前四周手写的组件，如何整合成一条可复用、可配置的标准流水线？ SpecAugment 的时间掩码&#x2F;频率掩码在做什么？为什么它几乎是 ASR 训练的标配？ torchaudio &#x2F; librosa &#x2F; soundfile 各自该用在什么场景？ 数据增广（加噪、混响、变速、变调）如何模拟真实世界的声学多样性">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-04T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.506Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="语音">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-1-%E6%95%B0%E5%AD%97%E9%9F%B3%E9%A2%91%E4%B8%8E%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86%E5%9F%BA%E7%A1%80-%E7%AC%AC5-6%E5%91%A8-%E5%B7%A5%E5%85%B7%E7%AE%B1%E6%95%B4%E5%90%88%E4%B8%8EAudioPipeline%E6%9E%84%E5%BB%BA/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-1-%E6%95%B0%E5%AD%97%E9%9F%B3%E9%A2%91%E4%B8%8E%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86%E5%9F%BA%E7%A1%80-%E7%AC%AC5-6%E5%91%A8-%E5%B7%A5%E5%85%B7%E7%AE%B1%E6%95%B4%E5%90%88%E4%B8%8EAudioPipeline%E6%9E%84%E5%BB%BA/","path":"2026/11/04/语音方向-1-数字音频与信号处理基础-第5-6周-工具箱整合与AudioPipeline构建/","title":"第5-6周-工具箱整合与AudioPipeline构建"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第5-6周-工具箱整合与AudioPipeline构建 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-5-6-%E5%91%A8%E6%95%99%E7%A8%8B%E5%B7%A5%E5%85%B7%E7%AE%B1%E6%95%B4%E5%90%88%E4%B8%8E-audiopipeline-%E6%9E%84%E5%BB%BA"><span class="nav-number">1.</span> <span class="nav-text"> 第 5-6 周教程：工具箱整合与 AudioPipeline 构建</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%B7%A5%E5%85%B7%E7%AE%B1%E5%85%A8%E6%99%AF%E6%AF%8F%E4%B8%AA%E5%BA%93%E8%AF%A5%E5%B9%B2%E4%BB%80%E4%B9%88"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 工具箱全景：每个库该干什么</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E9%80%89%E5%9E%8B%E7%9F%A9%E9%98%B5"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 选型矩阵</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-torchaudio-%E7%9A%84%E5%85%B3%E9%94%AE%E7%BB%84%E4%BB%B6"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 torchaudio 的关键组件</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-specaugmentasr-%E8%AE%AD%E7%BB%83%E7%9A%84%E6%A0%87%E9%85%8D%E5%A2%9E%E5%B9%BF"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. SpecAugment：ASR 训练的标配增广</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E5%8A%A8%E6%9C%BA%E4%B8%8E%E5%8E%9F%E7%90%86"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 动机与原理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E5%AE%9E%E7%8E%B0"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 实现</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%B3%A2%E5%BD%A2%E5%9F%9F%E5%A2%9E%E5%B9%BF%E6%A8%A1%E6%8B%9F%E5%A3%B0%E5%AD%A6%E5%A4%9A%E6%A0%B7%E6%80%A7"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 波形域增广：模拟声学多样性</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E5%8A%A0%E6%80%A7%E5%99%AA%E5%A3%B0snr-%E6%8E%A7%E5%88%B6"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 加性噪声（SNR 控制）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E6%B7%B7%E5%93%8D%E5%8D%B7%E7%A7%AFrir"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 混响卷积（RIR）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-%E5%8F%98%E9%80%9F%E4%B8%8E%E5%8F%98%E8%B0%83"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 变速与变调</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#34-%E9%9F%B3%E9%87%8F%E6%89%B0%E5%8A%A8"><span class="nav-number">1.3.4.</span> <span class="nav-text"> 3.4 音量扰动</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-audiopipeline%E6%8A%8A%E4%B8%80%E5%88%87%E7%84%8A%E6%88%90%E5%8F%AF%E5%A4%8D%E7%94%A8%E7%B1%BB%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. AudioPipeline：把一切焊成可复用类（交付核心）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E8%AE%BE%E8%AE%A1%E7%9B%AE%E6%A0%87"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 设计目标</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E5%AE%8C%E6%95%B4%E5%AE%9E%E7%8E%B0"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 完整实现</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#43-%E7%AB%AF%E5%88%B0%E7%AB%AF%E9%AA%8C%E8%AF%81%E4%BA%A4%E4%BB%98"><span class="nav-number">1.4.3.</span> <span class="nav-text"> 4.3 端到端验证（交付）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#51-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.5.1.</span> <span class="nav-text"> 5.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#52-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.5.2.</span> <span class="nav-text"> 5.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E7%AB%AF%E5%88%B0%E7%AB%AF%E9%A2%84%E6%BC%94%E6%8A%8A%E7%89%B9%E5%BE%81%E5%96%82%E7%BB%99%E4%B8%80%E4%B8%AA%E7%9C%9F%E5%AE%9E%E6%A8%A1%E5%9E%8B"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 端到端预演：把特征喂给一个真实模型</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.7.</span> <span class="nav-text"> 7. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.8.</span> <span class="nav-text"> 本周交付清单</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#stage-1-%E6%80%BB%E7%BB%93%E4%BD%A0%E7%8E%B0%E5%9C%A8%E6%8B%A5%E6%9C%89%E7%9A%84%E5%9C%B0%E5%9F%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> Stage 1 总结：你现在拥有的地基</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-1-%E6%95%B0%E5%AD%97%E9%9F%B3%E9%A2%91%E4%B8%8E%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86%E5%9F%BA%E7%A1%80-%E7%AC%AC5-6%E5%91%A8-%E5%B7%A5%E5%85%B7%E7%AE%B1%E6%95%B4%E5%90%88%E4%B8%8EAudioPipeline%E6%9E%84%E5%BB%BA/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第5-6周-工具箱整合与AudioPipeline构建 | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第5-6周-工具箱整合与AudioPipeline构建
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-11-04 12:00:00" itemprop="dateCreated datePublished" datetime="2026-11-04T12:00:00+08:00">2026-11-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-05 08:11:03" itemprop="dateModified" datetime="2026-11-05T08:11:03+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91/" itemprop="url" rel="index"><span itemprop="name">语音方向</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91/Stage-1-%E6%95%B0%E5%AD%97%E9%9F%B3%E9%A2%91%E4%B8%8E%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86%E5%9F%BA%E7%A1%80/" itemprop="url" rel="index"><span itemprop="name">Stage 1-数字音频与信号处理基础</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-5-6-周教程工具箱整合与-audiopipeline-构建"><a class="markdownIt-Anchor" href="#第-5-6-周教程工具箱整合与-audiopipeline-构建"></a> 第 5-6 周教程：工具箱整合与 AudioPipeline 构建</h1>
+<blockquote>
+<p><strong>本周要回答的四个问题</strong></p>
+<ol>
+<li>前四周手写的组件，如何整合成一条<strong>可复用、可配置</strong>的标准流水线？</li>
+<li>SpecAugment 的时间掩码/频率掩码在做什么？为什么它几乎是 ASR 训练的标配？</li>
+<li>torchaudio / librosa / soundfile 各自该用在什么场景？</li>
+<li>数据增广（加噪、混响、变速、变调）如何模拟真实世界的声学多样性？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 5-6 周。交付物：可复用的 <code>AudioPipeline</code> 类（输入路径 → 输出 <code>{wave, fbank, mel_spec}</code> 三件套，支持 SpecAugment 开关），用 5 条语音跑通全流程并保存可视化。这个类将成为后续所有 Stage 的<strong>数据入口</strong>，值得花时间写扎实。</p>
+<hr />
+<h2 id="1-工具箱全景每个库该干什么"><a class="markdownIt-Anchor" href="#1-工具箱全景每个库该干什么"></a> 1. 工具箱全景：每个库该干什么</h2>
+<h3 id="11-选型矩阵"><a class="markdownIt-Anchor" href="#11-选型矩阵"></a> 1.1 选型矩阵</h3>
+<table>
+<thead>
+<tr>
+<th>库</th>
+<th>定位</th>
+<th>用在哪</th>
+<th>注意</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>soundfile</code></td>
+<td>纯 I/O（读写音频文件）</td>
+<td>文件读写、格式转换</td>
+<td>不做处理，只做搬运</td>
+</tr>
+<tr>
+<td><code>librosa</code></td>
+<td>分析为主（特征、可视化）</td>
+<td>原型、研究、画图</td>
+<td>纯 CPU/NumPy，慢但直观</td>
+</tr>
+<tr>
+<td><code>torchaudio</code></td>
+<td>PyTorch 生态、可 GPU、可进训练图</td>
+<td><strong>训练数据流水线（首选）</strong></td>
+<td>与模型同框架，零拷贝衔接</td>
+</tr>
+<tr>
+<td><code>audiomentations</code></td>
+<td>时域增广（加噪、混响、变调）</td>
+<td>数据增广</td>
+<td>需配合 soundfile</td>
+</tr>
+<tr>
+<td><code>scipy.signal</code></td>
+<td>通用信号处理</td>
+<td>滤波器、重采样的对照验证</td>
+<td>教学与验证用</td>
+</tr>
+</tbody>
+</table>
+<p><strong>决策规则</strong>：训练数据流水线用 <code>torchaudio</code>（与模型同框架、支持批量化与 GPU）；研究分析和画图用 <code>librosa</code>；文件 I/O 用 <code>soundfile</code>。本教程以 <code>torchaudio</code> 为主线构建 <code>AudioPipeline</code>。</p>
+<h3 id="12-torchaudio-的关键组件"><a class="markdownIt-Anchor" href="#12-torchaudio-的关键组件"></a> 1.2 torchaudio 的关键组件</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">import</span> torchaudio</span><br><span class="line"></span><br><span class="line"><span class="comment"># 读取（返回 (channels, samples) 与采样率）</span></span><br><span class="line">wave, sr = torchaudio.load(<span class="string">&quot;sample.wav&quot;</span>)        <span class="comment"># (C, N)</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 重采样（生产级，带限 sinc 插值，Kaiser 窗核）</span></span><br><span class="line">wave = torchaudio.functional.resample(wave, sr, <span class="number">16000</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># Kaldi 风格 Fbank（ASR 训练标配，与 ESPnet/FunASR 对齐）</span></span><br><span class="line">fbank = torchaudio.compliance.kaldi.fbank(</span><br><span class="line">    wave, num_mel_bins=<span class="number">80</span>, sample_frequency=<span class="number">16000</span>,</span><br><span class="line">    frame_length=<span class="number">25.0</span>, frame_shift=<span class="number">10.0</span>)        <span class="comment"># (T, 80)</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Mel 谱（更通用的声学特征）</span></span><br><span class="line">mel_transform = torchaudio.transforms.MelSpectrogram(</span><br><span class="line">    sample_rate=<span class="number">16000</span>, n_fft=<span class="number">512</span>, hop_length=<span class="number">160</span>,</span><br><span class="line">    win_length=<span class="number">400</span>, n_mels=<span class="number">80</span>)</span><br><span class="line">mel = mel_transform(wave)                       <span class="comment"># (C, 80, T)</span></span><br></pre></td></tr></table></figure>
+<blockquote>
+<p><strong>版本兼容提示</strong>：torchaudio 2.9 起把音频读写的后端移交给了 TorchCodec——若你装的是新版 torchaudio，<code>torchaudio.load/save</code> 需要 <code>pip install torchcodec</code>（或改用 <code>soundfile</code> 读入后转张量）。<code>compliance.kaldi.fbank</code>、<code>transforms</code> 等特征提取 API 不受影响。</p>
+</blockquote>
+<p><strong><code>compliance.kaldi.fbank</code> vs <code>MelSpectrogram</code> 的区别</strong>（面试高频）：前者严格复现 Kaldi 的特征提取（dither、预加重、去直流等细节，默认 <code>use_power=True</code> + 取对数），是 FunASR/ESPnet 系 ASR 的标准输入；后者是通用的可微 Mel 谱（默认 <code>power=2.0</code>、不取对数），常用于 TTS/声码器。<strong>喂 ASR 用前者，做声学分析用后者</strong>——混用是精度玄学的常见来源。</p>
+<hr />
+<h2 id="2-specaugmentasr-训练的标配增广"><a class="markdownIt-Anchor" href="#2-specaugmentasr-训练的标配增广"></a> 2. SpecAugment：ASR 训练的标配增广</h2>
+<h3 id="21-动机与原理"><a class="markdownIt-Anchor" href="#21-动机与原理"></a> 2.1 动机与原理</h3>
+<p>SpecAugment（Park et al., 2019）的核心洞察：<strong>对特征谱做随机掩码，等价于教模型&quot;在信息残缺时也能识别&quot;</strong>——模拟真实世界的遮挡、丢帧、噪声突发。它作用在<strong>特征域</strong>（不是波形域），实现简单、几乎零成本，却带来显著的 WER 下降。</p>
+<p>三个操作：</p>
+<ol>
+<li><strong>时间掩码（Time Masking）</strong>：随机选连续 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi></mrow><annotation encoding="application/x-tex">t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.61508em;vertical-align:0em;"></span><span class="mord mathnormal">t</span></span></span></span> 帧，全部置 0（模拟短暂静音/丢帧）。</li>
+<li><strong>频率掩码（Frequency Masking）</strong>：随机选连续 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>f</mi></mrow><annotation encoding="application/x-tex">f</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord mathnormal" style="margin-right:0.10764em;">f</span></span></span></span> 个频带，全部置 0（模拟窄带噪声/信道凹陷）。</li>
+<li><strong>时间扭曲（Time Warping）</strong>：沿时间轴做轻微非线性扭曲（实践中常省略，收益边际）。</li>
+</ol>
+<h3 id="22-实现"><a class="markdownIt-Anchor" href="#22-实现"></a> 2.2 实现</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">SpecAugment</span>(torch.nn.Module):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;特征域增广：时间掩码 + 频率掩码。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, freq_mask_param=<span class="number">27</span>, time_mask_param=<span class="number">100</span>,</span></span><br><span class="line"><span class="params">                 num_freq_masks=<span class="number">2</span>, num_time_masks=<span class="number">2</span></span>):</span><br><span class="line">        <span class="built_in">super</span>().__init__()</span><br><span class="line">        <span class="variable language_">self</span>.fmp, <span class="variable language_">self</span>.tmp = freq_mask_param, time_mask_param</span><br><span class="line">        <span class="variable language_">self</span>.nfm, <span class="variable language_">self</span>.ntm = num_freq_masks, num_time_masks</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">forward</span>(<span class="params">self, spec: torch.Tensor</span>) -&gt; torch.Tensor:</span><br><span class="line">        <span class="string">&quot;&quot;&quot;spec: (T, F) 或 (B, T, F)。仅训练时调用。&quot;&quot;&quot;</span></span><br><span class="line">        x = spec.clone()</span><br><span class="line">        squeeze = (x.dim() == <span class="number">2</span>)</span><br><span class="line">        <span class="keyword">if</span> squeeze:</span><br><span class="line">            x = x.unsqueeze(<span class="number">0</span>)</span><br><span class="line">        B, T, F = x.shape</span><br><span class="line">        <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="variable language_">self</span>.nfm):</span><br><span class="line">            f = torch.randint(<span class="number">0</span>, <span class="variable language_">self</span>.fmp + <span class="number">1</span>, (<span class="number">1</span>,)).item()</span><br><span class="line">            f0 = torch.randint(<span class="number">0</span>, <span class="built_in">max</span>(F - f, <span class="number">1</span>), (<span class="number">1</span>,)).item()</span><br><span class="line">            x[:, :, f0:f0 + f] = <span class="number">0</span></span><br><span class="line">        <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="variable language_">self</span>.ntm):</span><br><span class="line">            t = torch.randint(<span class="number">0</span>, <span class="variable language_">self</span>.tmp + <span class="number">1</span>, (<span class="number">1</span>,)).item()</span><br><span class="line">            t0 = torch.randint(<span class="number">0</span>, <span class="built_in">max</span>(T - t, <span class="number">1</span>), (<span class="number">1</span>,)).item()</span><br><span class="line">            x[:, t0:t0 + t, :] = <span class="number">0</span></span><br><span class="line">        <span class="keyword">return</span> x.squeeze(<span class="number">0</span>) <span class="keyword">if</span> squeeze <span class="keyword">else</span> x</span><br><span class="line"></span><br><span class="line"><span class="comment"># 验证：掩码后应有若干行/列为 0</span></span><br><span class="line">aug = SpecAugment()</span><br><span class="line">feat = torch.randn(<span class="number">1000</span>, <span class="number">80</span>)</span><br><span class="line">out = aug(feat)</span><br><span class="line"><span class="keyword">assert</span> out.shape == feat.shape</span><br><span class="line"><span class="keyword">assert</span> (out.<span class="built_in">sum</span>(dim=<span class="number">1</span>) == <span class="number">0</span>).<span class="built_in">any</span>() <span class="keyword">or</span> (out.<span class="built_in">sum</span>(dim=<span class="number">0</span>) == <span class="number">0</span>).<span class="built_in">any</span>()</span><br></pre></td></tr></table></figure>
+<p><strong>关键工程细节</strong>：</p>
+<ul>
+<li><strong>只在训练时开</strong>：推理/验证必须关闭，否则引入随机性破坏可复现性；</li>
+<li>上面的默认参数（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi><mo>=</mo><mn>27</mn></mrow><annotation encoding="application/x-tex">F=27</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord">7</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi><mo>=</mo><mn>100</mn></mrow><annotation encoding="application/x-tex">T=100</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span></span></span></span>、各 2 条掩码）正是原论文在 LibriSpeech 上的 <strong>LD（Double）策略</strong>；中文/长音频可按比例调整；</li>
+<li>torchaudio 也内置了 <code>transforms.FrequencyMasking</code> / <code>TimeMasking</code>，参数语义相同，生产中可直接用；</li>
+<li>掩码置 0 等价于&quot;把该区域当静音&quot;，与 CMVN 归一化配合时注意：应在归一化<strong>之后</strong>做掩码（先掩码会把 0 也统计进均值/方差，扭曲归一化参数）。</li>
+</ul>
+<hr />
+<h2 id="3-波形域增广模拟声学多样性"><a class="markdownIt-Anchor" href="#3-波形域增广模拟声学多样性"></a> 3. 波形域增广：模拟声学多样性</h2>
+<p>特征域掩码之外，<strong>波形域增广</strong>让模型见到更多声学条件。四类最常用：</p>
+<h3 id="31-加性噪声snr-控制"><a class="markdownIt-Anchor" href="#31-加性噪声snr-控制"></a> 3.1 加性噪声（SNR 控制）</h3>
+<p>复用第 4 周的 <code>mix_at_snr()</code>：从噪声库随机抽一条，按随机 SNR（如 5-20 dB）混入。这是鲁棒性增广的主力。</p>
+<h3 id="32-混响卷积rir"><a class="markdownIt-Anchor" href="#32-混响卷积rir"></a> 3.2 混响卷积（RIR）</h3>
+<p>房间脉冲响应 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi><mo stretchy="false">[</mo><mi>n</mi><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">h[n]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">h</span><span class="mopen">[</span><span class="mord mathnormal">n</span><span class="mclose">]</span></span></span></span> 与干净语音卷积即得带混响版本：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>y</mi><mo>=</mo><mi>s</mi><mo>∗</mo><mi>h</mi></mrow><annotation encoding="application/x-tex">y = s * h
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.46528em;vertical-align:0em;"></span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">∗</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">h</span></span></span></span></span></p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">import</span> torch.nn.functional <span class="keyword">as</span> F</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">apply_reverb</span>(<span class="params">speech: torch.Tensor, rir: torch.Tensor</span>) -&gt; torch.Tensor:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;speech: (1, N); rir: (1, M)。返回带混响信号并归一化。&quot;&quot;&quot;</span></span><br><span class="line">    M = rir.shape[-<span class="number">1</span>]</span><br><span class="line">    <span class="comment"># 注意：torch.conv1d 实际算的是&quot;互相关&quot;，不是数学卷积。</span></span><br><span class="line">    <span class="comment"># 把核翻转就变成真卷积；左侧补 M-1 个零是为了对齐时刻、保住前 M-1 个瞬态样本。</span></span><br><span class="line">    y = F.conv1d(F.pad(speech, (M - <span class="number">1</span>, <span class="number">0</span>)), rir.flip(-<span class="number">1</span>))   <span class="comment"># (1, N)</span></span><br><span class="line">    peak = y.<span class="built_in">abs</span>().<span class="built_in">max</span>() + <span class="number">1e-8</span></span><br><span class="line">    <span class="keyword">return</span> y / peak * speech.<span class="built_in">abs</span>().<span class="built_in">max</span>()   <span class="comment"># 峰值对齐防削波</span></span><br></pre></td></tr></table></figure>
+<blockquote>
+<p><strong>动手验证</strong>：<code>apply_reverb</code> 的卷积部分（归一化前）应与 <code>np.convolve(speech.numpy()[0], rir.numpy()[0])[:N]</code> 逐点一致（float32 下误差 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><msup><mn>0</mn><mrow><mo>−</mo><mn>7</mn></mrow></msup></mrow><annotation encoding="application/x-tex">10^{-7}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">7</span></span></span></span></span></span></span></span></span></span></span></span> 量级）——这正是验证&quot;互相关 vs 卷积&quot;坑的最佳练习。</p>
+</blockquote>
+<p>RIR 数据源：OpenAIR、MIT IR Survey，或用 <code>pyroomacoustics</code> 数值模拟任意房间。</p>
+<h3 id="33-变速与变调"><a class="markdownIt-Anchor" href="#33-变速与变调"></a> 3.3 变速与变调</h3>
+<ul>
+<li><strong>变速（speed perturb）</strong>：改变时长但<strong>不改音高</strong>（如 0.9×/1.1×）——torchaudio 没有开箱即用的 API（旧版的 <code>sox_effects</code> 后端已在 2.9 中移除），常用 <code>sox</code> 命令行或 <code>librosa.effects.time_stretch(y, rate=...)</code>；</li>
+<li><strong>变调（pitch shift）</strong>：改音高不改时长——模拟不同说话人。</li>
+</ul>
+<p>Kaldi 经典配方是 <strong>0.9/1.0/1.1 三档变速</strong>，等价于数据量 ×3。</p>
+<h3 id="34-音量扰动"><a class="markdownIt-Anchor" href="#34-音量扰动"></a> 3.4 音量扰动</h3>
+<p>随机乘一个增益（如 ±6 dB），教模型对响度不变。注意别推出削波区。</p>
+<hr />
+<h2 id="4-audiopipeline把一切焊成可复用类交付核心"><a class="markdownIt-Anchor" href="#4-audiopipeline把一切焊成可复用类交付核心"></a> 4. AudioPipeline：把一切焊成可复用类（交付核心）</h2>
+<h3 id="41-设计目标"><a class="markdownIt-Anchor" href="#41-设计目标"></a> 4.1 设计目标</h3>
+<ul>
+<li><strong>输入</strong>：音频路径（任意采样率/声道）；<strong>输出</strong>：<code>{wave, fbank, mel_spec}</code> 三件套 + 可选增广；</li>
+<li>统一重采样到 16 kHz、单声道；</li>
+<li>SpecAugment 与波形增广可开关；</li>
+<li>输出可直接进模型（张量化）。</li>
+</ul>
+<h3 id="42-完整实现"><a class="markdownIt-Anchor" href="#42-完整实现"></a> 4.2 完整实现</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">import</span> torchaudio</span><br><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">AudioPipeline</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">    语音数据入口：音频路径 -&gt; &#123;wave, fbank, mel_spec&#125; 三件套。</span></span><br><span class="line"><span class="string">    - 统一 16kHz 单声道</span></span><br><span class="line"><span class="string">    - 支持 SpecAugment（特征域）与加性噪声（波形域）增广</span></span><br><span class="line"><span class="string">    &quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, target_sr=<span class="number">16000</span>, n_mels=<span class="number">80</span>,</span></span><br><span class="line"><span class="params">                 use_specaugment=<span class="literal">False</span>, augment_noise=<span class="literal">False</span>,</span></span><br><span class="line"><span class="params">                 noise_dir=<span class="literal">None</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>.target_sr = target_sr</span><br><span class="line">        <span class="variable language_">self</span>.n_mels = n_mels</span><br><span class="line">        <span class="variable language_">self</span>.specaugment = SpecAugment() <span class="keyword">if</span> use_specaugment <span class="keyword">else</span> <span class="literal">None</span></span><br><span class="line">        <span class="variable language_">self</span>.augment_noise = augment_noise</span><br><span class="line">        <span class="variable language_">self</span>.noise_dir = noise_dir</span><br><span class="line"></span><br><span class="line">        <span class="comment"># Kaldi 风格 Fbank（ASR 标准输入）</span></span><br><span class="line">        <span class="variable language_">self</span>.fbank = <span class="keyword">lambda</span> w: torchaudio.compliance.kaldi.fbank(</span><br><span class="line">            w, num_mel_bins=n_mels, sample_frequency=target_sr,</span><br><span class="line">            frame_length=<span class="number">25.0</span>, frame_shift=<span class="number">10.0</span>)</span><br><span class="line">        <span class="comment"># 通用 Mel 谱（声学分析 / TTS 侧）</span></span><br><span class="line">        <span class="variable language_">self</span>.mel_transform = torchaudio.transforms.MelSpectrogram(</span><br><span class="line">            sample_rate=target_sr, n_fft=<span class="number">512</span>, hop_length=<span class="number">160</span>,</span><br><span class="line">            win_length=<span class="number">400</span>, n_mels=n_mels)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">_load_mono</span>(<span class="params">self, path</span>):</span><br><span class="line">        wave, sr = torchaudio.load(path)</span><br><span class="line">        <span class="keyword">if</span> wave.shape[<span class="number">0</span>] &gt; <span class="number">1</span>:</span><br><span class="line">            wave = wave.mean(dim=<span class="number">0</span>, keepdim=<span class="literal">True</span>)      <span class="comment"># 混缩单声道</span></span><br><span class="line">        <span class="keyword">if</span> sr != <span class="variable language_">self</span>.target_sr:</span><br><span class="line">            wave = torchaudio.functional.resample(wave, sr, <span class="variable language_">self</span>.target_sr)</span><br><span class="line">        <span class="keyword">return</span> wave                                     <span class="comment"># (1, N)</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">_maybe_add_noise</span>(<span class="params">self, wave</span>):</span><br><span class="line">        <span class="keyword">if</span> <span class="keyword">not</span> <span class="variable language_">self</span>.augment_noise <span class="keyword">or</span> <span class="variable language_">self</span>.noise_dir <span class="keyword">is</span> <span class="literal">None</span>:</span><br><span class="line">            <span class="keyword">return</span> wave</span><br><span class="line">        <span class="comment"># 从噪声库随机取一条，按随机 SNR 混入（复用第 4 周逻辑）</span></span><br><span class="line">        <span class="keyword">import</span> os, random</span><br><span class="line">        files = os.listdir(<span class="variable language_">self</span>.noise_dir)</span><br><span class="line">        noise, nsr = torchaudio.load(</span><br><span class="line">            os.path.join(<span class="variable language_">self</span>.noise_dir, random.choice(files)))</span><br><span class="line">        noise = noise.mean(dim=<span class="number">0</span>, keepdim=<span class="literal">True</span>)</span><br><span class="line">        <span class="keyword">if</span> noise.shape[-<span class="number">1</span>] &lt; wave.shape[-<span class="number">1</span>]:</span><br><span class="line">            noise = noise.repeat(<span class="number">1</span>, <span class="built_in">int</span>(np.ceil(wave.shape[-<span class="number">1</span>]/noise.shape[-<span class="number">1</span>])))</span><br><span class="line">        noise = noise[:, :wave.shape[-<span class="number">1</span>]]</span><br><span class="line">        snr = random.uniform(<span class="number">5</span>, <span class="number">20</span>)</span><br><span class="line">        ps = wave.<span class="built_in">pow</span>(<span class="number">2</span>).mean() + <span class="number">1e-12</span></span><br><span class="line">        pn = noise.<span class="built_in">pow</span>(<span class="number">2</span>).mean() + <span class="number">1e-12</span></span><br><span class="line">        scale = (ps / (pn * <span class="number">10</span> ** (snr/<span class="number">10</span>))).sqrt()</span><br><span class="line">        <span class="keyword">return</span> wave + scale * noise</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__call__</span>(<span class="params">self, path</span>):</span><br><span class="line">        wave = <span class="variable language_">self</span>._load_mono(path)</span><br><span class="line">        wave = <span class="variable language_">self</span>._maybe_add_noise(wave)</span><br><span class="line"></span><br><span class="line">        fbank = <span class="variable language_">self</span>.fbank(wave)                        <span class="comment"># (T, 80)</span></span><br><span class="line">        mel_spec = <span class="variable language_">self</span>.mel_transform(wave).squeeze(<span class="number">0</span>)  <span class="comment"># (80, T)</span></span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> <span class="variable language_">self</span>.specaugment <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span>:</span><br><span class="line">            fbank = <span class="variable language_">self</span>.specaugment(fbank)</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> &#123;</span><br><span class="line">            <span class="string">&quot;wave&quot;</span>: wave,              <span class="comment"># (1, N) 波形</span></span><br><span class="line">            <span class="string">&quot;fbank&quot;</span>: fbank,            <span class="comment"># (T, 80) ASR 输入</span></span><br><span class="line">            <span class="string">&quot;mel_spec&quot;</span>: mel_spec,      <span class="comment"># (80, T) 声学特征</span></span><br><span class="line">            <span class="string">&quot;sr&quot;</span>: <span class="variable language_">self</span>.target_sr,</span><br><span class="line">        &#125;</span><br></pre></td></tr></table></figure>
+<h3 id="43-端到端验证交付"><a class="markdownIt-Anchor" href="#43-端到端验证交付"></a> 4.3 端到端验证（交付）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> glob</span><br><span class="line"><span class="keyword">import</span> matplotlib</span><br><span class="line">matplotlib.use(<span class="string">&quot;Agg&quot;</span>)</span><br><span class="line"><span class="keyword">import</span> matplotlib.pyplot <span class="keyword">as</span> plt</span><br><span class="line"></span><br><span class="line"><span class="comment"># 准备 5 条测试音频（中文语音或任意语音）</span></span><br><span class="line">paths = <span class="built_in">sorted</span>(glob.glob(<span class="string">&quot;test_audio/*.wav&quot;</span>))[:<span class="number">5</span>]</span><br><span class="line"><span class="keyword">assert</span> <span class="built_in">len</span>(paths) &gt;= <span class="number">5</span>, <span class="string">&quot;请准备至少 5 条测试音频放入 test_audio/&quot;</span></span><br><span class="line"></span><br><span class="line">pipe = AudioPipeline(use_specaugment=<span class="literal">True</span>, augment_noise=<span class="literal">False</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> i, p <span class="keyword">in</span> <span class="built_in">enumerate</span>(paths):</span><br><span class="line">    out = pipe(p)</span><br><span class="line">    wave, fbank, mel = out[<span class="string">&quot;wave&quot;</span>], out[<span class="string">&quot;fbank&quot;</span>], out[<span class="string">&quot;mel_spec&quot;</span>]</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;[<span class="subst">&#123;p&#125;</span>] wave=<span class="subst">&#123;<span class="built_in">tuple</span>(wave.shape)&#125;</span> fbank=<span class="subst">&#123;<span class="built_in">tuple</span>(fbank.shape)&#125;</span> mel=<span class="subst">&#123;<span class="built_in">tuple</span>(mel.shape)&#125;</span>&quot;</span>)</span><br><span class="line">    <span class="comment"># 断言：三件套形状自洽</span></span><br><span class="line">    <span class="keyword">assert</span> wave.dim() == <span class="number">2</span> <span class="keyword">and</span> wave.shape[<span class="number">0</span>] == <span class="number">1</span></span><br><span class="line">    <span class="keyword">assert</span> fbank.shape[<span class="number">1</span>] == <span class="number">80</span></span><br><span class="line">    expected_T = <span class="number">1</span> + (wave.shape[-<span class="number">1</span>] - <span class="number">400</span>) // <span class="number">160</span></span><br><span class="line">    <span class="comment"># kaldi fbank 默认 snip_edges=True（不中心填充），帧数严格等于上式</span></span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">abs</span>(fbank.shape[<span class="number">0</span>] - expected_T) &lt;= <span class="number">2</span>   <span class="comment"># 留容差防不同实现边界差异</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># 保存可视化（波形 + fbank 热力图）</span></span><br><span class="line">    fig, axes = plt.subplots(<span class="number">2</span>, <span class="number">1</span>, figsize=(<span class="number">12</span>, <span class="number">6</span>))</span><br><span class="line">    axes[<span class="number">0</span>].plot(wave[<span class="number">0</span>].numpy())</span><br><span class="line">    axes[<span class="number">0</span>].set_title(<span class="string">&quot;Waveform&quot;</span>)</span><br><span class="line">    im = axes[<span class="number">1</span>].imshow(fbank.T.numpy(), aspect=<span class="string">&quot;auto&quot;</span>, origin=<span class="string">&quot;lower&quot;</span>)</span><br><span class="line">    axes[<span class="number">1</span>].set_title(<span class="string">&quot;Log-Mel Fbank (80-dim)&quot;</span>)</span><br><span class="line">    fig.colorbar(im, ax=axes[<span class="number">1</span>])</span><br><span class="line">    plt.tight_layout()</span><br><span class="line">    plt.savefig(<span class="string">f&quot;pipeline_out_<span class="subst">&#123;i&#125;</span>.png&quot;</span>, dpi=<span class="number">110</span>)</span><br><span class="line">    plt.close(fig)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;全部跑通，可视化已保存。&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>预期</strong>：每条音频打印三个 shape，fbank 帧数与公式 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mo>+</mo><mo stretchy="false">(</mo><mi>N</mi><mo>−</mo><mn>400</mn><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><mn>160</mn></mrow><annotation encoding="application/x-tex">1 + (N-400)/160</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">4</span><span class="mord">0</span><span class="mord">0</span><span class="mclose">)</span><span class="mord">/</span><span class="mord">1</span><span class="mord">6</span><span class="mord">0</span></span></span></span> 严格吻合，并输出波形 + 语谱图可视化。</p>
+<p><strong>验证增广生效</strong>：同一路径分别用 <code>use_specaugment=True/False</code> 各跑一次，断言两次 <code>fbank</code> 不完全相同（掩码引入差异），证明增广链路接通。</p>
+<hr />
+<h2 id="5-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#5-工程权衡与失效模式"></a> 5. 工程权衡与失效模式</h2>
+<h3 id="51-权衡"><a class="markdownIt-Anchor" href="#51-权衡"></a> 5.1 权衡</h3>
+<ul>
+<li><strong>增广强度</strong>：过强（低 SNR 加噪 + 多重掩码）会让训练分布偏离推理分布，反而伤精度；从无增广基线出发，逐项加增广看验证集变化。</li>
+<li><strong>特征提取一致性</strong>：训练与推理必须用<strong>完全相同</strong>的特征配置（同库、同参数），否则分布漂移。<code>AudioPipeline</code> 的价值正在于此——单点定义，处处复用。</li>
+<li><strong>波形增广在线还是离线</strong>：在线增广每次 epoch 随机不同（多样性好，但慢）；离线预生成（快，但固定）。常用折中：在线波形增广 + 缓存特征。</li>
+</ul>
+<h3 id="52-失效模式"><a class="markdownIt-Anchor" href="#52-失效模式"></a> 5.2 失效模式</h3>
+<ol>
+<li><strong>特征配置不一致</strong>：训练用 <code>compliance.kaldi.fbank</code>、推理用 <code>MelSpectrogram</code>，输入分布错位 → WER 暴涨且难排查。<strong>定位</strong>：打印两路特征均值/方差对比；<strong>修复</strong>：统一走 <code>AudioPipeline</code>。</li>
+<li><strong>推理时忘关增广</strong>：验证集带随机掩码，指标抖动且偏低。<strong>修复</strong>：<code>use_specaugment</code> 与训练阶段绑定，推理强制关。</li>
+<li><strong>增广后削波</strong>：加噪/混响后幅值超过 ±1。<strong>修复</strong>：增广后统一峰值归一化。</li>
+<li><strong>重采样遗漏</strong>：混合采样率数据集未统一到 16 kHz，帧数公式全错。<strong>修复</strong>：<code>AudioPipeline</code> 入口强制重采样并断言。</li>
+</ol>
+<hr />
+<h2 id="6-端到端预演把特征喂给一个真实模型"><a class="markdownIt-Anchor" href="#6-端到端预演把特征喂给一个真实模型"></a> 6. 端到端预演：把特征喂给一个真实模型</h2>
+<p>本周收尾任务：不深究模型，只走通&quot;波形 → 特征 → 模型&quot;的流水线。用 <code>funasr</code> 或 <code>transformers</code> 跑一次语音识别，重点观察<strong>你的 <code>AudioPipeline</code> 特征如何接入</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 示例：用 funasr 的 SenseVoice 走一次识别（需先 pip install funasr）</span></span><br><span class="line"><span class="keyword">from</span> funasr <span class="keyword">import</span> AutoModel</span><br><span class="line"></span><br><span class="line">model = AutoModel(model=<span class="string">&quot;iic/SenseVoiceSmall&quot;</span>)</span><br><span class="line">res = model.generate(<span class="built_in">input</span>=<span class="string">&quot;test_audio/sample_0.wav&quot;</span>)</span><br><span class="line"><span class="built_in">print</span>(res[<span class="number">0</span>][<span class="string">&quot;text&quot;</span>])</span><br></pre></td></tr></table></figure>
+<p>观察点：① 模型内部特征提取与你 <code>AudioPipeline</code> 的配置是否一致；② 输入波形如何被转成 80 维特征再进 encoder。这为 Stage 2 深拆 ASR 模型做铺垫——<strong>你已经打通了&quot;数据入口&quot;，下周起拆&quot;模型内部&quot;</strong>。</p>
+<hr />
+<h2 id="7-延伸思考题含解析"><a class="markdownIt-Anchor" href="#7-延伸思考题含解析"></a> 7. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：SpecAugment 为什么作用在特征域而非波形域？两者互补吗？<br />
+<strong>A</strong>：特征域掩码直接模拟&quot;信息缺失&quot;，计算几乎免费且对模型输入空间精准；波形增广（加噪/混响）模拟声学条件多样性。二者作用层面不同、互补，实践中叠加使用。</p>
+<p><strong>Q2</strong>：为什么喂 ASR 用 <code>compliance.kaldi.fbank</code> 而不用通用 <code>MelSpectrogram</code>？<br />
+<strong>A</strong>：Kaldi fbank 严格复现训练该模型时的特征规范（能量、dither、预加重），保证输入分布一致；通用 Mel 谱细节不同，会引入分布漂移。特征提取必须与模型训练配置逐项对齐。</p>
+<p><strong>Q3</strong>：<code>AudioPipeline</code> 的帧数断言为什么留 ±2 容差？<br />
+<strong>A</strong>：<code>compliance.kaldi.fbank</code> 默认 <code>snip_edges=True</code>（不中心填充），帧数严格等于 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mo>+</mo><mo stretchy="false">(</mo><mi>N</mi><mo>−</mo><mn>400</mn><mo stretchy="false">)</mo><mi mathvariant="normal">/</mi><mn>160</mn></mrow><annotation encoding="application/x-tex">1 + (N-400)/160</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">4</span><span class="mord">0</span><span class="mord">0</span><span class="mclose">)</span><span class="mord">/</span><span class="mord">1</span><span class="mord">6</span><span class="mord">0</span></span></span></span>；但其他实现（如 <code>MelSpectrogram</code> 的 <code>center=True</code>）会中心填充、多出几帧。容差是为了在混用实现时仍能抓住&quot;量级错误&quot;（如采样率错导致帧数差几倍），而不是纠结边界上的一两帧。</p>
+<p><strong>Q4</strong>：在线增广和离线预生成增广，各自适合什么场景？<br />
+<strong>A</strong>：在线增广多样性好、存储省，适合训练主流程；离线预生成速度快、可复现，适合把昂贵的增广（如混响卷积）固化成数据集。常见组合：昂贵增广离线、轻量增广在线。</p>
+<p><strong>Q5</strong>：如果把 <code>AudioPipeline</code> 输出直接喂给 Stage 2 的 Whisper，需要注意什么？<br />
+<strong>A</strong>：Whisper 用自己的 80 维、25ms/10ms、n_fft=400 的 log-mel，且内部自动提取——直接喂波形即可，不要喂你预计算的 512-FFT 特征（n_fft 不同）。特征必须与目标模型的官方前处理一致。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 实现 <code>SpecAugment</code>，验证掩码生效断言。</li>
+<li>[ ] 实现 <code>AudioPipeline</code> 类，输出三件套并统一 16 kHz 单声道。</li>
+<li>[ ] 用 5 条音频跑通全流程，帧数断言通过，保存波形 + 语谱图可视化。</li>
+<li>[ ] 验证增广开关：开/关 SpecAugment 两次输出有差异。</li>
+<li>[ ] 用 <code>funasr</code>/<code>whisper</code> 走一次端到端识别，观察特征接入点。</li>
+</ul>
+<h2 id="stage-1-总结你现在拥有的地基"><a class="markdownIt-Anchor" href="#stage-1-总结你现在拥有的地基"></a> Stage 1 总结：你现在拥有的地基</h2>
+<p>完成本阶段，你已能：</p>
+<ol>
+<li><strong>徒手推导</strong>：任意音频从波形 → 帧 → 频谱 → 80 维 Log-Mel 的每一步 Shape；</li>
+<li><strong>亲手实现</strong>：重采样、STFT/iSTFT、Mel 滤波器组、谱减法、<code>mix_at_snr</code>、SpecAugment；</li>
+<li><strong>一条标准流水线</strong>：<code>AudioPipeline</code>，作为 Stage 2-6 所有实验的统一数据入口。</li>
+</ol>
+<p>对照学习计划第 6 周的自测清单逐项核验，全部通过后即可进入 <strong>Stage 2：语音识别 ASR</strong>。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%AF%AD%E9%9F%B3/" rel="tag"># 语音</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-1-%E6%95%B0%E5%AD%97%E9%9F%B3%E9%A2%91%E4%B8%8E%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86%E5%9F%BA%E7%A1%80-%E7%AC%AC4%E5%91%A8-%E6%95%B0%E5%AD%97%E6%BB%A4%E6%B3%A2%E5%99%A8%E4%B8%8E%E4%BF%A1%E5%99%AA%E6%AF%94%E5%A2%9E%E5%BC%BA%E5%85%A5%E5%9C%BA%E5%88%B8/" rel="prev" title="第4周-数字滤波器与信噪比增强入场券">
+                  <i class="fa fa-angle-left"></i> 第4周-数字滤波器与信噪比增强入场券
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-1-%E6%95%B0%E5%AD%97%E9%9F%B3%E9%A2%91%E4%B8%8E%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86%E5%9F%BA%E7%A1%80-%E7%AC%AC3%E5%91%A8-%E5%90%AC%E8%A7%89%E7%89%B9%E5%BE%81Mel%E6%BB%A4%E6%B3%A2%E5%99%A8%E7%BB%84MFCC%E4%B8%8EFbank/" rel="next" title="第3周-听觉特征Mel滤波器组MFCC与Fbank">
+                  第3周-听觉特征Mel滤波器组MFCC与Fbank <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

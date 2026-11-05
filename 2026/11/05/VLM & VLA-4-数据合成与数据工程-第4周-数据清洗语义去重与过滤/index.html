@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 4 周教程：数据清洗、语义去重与多维过滤  本周要回答的三个问题  MinHash&#x2F;LSH 为什么能实现&quot;近线性时间&quot;的海量字面去重？它的概率保证是什么？ 为什么语义去重（Embedding 余弦）比精确字符串匹配重要？记忆效应的机制是什么？ 规则过滤与模型打分如何组合成一条多维过滤流水线？   对应学习计划：第 4 周。交付物：数据清洗 Pipeline——2,000">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第4周-数据清洗语义去重与过滤">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC4%E5%91%A8-%E6%95%B0%E6%8D%AE%E6%B8%85%E6%B4%97%E8%AF%AD%E4%B9%89%E5%8E%BB%E9%87%8D%E4%B8%8E%E8%BF%87%E6%BB%A4/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 4 周教程：数据清洗、语义去重与多维过滤  本周要回答的三个问题  MinHash&#x2F;LSH 为什么能实现&quot;近线性时间&quot;的海量字面去重？它的概率保证是什么？ 为什么语义去重（Embedding 余弦）比精确字符串匹配重要？记忆效应的机制是什么？ 规则过滤与模型打分如何组合成一条多维过滤流水线？   对应学习计划：第 4 周。交付物：数据清洗 Pipeline——2,000">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-05T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.558Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC4%E5%91%A8-%E6%95%B0%E6%8D%AE%E6%B8%85%E6%B4%97%E8%AF%AD%E4%B9%89%E5%8E%BB%E9%87%8D%E4%B8%8E%E8%BF%87%E6%BB%A4/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC4%E5%91%A8-%E6%95%B0%E6%8D%AE%E6%B8%85%E6%B4%97%E8%AF%AD%E4%B9%89%E5%8E%BB%E9%87%8D%E4%B8%8E%E8%BF%87%E6%BB%A4/","path":"2026/11/05/VLM & VLA-4-数据合成与数据工程-第4周-数据清洗语义去重与过滤/","title":"第4周-数据清洗语义去重与过滤"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第4周-数据清洗语义去重与过滤 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-4-%E5%91%A8%E6%95%99%E7%A8%8B%E6%95%B0%E6%8D%AE%E6%B8%85%E6%B4%97-%E8%AF%AD%E4%B9%89%E5%8E%BB%E9%87%8D%E4%B8%8E%E5%A4%9A%E7%BB%B4%E8%BF%87%E6%BB%A4"><span class="nav-number">1.</span> <span class="nav-text"> 第 4 周教程：数据清洗、语义去重与多维过滤</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E9%87%8D%E5%A4%8D%E6%95%B0%E6%8D%AE%E7%9A%84%E5%8D%B1%E5%AE%B3%E4%B8%8E%E4%B8%A4%E7%B1%BB%E5%8E%BB%E9%87%8D%E7%9A%84%E5%88%86%E5%B7%A5"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：重复数据的危害与两类去重的分工</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E6%A0%B9%E6%9C%AC%E7%9F%9B%E7%9B%BE%E8%AE%AD%E7%BB%83%E7%9A%84%E6%A2%AF%E5%BA%A6%E8%A7%86%E8%A7%92%E7%9C%8B%E9%87%8D%E5%A4%8D"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 根本矛盾：训练的梯度视角看重复</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E4%B8%A4%E7%B1%BB%E5%8E%BB%E9%87%8D%E7%9A%84%E6%95%B0%E5%AD%A6%E6%9C%AC%E8%B4%A8%E4%B8%8E%E5%88%86%E5%B7%A5"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 两类去重的数学本质与分工</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E5%9B%9B%E9%81%93%E9%97%B8%E7%9A%84%E6%B8%85%E6%B4%97%E6%B5%81%E6%B0%B4%E7%BA%BF"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 系统架构：四道闸的清洗流水线</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E6%9C%AC%E5%91%A8-mvp%E4%BA%94%E9%97%B8%E6%B8%85%E6%B4%97-pipeline"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 本周 MVP：五闸清洗 Pipeline</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E5%86%B3%E7%AD%96%E8%A1%A8%E5%8E%BB%E9%87%8D%E4%B8%8E%E6%89%93%E5%88%86%E7%9A%84%E5%8F%82%E6%95%B0"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 决策表：去重与打分的参数</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E4%B8%89%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 三个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC4%E5%91%A8-%E6%95%B0%E6%8D%AE%E6%B8%85%E6%B4%97%E8%AF%AD%E4%B9%89%E5%8E%BB%E9%87%8D%E4%B8%8E%E8%BF%87%E6%BB%A4/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第4周-数据清洗语义去重与过滤 | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第4周-数据清洗语义去重与过滤
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2026-11-05 12:00:00 / 修改时间：08:11:03" itemprop="dateCreated datePublished" datetime="2026-11-05T12:00:00+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Stage 4-数据合成与数据工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>17 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-4-周教程数据清洗-语义去重与多维过滤"><a class="markdownIt-Anchor" href="#第-4-周教程数据清洗-语义去重与多维过滤"></a> 第 4 周教程：数据清洗、语义去重与多维过滤</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>MinHash/LSH 为什么能实现&quot;近线性时间&quot;的海量字面去重？它的概率保证是什么？</li>
+<li>为什么语义去重（Embedding 余弦）比精确字符串匹配重要？记忆效应的机制是什么？</li>
+<li>规则过滤与模型打分如何组合成一条多维过滤流水线？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 4 周。交付物：数据清洗 Pipeline——2,000 条混噪声数据，MinHash 剔字面重复，FAISS + CLIP/文本 Embedding（阈值 &gt;0.92）剔语义重复，规则 + 模型打分筛出 Top 40% 高质量样本。</p>
+<hr />
+<h2 id="1-第一性原理重复数据的危害与两类去重的分工"><a class="markdownIt-Anchor" href="#1-第一性原理重复数据的危害与两类去重的分工"></a> 1. 第一性原理：重复数据的危害与两类去重的分工</h2>
+<h3 id="11-根本矛盾训练的梯度视角看重复"><a class="markdownIt-Anchor" href="#11-根本矛盾训练的梯度视角看重复"></a> 1.1 根本矛盾：训练的梯度视角看重复</h3>
+<p>重复数据不是&quot;浪费空间&quot;的问题，而是<strong>扭曲梯度分布</strong>的问题。设某条（或近似某条的）数据在训练集中出现 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span> 次，等效于该样本的损失权重放大 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span> 倍——模型会为此样本的模式付出不成比例的拟合容量。三种可观测后果：</p>
+<ol>
+<li><strong>记忆效应</strong>：模型逐字背诵高频样本（生成时复述训练例），泛化差。合成数据的模板坍缩（第 1 周失效 1）与爬取数据的近重复会急剧放大这一点。</li>
+<li><strong>评测泄漏</strong>：重复样本里若混有评测集的近邻，分数虚高（Stage 3 失效 3 的机制）。</li>
+<li><strong>分布偏移</strong>：重复不是均匀的——高频模式通常是&quot;容易批量生成&quot;的模式（如某种问答模板），重复放大的是分布里最平庸的部分。</li>
+</ol>
+<h3 id="12-两类去重的数学本质与分工"><a class="markdownIt-Anchor" href="#12-两类去重的数学本质与分工"></a> 1.2 两类去重的数学本质与分工</h3>
+<p><strong>字面去重（MinHash + LSH）<strong>回答：&quot;这两条文本是不是</strong>同一篇东西的改写</strong>？&quot;</p>
+<p>Jaccard 相似度 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>J</mi><mo stretchy="false">(</mo><mi>A</mi><mo separator="true">,</mo><mi>B</mi><mo stretchy="false">)</mo><mo>=</mo><mi mathvariant="normal">∣</mi><mi>A</mi><mo>∩</mo><mi>B</mi><mi mathvariant="normal">∣</mi><mi mathvariant="normal">/</mi><mi mathvariant="normal">∣</mi><mi>A</mi><mo>∪</mo><mi>B</mi><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">J(A, B) = |A \cap B| / |A \cup B|</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.09618em;">J</span><span class="mopen">(</span><span class="mord mathnormal">A</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∣</span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">∩</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mord">∣</span><span class="mord">/</span><span class="mord">∣</span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">∪</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mord">∣</span></span></span></span>（按 shingle/n-gram 集合计算）。直接两两比较是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><msup><mi>n</mi><mn>2</mn></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(n^2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>——百万级数据不可行。MinHash 的洞见：<strong>用&quot;最小哈希值是否相等&quot;作为 Jaccard 的无偏估计</strong>：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>P</mi><mo stretchy="false">[</mo><munder><mo><mi>min</mi><mo>⁡</mo></mo><mrow><mi>x</mi><mo>∈</mo><mi>A</mi></mrow></munder><mi>h</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>=</mo><munder><mo><mi>min</mi><mo>⁡</mo></mo><mrow><mi>x</mi><mo>∈</mo><mi>B</mi></mrow></munder><mi>h</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo stretchy="false">]</mo><mo>=</mo><mi>J</mi><mo stretchy="false">(</mo><mi>A</mi><mo separator="true">,</mo><mi>B</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">P[\min_{x \in A} h(x) = \min_{x \in B} h(x)] = J(A, B)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.521701em;vertical-align:-0.771701em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mopen">[</span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.66786em;"><span style="top:-2.355669em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">x</span><span class="mrel mtight">∈</span><span class="mord mathnormal mtight">A</span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">min</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.771701em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">h</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.521701em;vertical-align:-0.771701em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.66786em;"><span style="top:-2.355669em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">x</span><span class="mrel mtight">∈</span><span class="mord mathnormal mtight" style="margin-right:0.05017em;">B</span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">min</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.771701em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">h</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.09618em;">J</span><span class="mopen">(</span><span class="mord mathnormal">A</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mclose">)</span></span></span></span></span></p>
+<p><strong>这个公式在干什么</strong>：对全集做一次随机排序，两集合各自取&quot;排序后最先出现的元素&quot;——两集合越相似，这个&quot;头名元素&quot;越可能是同一个。于是&quot;头名相等的概率&quot;就等于交集占比 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>J</mi></mrow><annotation encoding="application/x-tex">J</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.09618em;">J</span></span></span></span>。用 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span> 个独立哈希函数得到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span> 维签名，签名相同比例 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≈</mo><mi>J</mi></mrow><annotation encoding="application/x-tex">\approx J</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.48312em;vertical-align:0em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.09618em;">J</span></span></span></span>。再配合 <strong>LSH 分桶</strong>（把 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span> 维签名切成 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi></mrow><annotation encoding="application/x-tex">b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">b</span></span></span></span> 段（band），每段 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>=</mo><mi>k</mi><mi mathvariant="normal">/</mi><mi>b</mi></mrow><annotation encoding="application/x-tex">r = k/b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mord">/</span><span class="mord mathnormal">b</span></span></span></span> 行哈希到桶，<strong>任一段全行碰撞即候选对</strong>）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>P</mi><mo stretchy="false">[</mo><mtext>成为候选对</mtext><mo stretchy="false">]</mo><mo>=</mo><mn>1</mn><mo>−</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><msup><mi>J</mi><mrow><mtext> </mtext><mi>r</mi></mrow></msup><msup><mo stretchy="false">)</mo><mrow><mtext> </mtext><mi>b</mi></mrow></msup></mrow><annotation encoding="application/x-tex">P[\text{成为候选对}] = 1 - (1 - J^{\,r})^{\,b}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mopen">[</span><span class="mord text"><span class="mord cjk_fallback">成为候选对</span></span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.149108em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.09618em;">J</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7143919999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mspace mtight" style="margin-right:0.19516666666666668em;"></span><span class="mord mathnormal mtight" style="margin-right:0.02778em;">r</span></span></span></span></span></span></span></span></span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991079999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mspace mtight" style="margin-right:0.19516666666666668em;"></span><span class="mord mathnormal mtight">b</span></span></span></span></span></span></span></span></span></span></span></span></span></p>
+<p>（读法：一段内 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi></mrow><annotation encoding="application/x-tex">r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span></span> 行全部相等的概率是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>J</mi><mi>r</mi></msup></mrow><annotation encoding="application/x-tex">J^r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.09618em;">J</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.664392em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.02778em;">r</span></span></span></span></span></span></span></span></span></span></span>；<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi></mrow><annotation encoding="application/x-tex">b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">b</span></span></span></span> 段里至少一段撞上就是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mo>−</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><msup><mi>J</mi><mi>r</mi></msup><msup><mo stretchy="false">)</mo><mi>b</mi></msup></mrow><annotation encoding="application/x-tex">1-(1-J^r)^b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.099108em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.09618em;">J</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.664392em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.02778em;">r</span></span></span></span></span></span></span></span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.849108em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span></span></span></span></span></span></span></span>。调 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi></mrow><annotation encoding="application/x-tex">b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">b</span></span></span></span>/<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi></mrow><annotation encoding="application/x-tex">r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span></span> 就能把这个 S 曲线的陡峭位置挪到想要的工作点。）总复杂度降到近线性 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mi>n</mi><mo>⋅</mo><mi>k</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(n \cdot k)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord mathnormal">n</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mclose">)</span></span></span></span>——这是&quot;海量&quot;两个字的工程前提。</p>
+<p><strong>语义去重（Embedding + 余弦）<strong>回答：&quot;这两条数据是不是</strong>教了模型同一件事</strong>？&quot;</p>
+<p>两条字面完全不同的句子（“图中有一只橘猫在沙发上睡觉” vs “沙发上的橘猫正打盹”）Jaccard 可以很低，但对模型是同一监督信号——重复的判定单位是<strong>语义</strong>而非字符。用 Sentence-Transformers（文本）或 CLIP（图文）编码，余弦相似度：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>cos</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>u</mi><mo separator="true">,</mo><mi>v</mi><mo stretchy="false">)</mo><mo>=</mo><mfrac><mrow><mi>u</mi><mo>⋅</mo><mi>v</mi></mrow><mrow><mi mathvariant="normal">∥</mi><mi>u</mi><mi mathvariant="normal">∥</mi><mi mathvariant="normal">∥</mi><mi>v</mi><mi mathvariant="normal">∥</mi></mrow></mfrac></mrow><annotation encoding="application/x-tex">\cos(u, v) = \frac{u \cdot v}{\|u\| \|v\|}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">cos</span><span class="mopen">(</span><span class="mord mathnormal">u</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.0574500000000002em;vertical-align:-0.936em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.12145em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">∥</span><span class="mord mathnormal">u</span><span class="mord">∥</span><span class="mord">∥</span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span><span class="mord">∥</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">u</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.936em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p><strong>这个公式在干什么</strong>：两个 Embedding 向量的点积除以各自长度——消掉向量长短的影响，只留&quot;方向是否一致&quot;。方向越一致（语义越像）值越接近 1，正交（无关）趋近 0，相反为负。结果拿来当<strong>语义重复判据</strong>：配 <strong>FAISS</strong> 做近邻检索（百万级向量毫秒级 query），相似度超过阈值（0.92 是学习计划指定的起点）判为语义重复。</p>
+<p><strong>分工总结</strong>：字面去重便宜、快、适合第一道闸（处理完全/近完全重复）；语义去重较贵、适合第二道闸（处理改写与模板变体）。<strong>只做字面去重的清洗是不完整的</strong>——这正是自测清单第 3 题的核心：合成数据的大敌恰恰是&quot;字面不同、语义雷同&quot;的模板坍缩样本，它们大量逃过精确匹配与 MinHash（shingle 重叠低于阈值），只有语义层能抓住。</p>
+<blockquote>
+<p><strong>一句话总结</strong>：MinHash 用&quot;最小哈希相等概率 = Jaccard&quot;把 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><msup><mi>n</mi><mn>2</mn></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(n^2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> 的两两比较变成近线性的签名比对，抓&quot;字面像&quot;的重复；Embedding 余弦抓&quot;教的是同一件事&quot;的重复——两道闸串联，阈值永远要按自己的数据分布人工校准。</p>
+</blockquote>
+<p>阈值 0.92 的语义直觉：CLIP/Sentence 空间中不相关文本的余弦通常在 0.3~0.6，同义改写在 0.9+，同一模板换实体在 0.95+。0.92 大致卡在&quot;同义改写&quot;与&quot;相关但不同&quot;之间。<strong>阈值是分布相关的</strong>——接入自己的数据后应抽样人工核对阈值两侧的样本对再定稿，不要迷信任何论文数字。</p>
+<hr />
+<h2 id="2-系统架构四道闸的清洗流水线"><a class="markdownIt-Anchor" href="#2-系统架构四道闸的清洗流水线"></a> 2. 系统架构：四道闸的清洗流水线</h2>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">原始合成数据 (2000 条, 混噪声)</span><br><span class="line">   │</span><br><span class="line">   ▼</span><br><span class="line">┌─ 闸1: Schema 校验 (程序, 毫秒级) ─────────────┐</span><br><span class="line">│ JSON 可解析 / 必填字段 / 长度界限 / 格式断言     │  -&gt; 丢弃率通常 2~8%</span><br><span class="line">└──────────────────────────────────────────────┘</span><br><span class="line">   ▼</span><br><span class="line">┌─ 闸2: 规则过滤 (正则, 秒级) ──────────────────┐</span><br><span class="line">│ 乱码字符 / 重复句式 / 答案为空或复读 / 占位符泄漏 │</span><br><span class="line">└──────────────────────────────────────────────┘</span><br><span class="line">   ▼</span><br><span class="line">┌─ 闸3: 字面去重 (MinHash+LSH, 分钟级) ─────────┐</span><br><span class="line">│ Jaccard &gt; 0.8 的近重复对, 保留质量分高者        │</span><br><span class="line">└──────────────────────────────────────────────┘</span><br><span class="line">   ▼</span><br><span class="line">┌─ 闸4: 语义去重 (Embedding+FAISS, 分钟级) ─────┐</span><br><span class="line">│ 余弦 &gt; 0.92 的语义重复, 保留排序靠前/信息量大者  │</span><br><span class="line">└──────────────────────────────────────────────┘</span><br><span class="line">   ▼</span><br><span class="line">┌─ 闸5: 质量打分 (LLM Judge 或启发式, 小时级) ───┐</span><br><span class="line">│ 事实性/连贯性/指令遵循 1~5 分 -&gt; 取 Top 40%     │</span><br><span class="line">└──────────────────────────────────────────────┘</span><br><span class="line">   ▼</span><br><span class="line">高质量数据集 (含每条的过滤审计记录)</span><br></pre></td></tr></table></figure>
+<p>顺序设计的经济学：<strong>便宜的闸放前面</strong>。闸1/2 是纯 CPU 规则，闸3 是哈希计算，闸4 要跑 Embedding 模型，闸5 要调 LLM——每过一道闸，后续闸的量就少一批，最贵的 LLM 打分只对幸存者执行。若倒置（先 LLM 打分再去重），重复样本会白烧几倍打分预算。</p>
+<p>保留策略细节：语义重复簇内<strong>保留哪一条</strong>？经验做法是保留&quot;答案更长/信息熵更高/质量分更高&quot;的一条——去重不是扔，是<strong>簇内择优</strong>。</p>
+<hr />
+<h2 id="3-实现与验证"><a class="markdownIt-Anchor" href="#3-实现与验证"></a> 3. 实现与验证</h2>
+<h3 id="31-本周-mvp五闸清洗-pipeline"><a class="markdownIt-Anchor" href="#31-本周-mvp五闸清洗-pipeline"></a> 3.1 本周 MVP：五闸清洗 Pipeline</h3>
+<p>闸1/2/3（MinHash 手写实现）与启发式打分零重依赖可运行；闸4 给出 FAISS/Embedding 接入点，离线用字符 n-gram 向量近似演示。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">数据清洗 Pipeline: Schema -&gt; 规则 -&gt; MinHash 去重 -&gt; 语义去重 -&gt; 质量打分 (Top 40%)。</span></span><br><span class="line"><span class="string">运行方式: python stage4_week4_clean.py --raw raw.jsonl --out clean.jsonl [--use_faiss]</span></span><br><span class="line"><span class="string">依赖: datasketch(可选), faiss-cpu + sentence-transformers(可选)</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> argparse</span><br><span class="line"><span class="keyword">import</span> hashlib</span><br><span class="line"><span class="keyword">import</span> json</span><br><span class="line"><span class="keyword">import</span> re</span><br><span class="line"><span class="keyword">from</span> collections <span class="keyword">import</span> defaultdict</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 闸1+2: Schema 与规则 ----------</span></span><br><span class="line">PLACEHOLDER = re.<span class="built_in">compile</span>(<span class="string">r&quot;\&#123;\&#123;|\&#125;\&#125;|XXX|TODO|&lt;image&gt;\s*&lt;image&gt;&quot;</span>)</span><br><span class="line">REPEAT_RUN = re.<span class="built_in">compile</span>(<span class="string">r&quot;(.)\1&#123;8,&#125;&quot;</span>)          <span class="comment"># 同字符连跑 9+ 次</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">rule_check</span>(<span class="params">rec</span>):</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">not</span> <span class="built_in">isinstance</span>(rec, <span class="built_in">dict</span>) <span class="keyword">or</span> <span class="keyword">not</span> <span class="built_in">all</span>(rec.get(k) <span class="keyword">for</span> k <span class="keyword">in</span> (<span class="string">&quot;question&quot;</span>, <span class="string">&quot;answer&quot;</span>)):</span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot;schema&quot;</span></span><br><span class="line">    q, a = rec[<span class="string">&quot;question&quot;</span>], rec[<span class="string">&quot;answer&quot;</span>]</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">not</span> (<span class="number">5</span> &lt;= <span class="built_in">len</span>(q) &lt;= <span class="number">500</span> <span class="keyword">and</span> <span class="number">10</span> &lt;= <span class="built_in">len</span>(a) &lt;= <span class="number">4000</span>):</span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot;length&quot;</span></span><br><span class="line">    <span class="keyword">if</span> PLACEHOLDER.search(q + a) <span class="keyword">or</span> REPEAT_RUN.search(q + a):</span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot;garbage&quot;</span></span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">len</span>(<span class="built_in">set</span>(a)) &lt; <span class="number">8</span> <span class="keyword">and</span> <span class="built_in">len</span>(a) &gt; <span class="number">30</span>:        <span class="comment"># 答案字符多样性过低 -&gt; 复读</span></span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot;repeat&quot;</span></span><br><span class="line">    <span class="keyword">return</span> <span class="literal">None</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 闸3: MinHash + LSH (手写核心, 与 datasketch 同构) ----------</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">shingles</span>(<span class="params">text, k=<span class="number">3</span></span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;字符级 n-gram 集合 (中文无分词歧义; 英文同理适用)&quot;&quot;&quot;</span></span><br><span class="line">    text = re.sub(<span class="string">r&quot;\s+&quot;</span>, <span class="string">&quot;&quot;</span>, text.lower())</span><br><span class="line">    <span class="keyword">return</span> &#123;text[i:i + k] <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="built_in">max</span>(<span class="number">1</span>, <span class="built_in">len</span>(text) - k + <span class="number">1</span>))&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">minhash_sig</span>(<span class="params">sh, num_perm=<span class="number">128</span>, seed=<span class="number">0</span></span>):</span><br><span class="line">    sig = []</span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(num_perm):</span><br><span class="line">        <span class="comment"># 第 i 个哈希函数: key 参数注入 perm 序号, 数据从构造器传入</span></span><br><span class="line">        m = <span class="built_in">min</span>(<span class="built_in">int</span>.from_bytes(</span><br><span class="line">            hashlib.blake2b(<span class="built_in">str</span>(s).encode(), digest_size=<span class="number">8</span>,</span><br><span class="line">                            key=i.to_bytes(<span class="number">4</span>, <span class="string">&quot;big&quot;</span>) + seed.to_bytes(<span class="number">4</span>, <span class="string">&quot;big&quot;</span>)).digest(),</span><br><span class="line">            <span class="string">&quot;big&quot;</span>) <span class="keyword">for</span> s <span class="keyword">in</span> sh)</span><br><span class="line">        sig.append(m)</span><br><span class="line">    <span class="keyword">return</span> sig</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">est_jaccard</span>(<span class="params">s1, s2</span>):</span><br><span class="line">    same = <span class="built_in">sum</span>(a == b <span class="keyword">for</span> a, b <span class="keyword">in</span> <span class="built_in">zip</span>(s1, s2))</span><br><span class="line">    <span class="keyword">return</span> same / <span class="built_in">len</span>(s1)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">lsh_pairs</span>(<span class="params">sigs, bands=<span class="number">32</span>, rows=<span class="number">4</span></span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;签名分桶: bands*rows = num_perm; 返回疑似重复对 (近似 O(n))&quot;&quot;&quot;</span></span><br><span class="line">    buckets = defaultdict(<span class="built_in">list</span>)</span><br><span class="line">    <span class="keyword">for</span> idx, sig <span class="keyword">in</span> sigs.items():</span><br><span class="line">        <span class="keyword">for</span> b <span class="keyword">in</span> <span class="built_in">range</span>(bands):</span><br><span class="line">            key = (b, <span class="built_in">tuple</span>(sig[b * rows:(b + <span class="number">1</span>) * rows]))</span><br><span class="line">            buckets[key].append(idx)</span><br><span class="line">    pairs = <span class="built_in">set</span>()</span><br><span class="line">    <span class="keyword">for</span> members <span class="keyword">in</span> buckets.values():</span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">len</span>(members) &gt; <span class="number">1</span>:</span><br><span class="line">            members = <span class="built_in">sorted</span>(members)</span><br><span class="line">            <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="built_in">len</span>(members)):</span><br><span class="line">                <span class="keyword">for</span> j <span class="keyword">in</span> <span class="built_in">range</span>(i + <span class="number">1</span>, <span class="built_in">len</span>(members)):</span><br><span class="line">                    pairs.add((members[i], members[j]))</span><br><span class="line">    <span class="keyword">return</span> pairs</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">dedup_literal</span>(<span class="params">records, thr=<span class="number">0.8</span></span>):</span><br><span class="line">    sigs = &#123;i: minhash_sig(shingles(r[<span class="string">&quot;question&quot;</span>] + <span class="string">&quot; &quot;</span> + r[<span class="string">&quot;answer&quot;</span>]))</span><br><span class="line">            <span class="keyword">for</span> i, r <span class="keyword">in</span> <span class="built_in">enumerate</span>(records)&#125;</span><br><span class="line">    drop = <span class="built_in">set</span>()</span><br><span class="line">    <span class="keyword">for</span> i, j <span class="keyword">in</span> lsh_pairs(sigs):</span><br><span class="line">        <span class="keyword">if</span> est_jaccard(sigs[i], sigs[j]) &gt;= thr:</span><br><span class="line">            <span class="comment"># 簇内择优: 保留答案更长者</span></span><br><span class="line">            drop.add(j <span class="keyword">if</span> <span class="built_in">len</span>(records[j][<span class="string">&quot;answer&quot;</span>]) &gt;= <span class="built_in">len</span>(records[i][<span class="string">&quot;answer&quot;</span>]) <span class="keyword">else</span> i)</span><br><span class="line">    <span class="keyword">return</span> drop</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 闸4: 语义去重 ----------</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">dedup_semantic</span>(<span class="params">records, thr=<span class="number">0.92</span>, use_faiss=<span class="literal">False</span></span>):</span><br><span class="line">    <span class="keyword">if</span> use_faiss:</span><br><span class="line">        <span class="keyword">from</span> sentence_transformers <span class="keyword">import</span> SentenceTransformer</span><br><span class="line">        <span class="keyword">import</span> faiss, numpy <span class="keyword">as</span> np</span><br><span class="line">        model = SentenceTransformer(<span class="string">&quot;sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2&quot;</span>)</span><br><span class="line">        emb = model.encode([r[<span class="string">&quot;question&quot;</span>] <span class="keyword">for</span> r <span class="keyword">in</span> records],</span><br><span class="line">                           normalize_embeddings=<span class="literal">True</span>, show_progress_bar=<span class="literal">False</span>)</span><br><span class="line">        index = faiss.IndexFlatIP(emb.shape[<span class="number">1</span>])          <span class="comment"># 内积 = 归一化向量的余弦</span></span><br><span class="line">        index.add(np.array(emb))</span><br><span class="line">        sims, ids = index.search(np.array(emb), <span class="number">2</span>)       <span class="comment"># 最近邻(含自身)取 k=2</span></span><br><span class="line">        drop = <span class="built_in">set</span>()</span><br><span class="line">        <span class="keyword">for</span> i, (s, j) <span class="keyword">in</span> <span class="built_in">enumerate</span>(<span class="built_in">zip</span>(sims[:, <span class="number">1</span>], ids[:, <span class="number">1</span>])):</span><br><span class="line">            <span class="keyword">if</span> s &gt; thr <span class="keyword">and</span> j <span class="keyword">not</span> <span class="keyword">in</span> drop:                <span class="comment"># 保留先出现的</span></span><br><span class="line">                drop.add(<span class="built_in">int</span>(j))</span><br><span class="line">        <span class="keyword">return</span> drop</span><br><span class="line">    <span class="comment"># 离线近似: 字符 2-gram 集合的 Jaccard 当伪语义 (仅演示流程)</span></span><br><span class="line">    <span class="keyword">import</span> itertools</span><br><span class="line">    vecs = [shingles(r[<span class="string">&quot;question&quot;</span>], <span class="number">2</span>) <span class="keyword">for</span> r <span class="keyword">in</span> records]</span><br><span class="line">    drop = <span class="built_in">set</span>()</span><br><span class="line">    <span class="keyword">for</span> (i, j), (va, vb) <span class="keyword">in</span> <span class="built_in">zip</span>(itertools.combinations(<span class="built_in">range</span>(<span class="built_in">len</span>(records)), <span class="number">2</span>),</span><br><span class="line">                                itertools.combinations(vecs, <span class="number">2</span>)):</span><br><span class="line">        <span class="keyword">if</span> va | vb <span class="keyword">and</span> <span class="built_in">len</span>(va &amp; vb) / <span class="built_in">len</span>(va | vb) &gt; <span class="number">0.55</span>:   <span class="comment"># 演示阈值, 非余弦</span></span><br><span class="line">            drop.add(j)</span><br><span class="line">    <span class="keyword">return</span> drop</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 闸5: 质量打分 (启发式; LLM Judge 接口留出) ----------</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">quality_score</span>(<span class="params">rec</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;0~1 启发式分: 有 CoT 结构 + 答案信息量 + 问题具体度&quot;&quot;&quot;</span></span><br><span class="line">    s = <span class="number">0.0</span></span><br><span class="line">    a = rec[<span class="string">&quot;answer&quot;</span>]</span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">any</span>(k <span class="keyword">in</span> a <span class="keyword">for</span> k <span class="keyword">in</span> (<span class="string">&quot;观察&quot;</span>, <span class="string">&quot;推断&quot;</span>, <span class="string">&quot;结论&quot;</span>, <span class="string">&quot;首先&quot;</span>, <span class="string">&quot;因此&quot;</span>)):</span><br><span class="line">        s += <span class="number">0.35</span>                                        <span class="comment"># 有推理结构</span></span><br><span class="line">    s += <span class="built_in">min</span>(<span class="built_in">len</span>(a) / <span class="number">300</span>, <span class="number">0.35</span>)                          <span class="comment"># 答案信息量 (封顶)</span></span><br><span class="line">    s += <span class="built_in">min</span>(<span class="built_in">len</span>(re.findall(<span class="string">r&quot;[\u4e00-\u9fa5\w]&#123;2,&#125;&quot;</span>, rec[<span class="string">&quot;question&quot;</span>])) / <span class="number">15</span>, <span class="number">0.3</span>)</span><br><span class="line">    <span class="keyword">return</span> s</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">llm_judge_scores</span>(<span class="params">records, api_base, model</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;真实模式: 调 LLM 按 1~5 打分 (事实性/连贯性/指令遵循), 归一化到 0~1&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">from</span> openai <span class="keyword">import</span> OpenAI</span><br><span class="line">    client = OpenAI(base_url=api_base, api_key=<span class="string">&quot;EMPTY&quot;</span>)</span><br><span class="line">    out = []</span><br><span class="line">    <span class="keyword">for</span> r <span class="keyword">in</span> records:</span><br><span class="line">        prompt = (<span class="string">f&quot;按事实性与连贯性给这条问答打 1~5 分, 只输出数字。\n&quot;</span></span><br><span class="line">                  <span class="string">f&quot;Q: <span class="subst">&#123;r[<span class="string">&#x27;question&#x27;</span>][:<span class="number">300</span>]&#125;</span>\nA: <span class="subst">&#123;r[<span class="string">&#x27;answer&#x27;</span>][:<span class="number">600</span>]&#125;</span>&quot;</span>)</span><br><span class="line">        rsp = client.chat.completions.create(model=model, temperature=<span class="number">0</span>,</span><br><span class="line">                                             messages=[&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: prompt&#125;])</span><br><span class="line">        <span class="keyword">try</span>:</span><br><span class="line">            out.append(<span class="built_in">min</span>(<span class="built_in">int</span>(rsp.choices[<span class="number">0</span>].message.content.strip()[<span class="number">0</span>]), <span class="number">5</span>) / <span class="number">5</span>)</span><br><span class="line">        <span class="keyword">except</span> Exception:</span><br><span class="line">            out.append(<span class="number">0.5</span>)                              <span class="comment"># 解析失败给中性分并人工复核</span></span><br><span class="line">    <span class="keyword">return</span> out</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    ap = argparse.ArgumentParser()</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--raw&quot;</span>, default=<span class="string">&quot;raw.jsonl&quot;</span>); ap.add_argument(<span class="string">&quot;--out&quot;</span>, default=<span class="string">&quot;clean.jsonl&quot;</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--top&quot;</span>, <span class="built_in">type</span>=<span class="built_in">float</span>, default=<span class="number">0.4</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--use_faiss&quot;</span>, action=<span class="string">&quot;store_true&quot;</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--judge-api&quot;</span>); ap.add_argument(<span class="string">&quot;--judge-model&quot;</span>)</span><br><span class="line">    args = ap.parse_args()</span><br><span class="line"></span><br><span class="line">    raw = [json.loads(l) <span class="keyword">for</span> l <span class="keyword">in</span> <span class="built_in">open</span>(args.raw)]</span><br><span class="line">    n0 = <span class="built_in">len</span>(raw)</span><br><span class="line">    <span class="comment"># 闸1+2</span></span><br><span class="line">    kept, rejected = [], &#123;&#125;</span><br><span class="line">    <span class="keyword">for</span> r <span class="keyword">in</span> raw:</span><br><span class="line">        why = rule_check(r)</span><br><span class="line">        <span class="keyword">if</span> why <span class="keyword">is</span> <span class="literal">None</span>:</span><br><span class="line">            kept.append(r)</span><br><span class="line">        <span class="keyword">else</span>:</span><br><span class="line">            rejected[why] = rejected.get(why, <span class="number">0</span>) + <span class="number">1</span></span><br><span class="line">    <span class="comment"># 闸3</span></span><br><span class="line">    drop_lit = dedup_literal(kept)</span><br><span class="line">    kept = [r <span class="keyword">for</span> i, r <span class="keyword">in</span> <span class="built_in">enumerate</span>(kept) <span class="keyword">if</span> i <span class="keyword">not</span> <span class="keyword">in</span> drop_lit]</span><br><span class="line">    n_lit = <span class="built_in">len</span>(kept)</span><br><span class="line">    <span class="comment"># 闸4</span></span><br><span class="line">    drop_sem = dedup_semantic(kept, use_faiss=args.use_faiss)</span><br><span class="line">    kept = [r <span class="keyword">for</span> i, r <span class="keyword">in</span> <span class="built_in">enumerate</span>(kept) <span class="keyword">if</span> i <span class="keyword">not</span> <span class="keyword">in</span> drop_sem]</span><br><span class="line">    n_sem = <span class="built_in">len</span>(kept)</span><br><span class="line">    <span class="comment"># 闸5</span></span><br><span class="line">    scores = (llm_judge_scores(kept, args.judge_api, args.judge_model)</span><br><span class="line">              <span class="keyword">if</span> args.judge_api <span class="keyword">else</span> [quality_score(r) <span class="keyword">for</span> r <span class="keyword">in</span> kept])</span><br><span class="line">    <span class="keyword">for</span> r, s <span class="keyword">in</span> <span class="built_in">zip</span>(kept, scores):</span><br><span class="line">        r[<span class="string">&quot;quality&quot;</span>] = <span class="built_in">round</span>(s, <span class="number">3</span>)</span><br><span class="line">    kept.sort(key=<span class="keyword">lambda</span> r: -r[<span class="string">&quot;quality&quot;</span>])</span><br><span class="line">    final = kept[: <span class="built_in">int</span>(n0 * args.top)]                  <span class="comment"># Top 40% 按原始总量计</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(args.out, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        f.writelines(json.dumps(r, ensure_ascii=<span class="literal">False</span>) + <span class="string">&quot;\n&quot;</span> <span class="keyword">for</span> r <span class="keyword">in</span> final)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 断言与审计报告 ----</span></span><br><span class="line">    <span class="comment"># 演示数据模板占比高, 模板族会被闸3/4 大幅塌缩; 真实混合数据幸存率更高</span></span><br><span class="line">    <span class="keyword">assert</span> n_sem &gt;= <span class="built_in">int</span>(n0 * args.top * <span class="number">0.4</span>), <span class="string">&quot;清洗后幸存量不足, 无法支撑 Top 40% 目标&quot;</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;原始 <span class="subst">&#123;n0&#125;</span> | 规则剔除 <span class="subst">&#123;rejected&#125;</span> | 字面去重剩 <span class="subst">&#123;n_lit&#125;</span> | &quot;</span></span><br><span class="line">          <span class="string">f&quot;语义去重剩 <span class="subst">&#123;n_sem&#125;</span> | 最终 Top40% <span class="subst">&#123;<span class="built_in">len</span>(final)&#125;</span> 条 -&gt; <span class="subst">&#123;args.out&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    main()</span><br></pre></td></tr></table></figure>
+<p><strong>配套噪声数据生成与验收运行</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 生成 2000 条混噪声测试集 (gen_noise.py 片段; 注意输出必须是 JSONL 逐行, 不能 json.dump 整个列表)</span></span><br><span class="line"><span class="keyword">import</span> json, random</span><br><span class="line">rng = random.Random(<span class="number">0</span>)</span><br><span class="line">OBJ = [<span class="string">&quot;红色轿车&quot;</span>, <span class="string">&quot;木桌&quot;</span>, <span class="string">&quot;橘猫&quot;</span>, <span class="string">&quot;金属水杯&quot;</span>, <span class="string">&quot;纸箱&quot;</span>, <span class="string">&quot;灭火器&quot;</span>, <span class="string">&quot;安全帽&quot;</span>, <span class="string">&quot;绿色盆栽&quot;</span>, <span class="string">&quot;显示器&quot;</span>, <span class="string">&quot;工具箱&quot;</span>]</span><br><span class="line">POS = [<span class="string">&quot;左侧&quot;</span>, <span class="string">&quot;右侧&quot;</span>, <span class="string">&quot;中上部&quot;</span>, <span class="string">&quot;角落&quot;</span>, <span class="string">&quot;前景&quot;</span>, <span class="string">&quot;背景&quot;</span>, <span class="string">&quot;中央&quot;</span>, <span class="string">&quot;边缘&quot;</span>]</span><br><span class="line">Q_PAT = [<span class="string">&quot;&#123;p&#125;的&#123;o&#125;一共有几个？&quot;</span>, <span class="string">&quot;数一数&#123;p&#125;出现了几个&#123;o&#125;？&quot;</span>, <span class="string">&quot;图中&#123;p&#125;位置的&#123;o&#125;数量是多少？&quot;</span>, <span class="string">&quot;请统计&#123;p&#125;处&#123;o&#125;的个数。&quot;</span>]</span><br><span class="line">A_PAT = [(<span class="string">&quot;观察：&#123;p&#125;区域可见&#123;n&#125;个&#123;o&#125;。&quot;</span>, <span class="string">&quot;推断：物体轮廓清晰无遮挡。&quot;</span>, <span class="string">&quot;结论：计数以图像证据为准。&quot;</span>),</span><br><span class="line">         (<span class="string">&quot;观察：画面&#123;p&#125;部分主体明确。&quot;</span>, <span class="string">&quot;推断：与周围无重叠干扰。&quot;</span>, <span class="string">&quot;结论：共识别出&#123;n&#125;个&#123;o&#125;。&quot;</span>),</span><br><span class="line">         (<span class="string">&quot;观察：&#123;o&#125;出现在画面&#123;p&#125;。&quot;</span>, <span class="string">&quot;推断：光照不影响判断。&quot;</span>, <span class="string">&quot;结论：最终计数为&#123;n&#125;。&quot;</span>)]</span><br><span class="line">G_PAT = [<span class="string">&quot;描述图片&#123;i&#125;中&#123;p&#125;的&#123;o&#125;正在&#123;act&#125;时的状态。&quot;</span>, <span class="string">&quot;图片&#123;i&#125;里&#123;p&#125;的&#123;o&#125;进行&#123;act&#125;作业的情形如何？&quot;</span>,</span><br><span class="line">         <span class="string">&quot;分析&#123;i&#125;号图中&#123;p&#125;处&#123;o&#125;执行&#123;act&#125;动作的画面。&quot;</span>]</span><br><span class="line">G_A_PAT = [(<span class="string">&quot;观察：人物&#123;h&#125;持工具，&#123;act&#125;动作幅度明显。&quot;</span>, <span class="string">&quot;推断：该工序处于&#123;pos&#125;阶段。&quot;</span>, <span class="string">&quot;结论：作业状态正常。&quot;</span>),</span><br><span class="line">           (<span class="string">&quot;观察：主体以&#123;h&#125;操作，&#123;act&#125;进行中。&quot;</span>, <span class="string">&quot;推断：与周边设备配合有序。&quot;</span>, <span class="string">&quot;结论：符合安全规范。&quot;</span>)]</span><br><span class="line"></span><br><span class="line">base = []</span><br><span class="line"><span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">400</span>):    <span class="comment"># 多样化正样本 (对象×位置×数量×句式随机组合, 否则会被闸3/4 当模板整族删除)</span></span><br><span class="line">    o, p, n = rng.choice(OBJ), rng.choice(POS), rng.randint(<span class="number">1</span>, <span class="number">5</span>)</span><br><span class="line">    base.append(&#123;<span class="string">&quot;question&quot;</span>: rng.choice(Q_PAT).<span class="built_in">format</span>(p=p, o=o),</span><br><span class="line">                 <span class="string">&quot;answer&quot;</span>: <span class="string">&quot;&quot;</span>.join(s.<span class="built_in">format</span>(p=p, o=o, n=n) <span class="keyword">for</span> s <span class="keyword">in</span> rng.choice(A_PAT))&#125;)</span><br><span class="line">dup = [<span class="built_in">dict</span>(b) <span class="keyword">for</span> b <span class="keyword">in</span> base]                                  <span class="comment"># 完全重复的另一份 (闸3 目标)</span></span><br><span class="line">semantic = [&#123;<span class="string">&quot;question&quot;</span>: <span class="string">f&quot;请问图片里第<span class="subst">&#123;i&#125;</span>类物体有几个？&quot;</span>,</span><br><span class="line">             <span class="string">&quot;answer&quot;</span>: <span class="string">&quot;详细分析过程：结合图像内容作答。&quot;</span>&#125; <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">400</span>)]  <span class="comment"># 同模板换序号 (近重复)</span></span><br><span class="line">noise = [&#123;<span class="string">&quot;question&quot;</span>: <span class="string">f&quot;garbage<span class="subst">&#123;i&#125;</span>&quot;</span>, <span class="string">&quot;answer&quot;</span>: <span class="string">&quot;aaaaaaaaaaaaaaaaaaaa&quot;</span>&#125; <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">200</span>)]</span><br><span class="line">short = [&#123;<span class="string">&quot;question&quot;</span>: <span class="string">&quot;啥?&quot;</span>, <span class="string">&quot;answer&quot;</span>: <span class="string">&quot;嗯&quot;</span>&#125; <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">100</span>)]</span><br><span class="line">good = []</span><br><span class="line"><span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">500</span>):</span><br><span class="line">    o, p, i = rng.choice(OBJ), rng.choice(POS), rng.randint(<span class="number">0</span>, <span class="number">9999</span>)</span><br><span class="line">    act = rng.choice([<span class="string">&quot;装配&quot;</span>, <span class="string">&quot;搬运&quot;</span>, <span class="string">&quot;分拣&quot;</span>, <span class="string">&quot;巡视&quot;</span>, <span class="string">&quot;擦拭&quot;</span>, <span class="string">&quot;堆叠&quot;</span>, <span class="string">&quot;检修&quot;</span>, <span class="string">&quot;记录&quot;</span>])</span><br><span class="line">    good.append(&#123;<span class="string">&quot;question&quot;</span>: rng.choice(G_PAT).<span class="built_in">format</span>(i=i, p=p, o=o, act=act),</span><br><span class="line">                 <span class="string">&quot;answer&quot;</span>: <span class="string">&quot;&quot;</span>.join(s.<span class="built_in">format</span>(h=rng.choice([<span class="string">&quot;左手&quot;</span>, <span class="string">&quot;右手&quot;</span>]), act=act,</span><br><span class="line">                                            pos=rng.choice([<span class="string">&quot;起始&quot;</span>, <span class="string">&quot;中间&quot;</span>, <span class="string">&quot;收尾&quot;</span>]))</span><br><span class="line">                                   <span class="keyword">for</span> s <span class="keyword">in</span> rng.choice(G_A_PAT))&#125;)</span><br><span class="line">data = base + dup + semantic + noise + short + good             <span class="comment"># 共 2000 条</span></span><br><span class="line">rng.shuffle(data)</span><br><span class="line"><span class="keyword">with</span> <span class="built_in">open</span>(<span class="string">&quot;raw.jsonl&quot;</span>, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">    <span class="keyword">for</span> r <span class="keyword">in</span> data:</span><br><span class="line">        f.write(json.dumps(r, ensure_ascii=<span class="literal">False</span>) + <span class="string">&quot;\n&quot;</span>)</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">python stage4_week4_clean.py --raw raw.jsonl --out clean.jsonl</span><br><span class="line"><span class="comment"># 预期输出 (seed=0 实测):</span></span><br><span class="line"><span class="comment"># 原始 2000 | 规则剔除 &#123;&#x27;length&#x27;: 100, &#x27;garbage&#x27;: 200&#125; | 字面去重剩 800 | 语义去重剩 377 | 最终 Top40% 377 条 -&gt; clean.jsonl</span></span><br><span class="line"><span class="comment">#</span></span><br><span class="line"><span class="comment"># 解读: 400 条完全重复在闸3 被删; &quot;同模板换序号&quot;的 400 条与正样本的少量模板碰撞也被闸3</span></span><br><span class="line"><span class="comment"># (字符 n-gram 高重叠)拦下大半; 闸4 再删掉跨措辞的模板变体。演示数据模板占比极高,</span></span><br><span class="line"><span class="comment"># 塌缩率相应很高——真实混合数据的幸存率会显著高于 377/2000, Top-K 截取以闸5 打分排序为准。</span></span><br></pre></td></tr></table></figure>
+<p><strong>必须人工做的验收</strong>：从 0.92 阈值两侧各抽 10 对&quot;被判重复&quot;的样本肉眼核对——把&quot; teaching 不同知识点却被误杀&quot;的比例压到可接受（&lt;10%），阈值才算定稿。</p>
+<hr />
+<h2 id="4-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#4-工程权衡与失效模式"></a> 4. 工程权衡与失效模式</h2>
+<h3 id="41-决策表去重与打分的参数"><a class="markdownIt-Anchor" href="#41-决策表去重与打分的参数"></a> 4.1 决策表：去重与打分的参数</h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>起点</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MinHash shingle k</td>
+<td>3（字符级 n-gram，中英文通用）</td>
+<td>k 越大对改写越敏感、对小文本越粗糙</td>
+</tr>
+<tr>
+<td>LSH bands/rows</td>
+<td>128 签名 = 32 bands × 4 rows</td>
+<td>检出 J≈0.8 的概率 = 1-(1-0.8⁴)³² ≈ 1.0（0.5904³²≈5×10⁻⁸，几乎必检出）；J≈0.5 时降至 ≈0.87</td>
+</tr>
+<tr>
+<td>语义阈值（文本）</td>
+<td>0.90~0.94</td>
+<td>分布相关，人工抽检定稿</td>
+</tr>
+<tr>
+<td>语义阈值（CLIP 图文）</td>
+<td>0.92+</td>
+<td>CLIP 相似度整体偏高，阈值略升</td>
+</tr>
+<tr>
+<td>Top-K 比例</td>
+<td>30%~50%</td>
+<td>打分置信度低时保守（更大 K），高时激进</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-三个代表性失效模式"><a class="markdownIt-Anchor" href="#42-三个代表性失效模式"></a> 4.2 三个代表性失效模式</h3>
+<p><strong>失效 1：语义去重误杀&quot;教学必要&quot;的相似样本</strong></p>
+<ul>
+<li><strong>症状</strong>：清洗后模型在某一维度（如计数 2~5 的区分）明显变弱。</li>
+<li><strong>根因</strong>：计数教学本来就需要&quot;同模板换数字&quot;的样本族——语义去重把这条&quot;族&quot;当重复删到只剩 1 条，梯度信号不足以学会规则泛化。</li>
+<li><strong>定位</strong>：按维度统计清洗前后样本量，找骤降维度；抽 0.92 两侧样本对人工判。</li>
+<li><strong>修复</strong>：<strong>去重键问题分层</strong>——教学必需的参数化模板族（答案不同）豁免；只对&quot;答案也雷同&quot;的样本判重（把 answer 拼进相似度输入，或按维度设阈值）。</li>
+</ul>
+<p><strong>失效 2：MinHash 阈值过松，近重复漏网</strong></p>
+<ul>
+<li><strong>症状</strong>：训练后模型仍有复读倾向，检查发现大量&quot;仅换实体词&quot;的样本存活。</li>
+<li><strong>根因</strong>：shingle 重叠率因实体替换而低于 0.8 阈值，字面闸放行；而语义闸若没接（或阈值过松）就漏了。</li>
+<li><strong>定位</strong>：对存活样本跑一次高阈值（0.85）MinHash 复查，统计漏网率。</li>
+<li><strong>修复</strong>：字面/语义双闸的阈值联动——字面闸收紧到 0.7 做保守第一刀，语义闸兜底。</li>
+</ul>
+<p><strong>失效 3：LLM Judge 打分的系统性偏置污染 Top-K</strong></p>
+<ul>
+<li><strong>症状</strong>：Top 40% 数据里长答案占比异常高，微调后模型输出冗长。</li>
+<li><strong>根因</strong>：Judge（或启发式）对&quot;长=信息量大&quot;的相关性赋予过高权重——本 MVP 的 <code>quality_score</code> 里 <code>len(a)/300</code> 项就可能诱发此偏置。</li>
+<li><strong>定位</strong>：对打分与答案长度做相关性分析（相关系数 &gt;0.7 即偏置）；抽长短答案同题对评估。</li>
+<li><strong>修复</strong>：打分维度去相关（长度归一化后按&quot;单位长度信息量&quot;计分）；LLM Judge 的 prompt 显式声明&quot;长度不影响评分&quot;；最终数据做长度分布监控并回配平。</li>
+</ul>
+<hr />
+<h2 id="5-延伸思考题"><a class="markdownIt-Anchor" href="#5-延伸思考题"></a> 5. 延伸思考题</h2>
+<ol>
+<li><strong>阈值的理论视角</strong>：0.92 这个数在不同 Embedding 模型间不可迁移（不同模型的相似度分布不同）。设计一个&quot;自动定阈值&quot;流程：不依赖固定值，而是从数据分布本身（如相似度直方图的双峰谷点）推导阈值，并讨论其失效场景（单峰分布时怎么办）。</li>
+<li><strong>规模推演</strong>：1 亿条数据的语义去重，FAISS IndexFlatIP（精确检索）内存放不下时有哪些降级路径？（提示：IVF/HNSW 近似索引、聚类后簇内去重、两阶段——先 MinHash 粗筛再 Embedding 细查；每条给出精度/速度/内存的定性代价。）</li>
+<li><strong>闭环实验</strong>：用第 4 节失效 1 的&quot;分层去重&quot;改造本 MVP，在同一条 SFT 流程上对比&quot;全局去重&quot;与&quot;分层去重&quot;数据的计数维度评测分（Stage 3 mini-Bench），验证清洗策略对能力维度的实际影响——这是把 Stage 3 评测与 Stage 4 清洗真正闭环的练习。</li>
+</ol>
+<hr />
+<p><em>下一篇：第 5-6 周：高吞吐合成 Pipeline 工程化与闭环验证</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/05/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC5-6%E5%91%A8-%E9%AB%98%E5%90%9E%E5%90%90Pipeline%E4%B8%8E%E9%97%AD%E7%8E%AF%E9%AA%8C%E8%AF%81/" rel="prev" title="第5-6周-高吞吐Pipeline与闭环验证">
+                  <i class="fa fa-angle-left"></i> 第5-6周-高吞吐Pipeline与闭环验证
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/05/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC3%E5%91%A8-Agent%E8%BD%A8%E8%BF%B9%E4%B8%8E%E6%89%A7%E8%A1%8C%E9%AA%8C%E8%AF%81%E5%90%88%E6%88%90/" rel="next" title="第3周-Agent轨迹与执行验证合成">
+                  第3周-Agent轨迹与执行验证合成 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

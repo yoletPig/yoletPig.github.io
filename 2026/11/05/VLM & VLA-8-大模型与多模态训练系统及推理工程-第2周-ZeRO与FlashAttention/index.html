@@ -1,0 +1,630 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 2 周教程：分布式训练引擎——DeepSpeed ZeRO 与 FlashAttention 机制  本周要回答的三个问题  ZeRO-1&#x2F;2&#x2F;3 各切分什么、每级省多少显存、通信代价怎么变？ FlashAttention 的 Tiling + Online Softmax 到底在优化什么？&quot;exact attention&quot;是什么意思？ Offload 到 CPU&#x2F;NVM">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第2周-ZeRO与FlashAttention">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC2%E5%91%A8-ZeRO%E4%B8%8EFlashAttention/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 2 周教程：分布式训练引擎——DeepSpeed ZeRO 与 FlashAttention 机制  本周要回答的三个问题  ZeRO-1&#x2F;2&#x2F;3 各切分什么、每级省多少显存、通信代价怎么变？ FlashAttention 的 Tiling + Online Softmax 到底在优化什么？&quot;exact attention&quot;是什么意思？ Offload 到 CPU&#x2F;NVM">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-05T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.574Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC2%E5%91%A8-ZeRO%E4%B8%8EFlashAttention/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC2%E5%91%A8-ZeRO%E4%B8%8EFlashAttention/","path":"2026/11/05/VLM & VLA-8-大模型与多模态训练系统及推理工程-第2周-ZeRO与FlashAttention/","title":"第2周-ZeRO与FlashAttention"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第2周-ZeRO与FlashAttention | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-2-%E5%91%A8%E6%95%99%E7%A8%8B%E5%88%86%E5%B8%83%E5%BC%8F%E8%AE%AD%E7%BB%83%E5%BC%95%E6%93%8Edeepspeed-zero-%E4%B8%8E-flashattention-%E6%9C%BA%E5%88%B6"><span class="nav-number">1.</span> <span class="nav-text"> 第 2 周教程：分布式训练引擎——DeepSpeed ZeRO 与 FlashAttention 机制</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E5%86%97%E4%BD%99%E4%BB%8E%E5%93%AA%E6%9D%A5%E5%88%87%E5%88%B0%E5%93%AA%E5%8E%BB"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：冗余从哪来，切到哪去</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-zero-%E7%9A%84%E6%A0%B8%E5%BF%83%E8%A7%82%E5%AF%9F%E6%95%B0%E6%8D%AE%E5%B9%B6%E8%A1%8C%E9%87%8C-90-%E7%9A%84%E7%8A%B6%E6%80%81%E6%98%AF%E5%86%97%E4%BD%99%E7%9A%84"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 ZeRO 的核心观察：数据并行里 90% 的状态是冗余的</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-zero-3-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%80%9A%E4%BF%A1%E5%8F%98%E8%B4%B5%E8%87%AA%E6%B5%8B%E8%80%83%E7%82%B9"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 ZeRO-3 为什么通信变贵（自测考点）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-offload%E6%8A%8A%E8%B4%A6%E5%8D%95%E8%BD%AC%E7%A7%BB%E5%88%B0-cpunvme"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 Offload：把账单转移到 CPU&#x2F;NVMe</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#14-flashattentionio-%E6%84%9F%E7%9F%A5%E7%9A%84%E7%B2%BE%E7%A1%AE%E6%B3%A8%E6%84%8F%E5%8A%9B"><span class="nav-number">1.1.4.</span> <span class="nav-text"> 1.4 FlashAttention：IO 感知的精确注意力</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-ds_configjsonzero-3%E4%B8%8E%E8%AE%AD%E7%BB%83%E8%84%9A%E6%9C%AC"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 ds_config.json（ZeRO-3）与训练脚本</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-fa2-%E5%BC%80%E5%85%B3%E5%AF%B9%E6%AF%94%E5%AE%9E%E9%AA%8C%E6%9C%AC%E5%91%A8-mvp"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 FA2 开&#x2F;关对比实验（本周 MVP）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E5%86%B3%E7%AD%96%E8%A1%A8%E5%B9%B6%E8%A1%8C%E7%AD%96%E7%95%A5%E7%BB%84%E5%90%88"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 决策表：并行策略组合</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%B8%89%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 三个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC2%E5%91%A8-ZeRO%E4%B8%8EFlashAttention/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第2周-ZeRO与FlashAttention | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第2周-ZeRO与FlashAttention
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2026-11-05 12:00:00 / 修改时间：08:11:03" itemprop="dateCreated datePublished" datetime="2026-11-05T12:00:00+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Stage 8-大模型与多模态训练系统及推理工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.7k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>10 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-2-周教程分布式训练引擎deepspeed-zero-与-flashattention-机制"><a class="markdownIt-Anchor" href="#第-2-周教程分布式训练引擎deepspeed-zero-与-flashattention-机制"></a> 第 2 周教程：分布式训练引擎——DeepSpeed ZeRO 与 FlashAttention 机制</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>ZeRO-1/2/3 各切分什么、每级省多少显存、通信代价怎么变？</li>
+<li>FlashAttention 的 Tiling + Online Softmax 到底在优化什么？&quot;exact attention&quot;是什么意思？</li>
+<li>Offload 到 CPU/NVMe 的收益与代价边界在哪？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 2 周。交付物：DeepSpeed <code>ds_config.json</code> + 7B+ VLM 的 ZeRO-3 + FA2 训练脚本；8k+ 上下文下对比开/关 FA2 的 TFLOPS 与显存峰值。</p>
+<p><strong>论文</strong>：ZeRO（<em>ZeRO: Memory Optimizations Toward Training Trillion Parameter Models</em>, SC 2020）、FlashAttention（<em>FlashAttention: Fast and Memory-Efficient Exact Attention with IO-Awareness</em>, NeurIPS 2022）、FlashAttention-2（Dao, arXiv:2307.08691）——学习计划所引无误。第 1 周的显存账本是本篇的量化基准，Stage 2 第 4 周已铺垫的 BF16/Checkpointing/打包结论不再重复。</p>
+<hr />
+<h2 id="1-第一性原理冗余从哪来切到哪去"><a class="markdownIt-Anchor" href="#1-第一性原理冗余从哪来切到哪去"></a> 1. 第一性原理：冗余从哪来，切到哪去</h2>
+<h3 id="11-zero-的核心观察数据并行里-90-的状态是冗余的"><a class="markdownIt-Anchor" href="#11-zero-的核心观察数据并行里-90-的状态是冗余的"></a> 1.1 ZeRO 的核心观察：数据并行里 90% 的状态是冗余的</h3>
+<p>第 1 周账本显示：模型状态 = 权重 2P + 梯度 2P + 优化器 12P = <strong>16P 字节</strong>，其中权重只占 1/8。而数据并行（DDP）把<strong>全部 16P 在每张卡上复制一份</strong>——N 卡集群里买的是 N 倍算力，却只换来 1 倍 batch。</p>
+<p>ZeRO 的做法按&quot;切分优先级&quot;递进（切完优化器切梯度，最后切权重）：</p>
+<table>
+<thead>
+<tr>
+<th>级别</th>
+<th>切分对象</th>
+<th>每卡模型状态</th>
+<th>通信代价（相对 DDP）</th>
+<th>每卡状态公式</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ZeRO-1</td>
+<td>优化器状态</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>16</mn><mi>P</mi><mi mathvariant="normal">/</mi><msub><mi>N</mi><mi>d</mi></msub></mrow><annotation encoding="application/x-tex">16P/N_d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">6</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>（近似）</td>
+<td>≈ 相同</td>
+<td>权重/梯度全量 + 优化器 1/N</td>
+</tr>
+<tr>
+<td><strong>ZeRO-2</strong></td>
+<td>+ 梯度</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≈</mo><mn>14</mn><mi>P</mi><mi mathvariant="normal">/</mi><msub><mi>N</mi><mi>d</mi></msub><mo>+</mo><mn>2</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">\approx 14P/N_d + 2P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.48312em;vertical-align:0em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">4</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span></td>
+<td>≈ 相同</td>
+<td>权重全量 + 梯度即时消费</td>
+</tr>
+<tr>
+<td><strong>ZeRO-3</strong></td>
+<td>+ 权重</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≈</mo><mn>16</mn><mi>P</mi><mi mathvariant="normal">/</mi><msub><mi>N</mi><mi>d</mi></msub></mrow><annotation encoding="application/x-tex">\approx 16P/N_d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.48312em;vertical-align:0em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">6</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td><strong>前向+反向各多一次 all-gather</strong></td>
+<td>一切都只有 1/N</td>
+</tr>
+</tbody>
+</table>
+<p>精确表（P、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>N</mi><mi>d</mi></msub></mrow><annotation encoding="application/x-tex">N_d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>）：</p>
+<table>
+<thead>
+<tr>
+<th>级别</th>
+<th>权重</th>
+<th>梯度</th>
+<th>优化器</th>
+<th>每卡合计</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DDP</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">2P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">2P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>12</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">12P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>16</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">16P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord">6</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span></td>
+</tr>
+<tr>
+<td>ZeRO-1</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">2P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">2P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>12</mn><mi>P</mi><mi mathvariant="normal">/</mi><msub><mi>N</mi><mi>d</mi></msub></mrow><annotation encoding="application/x-tex">12P/N_d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4</mn><mi>P</mi><mo>+</mo><mn>12</mn><mi>P</mi><mi mathvariant="normal">/</mi><msub><mi>N</mi><mi>d</mi></msub></mrow><annotation encoding="application/x-tex">4P + 12P/N_d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord">4</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+</tr>
+<tr>
+<td>ZeRO-2</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">2P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi><mi mathvariant="normal">/</mi><msub><mi>N</mi><mi>d</mi></msub></mrow><annotation encoding="application/x-tex">2P/N_d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>12</mn><mi>P</mi><mi mathvariant="normal">/</mi><msub><mi>N</mi><mi>d</mi></msub></mrow><annotation encoding="application/x-tex">12P/N_d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi><mo>+</mo><mn>14</mn><mi>P</mi><mi mathvariant="normal">/</mi><msub><mi>N</mi><mi>d</mi></msub></mrow><annotation encoding="application/x-tex">2P + 14P/N_d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">4</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+</tr>
+<tr>
+<td>ZeRO-3</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi><mi mathvariant="normal">/</mi><msub><mi>N</mi><mi>d</mi></msub></mrow><annotation encoding="application/x-tex">2P/N_d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi><mi mathvariant="normal">/</mi><msub><mi>N</mi><mi>d</mi></msub></mrow><annotation encoding="application/x-tex">2P/N_d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>12</mn><mi>P</mi><mi mathvariant="normal">/</mi><msub><mi>N</mi><mi>d</mi></msub></mrow><annotation encoding="application/x-tex">12P/N_d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>16</mn><mi>P</mi><mi mathvariant="normal">/</mi><msub><mi>N</mi><mi>d</mi></msub></mrow><annotation encoding="application/x-tex">16P/N_d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">6</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">d</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+</tr>
+</tbody>
+</table>
+<p>数字验证：7B、8 卡。DDP 每卡 112GB；ZeRO-2 每卡 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>14</mn><mo>+</mo><mn>98</mn><mi mathvariant="normal">/</mi><mn>8</mn><mo>≈</mo><mn>26</mn></mrow><annotation encoding="application/x-tex">14 + 98/8 \approx 26</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">9</span><span class="mord">8</span><span class="mord">/</span><span class="mord">8</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord">6</span></span></span></span>GB；ZeRO-3 每卡 14GB——<strong>80G 卡从&quot;放不下&quot;到&quot;绰绰有余&quot;</strong>。</p>
+<h3 id="12-zero-3-为什么通信变贵自测考点"><a class="markdownIt-Anchor" href="#12-zero-3-为什么通信变贵自测考点"></a> 1.2 ZeRO-3 为什么通信变贵（自测考点）</h3>
+<p>ZeRO-1/2 的通信与 DDP 几乎一致：梯度规约用 <code>reduce_scatter</code> 替代 <code>all-reduce</code>（每卡只留自己负责的梯度片），总通信量同量级。<strong>ZeRO-3 的本质不同：权重本身被切了，而前向/反向的每个算子都需要完整的权重</strong>——于是：</p>
+<ul>
+<li>前向每层：<code>all_gather</code> 拉齐该层参数 → 计算 → 释放；</li>
+<li>反向每层：再次 <code>all_gather</code> → 计算梯度 → <code>reduce_scatter</code> 回传梯度片。</li>
+</ul>
+<p><strong>每层每步多出 2 次参数 all-gather</strong>（前向一次、反向一次）。这是&quot;显存换通信&quot;的直接代价。缓解手段：</p>
+<ol>
+<li><strong>通信量与计算重叠</strong>（ZeRO-3 的分层预取：上一层计算时提前拉下一层参数）——设计良好时额外通信大部分被计算掩盖；</li>
+<li><strong>参数驻留缓存</strong>（现代实现里的 <code>[Module]</code> 级 cache）；</li>
+<li>小 TP（张量并行）混合：权重切 ZeRO-3 之外再 intra-node 切 TP，通信留在 NVLink 域内。</li>
+</ol>
+<p>选型经验规则（承接 Stage 2 第 4 周决策表，本篇给出机理）：<strong>LoRA/小模型显存够 → DDP/ZeRO-1/2（快）；全量大模型权重装不下 → ZeRO-3；装不下且预算充足 → ZeRO-3 + Offload 是最后手段</strong>。</p>
+<h3 id="13-offload把账单转移到-cpunvme"><a class="markdownIt-Anchor" href="#13-offload把账单转移到-cpunvme"></a> 1.3 Offload：把账单转移到 CPU/NVMe</h3>
+<p>ZeRO-Offload/Infinity 把切分后的状态进一步搬出 GPU：优化器状态与 FP32 主权重 → CPU RAM（更新在 CPU 上做），甚至 → NVMe（Infinity）。收益是显存几乎不受限；代价是 <strong>PCIe/NVMe 带宽（~25GB/s / ~5GB/s）比 HBM（~2TB/s）低 1~2 个数量级</strong>，状态在 CPU↔GPU 间的搬运成为新瓶颈。经验量级：offload 优化器（不清零梯度批次时）减速 20~50%；offload 参数减速 2~10 倍。<strong>判据：offload 换来的&quot;能跑&quot;是否值这个减速——只有&quot;预算买不到更多卡&quot;时才动用。</strong></p>
+<h3 id="14-flashattentionio-感知的精确注意力"><a class="markdownIt-Anchor" href="#14-flashattentionio-感知的精确注意力"></a> 1.4 FlashAttention：IO 感知的精确注意力</h3>
+<p><strong>问题</strong>：标准注意力把 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi><mo>×</mo><mi>S</mi></mrow><annotation encoding="application/x-tex">S \times S</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span></span></span></span> 中间矩阵写回 HBM 再读回来做 softmax 与乘 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>V</mi></mrow><annotation encoding="application/x-tex">V</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.22222em;">V</span></span></span></span>——注意力是**访存受限（memory-bound）**算子：HBM 读写的数据量远超 SRAM 能承载的计算所需。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi><mo>=</mo><mn>8</mn><mi>k</mi></mrow><annotation encoding="application/x-tex">S=8k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord">8</span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span> 时注意力矩阵单层 256MB（bf16），几十层 × 反向重读，带宽是纯浪费。</p>
+<p><strong>核心思想</strong>：attention 的数学定义不变（所以叫 <strong>exact attention</strong>——数值上等价于标准实现，不是近似！），改变的是<strong>计算组织方式</strong>：</p>
+<ol>
+<li><strong>Tiling</strong>：Q/K/V 切成小块装进 SRAM（比 HBM 快 ~10 倍的片上缓存），每块内完成 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Q</mi><msup><mi>K</mi><mi mathvariant="normal">⊤</mi></msup></mrow><annotation encoding="application/x-tex">QK^\top</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.043548em;vertical-align:-0.19444em;"></span><span class="mord mathnormal">Q</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07153em;">K</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.849108em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span></span></span></span></span></span></span></span> → 缩放 → softmax → 乘 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>V</mi></mrow><annotation encoding="application/x-tex">V</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.22222em;">V</span></span></span></span> 的全流程；</li>
+<li><strong>Online Softmax</strong>：softmax 的分母依赖全行的 max 与 sum，而 tiling 后每块只看到局部——用递推式维护&quot;全局 max 与 running sum&quot;，每来一块就修正之前的局部结果，<strong>数学上严格等价于全局 softmax</strong>；</li>
+<li>反向不存 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi><mo>×</mo><mi>S</mi></mrow><annotation encoding="application/x-tex">S \times S</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span></span></span></span> 矩阵，用重算（存小块输入，反向重算中间量）。</li>
+</ol>
+<p>收益（第 1 周账本的语言）：显存 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><msup><mi>S</mi><mn>2</mn></msup><mo stretchy="false">)</mo><mo>→</mo><mi>O</mi><mo stretchy="false">(</mo><mi>S</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(S^2) \to O(S)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mclose">)</span></span></span></span>；HBM 读写量降一个量级 → 计算强度上升 → 长序列下注意力核实测最高约 9 倍、端到端常见 1.5~2 倍加速（A100 官方口径；<strong>短序列（S≈512）收益有限，不要泛化</strong>）。FlashAttention-2（arXiv:2307.08691）把并行度调到序列维、减少非矩阵乘运算，相比 FA1 前向再快约 2 倍；FA3（Hopper 架构）进一步利用新硬件特性。</p>
+<p><strong>工程纪律</strong>（第 2 周交付的对比实验公平性）：开启方式 <code>attn_implementation=&quot;flash_attention_2&quot;</code>；对照组（关闭 FA）用 SDPA 或 eager 且<strong>同精度同 batch</strong>——精度口径不同（fp32 eager vs bf16 FA）的对比是无效对比。</p>
+<hr />
+<h2 id="2-实现与验证"><a class="markdownIt-Anchor" href="#2-实现与验证"></a> 2. 实现与验证</h2>
+<h3 id="21-ds_configjsonzero-3与训练脚本"><a class="markdownIt-Anchor" href="#21-ds_configjsonzero-3与训练脚本"></a> 2.1 ds_config.json（ZeRO-3）与训练脚本</h3>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;train_batch_size&quot;</span><span class="punctuation">:</span> <span class="string">&quot;auto&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;train_micro_batch_size_per_gpu&quot;</span><span class="punctuation">:</span> <span class="string">&quot;auto&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;gradient_accumulation_steps&quot;</span><span class="punctuation">:</span> <span class="string">&quot;auto&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;bf16&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;enabled&quot;</span><span class="punctuation">:</span> <span class="string">&quot;auto&quot;</span> <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;zero_optimization&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;stage&quot;</span><span class="punctuation">:</span> <span class="number">3</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;contiguous_gradients&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;overlap_comm&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;reduce_scatter&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;reduce_bucket_size&quot;</span><span class="punctuation">:</span> <span class="number">5e8</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;allgather_partitions&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;allgather_bucket_size&quot;</span><span class="punctuation">:</span> <span class="number">5e8</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;stage3_prefetch_bucket_size&quot;</span><span class="punctuation">:</span> <span class="number">5e8</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;stage3_param_persistence_threshold&quot;</span><span class="punctuation">:</span> <span class="number">1e6</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;stage3_max_live_parameters&quot;</span><span class="punctuation">:</span> <span class="number">1e9</span></span><br><span class="line">  <span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;optimizer&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;AdamW&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;params&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span> <span class="attr">&quot;lr&quot;</span><span class="punctuation">:</span> <span class="string">&quot;auto&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;betas&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="number">0.9</span><span class="punctuation">,</span> <span class="number">0.95</span><span class="punctuation">]</span><span class="punctuation">,</span> <span class="attr">&quot;weight_decay&quot;</span><span class="punctuation">:</span> <span class="number">0.1</span> <span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<p>（<code>stage3_prefetch_bucket_size</code>/<code>param_persistence</code> 是 ZeRO-3 通信掩盖的旋钮：预取下一层参数、小参数常驻不切。）</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 7B VLM + ZeRO-3 + FA2 (LLaMA-Factory 入口, 沿用 Stage2 配置只改两处)</span></span><br><span class="line"><span class="comment">#   flash_attn: fa2</span></span><br><span class="line"><span class="comment">#   deepspeed: ds_z3_config.json</span></span><br><span class="line">FORCE_TORCHRUN=1 NPROC_PER_NODE=4 llamafactory-cli train qwen2vl_z3_fa2.yaml</span><br></pre></td></tr></table></figure>
+<h3 id="22-fa2-开关对比实验本周-mvp"><a class="markdownIt-Anchor" href="#22-fa2-开关对比实验本周-mvp"></a> 2.2 FA2 开/关对比实验（本周 MVP）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">FA2 开关对比: 同配置下测 TFLOPS 与显存峰值 (8k 长上下文)。</span></span><br><span class="line"><span class="string">运行方式: python stage8_week2_fa_compare.py --seq 8192 --attn flash_attention_2</span></span><br><span class="line"><span class="string">          python stage8_week2_fa_compare.py --seq 8192 --attn sdpa</span></span><br><span class="line"><span class="string">依赖: torch, transformers</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> argparse, torch, time</span><br><span class="line"><span class="keyword">from</span> transformers <span class="keyword">import</span> AutoModelForCausalLM</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">tflops_measured</span>(<span class="params">model, S, B, dt, P</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;训练步近似 FLOPs = 6P·B·S (权重主导) / 时间&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">6</span> * P * B * S / dt / <span class="number">1e12</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    ap = argparse.ArgumentParser()</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--model&quot;</span>, default=<span class="string">&quot;Qwen/Qwen2.5-0.5B&quot;</span>)   <span class="comment"># 教学环境小模型; 方法同 7B</span></span><br><span class="line">    ap.add_argument(<span class="string">&quot;--seq&quot;</span>, <span class="built_in">type</span>=<span class="built_in">int</span>, default=<span class="number">8192</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--attn&quot;</span>, default=<span class="string">&quot;flash_attention_2&quot;</span>,</span><br><span class="line">                    choices=[<span class="string">&quot;flash_attention_2&quot;</span>, <span class="string">&quot;sdpa&quot;</span>, <span class="string">&quot;eager&quot;</span>])</span><br><span class="line">    args = ap.parse_args()</span><br><span class="line">    dev = <span class="string">&quot;cuda&quot;</span></span><br><span class="line">    model = AutoModelForCausalLM.from_pretrained(</span><br><span class="line">        args.model, torch_dtype=torch.bfloat16,</span><br><span class="line">        attn_implementation=args.attn).to(dev)</span><br><span class="line">    model.gradient_checkpointing_enable()</span><br><span class="line">    model.train()</span><br><span class="line">    P = <span class="built_in">sum</span>(p.numel() <span class="keyword">for</span> p <span class="keyword">in</span> model.parameters())</span><br><span class="line">    opt = torch.optim.AdamW(model.parameters(), lr=<span class="number">1e-5</span>)</span><br><span class="line"></span><br><span class="line">    x = torch.randint(<span class="number">0</span>, model.config.vocab_size, (<span class="number">1</span>, args.seq), device=dev)</span><br><span class="line">    <span class="comment"># 预热 2 步 (kernel 编译/显存池稳定)</span></span><br><span class="line">    <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">2</span>):</span><br><span class="line">        loss = model(input_ids=x, labels=x).loss</span><br><span class="line">        loss.backward(); opt.step(); opt.zero_grad()</span><br><span class="line">    torch.cuda.synchronize(); torch.cuda.reset_peak_memory_stats()</span><br><span class="line">    t0 = time.time()</span><br><span class="line">    <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">3</span>):</span><br><span class="line">        loss = model(input_ids=x, labels=x).loss</span><br><span class="line">        loss.backward(); opt.step(); opt.zero_grad()</span><br><span class="line">    torch.cuda.synchronize()</span><br><span class="line">    dt = (time.time() - t0) / <span class="number">3</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;[<span class="subst">&#123;args.attn&#125;</span>] S=<span class="subst">&#123;args.seq&#125;</span>  峰值显存=<span class="subst">&#123;torch.cuda.max_memory_allocated()/<span class="number">1024</span>**<span class="number">3</span>:<span class="number">.1</span>f&#125;</span> GB  &quot;</span></span><br><span class="line">          <span class="string">f&quot;吞吐≈<span class="subst">&#123;tflops_measured(model, args.seq, <span class="number">1</span>, dt, P):<span class="number">.0</span>f&#125;</span> TFLOPS&quot;</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    main()</span><br></pre></td></tr></table></figure>
+<p><strong>预期形态</strong>（示意，0.5B、S=8192、单卡；绝对值随硬件与版本浮动，关注相对差距方向）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[sdpa] S=8192  峰值显存=18.4 GB  吞吐≈21 TFLOPS</span><br><span class="line">[flash_attention_2] S=8192  峰值显存=15.1 GB  吞吐≈29 TFLOPS</span><br></pre></td></tr></table></figure>
+<p>判读纪律：<strong>同硬件同精度同 batch</strong>，报告三要素（显存峰值 / TFLOPS / 序列长度）缺一不可；把两次运行的绝对值写进报告，而不是引用&quot;FA2 快 2~4 倍&quot;的文献数字——那是 A100 长序列口径，不是你的口径。</p>
+<hr />
+<h2 id="3-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#3-工程权衡与失效模式"></a> 3. 工程权衡与失效模式</h2>
+<h3 id="31-决策表并行策略组合"><a class="markdownIt-Anchor" href="#31-决策表并行策略组合"></a> 3.1 决策表：并行策略组合</h3>
+<table>
+<thead>
+<tr>
+<th>显存困境</th>
+<th>首选</th>
+<th>备选</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>优化器状态放不下</td>
+<td>ZeRO-1/2</td>
+<td>8-bit 优化器（bitsandbytes）</td>
+</tr>
+<tr>
+<td>梯度放不下</td>
+<td>ZeRO-2</td>
+<td>梯度累积（不省显存只省通信，注意区分）</td>
+</tr>
+<tr>
+<td>权重放不下</td>
+<td>ZeRO-3</td>
+<td>Pipeline/张量并行（Megatron 系）、LoRA</td>
+</tr>
+<tr>
+<td>全都放不下</td>
+<td>ZeRO-3 + offload</td>
+<td>量化训练（QLoRA）/ 减模型</td>
+</tr>
+<tr>
+<td>长上下文激活爆炸</td>
+<td>FA2 + checkpointing</td>
+<td>序列并行（DeepSpeed Ulysses，verl 支持）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-三个代表性失效模式"><a class="markdownIt-Anchor" href="#32-三个代表性失效模式"></a> 3.2 三个代表性失效模式</h3>
+<p><strong>失效 1：ZeRO-3 与自定义代码的&quot;参数不可见&quot;冲突</strong></p>
+<ul>
+<li><strong>症状</strong>：ZeRO-3 下手动访问 <code>model.layers[0].weight</code> 得到的是空分片/占位符，自定义逻辑（如权重探测、手工投影）静默算错。</li>
+<li><strong>根因</strong>：ZeRO-3 的参数按需物化——非 forward 路径的代码看到的是分片元数据。</li>
+<li><strong>定位</strong>：打印参数的 <code>ds_tensor</code>/shape 与 <code> numel</code> 对比。</li>
+<li><strong>修复</strong>：用 DeepSpeed 的 Gather 接口（<code>zero.GatheredParameters</code> 上下文）显式拉取；或该逻辑改在 ZeRO-2 下运行。</li>
+</ul>
+<p><strong>失效 2：FA2 的数值/精度差异被误判为 bug</strong></p>
+<ul>
+<li><strong>症状</strong>：同模型 FA2 与 eager 的 logits 有 1e-2 量级差异；RL/评测结果轻微漂移。</li>
+<li><strong>根因</strong>：online softmax 的累加顺序与数值路径不同——<strong>等价不等于逐位相同</strong>（bf16 下误差更明显）。Stage 3 评测协议里&quot;同一推理实现&quot;的纪律同源。</li>
+<li><strong>定位</strong>：fp32 下对比两者差异应缩到 1e-3 内；确认差异随精度缩放（数值噪声）而非结构性错误。</li>
+<li><strong>修复</strong>：训练/评测全链路统一实现；关键回归测试（金样本）绑实现版本。</li>
+</ul>
+<p><strong>失效 3：vLLM 0.7.x / 引擎版本矩阵错配</strong></p>
+<ul>
+<li><strong>症状</strong>：verl/训练框架与推理后端组合报各种诡异 OOM/内核错误。</li>
+<li><strong>根因</strong>：FA2/flash-attn、vLLM、torch、transformers 的版本矩阵强耦合（verl 官方明确警告 vllm 0.7.x 有 OOM bug，建议 ≥0.8.2——已核实其 README）。</li>
+<li><strong>定位</strong>：对照框架官方的版本推荐表。</li>
+<li><strong>修复</strong>：用官方 docker/uv 锁版本矩阵；升级任何一员前先查兼容声明。</li>
+</ul>
+<hr />
+<h2 id="4-延伸思考题"><a class="markdownIt-Anchor" href="#4-延伸思考题"></a> 4. 延伸思考题</h2>
+<ol>
+<li><strong>通信量推导</strong>：ZeRO-3 每步的总通信量 = 前向 all-gather（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">2P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span> 字节）+ 反向 all-gather（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">2P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span> 字节）+ reduce-scatter（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">2P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span> 字节）≈ <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>6</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">6P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">6</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span> 字节；对比 DDP 的梯度 all-reduce = reduce-scatter + all-gather ≈ <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">4P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">4</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span> 字节——<strong>1.5 倍通信</strong>（ZeRO 论文口径：ZeRO-1/2 与标准数据并行通信量相同，ZeRO-3 至多 1.5×）。结合第 1 周 2.2 的带宽公式，算 7B 在 NVLink 与 PCIe 上的每步通信时间，解释&quot;ZeRO-3 在快互联上几乎免费、慢互联上代价显著&quot;。</li>
+<li><strong>Online Softmax 的数值稳定性</strong>：证明递推式 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>m</mi><mrow><mi>n</mi><mi>e</mi><mi>w</mi></mrow></msub><mo>=</mo><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>m</mi><mo separator="true">,</mo><msub><mi>m</mi><mrow><mi>b</mi><mi>l</mi><mi>o</mi><mi>c</mi><mi>k</mi></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">m_{new} = \max(m, m_{block})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.58056em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight" style="margin-right:0.02691em;">w</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">max</span><span class="mopen">(</span><span class="mord mathnormal">m</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="mord mathnormal mtight" style="margin-right:0.01968em;">l</span><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>s</mi><mrow><mi>n</mi><mi>e</mi><mi>w</mi></mrow></msub><mo>=</mo><mi>s</mi><mo>⋅</mo><msup><mi>e</mi><mrow><mi>m</mi><mo>−</mo><msub><mi>m</mi><mrow><mi>n</mi><mi>e</mi><mi>w</mi></mrow></msub></mrow></msup><mo>+</mo><msub><mi>s</mi><mrow><mi>b</mi><mi>l</mi><mi>o</mi><mi>c</mi><mi>k</mi></mrow></msub><mo>⋅</mo><msup><mi>e</mi><mrow><msub><mi>m</mi><mrow><mi>b</mi><mi>l</mi><mi>o</mi><mi>c</mi><mi>k</mi></mrow></msub><mo>−</mo><msub><mi>m</mi><mrow><mi>n</mi><mi>e</mi><mi>w</mi></mrow></msub></mrow></msup></mrow><annotation encoding="application/x-tex">s_{new} = s \cdot e^{m - m_{new}} + s_{block} \cdot e^{m_{block} - m_{new}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.58056em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight" style="margin-right:0.02691em;">w</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.44445em;vertical-align:0em;"></span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.854661em;vertical-align:-0.08333em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.771331em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">m</span><span class="mbin mtight">−</span><span class="mord mtight"><span class="mord mathnormal mtight">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.16454285714285719em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight" style="margin-right:0.02691em;">w</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.59445em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="mord mathnormal mtight" style="margin-right:0.01968em;">l</span><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.771331em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.771331em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3487714285714287em;margin-left:0em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="mord mathnormal mtight" style="margin-right:0.01968em;">l</span><span class="mord mathnormal mtight">o</span><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15122857142857138em;"><span></span></span></span></span></span></span><span class="mbin mtight">−</span><span class="mord mtight"><span class="mord mathnormal mtight">m</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.16454285714285719em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight" style="margin-right:0.02691em;">w</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span> 与全局 softmax 严格等价——并解释为什么这个递推同时解决了&quot;数值稳定性&quot;（max 移位）与&quot;流式计算&quot;（无需全行）两个问题。</li>
+<li><strong>量化训练的前瞻</strong>：QLoRA 的 NF4 底座（Stage 2）与 FP8 训练（第 5 周预告）在账本里各动了哪一项？用第 1 周公式算&quot;7B NF4 + LoRA&quot;的模型状态显存，解释为什么它是单卡 7B 微调的默认答案。</li>
+</ol>
+<hr />
+<p><em>下一篇：第 3 周：高吞吐推理引擎——vLLM 与 PagedAttention</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/05/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC4%E5%91%A8-SGLang%E4%B8%8EPrefixCaching/" rel="prev" title="第4周-SGLang与PrefixCaching">
+                  <i class="fa fa-angle-left"></i> 第4周-SGLang与PrefixCaching
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/05/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC1%E5%91%A8-%E6%98%BE%E5%AD%98%E5%89%96%E6%9E%90%E4%B8%8E%E5%88%86%E5%B8%83%E5%BC%8F%E5%9F%BA%E7%A1%80/" rel="next" title="第1周-显存剖析与分布式基础">
+                  第1周-显存剖析与分布式基础 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

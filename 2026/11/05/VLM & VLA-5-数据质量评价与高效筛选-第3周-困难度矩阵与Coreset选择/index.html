@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 3 周教程：困难度筛选矩阵、多样性与 Coreset 选择  本周要回答的三个问题  困难度-质量二维矩阵为什么把 “Sweet Spot” 放在中间而非两端？ 只按 Loss 筛选为什么会&quot;全挤在一个领域&quot;？Embedding 聚类怎么解？ K-Means 与最远点采样（FPS）各自在保证什么？怎么组合成两阶段 Pipeline？   对应学习计划：第 3 周。交付物：">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第3周-困难度矩阵与Coreset选择">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC3%E5%91%A8-%E5%9B%B0%E9%9A%BE%E5%BA%A6%E7%9F%A9%E9%98%B5%E4%B8%8ECoreset%E9%80%89%E6%8B%A9/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 3 周教程：困难度筛选矩阵、多样性与 Coreset 选择  本周要回答的三个问题  困难度-质量二维矩阵为什么把 “Sweet Spot” 放在中间而非两端？ 只按 Loss 筛选为什么会&quot;全挤在一个领域&quot;？Embedding 聚类怎么解？ K-Means 与最远点采样（FPS）各自在保证什么？怎么组合成两阶段 Pipeline？   对应学习计划：第 3 周。交付物：">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-05T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.562Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC3%E5%91%A8-%E5%9B%B0%E9%9A%BE%E5%BA%A6%E7%9F%A9%E9%98%B5%E4%B8%8ECoreset%E9%80%89%E6%8B%A9/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC3%E5%91%A8-%E5%9B%B0%E9%9A%BE%E5%BA%A6%E7%9F%A9%E9%98%B5%E4%B8%8ECoreset%E9%80%89%E6%8B%A9/","path":"2026/11/05/VLM & VLA-5-数据质量评价与高效筛选-第3周-困难度矩阵与Coreset选择/","title":"第3周-困难度矩阵与Coreset选择"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第3周-困难度矩阵与Coreset选择 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-3-%E5%91%A8%E6%95%99%E7%A8%8B%E5%9B%B0%E9%9A%BE%E5%BA%A6%E7%AD%9B%E9%80%89%E7%9F%A9%E9%98%B5-%E5%A4%9A%E6%A0%B7%E6%80%A7%E4%B8%8E-coreset-%E9%80%89%E6%8B%A9"><span class="nav-number">1.</span> <span class="nav-text"> 第 3 周教程：困难度筛选矩阵、多样性与 Coreset 选择</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E4%BB%8E%E6%A0%B7%E6%9C%AC%E5%A5%BD%E5%9D%8F%E5%88%B0%E9%9B%86%E5%90%88%E6%9E%84%E6%88%90"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：从&quot;样本好坏&quot;到&quot;集合构成&quot;</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E6%A0%B9%E6%9C%AC%E7%9F%9B%E7%9B%BE%E7%8B%AC%E7%AB%8B%E6%89%93%E5%88%86-%E7%BB%84%E5%90%88%E6%9C%80%E4%BC%98"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 根本矛盾：独立打分 ≠ 组合最优</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E5%9B%B0%E9%9A%BE%E5%BA%A6-%E8%B4%A8%E9%87%8F%E4%BA%8C%E7%BB%B4%E7%9F%A9%E9%98%B5"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 困难度-质量二维矩阵</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-%E5%A4%9A%E6%A0%B7%E6%80%A7%E7%9A%84%E5%87%A0%E4%BD%95embedding-%E7%A9%BA%E9%97%B4%E4%B8%AD%E7%9A%84%E8%A6%86%E7%9B%96"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 多样性的几何：Embedding 空间中的覆盖</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E6%9C%AC%E5%91%A8-mvp%E4%B8%A4%E9%98%B6%E6%AE%B5%E5%A4%8D%E5%90%88%E7%AD%9B%E9%80%89-pipeline"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 本周 MVP：两阶段复合筛选 Pipeline</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E5%86%B3%E7%AD%96%E8%A1%A8%E9%80%89%E6%8B%A9%E7%AE%97%E6%B3%95%E7%9A%84%E5%8F%82%E6%95%B0%E7%A9%BA%E9%97%B4"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 决策表：选择算法的参数空间</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%B8%89%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 三个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC3%E5%91%A8-%E5%9B%B0%E9%9A%BE%E5%BA%A6%E7%9F%A9%E9%98%B5%E4%B8%8ECoreset%E9%80%89%E6%8B%A9/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第3周-困难度矩阵与Coreset选择 | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第3周-困难度矩阵与Coreset选择
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2026-11-05 12:00:00 / 修改时间：08:11:03" itemprop="dateCreated datePublished" datetime="2026-11-05T12:00:00+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89/" itemprop="url" rel="index"><span itemprop="name">Stage 5-数据质量评价与高效筛选</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>13 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-3-周教程困难度筛选矩阵-多样性与-coreset-选择"><a class="markdownIt-Anchor" href="#第-3-周教程困难度筛选矩阵-多样性与-coreset-选择"></a> 第 3 周教程：困难度筛选矩阵、多样性与 Coreset 选择</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>困难度-质量二维矩阵为什么把 “Sweet Spot” 放在中间而非两端？</li>
+<li>只按 Loss 筛选为什么会&quot;全挤在一个领域&quot;？Embedding 聚类怎么解？</li>
+<li>K-Means 与最远点采样（FPS）各自在保证什么？怎么组合成两阶段 Pipeline？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 3 周。交付物：复合筛选 Pipeline——第一阶段用 NLL 剔除最高 5%（噪声）与最低 20%（过简单）；第二阶段抽取 LLM 倒数第二层 Embedding，K-Means 聚 10 簇，簇内按 NLL 均匀抽取，产出兼具困难度与多样性的 30% 精炼数据集。</p>
+<hr />
+<h2 id="1-第一性原理从样本好坏到集合构成"><a class="markdownIt-Anchor" href="#1-第一性原理从样本好坏到集合构成"></a> 1. 第一性原理：从&quot;样本好坏&quot;到&quot;集合构成&quot;</h2>
+<h3 id="11-根本矛盾独立打分-组合最优"><a class="markdownIt-Anchor" href="#11-根本矛盾独立打分-组合最优"></a> 1.1 根本矛盾：独立打分 ≠ 组合最优</h3>
+<p>第 1-2 周的所有指标都是<strong>逐样本独立打分</strong>——每条数据拿到一个分数，排序截断。但这忽略了一个关键事实：<strong>训练的价值取决于样本集合的构成，而非样本个体的绝对分数</strong>。两个集合层面的失败模式：</p>
+<ol>
+<li><strong>领域坍缩（Domain Collapse）</strong>：单纯按 NLL 排序取 Top，选出的几乎全是同一类&quot;难&quot;样本（如全是复杂数学题/长 OCR）——NLL 高与&quot;任务类型难&quot;高度相关。训练分布严重偏斜，其他能力遗忘（Stage 2 第 3 周的机制在数据选择中的重现）。</li>
+<li><strong>语义冗余</strong>：分数相近的样本可能内容高度雷同（同一模板的变体），保留 10 条学不到比保留 1 条更多的东西（Stage 4 语义去重的&quot;集合版&quot;问题）。</li>
+</ol>
+<p><strong>Coreset（核心集）选择的本质</strong>：在预算约束（30%）下，选出一个<strong>子集，使其对参数空间的影响（梯度/损失变化）尽可能逼近全量数据</strong>。直接优化&quot;影响逼近&quot;计算不可行（需要梯度内积，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><msup><mi>n</mi><mn>2</mn></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(n^2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>），因此用两类代理：<strong>质量代理</strong>（困难度——这条数据&quot;值不值得学&quot;）与<strong>覆盖代理</strong>（多样性——这类数据&quot;有没有被代表过&quot;）。本周的两阶段 Pipeline 就是这两个代理的串联。</p>
+<h3 id="12-困难度-质量二维矩阵"><a class="markdownIt-Anchor" href="#12-困难度-质量二维矩阵"></a> 1.2 困难度-质量二维矩阵</h3>
+<p>把第 1 周的 NLL（困难度轴）与噪声判定（质量轴：CLIP Score 低/规则过滤命中/两端异常）组合成二维决策矩阵：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><strong>质量高</strong></th>
+<th><strong>质量低</strong></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>困难度低</strong>（NLL 低）</td>
+<td>Too Easy：模型已掌握，<strong>丢弃</strong></td>
+<td>无价值噪声，<strong>丢弃</strong></td>
+</tr>
+<tr>
+<td><strong>困难度中</strong>（Sweet Spot）</td>
+<td><strong>核心资产：能力临界点样本，保留</strong></td>
+<td>混杂：逐条审查</td>
+</tr>
+<tr>
+<td><strong>困难度高</strong>（NLL 高）</td>
+<td><strong>难题：有条件保留</strong>（如带验证的推理链）</td>
+<td>Too Hard/Noisy：乱码/错标，<strong>丢弃</strong></td>
+</tr>
+</tbody>
+</table>
+<p>“Sweet Spot 在中间&quot;的机制解释：学习信号 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∝</mo></mrow><annotation encoding="application/x-tex">\propto</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mrel">∝</span></span></span></span> 梯度大小 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>≈</mo></mrow><annotation encoding="application/x-tex">\approx</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.48312em;vertical-align:0em;"></span><span class="mrel">≈</span></span></span></span> 模型的预测误差。误差趋零（太简单）→ 无梯度；误差巨大且结构混乱（太难/噪声）→ 梯度方向不可信、损失面震荡。<strong>可学习的最优区间在&quot;模型踮脚够得着&quot;的能力边界（Margin Zone）</strong>。这个论断有个重要推论：<strong>Sweet Spot 的位置随参考模型移动</strong>——用 2B 参考筛出的&quot;难”，对 7B 目标可能只是&quot;中等&quot;。因此矩阵的困难度轴应该用<strong>与目标模型同源的参考模型</strong>打分，且同一数据集在不同训练阶段重新打分（能力边界推移了）。</p>
+<p>DEITA（已核实：<em>What Makes Good Data for Alignment? A Comprehensive Study of Automatic Data Selection in Instruction Tuning</em>, ICLR 2024）给出的三维框架与此同构——<strong>复杂度（Complexity）、质量（Quality）、多样性（Diversity）</strong>——并验证了&quot;按此三维度量 + 简单选择策略，6K 样本可匹敌基线&quot;的 Less-is-More 结论。困难度矩阵是其在多模态场景的操作化。</p>
+<h3 id="13-多样性的几何embedding-空间中的覆盖"><a class="markdownIt-Anchor" href="#13-多样性的几何embedding-空间中的覆盖"></a> 1.3 多样性的几何：Embedding 空间中的覆盖</h3>
+<p>多样性需要一个&quot;语义距离&quot;的定义。第 4 阶段用过 CLIP 相似度（字面/浅语义），本阶段升级为<strong>目标模型自身的隐层表征</strong>：</p>
+<ul>
+<li><strong>倒数第二层 hidden state</strong>（回答区 Token 的平均池化）：它是 LLM 对样本&quot;理解&quot;的内部编码，比 CLIP 更贴近&quot;训练动力学的相似性&quot;——两个在该空间中靠近的样本，对模型的影响也更相似（XMAS 等工作证明了注意力/隐层特征与梯度影响的关联，arXiv:2510.01454）。</li>
+<li>高维（4k）不能直接聚类（维度灾难：距离集中效应），先 <strong>PCA 降到 64~128 维</strong>，保留主要方差方向。</li>
+</ul>
+<p>两个覆盖算法的分工（K-Means 在做的事，一句话：给每个样本找一个&quot;最近的簇中心&quot;，再反过来把中心挪到簇内均值——交替两步使簇内平方距离 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mo>∑</mo><mi>c</mi></msub><msub><mo>∑</mo><mrow><mi>i</mi><mo>∈</mo><mi>c</mi></mrow></msub><mi mathvariant="normal">∥</mi><msub><mi>x</mi><mi>i</mi></msub><mo>−</mo><msub><mi>μ</mi><mi>c</mi></msub><msup><mi mathvariant="normal">∥</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">\sum_c \sum_{i \in c} \|x_i - \mu_c\|^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.07708em;vertical-align:-0.32708000000000004em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:-0.0000050000000000050004em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.0016819999999999613em;"><span style="top:-2.40029em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.29971000000000003em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:-0.0000050000000000050004em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.16195399999999993em;"><span style="top:-2.40029em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mrel mtight">∈</span><span class="mord mathnormal mtight">c</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.32708000000000004em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">∥</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">μ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord">∥</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span> 变小，收敛后每个簇就是一个语义区域；FPS 在做的事，一句话：先随机选一个点，之后每轮都选&quot;离已选集合最远的点&quot;，贪心地撑开覆盖半径）：</p>
+<table>
+<thead>
+<tr>
+<th>算法</th>
+<th>保证</th>
+<th>复杂度</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>K-Means 聚类 + 簇内配额采样</strong></td>
+<td>“每个语义区域按比例有代表”</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mi>n</mi><mi>k</mi><mi>d</mi><mi>i</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(nkdi)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mord mathnormal">d</span><span class="mord mathnormal">i</span><span class="mclose">)</span></span></span></span>（近似线性）</td>
+<td>量大（&gt;5k）、需要任务配额控制</td>
+</tr>
+<tr>
+<td><strong>最远点采样（FPS）</strong></td>
+<td>“选中点两两距离最大化”——均匀覆盖整个空间</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mi>n</mi><mi>k</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(nk)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord mathnormal">n</span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mclose">)</span></span></span></span> 朴素实现</td>
+<td>量中小、追求几何均匀</td>
+</tr>
+</tbody>
+</table>
+<p>K-Means 的簇天然对应&quot;任务/领域&quot;（无需人工标注的任务边界），簇内按 NLL 分层采样同时满足困难度与多样性；FPS 则不假设簇结构、几何上更均匀但对离群点敏感。<strong>两阶段 Pipeline 选 K-Means 为主</strong>（配额可控、可解释——10 个簇可以人工抽查对应什么任务）。</p>
+<hr />
+<h2 id="2-实现与验证"><a class="markdownIt-Anchor" href="#2-实现与验证"></a> 2. 实现与验证</h2>
+<h3 id="21-本周-mvp两阶段复合筛选-pipeline"><a class="markdownIt-Anchor" href="#21-本周-mvp两阶段复合筛选-pipeline"></a> 2.1 本周 MVP：两阶段复合筛选 Pipeline</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">两阶段复合筛选: NLL 两端截断 -&gt; 倒数第二层 Embedding -&gt; KMeans 簇内均匀采样。</span></span><br><span class="line"><span class="string">运行方式:</span></span><br><span class="line"><span class="string">  步骤A(打分+抽特征): python stage5_week3_coreset.py --data sft.jsonl --extract</span></span><br><span class="line"><span class="string">  步骤B(选择):        python stage5_week3_coreset.py --select --keep 0.30 --clusters 10</span></span><br><span class="line"><span class="string">依赖: torch, transformers, scikit-learn, numpy</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> argparse</span><br><span class="line"><span class="keyword">import</span> json</span><br><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"><span class="keyword">import</span> torch          <span class="comment"># @torch.no_grad() 装饰器在模块加载时求值, 必须顶层导入</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">load_jsonl</span>(<span class="params">path</span>):</span><br><span class="line">    <span class="keyword">return</span> [json.loads(l) <span class="keyword">for</span> l <span class="keyword">in</span> <span class="built_in">open</span>(path)]</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 第一阶段: NLL 两端截断 ----------</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">stage1_filter</span>(<span class="params">scores_path, drop_high=<span class="number">0.05</span>, drop_low=<span class="number">0.20</span></span>):</span><br><span class="line">    scores = [json.loads(l) <span class="keyword">for</span> l <span class="keyword">in</span> <span class="built_in">open</span>(scores_path)]   <span class="comment"># 第1周产物</span></span><br><span class="line">    s = <span class="built_in">sorted</span>(scores, key=<span class="keyword">lambda</span> r: r[<span class="string">&quot;nll&quot;</span>])</span><br><span class="line">    n = <span class="built_in">len</span>(s)</span><br><span class="line">    lo, hi = <span class="built_in">int</span>(n * drop_low), n - <span class="built_in">int</span>(n * drop_high)</span><br><span class="line">    kept = s[lo:hi]                                       <span class="comment"># 剔除两端</span></span><br><span class="line">    <span class="comment"># 质量底线: CLIP 过低者一并出局 (第1周指标串联)</span></span><br><span class="line">    kept = [r <span class="keyword">for</span> r <span class="keyword">in</span> kept <span class="keyword">if</span> r.get(<span class="string">&quot;clip&quot;</span>, <span class="number">1.0</span>) &gt; <span class="number">0.15</span>]</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;阶段1: <span class="subst">&#123;n&#125;</span> -&gt; <span class="subst">&#123;<span class="built_in">len</span>(kept)&#125;</span> (剔除低NLL <span class="subst">&#123;lo&#125;</span> + 高NLL <span class="subst">&#123;n - hi&#125;</span> + CLIP低分)&quot;</span>)</span><br><span class="line">    <span class="keyword">return</span> kept</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 第二阶段特征: 倒数第二层 hidden state ----------</span></span><br><span class="line"><span class="meta">@torch.no_grad()</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">extract_penult_embeddings</span>(<span class="params">rows, model, processor, device</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;序列末位 (回答末 Token / EOS, 含 chat 模板) 的倒数第二层 hidden state 作为样本表示。</span></span><br><span class="line"><span class="string">    更稳健的做法是对回答区 Token 做 mean-pooling, 见失效模式 1&quot;&quot;&quot;</span></span><br><span class="line">    embs = []</span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">0</span>, <span class="built_in">len</span>(rows), <span class="number">4</span>):                      <span class="comment"># 小批</span></span><br><span class="line">        batch = rows[i:i + <span class="number">4</span>]</span><br><span class="line">        texts, images = [], []</span><br><span class="line">        <span class="keyword">for</span> r <span class="keyword">in</span> batch:</span><br><span class="line">            msgs = [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: [</span><br><span class="line">                &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;image&quot;</span>&#125;, &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;text&quot;</span>, <span class="string">&quot;text&quot;</span>: r[<span class="string">&quot;question&quot;</span>]&#125;]&#125;]</span><br><span class="line">            p = processor.apply_chat_template(msgs, tokenize=<span class="literal">False</span>,</span><br><span class="line">                                              add_generation_prompt=<span class="literal">True</span>)</span><br><span class="line">            texts.append(p + r[<span class="string">&quot;answer&quot;</span>]); images.append(r[<span class="string">&quot;image&quot;</span>])</span><br><span class="line">        inputs = processor(text=texts, images=images, return_tensors=<span class="string">&quot;pt&quot;</span>,</span><br><span class="line">                           padding=<span class="literal">True</span>).to(device)</span><br><span class="line">        out = model(**inputs, output_hidden_states=<span class="literal">True</span>)</span><br><span class="line">        h = out.hidden_states[-<span class="number">2</span>]                          <span class="comment"># 倒数第二层 [B,L,d]</span></span><br><span class="line">        <span class="comment"># 用每条最后一个非 padding 位置的向量作为样本表示</span></span><br><span class="line">        lens = inputs[<span class="string">&quot;attention_mask&quot;</span>].<span class="built_in">sum</span>(<span class="number">1</span>) - <span class="number">1</span></span><br><span class="line">        emb = h[torch.arange(h.size(<span class="number">0</span>)), lens]</span><br><span class="line">        embs.append(emb.<span class="built_in">float</span>().cpu().numpy())</span><br><span class="line">    <span class="keyword">return</span> np.concatenate(embs)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">stage2_select</span>(<span class="params">kept, embs, keep_ratio=<span class="number">0.30</span>, k=<span class="number">10</span>, seed=<span class="number">0</span></span>):</span><br><span class="line">    <span class="keyword">from</span> sklearn.cluster <span class="keyword">import</span> KMeans</span><br><span class="line">    <span class="keyword">from</span> sklearn.decomposition <span class="keyword">import</span> PCA</span><br><span class="line">    X = PCA(n_components=<span class="number">64</span>, random_state=seed).fit_transform(embs)</span><br><span class="line">    X = X / (np.linalg.norm(X, axis=<span class="number">1</span>, keepdims=<span class="literal">True</span>) + <span class="number">1e-8</span>)</span><br><span class="line">    km = KMeans(n_clusters=k, random_state=seed, n_init=<span class="number">10</span>).fit(X)</span><br><span class="line">    labels = km.labels_</span><br><span class="line"></span><br><span class="line">    n_keep = <span class="built_in">int</span>(<span class="built_in">len</span>(kept) * keep_ratio)</span><br><span class="line">    <span class="comment"># 簇配额: 按簇大小比例分配 (保底每簇 1)</span></span><br><span class="line">    quota = np.maximum(<span class="number">1</span>, (np.bincount(labels, minlength=k) / <span class="built_in">len</span>(labels) * n_keep).astype(<span class="built_in">int</span>))</span><br><span class="line">    <span class="keyword">while</span> quota.<span class="built_in">sum</span>() &gt; n_keep:                            <span class="comment"># 配额超支时从最大簇扣</span></span><br><span class="line">        quota[np.argmax(quota)] -= <span class="number">1</span></span><br><span class="line"></span><br><span class="line">    chosen = []</span><br><span class="line">    <span class="keyword">for</span> c <span class="keyword">in</span> <span class="built_in">range</span>(k):</span><br><span class="line">        idxs = np.where(labels == c)[<span class="number">0</span>]</span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">len</span>(idxs) == <span class="number">0</span>:</span><br><span class="line">            <span class="keyword">continue</span></span><br><span class="line">        <span class="comment"># 簇内按 NLL 均匀分层取: 排序后等间隔采样 (覆盖困难度谱系)</span></span><br><span class="line">        idxs = idxs[np.argsort([kept[i][<span class="string">&quot;nll&quot;</span>] <span class="keyword">for</span> i <span class="keyword">in</span> idxs])]</span><br><span class="line">        take = quota[c]</span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">len</span>(idxs) &lt;= take:</span><br><span class="line">            chosen.extend(idxs.tolist())</span><br><span class="line">        <span class="keyword">else</span>:</span><br><span class="line">            pos = np.linspace(<span class="number">0</span>, <span class="built_in">len</span>(idxs) - <span class="number">1</span>, take).<span class="built_in">round</span>().astype(<span class="built_in">int</span>)</span><br><span class="line">            chosen.extend(idxs[pos].tolist())</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">sorted</span>(<span class="built_in">set</span>(chosen)), labels</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    ap = argparse.ArgumentParser()</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--data&quot;</span>, default=<span class="string">&quot;sft.jsonl&quot;</span>); ap.add_argument(<span class="string">&quot;--scores&quot;</span>, default=<span class="string">&quot;scores.jsonl&quot;</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--extract&quot;</span>, action=<span class="string">&quot;store_true&quot;</span>); ap.add_argument(<span class="string">&quot;--select&quot;</span>, action=<span class="string">&quot;store_true&quot;</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--out&quot;</span>, default=<span class="string">&quot;coreset_30.jsonl&quot;</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--keep&quot;</span>, <span class="built_in">type</span>=<span class="built_in">float</span>, default=<span class="number">0.30</span>); ap.add_argument(<span class="string">&quot;--clusters&quot;</span>, <span class="built_in">type</span>=<span class="built_in">int</span>, default=<span class="number">10</span>)</span><br><span class="line">    args = ap.parse_args()</span><br><span class="line"></span><br><span class="line">    kept = stage1_filter(args.scores)</span><br><span class="line">    <span class="keyword">if</span> args.extract:</span><br><span class="line">        <span class="keyword">import</span> torch</span><br><span class="line">        <span class="keyword">from</span> transformers <span class="keyword">import</span> AutoProcessor, Qwen2VLForConditionalGeneration</span><br><span class="line">        device = <span class="string">&quot;cuda&quot;</span> <span class="keyword">if</span> torch.cuda.is_available() <span class="keyword">else</span> <span class="string">&quot;cpu&quot;</span></span><br><span class="line">        MID = <span class="string">&quot;Qwen/Qwen2-VL-2B-Instruct&quot;</span></span><br><span class="line">        model = Qwen2VLForConditionalGeneration.from_pretrained(</span><br><span class="line">            MID, torch_dtype=torch.bfloat16).to(device).<span class="built_in">eval</span>()</span><br><span class="line">        processor = AutoProcessor.from_pretrained(MID)</span><br><span class="line">        rows = load_jsonl(args.data)</span><br><span class="line">        <span class="comment"># 与 scores 对齐: scores 保留了 question 作为键</span></span><br><span class="line">        q2row = &#123;r[<span class="string">&quot;question&quot;</span>]: r <span class="keyword">for</span> r <span class="keyword">in</span> rows&#125;</span><br><span class="line">        rows_ord = [q2row[r[<span class="string">&quot;question&quot;</span>]] <span class="keyword">for</span> r <span class="keyword">in</span> kept]</span><br><span class="line">        embs = extract_penult_embeddings(rows_ord, model, processor, device)</span><br><span class="line">        np.save(<span class="string">&quot;embs.npy&quot;</span>, embs)</span><br><span class="line">        json.dump([r[<span class="string">&quot;question&quot;</span>] <span class="keyword">for</span> r <span class="keyword">in</span> kept], <span class="built_in">open</span>(<span class="string">&quot;kept_keys.json&quot;</span>, <span class="string">&quot;w&quot;</span>), ensure_ascii=<span class="literal">False</span>)</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;特征已抽取: embs.npy <span class="subst">&#123;embs.shape&#125;</span>&quot;</span>)</span><br><span class="line">        <span class="keyword">return</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> args.select:</span><br><span class="line">        embs = np.load(<span class="string">&quot;embs.npy&quot;</span>)</span><br><span class="line">        <span class="keyword">assert</span> <span class="built_in">len</span>(embs) == <span class="built_in">len</span>(kept), <span class="string">&quot;特征与打分记录错位, 重跑 --extract&quot;</span></span><br><span class="line">        chosen, labels = stage2_select(kept, embs, args.keep, args.clusters)</span><br><span class="line"></span><br><span class="line">        <span class="comment"># ---- 断言: 筛选质量的关键统计 ----</span></span><br><span class="line">        <span class="keyword">assert</span> <span class="built_in">len</span>(chosen) &gt;= <span class="built_in">int</span>(<span class="built_in">len</span>(kept) * args.keep * <span class="number">0.9</span>), <span class="string">&quot;产出不足&quot;</span></span><br><span class="line">        sel_nll = [kept[i][<span class="string">&quot;nll&quot;</span>] <span class="keyword">for</span> i <span class="keyword">in</span> chosen]</span><br><span class="line">        all_nll = [r[<span class="string">&quot;nll&quot;</span>] <span class="keyword">for</span> r <span class="keyword">in</span> kept]</span><br><span class="line">        <span class="keyword">import</span> statistics <span class="keyword">as</span> st</span><br><span class="line">        <span class="comment"># 均值应接近 (保留中间困难度, 不因聚类而偏移)</span></span><br><span class="line">        <span class="keyword">assert</span> <span class="built_in">abs</span>(st.mean(sel_nll) - st.mean(all_nll)) &lt; <span class="number">0.5</span>, <span class="string">&quot;簇内采样偏移了困难度分布&quot;</span></span><br><span class="line">        <span class="comment"># 多样性: 各簇均应有代表</span></span><br><span class="line">        <span class="keyword">from</span> collections <span class="keyword">import</span> Counter</span><br><span class="line">        cnt = Counter(labels[i] <span class="keyword">for</span> i <span class="keyword">in</span> chosen)</span><br><span class="line">        <span class="keyword">assert</span> <span class="built_in">len</span>(cnt) == args.clusters <span class="keyword">and</span> <span class="built_in">min</span>(cnt.values()) &gt;= <span class="number">1</span>, <span class="string">&quot;存在空簇, 多样性失败&quot;</span></span><br><span class="line">        q2row = &#123;r[<span class="string">&quot;question&quot;</span>]: r <span class="keyword">for</span> r <span class="keyword">in</span> load_jsonl(args.data)&#125;</span><br><span class="line">        <span class="keyword">with</span> <span class="built_in">open</span>(args.out, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">            <span class="keyword">for</span> i <span class="keyword">in</span> chosen:</span><br><span class="line">                f.write(json.dumps(q2row[kept[i][<span class="string">&quot;question&quot;</span>]], ensure_ascii=<span class="literal">False</span>) + <span class="string">&quot;\n&quot;</span>)</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;簇分布: <span class="subst">&#123;<span class="built_in">dict</span>(<span class="built_in">sorted</span>(cnt.items()))&#125;</span>&quot;</span>)</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;最终 Coreset: <span class="subst">&#123;<span class="built_in">len</span>(chosen)&#125;</span> 条 (<span class="subst">&#123;<span class="built_in">len</span>(chosen)/<span class="built_in">len</span>(kept):<span class="number">.0</span>%&#125;</span> of 阶段1产出) -&gt; <span class="subst">&#123;args.out&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    main()</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出形态</strong>：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">阶段1: 1000 -&gt; 742 (剔除低NLL 200 + 高NLL 50 + CLIP低分)</span><br><span class="line">特征已抽取: embs.npy (742, 3584)</span><br><span class="line">簇分布: &#123;0: 22, 1: 24, 2: 21, 3: 25, 4: 23, 5: 20, 6: 24, 7: 22, 8: 23, 9: 21&#125;</span><br><span class="line">最终 Coreset: 225 条 (30% of 阶段1产出) -&gt; coreset_30.jsonl</span><br></pre></td></tr></table></figure>
+<p><strong>人工验收</strong>：抽 3 个簇各看 5 条样本，判断簇是否对应可命名的任务类型（如&quot;图表问答簇&quot;“空间关系簇”）——簇的可解释性是&quot;多样性覆盖&quot;有效性的直接证据；若所有簇内容雷同，说明 Embedding 未捕获语义（检查是否忘了 PCA 归一化，或 hidden state 取错层）。</p>
+<hr />
+<h2 id="3-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#3-工程权衡与失效模式"></a> 3. 工程权衡与失效模式</h2>
+<h3 id="31-决策表选择算法的参数空间"><a class="markdownIt-Anchor" href="#31-决策表选择算法的参数空间"></a> 3.1 决策表：选择算法的参数空间</h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>起点</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>两端截断比例</td>
+<td>高 5% / 低 20%</td>
+<td>按数据噪声率与参考模型强度调整（第 1 周 1.3 节）</td>
+</tr>
+<tr>
+<td>聚类特征</td>
+<td>倒数第二层 + 回答区池化</td>
+<td>换层（如中层）会改变语义粒度——中层更句法、深层更任务化</td>
+</tr>
+<tr>
+<td>PCA 维度</td>
+<td>64~128</td>
+<td>过高受维度灾难，过低丢多样性信息</td>
+</tr>
+<tr>
+<td>K（簇数）</td>
+<td>10</td>
+<td>用轮廓系数（silhouette）辅助扫描 5~30；簇要可人工命名</td>
+</tr>
+<tr>
+<td>簇内采样</td>
+<td>NLL 等间隔分层</td>
+<td>也可按 ΔL_Img 分层（强化视觉多样性）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-三个代表性失效模式"><a class="markdownIt-Anchor" href="#32-三个代表性失效模式"></a> 3.2 三个代表性失效模式</h3>
+<p><strong>失效 1：聚类特征坍缩到&quot;长度方向&quot;</strong></p>
+<ul>
+<li><strong>症状</strong>：簇与&quot;回答长短&quot;强相关（短答案一簇、长答案一簇），而非任务类型。</li>
+<li><strong>根因</strong>：hidden state 的范数/位置编码残留与序列长度耦合，PCA 第一主成分被长度占据。</li>
+<li><strong>定位</strong>：对 Embedding 与样本长度做相关分析；看第一主成分的载荷。</li>
+<li><strong>修复</strong>：L2 归一化（已内置）；或改用&quot;均值池化 + 去长度中心化&quot;；或对回答 Token 做 mean-pooling 而非取末 Token。</li>
+</ul>
+<p><strong>失效 2：K-Means 簇极不均衡，配额保底反而引入噪声簇</strong></p>
+<ul>
+<li><strong>症状</strong>：一个巨型簇占 80%，其余小簇每簇只被保底采 1 条——小簇的 1 条可能恰是离群噪声。</li>
+<li><strong>根因</strong>：数据本身主导任务集中（真实分布如此），均匀配额与保底机制放大了小簇的话语权。</li>
+<li><strong>定位</strong>：打印簇大小分布；对最小簇的样本人工审。</li>
+<li><strong>修复</strong>：配额按 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msqrt><mtext>簇大小</mtext></msqrt></mrow><annotation encoding="application/x-tex">\sqrt{\text{簇大小}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.04em;vertical-align:-0.11333499999999996em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9266650000000001em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord text"><span class="mord cjk_fallback">簇大小</span></span></span></span><span style="top:-2.886665em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg width='400em' height='1.08em' viewBox='0 0 400000 1080' preserveAspectRatio='xMinYMin slice'><path d='M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.11333499999999996em;"><span></span></span></span></span></span></span></span></span> 或温度公式（Stage 4 第 3 周的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi></mrow><annotation encoding="application/x-tex">\alpha</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span></span></span></span> 采样）软平衡而非硬保底；最小簇样本数 &lt;5 时并入邻近簇。</li>
+</ul>
+<p><strong>失效 3：两端截断把&quot;目标模型真正要学的新任务&quot;扔掉了</strong></p>
+<ul>
+<li><strong>症状</strong>：30% Coreset 训练后，通用能力持平但新兴任务（如新 benchmark）表现反不如随机子集。</li>
+<li><strong>根因</strong>：参考模型&quot;没见过&quot;的新任务类型 NLL 天然极高，被当作噪声截断——<strong>参考模型的时差</strong>（第 1 周思考题 3 的机制）在矩阵阶段兑现为损失。</li>
+<li><strong>定位</strong>：被截断的高 NLL 段抽样人工审——区分&quot;乱码噪声&quot;与&quot;新任务好数据&quot;。</li>
+<li><strong>修复</strong>：高 NLL 段不直接丢弃，先过质量闸（CLIP/规则/人工抽检），质量过关的&quot;难而正确&quot;样本单独成簇保留；或用更强参考模型（教师）重新打分这一段。</li>
+</ul>
+<hr />
+<h2 id="4-延伸思考题"><a class="markdownIt-Anchor" href="#4-延伸思考题"></a> 4. 延伸思考题</h2>
+<ol>
+<li><strong>FPS 对比实验</strong>：把第二阶段替换为最远点采样（k-center：贪心选距已选集最远的点），在同预算下与 K-Means 方案对比：两子集的 Jaccard 重合度、簇覆盖率、以及 30% 预算下的训练效果（第 4 周）。写一段&quot;算法敏感性&quot;结论。</li>
+<li><strong>Sweet Spot 的动态性</strong>：设计一个&quot;迭代式筛选&quot;方案——第一轮用底座模型打分筛选、训练后用<strong>新模型</strong>重打分、再筛再训。这个自举循环的收敛条件与风险（如分布越走越窄）是什么？（提示：这是 curriculum / self-paced learning 的思想；防窄化手段是每轮强制保留一定比例的随机样本。）</li>
+<li><strong>理论拉伸</strong>：Coreset 的严格定义要求&quot;子集训练的损失变化 ε-逼近全量训练&quot;。本章的&quot;质量代理 + 覆盖代理&quot;在什么假设下是这个定义的合理近似？什么数据分布会使其失效？（提示：假设&quot;隐层近邻 → 梯度相似&quot;（XMAS 的经验结论）；失效场景——两个隐层近但梯度异号的样本，覆盖代理会误判冗余。）</li>
+</ol>
+<hr />
+<p><em>下一篇：第 4 周：筛选算法验证与 “Less is More” 消融实验</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/05/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC4%E5%91%A8-LessIsMore%E6%B6%88%E8%9E%8D%E9%AA%8C%E8%AF%81/" rel="prev" title="第4周-LessIsMore消融验证">
+                  <i class="fa fa-angle-left"></i> 第4周-LessIsMore消融验证
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/05/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC2%E5%91%A8-%E5%8F%8C%E5%90%91%E4%BF%A1%E6%81%AF%E5%A2%9E%E7%9B%8A%E4%B8%8E%E6%A8%A1%E6%80%81%E4%BE%9D%E8%B5%96/" rel="next" title="第2周-双向信息增益与模态依赖">
+                  第2周-双向信息增益与模态依赖 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

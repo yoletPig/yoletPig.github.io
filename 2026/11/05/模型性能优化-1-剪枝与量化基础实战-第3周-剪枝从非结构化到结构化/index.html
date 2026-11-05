@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 3 周教程：剪枝——从非结构化到结构化（Wanda &#x2F; SparseGPT &#x2F; LLM-Pruner）  本周要回答的问题  剪掉一半权重，为什么模型还能用？&quot;重要性&quot;到底怎么定义？ Wanda 的激活加权 ∣W∣⋅∣X∣|W| \cdot |X|∣W∣⋅∣X∣ 凭什么不重训就能剪？它与 SparseGPT 的二阶补偿差在哪？ 2:4 结构化稀疏在 Ampere Tens">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第3周-剪枝从非结构化到结构化">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC3%E5%91%A8-%E5%89%AA%E6%9E%9D%E4%BB%8E%E9%9D%9E%E7%BB%93%E6%9E%84%E5%8C%96%E5%88%B0%E7%BB%93%E6%9E%84%E5%8C%96/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 3 周教程：剪枝——从非结构化到结构化（Wanda &#x2F; SparseGPT &#x2F; LLM-Pruner）  本周要回答的问题  剪掉一半权重，为什么模型还能用？&quot;重要性&quot;到底怎么定义？ Wanda 的激活加权 ∣W∣⋅∣X∣|W| \cdot |X|∣W∣⋅∣X∣ 凭什么不重训就能剪？它与 SparseGPT 的二阶补偿差在哪？ 2:4 结构化稀疏在 Ampere Tens">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-05T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.582Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="推理优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC3%E5%91%A8-%E5%89%AA%E6%9E%9D%E4%BB%8E%E9%9D%9E%E7%BB%93%E6%9E%84%E5%8C%96%E5%88%B0%E7%BB%93%E6%9E%84%E5%8C%96/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC3%E5%91%A8-%E5%89%AA%E6%9E%9D%E4%BB%8E%E9%9D%9E%E7%BB%93%E6%9E%84%E5%8C%96%E5%88%B0%E7%BB%93%E6%9E%84%E5%8C%96/","path":"2026/11/05/模型性能优化-1-剪枝与量化基础实战-第3周-剪枝从非结构化到结构化/","title":"第3周-剪枝从非结构化到结构化"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第3周-剪枝从非结构化到结构化 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-3-%E5%91%A8%E6%95%99%E7%A8%8B%E5%89%AA%E6%9E%9D%E4%BB%8E%E9%9D%9E%E7%BB%93%E6%9E%84%E5%8C%96%E5%88%B0%E7%BB%93%E6%9E%84%E5%8C%96wanda-sparsegpt-llm-pruner"><span class="nav-number">1.</span> <span class="nav-text"> 第 3 周教程：剪枝——从非结构化到结构化（Wanda &#x2F; SparseGPT &#x2F; LLM-Pruner）</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E7%A8%80%E7%96%8F-%E7%94%A8%E9%87%8D%E8%A6%81%E6%80%A7%E6%8E%92%E5%BA%8F%E6%8D%A2%E5%8F%82%E6%95%B0%E9%A2%84%E7%AE%97"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：稀疏 &#x3D; 用&quot;重要性排序&quot;换参数预算</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E9%97%AE%E9%A2%98%E5%AE%9A%E4%B9%89"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 问题定义</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E4%B8%89%E4%BB%A3%E9%87%8D%E8%A6%81%E6%80%A7%E4%BB%A3%E7%90%86"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 三代重要性代理</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-wanda-%E4%B8%BA%E4%BB%80%E4%B9%88%E6%9C%89%E6%95%88%E4%B8%80%E8%A1%8C%E8%BE%93%E5%87%BA%E7%9A%84%E8%AF%AF%E5%B7%AE%E5%88%86%E8%A7%A3"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 Wanda 为什么有效：一行输出的误差分解</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#14-sparsegpt%E6%8A%8A%E5%89%AA%E6%9E%9D%E5%86%99%E6%88%90%E9%80%90%E5%88%97%E6%9C%80%E5%B0%8F%E4%BA%8C%E4%B9%98"><span class="nav-number">1.1.4.</span> <span class="nav-text"> 1.4 SparseGPT：把剪枝写成逐列最小二乘</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#15-llm-pruner%E7%BB%93%E6%9E%84%E5%8C%96%E5%89%AA%E6%9E%9D%E7%9A%84%E4%BE%9D%E8%B5%96%E5%9B%BE"><span class="nav-number">1.1.5.</span> <span class="nav-text"> 1.5 LLM-Pruner：结构化剪枝的依赖图</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#16-24-%E7%A8%80%E7%96%8F%E4%B8%BA%E7%A1%AC%E4%BB%B6%E8%80%8C%E7%94%9F%E7%9A%84%E7%BB%93%E6%9E%84%E5%8C%96%E6%A0%BC%E5%BC%8F"><span class="nav-number">1.1.6.</span> <span class="nav-text"> 1.6 2:4 稀疏：为硬件而生的结构化格式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E4%B8%8E%E6%95%B0%E6%8D%AE%E6%B5%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 系统架构与数据流</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 实现与验证（本周交付核心）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E6%89%8B%E5%86%99-wanda%E5%AE%8C%E6%95%B4%E5%8F%AF%E8%BF%90%E8%A1%8C%E5%B0%8F%E6%A8%A1%E5%9E%8B%E6%9C%AC%E5%9C%B0%E5%8F%AF%E8%B7%91"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 手写 Wanda（完整可运行，小模型本地可跑）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E5%9C%A8%E7%9C%9F%E5%AE%9E%E6%A8%A1%E5%9E%8B%E4%B8%8A%E8%B7%91%E4%B8%A4%E6%9D%A1%E8%B7%AF"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 在真实模型上跑：两条路</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-%E9%80%9A%E9%81%93%E5%89%AA%E6%9E%9D-%E5%BE%AE%E8%B0%83%E6%81%A2%E5%A4%8Dresnet-18-cifar-10-%E6%9B%B2%E7%BA%BF"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 通道剪枝 + 微调恢复（ResNet-18 CIFAR-10 曲线）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#34-24-%E6%8A%95%E5%BD%B1%E6%8A%8A%E4%BB%BB%E6%84%8F%E6%8E%A9%E7%A0%81%E5%8F%98%E6%88%90%E7%A1%AC%E4%BB%B6%E8%83%BD%E5%90%83%E7%9A%84%E5%BD%A2%E7%8A%B6%E5%8F%AF%E8%BF%90%E8%A1%8C"><span class="nav-number">1.3.4.</span> <span class="nav-text"> 3.4 2:4 投影：把任意掩码变成硬件能吃的形状（可运行）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#35-%E5%89%AA%E6%9E%9D-%E9%87%8F%E5%8C%96%E5%8F%A0%E5%8A%A0%E5%85%88%E5%89%AA%E5%90%8E%E9%87%8F%E7%9A%84%E8%AF%AF%E5%B7%AE%E9%A2%84%E7%AE%97%E8%A7%86%E8%A7%92"><span class="nav-number">1.3.5.</span> <span class="nav-text"> 3.5 剪枝-量化叠加：先剪后量的误差预算视角</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E6%9C%AC%E5%91%A8%E6%96%B9%E6%B3%95%E8%AE%BA%E5%B0%8F%E7%BB%93%E4%B8%89%E7%A7%8D%E5%8E%8B%E7%BC%A9%E8%B7%AF%E7%BA%BF%E7%9A%84%E8%AF%AF%E5%B7%AE%E9%A2%84%E7%AE%97%E8%A7%86%E8%A7%92"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 本周方法论小结：三种压缩路线的误差预算视角</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.7.</span> <span class="nav-text"> 本周交付清单</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E9%99%84%E6%9C%AC%E5%91%A8%E5%AE%9E%E9%AA%8C%E7%BB%93%E6%9E%9C%E8%AE%B0%E5%BD%95%E6%A8%A1%E6%9D%BF"><span class="nav-number">1.8.</span> <span class="nav-text"> 附：本周实验结果记录模板</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC3%E5%91%A8-%E5%89%AA%E6%9E%9D%E4%BB%8E%E9%9D%9E%E7%BB%93%E6%9E%84%E5%8C%96%E5%88%B0%E7%BB%93%E6%9E%84%E5%8C%96/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第3周-剪枝从非结构化到结构化 | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第3周-剪枝从非结构化到结构化
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2026-11-05 12:00:00 / 修改时间：08:11:03" itemprop="dateCreated datePublished" datetime="2026-11-05T12:00:00+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" itemprop="url" rel="index"><span itemprop="name">模型性能优化</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/Stage-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98/" itemprop="url" rel="index"><span itemprop="name">Stage 1-剪枝与量化基础实战</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.1k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>15 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-3-周教程剪枝从非结构化到结构化wanda-sparsegpt-llm-pruner"><a class="markdownIt-Anchor" href="#第-3-周教程剪枝从非结构化到结构化wanda-sparsegpt-llm-pruner"></a> 第 3 周教程：剪枝——从非结构化到结构化（Wanda / SparseGPT / LLM-Pruner）</h1>
+<blockquote>
+<p><strong>本周要回答的问题</strong></p>
+<ol>
+<li>剪掉一半权重，为什么模型还能用？&quot;重要性&quot;到底怎么定义？</li>
+<li>Wanda 的激活加权 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><mi>W</mi><mi mathvariant="normal">∣</mi><mo>⋅</mo><mi mathvariant="normal">∣</mi><mi>X</mi><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">|W| \cdot |X|</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∣</span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="mord">∣</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">∣</span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="mord">∣</span></span></span></span> 凭什么不重训就能剪？它与 SparseGPT 的二阶补偿差在哪？</li>
+<li>2:4 结构化稀疏在 Ampere Tensor Core 上的硬件机制是什么？为什么 50% 稀疏能真提速而普通稀疏不能？</li>
+<li>通道剪枝后为什么要微调恢复？剪枝率-精度曲线长什么样？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 3 周。交付物：① 对 Qwen2.5-1.5B 做 Wanda 50% 非结构化剪枝并测困惑度损失；② ResNet-18 CIFAR 通道剪枝 + 微调恢复曲线；③ 解释 2:4 稀疏的硬件加速原理。</p>
+<hr />
+<h2 id="1-第一性原理稀疏-用重要性排序换参数预算"><a class="markdownIt-Anchor" href="#1-第一性原理稀疏-用重要性排序换参数预算"></a> 1. 第一性原理：稀疏 = 用&quot;重要性排序&quot;换参数预算</h2>
+<h3 id="11-问题定义"><a class="markdownIt-Anchor" href="#11-问题定义"></a> 1.1 问题定义</h3>
+<p>剪枝要解的问题：给定预算（保留 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">k\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.80556em;vertical-align:-0.05556em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mord">%</span></span></span></span> 参数），找出使任务损失最小的参数子集。形式化为</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><munder><mo><mi>min</mi><mo>⁡</mo></mo><mrow><mi>m</mi><mo>∈</mo><mo stretchy="false">{</mo><mn>0</mn><mo separator="true">,</mo><mn>1</mn><msup><mo stretchy="false">}</mo><mrow><mi mathvariant="normal">∣</mi><mi>W</mi><mi mathvariant="normal">∣</mi></mrow></msup></mrow></munder><mtext> </mtext><mi mathvariant="script">L</mi><mo stretchy="false">(</mo><mi>m</mi><mo>⊙</mo><mi>W</mi><mo stretchy="false">)</mo><mspace width="1em"/><mtext>s.t.</mtext><mspace width="1em"/><mi mathvariant="normal">∥</mi><mi>m</mi><msub><mi mathvariant="normal">∥</mi><mn>0</mn></msub><mo>≤</mo><mi>k</mi><mi mathvariant="normal">∣</mi><mi>W</mi><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">\min_{m \in \{0,1\}^{|W|}} \ \mathcal{L}(m \odot W) \quad \text{s.t.} \quad \|m\|_0 \le k|W|
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.766425em;vertical-align:-1.016425em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.66786em;"><span style="top:-2.258575em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">m</span><span class="mrel mtight">∈</span><span class="mopen mtight">{</span><span class="mord mtight">0</span><span class="mpunct mtight">,</span><span class="mord mtight">1</span><span class="mclose mtight"><span class="mclose mtight">}</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8220357142857143em;"><span style="top:-2.8220357142857138em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5357142857142856em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mtight">∣</span><span class="mord mathnormal mtight" style="margin-right:0.13889em;">W</span><span class="mord mtight">∣</span></span></span></span></span></span></span></span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">min</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.016425em;"><span></span></span></span></span></span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathcal">L</span></span><span class="mopen">(</span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⊙</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="mclose">)</span><span class="mspace" style="margin-right:1em;"></span><span class="mord text"><span class="mord">s.t.</span></span><span class="mspace" style="margin-right:1em;"></span><span class="mord">∥</span><span class="mord mathnormal">m</span><span class="mord"><span class="mord">∥</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mord">∣</span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="mord">∣</span></span></span></span></span></p>
+<p>这是组合优化（NP 难），所有实用算法都是在用不同的**重要性代理（importance proxy）**做近似。</p>
+<h3 id="12-三代重要性代理"><a class="markdownIt-Anchor" href="#12-三代重要性代理"></a> 1.2 三代重要性代理</h3>
+<table>
+<thead>
+<tr>
+<th>算法</th>
+<th>重要性定义</th>
+<th>需要重训？</th>
+<th>代表</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Magnitude</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><msub><mi>W</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">|W_{ij}|</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.036108em;vertical-align:-0.286108em;"></span><span class="mord">∣</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mord">∣</span></span></span></span></td>
+<td>需要（经典 30 轮迭代剪枝）</td>
+<td>Han et al. 2015</td>
+</tr>
+<tr>
+<td>Movement</td>
+<td>训练中 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><msub><mi>W</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">|W_{ij}|</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.036108em;vertical-align:-0.286108em;"></span><span class="mord">∣</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mord">∣</span></span></span></span> 的移动量</td>
+<td>需要</td>
+<td>Movement Pruning</td>
+</tr>
+<tr>
+<td><strong>Wanda</strong></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><msub><mi>W</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mi mathvariant="normal">∣</mi><mo>⋅</mo><mi mathvariant="normal">∣</mi><msub><mi>X</mi><mi>j</mi></msub><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">|W_{ij}| \cdot |X_j|</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.036108em;vertical-align:-0.286108em;"></span><span class="mord">∣</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mord">∣</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.036108em;vertical-align:-0.286108em;"></span><span class="mord">∣</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:-0.07847em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mord">∣</span></span></span></span>（权重 × 输入激活范数）</td>
+<td><strong>不需要</strong></td>
+<td>Sun et al. 2023</td>
+</tr>
+<tr>
+<td><strong>SparseGPT</strong></td>
+<td>剪一列后的二阶输出误差（Hessian）</td>
+<td>不需要（一次性）</td>
+<td>Frantar &amp; Alistarh 2023</td>
+</tr>
+</tbody>
+</table>
+<h3 id="13-wanda-为什么有效一行输出的误差分解"><a class="markdownIt-Anchor" href="#13-wanda-为什么有效一行输出的误差分解"></a> 1.3 Wanda 为什么有效：一行输出的误差分解</h3>
+<p>考虑线性层 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi><mo>=</mo><mi>W</mi><mi>x</mi></mrow><annotation encoding="application/x-tex">y = Wx</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="mord mathnormal">x</span></span></span></span>。剪掉 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>W</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">W_{ij}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span> 造成的输出误差期望约为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∣</mi><msub><mi>W</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mi mathvariant="normal">∣</mi><mo>⋅</mo><mi mathvariant="normal">∣</mi><msub><mi>x</mi><mi>j</mi></msub><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">|W_{ij}| \cdot |x_j|</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.036108em;vertical-align:-0.286108em;"></span><span class="mord">∣</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mord">∣</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.036108em;vertical-align:-0.286108em;"></span><span class="mord">∣</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mord">∣</span></span></span></span>——<strong>权重小但输入通道幅度大的连接，剪掉同样致命</strong>。Wanda 的重要性即按列激活范数加权：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>S</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mo>=</mo><mi mathvariant="normal">∣</mi><msub><mi>W</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><mi mathvariant="normal">∣</mi><mo>⋅</mo><mi mathvariant="normal">∥</mi><msub><mi>X</mi><mrow><mo>⋅</mo><mi>j</mi></mrow></msub><msub><mi mathvariant="normal">∥</mi><mn>2</mn></msub><mo separator="true">,</mo><mspace width="2em"/><mtext>每行保留 </mtext><mi>S</mi><mtext> 最大的 </mtext><mi>k</mi><mi mathvariant="normal">%</mi><mtext> 个</mtext></mrow><annotation encoding="application/x-tex">S_{ij} = |W_{ij}| \cdot \|X_{\cdot j}\|_2, \qquad \text{每行保留 } S \text{ 最大的 } k\% \text{ 个}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:-0.05764em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.036108em;vertical-align:-0.286108em;"></span><span class="mord">∣</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mord">∣</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.036108em;vertical-align:-0.286108em;"></span><span class="mord">∥</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:-0.07847em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">⋅</span><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord">∥</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord text"><span class="mord cjk_fallback">每行保留</span><span class="mord"> </span></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mord text"><span class="mord"> </span><span class="mord cjk_fallback">最大的</span><span class="mord"> </span></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mord">%</span><span class="mord text"><span class="mord"> </span><span class="mord cjk_fallback">个</span></span></span></span></span></span></p>
+<p>两个关键设计：① 按<strong>输出行</strong>独立剪（保持每行稀疏率一致，避免某些神经元被剪空）；② 激活范数用一小批校准数据统计——与第 2 周校准完全同构。这就是&quot;不重训也能工作&quot;的原因：它用的是<strong>一阶泰勒项的幅度</strong>，而 LLM 权重在预训练后已处于良好局部极小，一阶近似足够。</p>
+<h3 id="14-sparsegpt把剪枝写成逐列最小二乘"><a class="markdownIt-Anchor" href="#14-sparsegpt把剪枝写成逐列最小二乘"></a> 1.4 SparseGPT：把剪枝写成逐列最小二乘</h3>
+<p>SparseGPT 把每层剪枝视为</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>arg</mi><mo>⁡</mo><munder><mo><mi>min</mi><mo>⁡</mo></mo><mover accent="true"><mi>W</mi><mo>^</mo></mover></munder><mi mathvariant="normal">∥</mi><mi>X</mi><msup><mi>W</mi><mi mathvariant="normal">⊤</mi></msup><mo>−</mo><mi>X</mi><msup><mover accent="true"><mi>W</mi><mo>^</mo></mover><mi mathvariant="normal">⊤</mi></msup><msubsup><mi mathvariant="normal">∥</mi><mi>F</mi><mn>2</mn></msubsup><mspace width="1em"/><mtext>s.t. </mtext><mover accent="true"><mi>W</mi><mo>^</mo></mover><mtext> 满足稀疏约束</mtext></mrow><annotation encoding="application/x-tex">\arg\min_{\hat W} \|XW^\top - X\hat W^\top\|_F^2 \quad \text{s.t. } \hat W \text{ 满足稀疏约束}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.8278469999999998em;vertical-align:-0.9287389999999999em;"></span><span class="mop">ar<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.66786em;"><span style="top:-2.1712610000000003em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord accent mtight"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9467699999999999em;"><span style="top:-2.7em;"><span class="pstrut" style="height:2.7em;"></span><span class="mord mathnormal mtight" style="margin-right:0.13889em;">W</span></span><span style="top:-2.9523300000000003em;"><span class="pstrut" style="height:2.7em;"></span><span class="accent-body" style="left:-0.25em;"><span class="mord mtight">^</span></span></span></span></span></span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">min</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9287389999999999em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">∥</span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991079999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.19677em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="mord"><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9467699999999999em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span style="top:-3.25233em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.25em;"><span class="mord">^</span></span></span></span></span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991079999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span></span></span></span></span><span class="mord"><span class="mord">∥</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8641079999999999em;"><span style="top:-2.4530000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">F</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:1em;"></span><span class="mord text"><span class="mord">s.t. </span></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9467699999999999em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span><span style="top:-3.25233em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.25em;"><span class="mord">^</span></span></span></span></span></span></span><span class="mord text"><span class="mord"> </span><span class="mord cjk_fallback">满足稀疏约束</span></span></span></span></span></span></p>
+<p>用 Hessian <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi><mo>=</mo><mn>2</mn><mi>X</mi><msup><mi>X</mi><mi mathvariant="normal">⊤</mi></msup></mrow><annotation encoding="application/x-tex">H = 2XX^\top</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.08125em;">H</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.849108em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.849108em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span></span></span></span></span></span></span></span>（与 GPTQ 完全同源的累积式，Stage 2 第 1 周会再推一遍）做二阶补偿：剪掉某元素后，把该行其余元素的误差按 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>H</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup></mrow><annotation encoding="application/x-tex">H^{-1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.08125em;">H</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span></span></span></span> 最优摊还。相比 Wanda 的一阶近似，它在 60%+ 高稀疏率下显著更稳，代价是要逐层解小线性系统（慢一个量级，但仍免重训）。</p>
+<h3 id="15-llm-pruner结构化剪枝的依赖图"><a class="markdownIt-Anchor" href="#15-llm-pruner结构化剪枝的依赖图"></a> 1.5 LLM-Pruner：结构化剪枝的依赖图</h3>
+<p>非结构化剪枝产生稀疏矩阵，<strong>通用硬件上并不加速</strong>（稀疏存储格式与密集计算单元的矛盾）。LLM-Pruner 转向<strong>结构化剪枝</strong>：直接删整条通道/头/层。难点是 Transformer 内部存在耦合结构（残差、RoPE 多头、共享 FFN 门控），盲删会破坏形状一致。它的方案：</p>
+<ol>
+<li><strong>依赖图（dependency graph）</strong> 分析：识别必须同剪同留的结构组；</li>
+<li>对每个结构组用 <strong>LoRA 式低秩恢复</strong>：剪掉的主干旁挂一个低秩分支做少量数据恢复训练（通常 &lt; 3 小时），避免全参微调。</li>
+</ol>
+<h3 id="16-24-稀疏为硬件而生的结构化格式"><a class="markdownIt-Anchor" href="#16-24-稀疏为硬件而生的结构化格式"></a> 1.6 2:4 稀疏：为硬件而生的结构化格式</h3>
+<p>NVIDIA Ampere 引入的 <strong>2:4 结构化稀疏（2:4 Structured Sparsity）</strong>：每连续 4 个权重中至多 2 个非零。</p>
+<p>硬件机制（A100 稀疏 Tensor Core）：</p>
+<ul>
+<li>权重侧：非零值按 2:4 模式压缩存储——只存 2 个非零值 + 2-bit 索引（记录位置），体积近减半；</li>
+<li>激活侧：保持密集，但 Tensor Core 的 MMA 单元内置<strong>选择逻辑</strong>，每个时钟周期跳过索引标记为零的乘累加；</li>
+<li>效果：等效算力翻倍（FP16 312 → 稀疏 624 TFLOPS 量级），且不需要稀疏矩阵格式（CSR/COO）的间接寻址。</li>
+</ul>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>2:4 压缩存储</mtext><mo>=</mo><munder><munder><mrow><mn>2</mn><mo>×</mo><mn>16</mn><mtext>-bit 值</mtext></mrow><mo stretchy="true">⏟</mo></munder><mtext>非零权重</mtext></munder><mo>+</mo><munder><munder><mrow><mn>2</mn><mo>×</mo><mn>2</mn><mtext>-bit 索引</mtext></mrow><mo stretchy="true">⏟</mo></munder><mtext>位置编码</mtext></munder><mo>⇒</mo><mtext>每 4 个权重共 </mtext><mn>36</mn><mtext> bit</mtext><mo>≈</mo><mn>9</mn><mtext> bit/权重</mtext></mrow><annotation encoding="application/x-tex">\text{2:4 压缩存储} = \underbrace{2 \times 16\text{-bit 值}}_{\text{非零权重}} + \underbrace{2 \times 2\text{-bit 索引}}_{\text{位置编码}} \Rightarrow \text{每 4 个权重共 } 36 \text{ bit} \approx 9 \text{ bit/权重}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord">2:4 </span><span class="mord cjk_fallback">压缩存储</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.104101em;vertical-align:-1.4096609999999998em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944400000000002em;"><span style="top:-1.5903390000000002em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">非零权重</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.69444em;"><span class="svg-align" style="top:-2.26867em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord">1</span><span class="mord">6</span><span class="mord text"><span class="mord">-bit </span><span class="mord cjk_fallback">值</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.73133em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.4096609999999998em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:2.104101em;vertical-align:-1.4096609999999998em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944400000000002em;"><span style="top:-1.5903390000000002em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">位置编码</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.69444em;"><span class="svg-align" style="top:-2.26867em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord">2</span><span class="mord text"><span class="mord">-bit </span><span class="mord cjk_fallback">索引</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.73133em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.4096609999999998em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">每</span><span class="mord"> 4 </span><span class="mord cjk_fallback">个权重共</span><span class="mord"> </span></span><span class="mord">3</span><span class="mord">6</span><span class="mord text"><span class="mord"> bit</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">9</span><span class="mord text"><span class="mord"> bit/</span><span class="mord cjk_fallback">权重</span></span></span></span></span></span></p>
+<p><strong>为什么任意 50% 稀疏不加速而 2:4 可以</strong>：普通稀疏需要索引间接访存 + 不规则计算，访存与调度开销抵消算力收益；2:4 的固定模式让硬件用确定性电路跳过零元素——<strong>稀疏要变成硬件指令才有收益</strong>。cuSPARSELt / <code>torch.sparse</code> 的 <code>to_sparse_semi_structured</code> 是软件入口。</p>
+<hr />
+<h2 id="2-系统架构与数据流"><a class="markdownIt-Anchor" href="#2-系统架构与数据流"></a> 2. 系统架构与数据流</h2>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">FP16 模型 + 校准集（128 条）</span><br><span class="line">  │ ① 逐层前向：收集每层输入激活的列范数 ‖X_·j‖</span><br><span class="line">  ▼</span><br><span class="line">重要性矩阵 S = |W| · ‖X‖        ← Wanda 核心</span><br><span class="line">  │ ② 每行取 top-k% 保留，其余置零 → 掩码 m</span><br><span class="line">  ▼</span><br><span class="line">稀疏模型 W&#x27; = m ⊙ W</span><br><span class="line">  │ ③（可选）2:4 重排：把任意掩码投影成最近的 2:4 模式</span><br><span class="line">  ▼</span><br><span class="line">评测：PPL / 下游任务     或     交给稀疏 Tensor Core 加速</span><br></pre></td></tr></table></figure>
+<p>结构化通道剪枝则多一步：剪完必须<strong>微调恢复</strong>（其余权重重新适配新容量），曲线先掉后回升。</p>
+<hr />
+<h2 id="3-实现与验证本周交付核心"><a class="markdownIt-Anchor" href="#3-实现与验证本周交付核心"></a> 3. 实现与验证（本周交付核心）</h2>
+<h3 id="31-手写-wanda完整可运行小模型本地可跑"><a class="markdownIt-Anchor" href="#31-手写-wanda完整可运行小模型本地可跑"></a> 3.1 手写 Wanda（完整可运行，小模型本地可跑）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">import</span> torch.nn <span class="keyword">as</span> nn</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">WandaPruner</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;对 nn.Linear 做 Wanda 非结构化剪枝（按输出行保留 top-k%）。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, sparsity: <span class="built_in">float</span> = <span class="number">0.5</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>.sparsity = sparsity</span><br><span class="line">        <span class="variable language_">self</span>.scaler = &#123;&#125;          <span class="comment"># name -&gt; 激活列范数累加</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">hook</span>(<span class="params">self, name</span>):</span><br><span class="line">        <span class="keyword">def</span> <span class="title function_">_hook</span>(<span class="params">m, inp, out</span>):</span><br><span class="line">            x = inp[<span class="number">0</span>].detach().<span class="built_in">float</span>()</span><br><span class="line">            <span class="comment"># 列范数平方累加（跨 batch 累积，等价 ‖X_·j‖_2）</span></span><br><span class="line">            norm_sq = x.reshape(-<span class="number">1</span>, x.shape[-<span class="number">1</span>]).<span class="built_in">pow</span>(<span class="number">2</span>).<span class="built_in">sum</span>(dim=<span class="number">0</span>)</span><br><span class="line">            <span class="variable language_">self</span>.scaler[name] = <span class="variable language_">self</span>.scaler.get(name, <span class="number">0</span>) + norm_sq</span><br><span class="line">        <span class="keyword">return</span> _hook</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">prune</span>(<span class="params">self, name, layer: nn.Linear</span>):</span><br><span class="line">        act = <span class="variable language_">self</span>.scaler[name].sqrt().to(layer.weight.device)</span><br><span class="line">        score = layer.weight.detach().<span class="built_in">abs</span>() * act[<span class="literal">None</span>, :]     <span class="comment"># S_ij</span></span><br><span class="line">        k = <span class="built_in">int</span>(score.shape[<span class="number">1</span>] * (<span class="number">1</span> - <span class="variable language_">self</span>.sparsity))</span><br><span class="line">        topk = score.topk(k, dim=<span class="number">1</span>).indices                    <span class="comment"># 每行保留</span></span><br><span class="line">        mask = torch.zeros_like(score, dtype=torch.<span class="built_in">bool</span>)</span><br><span class="line">        mask.scatter_(<span class="number">1</span>, topk, <span class="literal">True</span>)</span><br><span class="line">        layer.weight.data *= mask                              <span class="comment"># 就地置零</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 单元自检：验证掩码形状与稀疏率 ----</span></span><br><span class="line">lin = nn.Linear(<span class="number">64</span>, <span class="number">32</span>, bias=<span class="literal">False</span>)</span><br><span class="line">p = WandaPruner(<span class="number">0.5</span>)</span><br><span class="line">x = torch.randn(<span class="number">8</span>, <span class="number">64</span>)</span><br><span class="line">p.hook(<span class="string">&quot;l&quot;</span>)(lin, (x,), <span class="literal">None</span>)</span><br><span class="line">p.prune(<span class="string">&quot;l&quot;</span>, lin)</span><br><span class="line">w = lin.weight.data</span><br><span class="line"><span class="keyword">assert</span> (w == <span class="number">0</span>).<span class="built_in">float</span>().mean().item() == <span class="number">0.5</span>, <span class="string">&quot;稀疏率应为 50%&quot;</span></span><br><span class="line"><span class="keyword">assert</span> ((w == <span class="number">0</span>).<span class="built_in">float</span>().<span class="built_in">sum</span>(dim=<span class="number">1</span>) == <span class="number">32</span>).<span class="built_in">all</span>(), <span class="string">&quot;每行应恰好剪一半&quot;</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;Wanda 单元自检通过 ✓&quot;</span>)</span><br></pre></td></tr></table></figure>
+<h3 id="32-在真实模型上跑两条路"><a class="markdownIt-Anchor" href="#32-在真实模型上跑两条路"></a> 3.2 在真实模型上跑：两条路</h3>
+<ul>
+<li><strong>官方路线（推荐先跑）</strong>：Wanda 官方仓库（<a target="_blank" rel="noopener" href="https://github.com/locuslab/wanda">locuslab/wanda</a>）对 Qwen 系模型即改 <code>--model</code> 参数即可：<br />
+<code>python main.py --model Qwen/Qwen2.5-1.5B --sparsity_ratio 0.5 --sparsity_type unstructured --save out/</code>，<br />
+随后用第 2 周的 PPL 脚本评测（Neural Magic 的 SparseML 生态也有对应的 Wanda 修改器，可按环境二选一）。预期：WikiText-2 PPL 从 ~10（1.5B FP16 基线，按你实测）上涨 1~3 点——50% 稀疏下可接受，70% 开始崩。</li>
+<li><strong>手写路线</strong>：把 3.1 的 <code>WandaPruner</code> 挂到 <code>transformers</code> 模型全部 <code>q_proj/k_proj/v_proj/o_proj/gate_proj/up_proj/down_proj</code> 上，校准 128 条后统一剪枝，与官方版 PPL 对比（误差应 &lt; 0.2，差异来自激活统计的 batch 聚合方式）。</li>
+</ul>
+<h3 id="33-通道剪枝-微调恢复resnet-18-cifar-10-曲线"><a class="markdownIt-Anchor" href="#33-通道剪枝-微调恢复resnet-18-cifar-10-曲线"></a> 3.3 通道剪枝 + 微调恢复（ResNet-18 CIFAR-10 曲线）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch, torch.nn <span class="keyword">as</span> nn</span><br><span class="line"><span class="keyword">from</span> torchvision.models <span class="keyword">import</span> resnet18</span><br><span class="line"><span class="keyword">from</span> torchvision.datasets <span class="keyword">import</span> CIFAR10</span><br><span class="line"><span class="keyword">from</span> torchvision <span class="keyword">import</span> transforms</span><br><span class="line"><span class="keyword">from</span> torch.utils.data <span class="keyword">import</span> DataLoader</span><br><span class="line"></span><br><span class="line">tf = transforms.Compose([transforms.ToTensor(),</span><br><span class="line">                         transforms.Normalize((<span class="number">.5</span>,)*<span class="number">3</span>, (<span class="number">.5</span>,)*<span class="number">3</span>)])</span><br><span class="line">train = DataLoader(CIFAR10(<span class="string">&quot;~&quot;</span>, <span class="literal">True</span>, tf, download=<span class="literal">True</span>), <span class="number">128</span>, <span class="literal">True</span>, num_workers=<span class="number">2</span>)</span><br><span class="line">test  = DataLoader(CIFAR10(<span class="string">&quot;~&quot;</span>, <span class="literal">False</span>, tf, download=<span class="literal">True</span>), <span class="number">256</span>, num_workers=<span class="number">2</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">acc</span>(<span class="params">model</span>):</span><br><span class="line">    model.<span class="built_in">eval</span>(); ok = n = <span class="number">0</span></span><br><span class="line">    <span class="keyword">with</span> torch.no_grad():</span><br><span class="line">        <span class="keyword">for</span> x, y <span class="keyword">in</span> test:</span><br><span class="line">            ok += (model(x).argmax(<span class="number">1</span>) == y).<span class="built_in">sum</span>().item(); n += <span class="built_in">len</span>(y)</span><br><span class="line">    <span class="keyword">return</span> ok / n</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">prune_channel</span>(<span class="params">model, ratio</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;按 L1 范数剪掉每个卷积层 ratio 比例的输出通道（演示版：逐层独立）。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">for</span> m <span class="keyword">in</span> model.modules():</span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">isinstance</span>(m, nn.Conv2d):</span><br><span class="line">            l1 = m.weight.detach().<span class="built_in">abs</span>().<span class="built_in">sum</span>(dim=(<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>))</span><br><span class="line">            k = <span class="built_in">max</span>(<span class="number">1</span>, <span class="built_in">int</span>(l1.numel() * (<span class="number">1</span> - ratio)))</span><br><span class="line">            keep = l1.topk(k).indices.sort().values</span><br><span class="line">            m.weight = nn.Parameter(m.weight.data[keep])</span><br><span class="line">            m.out_channels = k</span><br><span class="line">    <span class="keyword">return</span> model  <span class="comment"># 注意：生产实现需同步修相邻层（用 torchpruner/llm-pruner 的依赖图思路）</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 实验循环：剪枝率 [0, .2, .4, .6] × &#123;直接评测, 微调 5 epoch 后评测&#125;</span></span><br><span class="line"><span class="comment"># 预期曲线：直接评测单调下降；微调后在 ≤40% 处几乎完全恢复，60% 出现不可恢复拐点</span></span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>说明：上面是教学骨架——真实的通道剪枝要联动修改下游层的 <code>in_channels</code>、BatchNorm 与 shortcut，建议用 <code>torch-pruning</code> 库完成依赖图处理，把精力放在&quot;剪枝率-精度&quot;曲线本身。</p>
+</blockquote>
+<h3 id="34-24-投影把任意掩码变成硬件能吃的形状可运行"><a class="markdownIt-Anchor" href="#34-24-投影把任意掩码变成硬件能吃的形状可运行"></a> 3.4 2:4 投影：把任意掩码变成硬件能吃的形状（可运行）</h3>
+<p>任意 50% 稀疏掩码不能直接进稀疏 Tensor Core——必须投影到&quot;每 4 个元素恰好 2 个非零&quot;的 2:4 模式。最小投影算法：每个长度为 4 的窗口内，保留重要性最高的 2 个。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">project_to_2_4</span>(<span class="params">score: torch.Tensor</span>) -&gt; torch.Tensor:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;把重要性矩阵投影成 2:4 结构化掩码（沿最后一维，每 4 保 2）。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">assert</span> score.shape[-<span class="number">1</span>] % <span class="number">4</span> == <span class="number">0</span></span><br><span class="line">    g = score.view(*score.shape[:-<span class="number">1</span>], -<span class="number">1</span>, <span class="number">4</span>)       <span class="comment"># 切成 4 元组</span></span><br><span class="line">    idx = g.topk(<span class="number">2</span>, dim=-<span class="number">1</span>).indices                <span class="comment"># 每组保留最大的 2 个</span></span><br><span class="line">    mask = torch.zeros_like(g, dtype=torch.<span class="built_in">bool</span>)</span><br><span class="line">    mask.scatter_(-<span class="number">1</span>, idx, <span class="literal">True</span>)</span><br><span class="line">    <span class="keyword">return</span> mask.view_as(score)</span><br><span class="line"></span><br><span class="line">torch.manual_seed(<span class="number">0</span>)</span><br><span class="line">S = torch.randn(<span class="number">8</span>, <span class="number">64</span>).<span class="built_in">abs</span>()</span><br><span class="line">m = project_to_2_4(S)</span><br><span class="line"><span class="comment"># 断言 1：稀疏率恰为 50%</span></span><br><span class="line"><span class="keyword">assert</span> m.<span class="built_in">float</span>().mean().item() == <span class="number">0.5</span></span><br><span class="line"><span class="comment"># 断言 2：每连续 4 个元素恰好 2 个非零（2:4 约束）</span></span><br><span class="line"><span class="keyword">assert</span> (m.view(<span class="number">8</span>, -<span class="number">1</span>, <span class="number">4</span>).<span class="built_in">sum</span>(-<span class="number">1</span>) == <span class="number">2</span>).<span class="built_in">all</span>()</span><br><span class="line"><span class="comment"># 断言 3：保留的是组内重要性最高的 2 个</span></span><br><span class="line">kept = (S * m).view(<span class="number">8</span>, -<span class="number">1</span>, <span class="number">4</span>).<span class="built_in">sum</span>(-<span class="number">1</span>)</span><br><span class="line">total = S.view(<span class="number">8</span>, -<span class="number">1</span>, <span class="number">4</span>).<span class="built_in">sum</span>(-<span class="number">1</span>)</span><br><span class="line"><span class="keyword">assert</span> (kept &gt;= total * <span class="number">0.5</span>).<span class="built_in">all</span>(), <span class="string">&quot;保留组应占组内重要性的一半以上&quot;</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;2:4 投影自检通过 ✓&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 误差视角：投影相比&quot;自由 50% 掩码&quot;损失了多少重要性质量？</span></span><br><span class="line">free_mask = torch.zeros_like(S).scatter_(</span><br><span class="line">    -<span class="number">1</span>, S.flatten(-<span class="number">1</span>).topk(<span class="number">32</span>, dim=-<span class="number">1</span>).indices, <span class="literal">True</span>)   <span class="comment"># 按行自由 50%</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;保留重要性占比：2:4=<span class="subst">&#123; (S*m).<span class="built_in">sum</span>()/S.<span class="built_in">sum</span>():<span class="number">.3</span>f&#125;</span>  &quot;</span></span><br><span class="line">      <span class="string">f&quot;自由=<span class="subst">&#123; (S*free_mask).<span class="built_in">sum</span>()/S.<span class="built_in">sum</span>():<span class="number">.3</span>f&#125;</span>&quot;</span>)</span><br><span class="line"><span class="comment"># 预期：2:4 略低于自由掩码（约低几个百分点）——结构化的&quot;格式税&quot;</span></span><br></pre></td></tr></table></figure>
+<p><strong>预期输出</strong>：三个断言通过；2:4 的保留占比略低于自由掩码——这个差值就是为硬件加速支付的&quot;格式税&quot;。面试讲 2:4 时把三层说全：① 硬件机制（索引压缩 + 选择逻辑）；② 投影算法（组内 top-2）；③ 格式税与训练感知稀疏（SparseGPT 2:4 变体在量化/剪枝时就按 2:4 约束选元素，避免事后投影的损失）。</p>
+<h3 id="35-剪枝-量化叠加先剪后量的误差预算视角"><a class="markdownIt-Anchor" href="#35-剪枝-量化叠加先剪后量的误差预算视角"></a> 3.5 剪枝-量化叠加：先剪后量的误差预算视角</h3>
+<p>本周收尾把&quot;组合拳&quot;的数值直觉补上：50% 剪枝后，剩余权重的分布通常<strong>更集中</strong>（大幅值权重更可能被保留，但整体方差结构变化），量化网格更容易贴合——这是&quot;先剪后量常比单独量化更好&quot;的经验来源。但两者误差会复合：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>总误差</mtext><mo>≈</mo><munder><munder><msub><mi>ε</mi><mtext>prune</mtext></msub><mo stretchy="true">⏟</mo></munder><mtext>容量损失</mtext></munder><mo>+</mo><munder><munder><msub><mi>ε</mi><mtext>quant</mtext></msub><mo stretchy="true">⏟</mo></munder><mtext>网格损失</mtext></munder><mo>+</mo><munder><munder><msub><mi>ε</mi><mtext>cross</mtext></msub><mo stretchy="true">⏟</mo></munder><mtext>复合项（不可线性外推）</mtext></munder></mrow><annotation encoding="application/x-tex">\text{总误差} \approx \underbrace{\varepsilon_{\text{prune}}}_{\text{容量损失}} + \underbrace{\varepsilon_{\text{quant}}}_{\text{网格损失}} + \underbrace{\varepsilon_{\text{cross}}}_{\text{复合项（不可线性外推）}}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">总误差</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.1957690000000003em;vertical-align:-1.6124390000000002em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.4305599999999996em;"><span style="top:-1.3875609999999998em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">容量损失</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.43055999999999994em;"><span class="svg-align" style="top:-2.065892em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">ε</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.15139200000000003em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">prune</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.934108em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.6124390000000002em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:2.1957690000000003em;vertical-align:-1.6124390000000002em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.4305599999999996em;"><span style="top:-1.3875609999999998em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">网格损失</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.43055999999999994em;"><span class="svg-align" style="top:-2.065892em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">ε</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.28055599999999997em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">quant</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.934108em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.6124390000000002em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.906891em;vertical-align:-1.476331em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.43055999999999983em;"><span style="top:-1.523669em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">复合项（不可线性外推）</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.43055999999999994em;"><span class="svg-align" style="top:-2.202em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">ε</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">cross</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.798em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.476331em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>实践规则：叠加后必须重测全指标（PPL + 长输出），绝不能用&quot;剪枝掉 0.5 + 量化掉 0.3 = 共掉 0.8&quot;的线性估计。第 5-6 周基线矩阵里预留一行&quot;剪枝+量化&quot;组合实验，正是为了实测这个交叉项。</p>
+<hr />
+<h2 id="4-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#4-工程权衡与失效模式"></a> 4. 工程权衡与失效模式</h2>
+<h3 id="41-权衡"><a class="markdownIt-Anchor" href="#41-权衡"></a> 4.1 权衡</h3>
+<ul>
+<li><strong>非结构化精度高但无通用加速</strong>：Wanda/SparseGPT 的 50% 稀疏只在稀疏 Tensor Core / cuSPARSELt 上有收益；CPU、普通 GPU、NPU 上推理速度不变甚至变慢（稀疏格式间接寻址）。</li>
+<li><strong>结构化直接减体积但精度代价大</strong>：删通道 = 真减 FLOPs，任何硬件都加速；但容量硬损失，必须微调恢复，且高剪枝率下不可逆。</li>
+<li><strong>免重训剪枝的隐含假设</strong>：模型处于良好极小点、校准集代表部署分布——微调过的下游模型上效果会打折。</li>
+<li><strong>剪枝-量化叠加</strong>：先剪后量是可行方向（稀疏权重分布更集中，量化网格更好定），但两者误差会复合，叠加后必须重测全指标，不能线性外推。</li>
+</ul>
+<h3 id="42-失效模式"><a class="markdownIt-Anchor" href="#42-失效模式"></a> 4.2 失效模式</h3>
+<ol>
+<li><strong>剪枝后 PPL 正常、长文本崩坏</strong>：与量化同款陷阱——局部指标不敏感于累积漂移；修复——加长输出评测（Stage 2 第 5-6 周）。</li>
+<li><strong>按行剪导致神经元死亡</strong>：症状——某些输出行非零元素极少，激活饱和；根因——全局 top-k 而非按行；修复——Wanda 的按行保留设计（§3.1 已实现）。</li>
+<li><strong>2:4 投影误差</strong>：把任意 50% 掩码强行投影到 2:4 模式会丢掉&quot;重要但位置不合&quot;的连接；修复——训练感知稀疏（SparseGPT 有 2:4 变体，直接按 2:4 约束选元素）。</li>
+<li><strong>通道剪枝后忘记重校准 BN</strong>：症状——剪完精度崩得离谱；根因——BatchNorm 统计量还对应旧通道集；修复——剪后先跑几个 batch 重建 BN 统计再微调。</li>
+</ol>
+<hr />
+<h2 id="5-延伸思考题含解析"><a class="markdownIt-Anchor" href="#5-延伸思考题含解析"></a> 5. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：Wanda 为什么按输出行独立保留 top-k，而不是全层全局 top-k？<br />
+<strong>A</strong>：全局 top-k 会让&quot;整行权重都偏小&quot;的神经元被剪空（该行全零 → 神经元死亡、输出恒为 0）。按行保留保证每个神经元至少存活 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">k\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.80556em;vertical-align:-0.05556em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mord">%</span></span></span></span> 的连接，维持层内表达维度。</p>
+<p><strong>Q2</strong>：SparseGPT 的 Hessian <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>H</mi><mo>=</mo><mn>2</mn><mi>X</mi><msup><mi>X</mi><mi mathvariant="normal">⊤</mi></msup></mrow><annotation encoding="application/x-tex">H = 2XX^\top</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.08125em;">H</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.849108em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.849108em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span></span></span></span></span></span></span></span> 与 GPTQ 是同一个东西——这暗示了什么？<br />
+<strong>A</strong>：两者都在解&quot;逐列修改权重使层输出重构误差最小&quot;的 OBS 问题：剪枝把某列置零、量化把某列舍入到网格，都是对单列的受约束修改，都用 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>H</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup></mrow><annotation encoding="application/x-tex">H^{-1}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.08125em;">H</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span></span></span></span> 把误差摊给其余列。所以 GPTQ 可以看作&quot;把量化当成一种特殊剪枝/约束投影&quot;。（Stage 2 第 1 周推导。）</p>
+<p><strong>Q3</strong>：为什么 2:4 稀疏的加速只在 batch 较大（算力瓶颈）时明显？<br />
+<strong>A</strong>：batch=1 的 decode 是访存瓶颈（Stage 3 Roofline），稀疏 Tensor Core 翻的是算力上限，对访存瓶颈无用武之地；只有 batch 拉大、GEMM 变成算力瓶颈后，2:4 的 2× 算力才兑现。</p>
+<p><strong>Q4</strong>：LLM-Pruner 为什么用依赖图？直接删通道会发生什么？<br />
+<strong>A</strong>：Transformer 里残差分支要求加和两侧维度一致、多头注意力的头维耦合、门控 FFN 的两分支必须同维。盲删会产生形状不匹配直接报错，或（若只删一侧）语义破坏。依赖图把必须同剪的结构绑成组，保证剪后仍是合法网络。</p>
+<p><strong>Q5</strong>：同一个模型，50% 剪枝 vs INT4 量化，哪个对 LLM 更划算？<br />
+<strong>A</strong>：INT4 量化：体积 4×↓、精度损失小（配 GPTQ/AWQ）、所有引擎通吃；50% 剪枝：非结构化无通用加速、结构化掉点大。端侧/云端通用结论都是<strong>量化优先，剪枝作为叠加项</strong>——这也是本方向课程把量化放在主线的原因。</p>
+<hr />
+<h2 id="6-本周方法论小结三种压缩路线的误差预算视角"><a class="markdownIt-Anchor" href="#6-本周方法论小结三种压缩路线的误差预算视角"></a> 6. 本周方法论小结：三种压缩路线的误差预算视角</h2>
+<table>
+<thead>
+<tr>
+<th>路线</th>
+<th>动了什么</th>
+<th>误差的性质</th>
+<th>恢复手段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>量化</td>
+<td>数值的分辨率</td>
+<td>网格舍入（有界、可补偿）</td>
+<td>校准、二阶补偿、QAT</td>
+</tr>
+<tr>
+<td>剪枝</td>
+<td>参数的存在性</td>
+<td>容量永久损失（无界、靠冗余吸收）</td>
+<td>微调恢复、依赖图</td>
+</tr>
+<tr>
+<td>蒸馏</td>
+<td>模型规模</td>
+<td>知识损失（用教师分布补）</td>
+<td>软标签、反向 KL</td>
+</tr>
+</tbody>
+</table>
+<p>这张表就是第 4 周&quot;组合拳&quot;的路线图：三条路线的误差性质不同、恢复手段不冲突，所以可以叠加——但叠加顺序有讲究（先动结构的蒸馏/剪枝，后动数值的量化），第 4 周展开。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 闭卷写出 Wanda 重要性公式与&quot;按行保留&quot;设计动机。</li>
+<li>[ ] 跑通手写 <code>WandaPruner</code> 单元自检（稀疏率与按行约束断言通过）。</li>
+<li>[ ] Qwen2.5-1.5B Wanda 50% 剪枝：记录 PPL 前/后（官方版 + 手写版对齐 &lt; 0.2）。</li>
+<li>[ ] ResNet-18 通道剪枝曲线：剪枝率 [0, .2, .4, .6] × {剪后直接, 微调恢复} 共 8 个点。</li>
+<li>[ ] 用自己的话解释 2:4 稀疏的硬件机制（≤ 120 字，含&quot;索引压缩 + 选择逻辑&quot;两个关键词）。</li>
+</ul>
+<hr />
+<h2 id="附本周实验结果记录模板"><a class="markdownIt-Anchor" href="#附本周实验结果记录模板"></a> 附：本周实验结果记录模板</h2>
+<table>
+<thead>
+<tr>
+<th>实验</th>
+<th>配置</th>
+<th>PPL/精度</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Wanda 官方</td>
+<td>1.5B, 50%, 128 条校准</td>
+<td><em>实测</em></td>
+<td>对照基准</td>
+</tr>
+<tr>
+<td>Wanda 手写</td>
+<td>同上</td>
+<td><em>实测</em></td>
+<td>与官方差应 &lt; 0.2</td>
+</tr>
+<tr>
+<td>SparseGPT（选做）</td>
+<td>1.5B, 50%</td>
+<td><em>实测</em></td>
+<td>高稀疏率下对比</td>
+</tr>
+<tr>
+<td>通道剪枝</td>
+<td>ResNet-18, 8 个点</td>
+<td><em>曲线图</em></td>
+<td>找容量红线</td>
+</tr>
+<tr>
+<td>2:4 投影</td>
+<td>§3.4 自检</td>
+<td>断言通过</td>
+<td>记录&quot;格式税&quot;数值</td>
+</tr>
+</tbody>
+</table>
+<p><strong>记录纪律</strong>：所有数字带环境脚注（模型版本、校准集、评测脚本哈希）——这张表会在第 5-6 周并入《压缩评测基线报告》，届时可比性就是今天的脚注换来的。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%8E%A8%E7%90%86%E4%BC%98%E5%8C%96/" rel="tag"># 推理优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC4%E5%91%A8-%E7%9F%A5%E8%AF%86%E8%92%B8%E9%A6%8F%E4%B8%8E%E5%B7%A5%E5%85%B7%E9%93%BE%E6%95%B4%E5%90%88%E5%A4%8D%E7%9B%98/" rel="prev" title="第4周-知识蒸馏与工具链整合复盘">
+                  <i class="fa fa-angle-left"></i> 第4周-知识蒸馏与工具链整合复盘
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC2%E5%91%A8-PTQ%E6%A0%A1%E5%87%86%E6%B5%81%E7%A8%8B%E5%85%A8%E6%8B%86%E8%A7%A3/" rel="next" title="第2周-PTQ校准流程全拆解">
+                  第2周-PTQ校准流程全拆解 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

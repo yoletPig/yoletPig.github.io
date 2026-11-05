@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 2 周教程：ATC 模型转换与 ACL 离线推理  本周要回答的三个问题  PyTorch → ONNX → ATC → OM 的转换链每一环在做什么？ ACL 推理的完整流程（资源初始化 → 加载 → 执行 → 释放）怎么走？ ATC 转换后精度掉了，怎么一步步定位到具体哪一层？   对应学习计划：第 2 周。交付物：在 310P 上走通「语音模型 → ONNX → OM → ACL 推理">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第2周-ATC模型转换与ACL离线推理">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-6-%E6%98%87%E8%85%BE%20CANN%20%E4%B8%8E%E7%AE%97%E5%AD%90%E5%BC%80%E5%8F%91-%E7%AC%AC2%E5%91%A8-ATC%E6%A8%A1%E5%9E%8B%E8%BD%AC%E6%8D%A2%E4%B8%8EACL%E7%A6%BB%E7%BA%BF%E6%8E%A8%E7%90%86/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 2 周教程：ATC 模型转换与 ACL 离线推理  本周要回答的三个问题  PyTorch → ONNX → ATC → OM 的转换链每一环在做什么？ ACL 推理的完整流程（资源初始化 → 加载 → 执行 → 释放）怎么走？ ATC 转换后精度掉了，怎么一步步定位到具体哪一层？   对应学习计划：第 2 周。交付物：在 310P 上走通「语音模型 → ONNX → OM → ACL 推理">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-05T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.598Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="推理优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-6-%E6%98%87%E8%85%BE%20CANN%20%E4%B8%8E%E7%AE%97%E5%AD%90%E5%BC%80%E5%8F%91-%E7%AC%AC2%E5%91%A8-ATC%E6%A8%A1%E5%9E%8B%E8%BD%AC%E6%8D%A2%E4%B8%8EACL%E7%A6%BB%E7%BA%BF%E6%8E%A8%E7%90%86/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-6-%E6%98%87%E8%85%BE%20CANN%20%E4%B8%8E%E7%AE%97%E5%AD%90%E5%BC%80%E5%8F%91-%E7%AC%AC2%E5%91%A8-ATC%E6%A8%A1%E5%9E%8B%E8%BD%AC%E6%8D%A2%E4%B8%8EACL%E7%A6%BB%E7%BA%BF%E6%8E%A8%E7%90%86/","path":"2026/11/05/模型性能优化-6-昇腾 CANN 与算子开发-第2周-ATC模型转换与ACL离线推理/","title":"第2周-ATC模型转换与ACL离线推理"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第2周-ATC模型转换与ACL离线推理 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-2-%E5%91%A8%E6%95%99%E7%A8%8Batc-%E6%A8%A1%E5%9E%8B%E8%BD%AC%E6%8D%A2%E4%B8%8E-acl-%E7%A6%BB%E7%BA%BF%E6%8E%A8%E7%90%86"><span class="nav-number">1.</span> <span class="nav-text"> 第 2 周教程：ATC 模型转换与 ACL 离线推理</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E8%BD%AC%E6%8D%A2%E8%80%8C%E4%B8%8D%E6%98%AF%E7%9B%B4%E6%8E%A5%E8%B7%91"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：为什么要&quot;转换&quot;而不是直接跑</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E8%AE%AD%E7%BB%83%E6%A0%BC%E5%BC%8F-%E6%8E%A8%E7%90%86%E6%9C%80%E4%BC%98%E6%A0%BC%E5%BC%8F"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 训练格式 ≠ 推理最优格式</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E8%BD%AC%E6%8D%A2%E9%93%BE%E5%85%A8%E6%99%AF"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 转换链全景</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-pytorch-onnx"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. PyTorch → ONNX</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E5%AF%BC%E5%87%BA"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 导出</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E5%AF%BC%E5%87%BA%E5%B8%B8%E8%A7%81%E5%9D%91"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 导出常见坑</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-onnx-omatc"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. ONNX → OM（ATC）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-atc-%E5%91%BD%E4%BB%A4"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 ATC 命令</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E5%8A%A8%E6%80%81-shape"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 动态 shape</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-%E9%87%8F%E5%8C%96%E8%81%94%E5%8A%A8%E5%AF%B9%E6%8E%A5-stage-1-2-%E7%9F%A5%E8%AF%86"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 量化联动（对接 Stage 1-2 知识）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-acl-%E6%8E%A8%E7%90%86%E7%BC%96%E7%A8%8B%E5%85%AB%E6%AD%A5%E6%B5%81%E7%A8%8B"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. ACL 推理编程（八步流程）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E6%B5%81%E7%A8%8B%E9%AA%A8%E6%9E%B6"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 流程骨架</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-python-%E6%8E%A5%E5%8F%A3%E7%A4%BA%E4%BE%8B"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 Python 接口示例</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#43-%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98%E8%A6%81%E7%82%B9"><span class="nav-number">1.4.3.</span> <span class="nav-text"> 4.3 性能调优要点</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E7%B2%BE%E5%BA%A6%E6%8E%92%E6%9F%A5%E8%BD%AC%E6%8D%A2%E5%90%8E%E6%8E%89%E4%BA%86%E6%80%8E%E4%B9%88%E5%8A%9E%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 精度排查：转换后掉了怎么办（交付核心）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#51-%E6%8E%92%E6%9F%A5%E6%B5%81%E7%A8%8B"><span class="nav-number">1.5.1.</span> <span class="nav-text"> 5.1 排查流程</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#52-%E9%80%90%E5%B1%82-dump-%E5%AF%B9%E6%AF%94"><span class="nav-number">1.5.2.</span> <span class="nav-text"> 5.2 逐层 dump 对比</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#53-%E4%BA%A4%E4%BB%98%E5%AE%9E%E9%AA%8C"><span class="nav-number">1.5.3.</span> <span class="nav-text"> 5.3 交付实验</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#61-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.6.1.</span> <span class="nav-text"> 6.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#62-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.6.2.</span> <span class="nav-text"> 6.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.7.</span> <span class="nav-text"> 7. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.8.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-6-%E6%98%87%E8%85%BE%20CANN%20%E4%B8%8E%E7%AE%97%E5%AD%90%E5%BC%80%E5%8F%91-%E7%AC%AC2%E5%91%A8-ATC%E6%A8%A1%E5%9E%8B%E8%BD%AC%E6%8D%A2%E4%B8%8EACL%E7%A6%BB%E7%BA%BF%E6%8E%A8%E7%90%86/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第2周-ATC模型转换与ACL离线推理 | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第2周-ATC模型转换与ACL离线推理
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2026-11-05 12:00:00 / 修改时间：08:11:03" itemprop="dateCreated datePublished" datetime="2026-11-05T12:00:00+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" itemprop="url" rel="index"><span itemprop="name">模型性能优化</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/Stage-6-%E6%98%87%E8%85%BE-CANN-%E4%B8%8E%E7%AE%97%E5%AD%90%E5%BC%80%E5%8F%91/" itemprop="url" rel="index"><span itemprop="name">Stage 6-昇腾 CANN 与算子开发</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>7 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-2-周教程atc-模型转换与-acl-离线推理"><a class="markdownIt-Anchor" href="#第-2-周教程atc-模型转换与-acl-离线推理"></a> 第 2 周教程：ATC 模型转换与 ACL 离线推理</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>PyTorch → ONNX → ATC → OM 的转换链每一环在做什么？</li>
+<li>ACL 推理的完整流程（资源初始化 → 加载 → 执行 → 释放）怎么走？</li>
+<li>ATC 转换后精度掉了，怎么一步步定位到具体哪一层？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 2 周。交付物：在 310P 上走通「语音模型 → ONNX → OM → ACL 推理」全链路，输出转换前后精度对比与单帧延迟，测 AIPP 开关影响。</p>
+<hr />
+<h2 id="1-第一性原理为什么要转换而不是直接跑"><a class="markdownIt-Anchor" href="#1-第一性原理为什么要转换而不是直接跑"></a> 1. 第一性原理：为什么要&quot;转换&quot;而不是直接跑</h2>
+<h3 id="11-训练格式-推理最优格式"><a class="markdownIt-Anchor" href="#11-训练格式-推理最优格式"></a> 1.1 训练格式 ≠ 推理最优格式</h3>
+<p>PyTorch 的 <code>.pt</code> 是<strong>训练导向</strong>的（动态图、算子通用、保留梯度信息）。推理需要<strong>静态图 + 目标硬件优化</strong>（算子融合、量化、内存规划）。两者目标不同，所以要转换。</p>
+<h3 id="12-转换链全景"><a class="markdownIt-Anchor" href="#12-转换链全景"></a> 1.2 转换链全景</h3>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>PyTorch</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>torch.onnx.export</mtext></mpadded></mover><mtext>ONNX</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>ATC</mtext></mpadded></mover><mtext>OM（.om）</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>ACL</mtext></mpadded></mover><mtext>NPU 推理</mtext></mrow><annotation encoding="application/x-tex">\text{PyTorch} \xrightarrow{\text{torch.onnx.export}} \text{ONNX} \xrightarrow{\text{ATC}} \text{OM（.om）} \xrightarrow{\text{ACL}} \text{NPU 推理}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.3025479999999998em;vertical-align:-0.19444em;"></span><span class="mord text"><span class="mord">PyTorch</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1081079999999999em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">torch.onnx.export</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord">ONNX</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">ATC</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord">OM</span><span class="mord cjk_fallback">（</span><span class="mord">.om</span><span class="mord cjk_fallback">）</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">ACL</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord">NPU </span><span class="mord cjk_fallback">推理</span></span></span></span></span></span></p>
+<ul>
+<li><strong>ONNX</strong>：中间表示，跨框架通用；</li>
+<li><strong>OM</strong>：昇腾的离线模型格式，已针对 NPU 编译优化（含图优化、算子选择、量化）；</li>
+<li><strong>ACL</strong>：运行时，加载 OM 执行推理。</li>
+</ul>
+<hr />
+<h2 id="2-pytorch-onnx"><a class="markdownIt-Anchor" href="#2-pytorch-onnx"></a> 2. PyTorch → ONNX</h2>
+<h3 id="21-导出"><a class="markdownIt-Anchor" href="#21-导出"></a> 2.1 导出</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"></span><br><span class="line">model = load_your_model()          <span class="comment"># 如 DeepFilterNet / 小型 ASR encoder</span></span><br><span class="line">model.<span class="built_in">eval</span>()</span><br><span class="line"></span><br><span class="line">dummy = torch.randn(<span class="number">1</span>, <span class="number">80</span>, <span class="number">100</span>)    <span class="comment"># 按你的输入形状（例：1 秒 80 维特征）</span></span><br><span class="line">torch.onnx.export(</span><br><span class="line">    model, dummy, <span class="string">&quot;model.onnx&quot;</span>,</span><br><span class="line">    opset_version=<span class="number">17</span>,</span><br><span class="line">    input_names=[<span class="string">&quot;input&quot;</span>], output_names=[<span class="string">&quot;output&quot;</span>],</span><br><span class="line">    dynamic_axes=&#123;<span class="string">&quot;input&quot;</span>: &#123;<span class="number">0</span>: <span class="string">&quot;batch&quot;</span>, <span class="number">2</span>: <span class="string">&quot;time&quot;</span>&#125;,</span><br><span class="line">                  <span class="string">&quot;output&quot;</span>: &#123;<span class="number">0</span>: <span class="string">&quot;batch&quot;</span>&#125;&#125;,</span><br><span class="line">)</span><br></pre></td></tr></table></figure>
+<h3 id="22-导出常见坑"><a class="markdownIt-Anchor" href="#22-导出常见坑"></a> 2.2 导出常见坑</h3>
+<ol>
+<li><strong>动态维度</strong>：语音时长可变，必须声明 <code>dynamic_axes</code>，否则导出固定长度；</li>
+<li><strong>不支持的算子</strong>：某些控制流/特殊算子 ONNX 不支持 → 简化模型或用等价实现；</li>
+<li><strong>精度差异</strong>：导出后用 ONNX Runtime 与 PyTorch 对比，误差应 &lt; 1e-4。</li>
+</ol>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> onnxruntime <span class="keyword">as</span> ort</span><br><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"></span><br><span class="line">sess = ort.InferenceSession(<span class="string">&quot;model.onnx&quot;</span>)</span><br><span class="line">onnx_out = sess.run(<span class="literal">None</span>, &#123;<span class="string">&quot;input&quot;</span>: dummy.numpy()&#125;)[<span class="number">0</span>]</span><br><span class="line">torch_out = model(dummy).detach().numpy()</span><br><span class="line">err = np.<span class="built_in">max</span>(np.<span class="built_in">abs</span>(onnx_out - torch_out))</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;PyTorch vs ONNX 误差: <span class="subst">&#123;err:<span class="number">.2</span>e&#125;</span>&quot;</span>)</span><br><span class="line"><span class="keyword">assert</span> err &lt; <span class="number">1e-4</span>, <span class="string">&quot;ONNX 导出精度异常&quot;</span></span><br></pre></td></tr></table></figure>
+<hr />
+<h2 id="3-onnx-omatc"><a class="markdownIt-Anchor" href="#3-onnx-omatc"></a> 3. ONNX → OM（ATC）</h2>
+<h3 id="31-atc-命令"><a class="markdownIt-Anchor" href="#31-atc-命令"></a> 3.1 ATC 命令</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">atc --model=model.onnx \</span><br><span class="line">    --framework=5 \                    <span class="comment"># 5 = ONNX</span></span><br><span class="line">    --output=model \                   <span class="comment"># 输出 model.om</span></span><br><span class="line">    --soc_version=Ascend310P3 \        <span class="comment"># 按你的 310P 型号</span></span><br><span class="line">    --input_shape=<span class="string">&quot;input:1,80,100&quot;</span> \</span><br><span class="line">    --<span class="built_in">log</span>=error</span><br></pre></td></tr></table></figure>
+<p><strong>关键参数</strong>：</p>
+<ul>
+<li><code>--soc_version</code>：目标芯片（310P3 / 310B / 910B，决定指令集）；</li>
+<li><code>--input_shape</code>：静态化输入形状；</li>
+<li>量化相关：<code>--input_format</code>、<code>--precision_mode</code> 等。</li>
+</ul>
+<h3 id="32-动态-shape"><a class="markdownIt-Anchor" href="#32-动态-shape"></a> 3.2 动态 shape</h3>
+<p>若输入时长可变，用动态 shape 配置：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">atc ... \</span><br><span class="line">    --input_shape=<span class="string">&quot;input:-1,80,-1&quot;</span> \</span><br><span class="line">    --dynamic_dims=<span class="string">&quot;1,80,100;2,80,200&quot;</span></span><br><span class="line"><span class="comment"># -1 表示动态维；--dynamic_dims 枚举实际会用到的一组 shape（分号分隔）</span></span><br></pre></td></tr></table></figure>
+<blockquote>
+<p><strong>版本注意</strong>：<code>--input_shape_range</code> 参数<strong>已被官方废弃</strong>（文档明确标注&quot;该参数已废弃，请勿使用&quot;），动态 shape 统一改用 <code>--input_shape</code>（其中维度设 <code>-1</code>）配合 <code>--dynamic_dims</code> / <code>--dynamic_batch_size</code> / <code>--dynamic_image_size</code>。老教程里出现的 <code>input_shape_range</code> 写法不要再用。</p>
+</blockquote>
+<p>动态 shape 灵活但性能略低于固定形状（无法完全预编译优化）。</p>
+<h3 id="33-量化联动对接-stage-1-2-知识"><a class="markdownIt-Anchor" href="#33-量化联动对接-stage-1-2-知识"></a> 3.3 量化联动（对接 Stage 1-2 知识）</h3>
+<p><strong>分工要分清</strong>：ATC 是模型转换器，<strong>本身不做 PTQ 校准</strong>。昇腾的训练后量化由专门工具完成：中小模型用 <strong>AMCT</strong>（Ascend Model Compression Toolkit），大模型用 <strong>msModelSlim</strong>（支持 W8A8/W4A8/GPTQ/AWQ 等）。典型链路是：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>量化工具（AMCT/msModelSlim）做量化</mtext><mo>→</mo><mtext>量化模型/校准产物</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>ATC</mtext></mpadded></mover><mtext>OM</mtext></mrow><annotation encoding="application/x-tex">\text{量化工具（AMCT/msModelSlim）做量化} \rightarrow \text{量化模型/校准产物} \xrightarrow{\text{ATC}} \text{OM}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord cjk_fallback">量化工具（</span><span class="mord">AMCT/msModelSlim</span><span class="mord cjk_fallback">）做量化</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.350331em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord cjk_fallback">量化模型</span><span class="mord">/</span><span class="mord cjk_fallback">校准产物</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">ATC</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord">OM</span></span></span></span></span></span></p>
+<p>对比两种量化路径：</p>
+<table>
+<thead>
+<tr>
+<th>路径</th>
+<th>做法</th>
+<th>精度</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ONNX 侧量化</td>
+<td>先在 ONNX 做量化（含 QDQ 节点），ATC 直接转</td>
+<td>取决于 ONNX 量化</td>
+</tr>
+<tr>
+<td>昇腾工具链量化</td>
+<td>AMCT/msModelSlim 校准量化，再 ATC 转 OM</td>
+<td>取决于校准数据与工具</td>
+</tr>
+</tbody>
+</table>
+<p>用你的校准集对比两者精度——这是&quot;量化在哪一层做&quot;的实践认知。</p>
+<hr />
+<h2 id="4-acl-推理编程八步流程"><a class="markdownIt-Anchor" href="#4-acl-推理编程八步流程"></a> 4. ACL 推理编程（八步流程）</h2>
+<h3 id="41-流程骨架"><a class="markdownIt-Anchor" href="#41-流程骨架"></a> 4.1 流程骨架</h3>
+<p>ACL（AscendCL）推理的标准步骤：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">1. acl.init()                        初始化</span><br><span class="line">2. acl.rt.set_device(device_id)      选择设备</span><br><span class="line">3. acl.rt.create_context()           创建上下文</span><br><span class="line">4. 加载模型: acl.mdl.load_from_file(&quot;model.om&quot;)</span><br><span class="line">5. 创建输入/输出数据集 (acl.mdl.create_dataset)</span><br><span class="line">6. 拷贝输入数据到 device (acl.rt.memcpy)</span><br><span class="line">7. 执行: acl.mdl.execute(model_id, input, output)</span><br><span class="line">8. 取回结果 + 释放资源 (unload / destroy / reset_device / acl.finalize)</span><br></pre></td></tr></table></figure>
+<h3 id="42-python-接口示例"><a class="markdownIt-Anchor" href="#42-python-接口示例"></a> 4.2 Python 接口示例</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> acl</span><br><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"></span><br><span class="line"><span class="comment"># 1-3. 初始化</span></span><br><span class="line">acl.init()</span><br><span class="line">acl.rt.set_device(<span class="number">0</span>)</span><br><span class="line">ctx, _ = acl.rt.create_context(<span class="number">0</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 4. 加载 OM</span></span><br><span class="line">model_id, _ = acl.mdl.load_from_file(<span class="string">&quot;model.om&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 准备输入</span></span><br><span class="line">input_np = np.random.randn(<span class="number">1</span>, <span class="number">80</span>, <span class="number">100</span>).astype(np.float32)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 5. 创建数据集与 buffer（简化：实际需按模型 IO 描述申请 device 内存）</span></span><br><span class="line"><span class="comment"># input_size = input_np.nbytes</span></span><br><span class="line"><span class="comment"># input_dev, _ = acl.rt.malloc(input_size, acl.ACL_MEM_MALLOC_HUGE_FIRST)</span></span><br><span class="line"><span class="comment"># acl.rt.memcpy(input_dev, input_size, input_np.ctypes.data, input_size, acl.ACL_HOST_TO_DEVICE)</span></span><br><span class="line"><span class="comment"># ...（完整代码参考 ascend/samples 的 ACL Python 示例）</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 7. 执行</span></span><br><span class="line"><span class="comment"># acl.mdl.execute(model_id, input_dataset, output_dataset)</span></span><br><span class="line"></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;ACL 推理八步流程：见注释骨架，完整实现以官方 sample 为准&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>务必对照</strong> <code>ascend/samples/python/level2_simple_inference</code> 的完整示例补全内存申请与数据集构造——ACL 的内存管理（host/device 拷贝、malloc 策略）是新手最容易出错的地方。</p>
+<h3 id="43-性能调优要点"><a class="markdownIt-Anchor" href="#43-性能调优要点"></a> 4.3 性能调优要点</h3>
+<ul>
+<li><strong>AIPP</strong>：图像预处理（缩放、归一化、色彩转换）卸载到硬件，省 CPU/减少搬运。语音侧若有特征前处理可类比优化；</li>
+<li><strong>零拷贝</strong>：减少 host↔device 往返，输入直接驻留 device；</li>
+<li><strong>多模型多流</strong>：用 stream 并发组织多模型/多请求，隐藏传输延迟。</li>
+</ul>
+<hr />
+<h2 id="5-精度排查转换后掉了怎么办交付核心"><a class="markdownIt-Anchor" href="#5-精度排查转换后掉了怎么办交付核心"></a> 5. 精度排查：转换后掉了怎么办（交付核心）</h2>
+<h3 id="51-排查流程"><a class="markdownIt-Anchor" href="#51-排查流程"></a> 5.1 排查流程</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">1. 定位：是量化问题还是算子问题？</span><br><span class="line">   → 先转不量化版本，看精度是否恢复</span><br><span class="line">2. 若量化问题：逐层 dump 对比</span><br><span class="line">   → 找出掉点最严重的层</span><br><span class="line">3. 若算子问题：检查该算子在昇腾的实现/精度模式</span><br></pre></td></tr></table></figure>
+<h3 id="52-逐层-dump-对比"><a class="markdownIt-Anchor" href="#52-逐层-dump-对比"></a> 5.2 逐层 dump 对比</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ATC 支持在转换时插入 dump 点，或开启精度调试</span></span><br><span class="line">atc ... --precision_mode=must_keep_origin_dtype   <span class="comment"># 保精度模式（降速换精度）</span></span><br><span class="line"><span class="comment"># 新版 CANN 提示：--precision_mode 已停止演进，官方推荐改用 --precision_mode_v2</span></span><br><span class="line"><span class="comment"># 需要按算子粒度控制 dtype 时用 --customize_dtypes</span></span><br></pre></td></tr></table></figure>
+<p>对掉点层：</p>
+<ul>
+<li>试 <code>--precision_mode</code> 不同档位；</li>
+<li>该层回退高精度；</li>
+<li>检查校准数据是否代表该层分布。</li>
+</ul>
+<h3 id="53-交付实验"><a class="markdownIt-Anchor" href="#53-交付实验"></a> 5.3 交付实验</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">转换前后精度对比表：</span><br><span class="line">| 版本 | 精度指标 | 单帧延迟 |</span><br><span class="line">| PyTorch 原版 | | |</span><br><span class="line">| ONNX（FP32） | | |</span><br><span class="line">| OM（FP32） | | |</span><br><span class="line">| OM（量化） | | |</span><br><span class="line"></span><br><span class="line">AIPP 开关延迟对比：</span><br><span class="line">| AIPP | 单帧延迟 |</span><br><span class="line">| 关 | |</span><br><span class="line">| 开 | |</span><br></pre></td></tr></table></figure>
+<hr />
+<h2 id="6-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#6-工程权衡与失效模式"></a> 6. 工程权衡与失效模式</h2>
+<h3 id="61-权衡"><a class="markdownIt-Anchor" href="#61-权衡"></a> 6.1 权衡</h3>
+<ul>
+<li><strong>静态 vs 动态 shape</strong>：静态快、动态灵活；</li>
+<li><strong>量化位置</strong>：ONNX 量化与 ATC 量化各有优势，实测对比；</li>
+<li><strong>精度模式</strong>：保精度模式（must_keep）牺牲速度换精度。</li>
+</ul>
+<h3 id="62-失效模式"><a class="markdownIt-Anchor" href="#62-失效模式"></a> 6.2 失效模式</h3>
+<ol>
+<li><strong>算子不支持</strong>：ATC 报某算子无昇腾实现。修复：换等价算子、或用自定义算子（第 5 周技能）补齐。</li>
+<li><strong>量化掉点</strong>：某些层量化敏感。修复：逐层定位 + 该层保高精度。</li>
+<li><strong>动态 shape 性能差</strong>：编译优化受限。修复：若场景固定，改静态。</li>
+<li><strong>ACL 内存泄漏</strong>：未正确释放。修复：严格按八步流程释放资源。</li>
+</ol>
+<hr />
+<h2 id="7-延伸思考题含解析"><a class="markdownIt-Anchor" href="#7-延伸思考题含解析"></a> 7. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：为什么不能直接在 NPU 上跑 PyTorch 的 .pt？<br />
+<strong>A</strong>：.pt 是训练导向的动态图格式，含梯度信息、算子通用未优化。NPU 推理需要静态图 + 硬件特化（算子融合、量化、内存规划）。必须经 ONNX→ATC 转成 OM 才能高效推理。</p>
+<p><strong>Q2</strong>：ATC 转换掉精度，第一步排查什么？<br />
+<strong>A</strong>：先判断是量化还是算子问题——转一个不量化版本看精度是否恢复。若是量化，逐层 dump 定位掉点层；若是算子，查该算子昇腾实现或换精度模式。</p>
+<p><strong>Q3</strong>：AIPP 解决什么问题？<br />
+<strong>A</strong>：把预处理（缩放/归一化/色彩转换）卸载到专用硬件，减少 CPU 负担与 host↔device 数据搬运，降低端到端延迟。</p>
+<p><strong>Q4</strong>：动态 shape 的代价是什么？<br />
+<strong>A</strong>：无法在编译期完全确定形状、做极致优化（内存规划、算子选择受限），性能低于固定形状。输入维度可变时必用，但能固定就固定。</p>
+<p><strong>Q5</strong>：你的语音模型转 OM 后，哪个环节最可能掉精度？<br />
+<strong>A</strong>：量化环节（尤其激活含离群值的层，呼应 Stage 1-2）。其次是某些昇腾支持较弱的算子。先关量化复测即可区分。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 走通 语音模型 → ONNX → OM 转换，精度对比误差 &lt; 1e-4。</li>
+<li>[ ] ACL 推理八步流程跑通，输出推理结果。</li>
+<li>[ ] 输出转换前后精度对比表 + 单帧延迟 + AIPP 开关对比。</li>
+<li>[ ] 掌握精度排查流程（量化/算子二分到逐层定位）。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%8E%A8%E7%90%86%E4%BC%98%E5%8C%96/" rel="tag"># 推理优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-6-%E6%98%87%E8%85%BE%20CANN%20%E4%B8%8E%E7%AE%97%E5%AD%90%E5%BC%80%E5%8F%91-%E7%AC%AC5-6%E5%91%A8-AscendC%E7%AE%97%E5%AD%90%E5%BC%80%E5%8F%91%E5%9F%BA%E7%A1%80%E4%B8%8E%E5%AE%9E%E8%B7%B5%E4%B8%80/" rel="prev" title="第5-6周-AscendC算子开发基础与实践一">
+                  <i class="fa fa-angle-left"></i> 第5-6周-AscendC算子开发基础与实践一
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-6-%E6%98%87%E8%85%BE%20CANN%20%E4%B8%8E%E7%AE%97%E5%AD%90%E5%BC%80%E5%8F%91-%E7%AC%AC3%E5%91%A8-MindIE%E5%A4%A7%E6%A8%A1%E5%9E%8B%E6%8E%A8%E7%90%86%E6%9C%8D%E5%8A%A1%E4%B8%8EvLLM%E5%AF%B9%E7%85%A7/" rel="next" title="第3周-MindIE大模型推理服务与vLLM对照">
+                  第3周-MindIE大模型推理服务与vLLM对照 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

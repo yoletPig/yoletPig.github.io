@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 2 周教程：PTQ 校准流程全拆解——四种策略的数学与工程落地  本周要回答的问题  校准数据集要多少条、怎么选？激活统计量在哪些 hook 上收集？ MinMax &#x2F; Percentile &#x2F; MSE &#x2F; KL 四种校准目标各在优化什么？数学形式是什么？ 为什么权重用 MinMax、激活用 Percentile 是行业默认配方？ llm-compressor &#x2F; ONNX Runtime">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第2周-PTQ校准流程全拆解">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC2%E5%91%A8-PTQ%E6%A0%A1%E5%87%86%E6%B5%81%E7%A8%8B%E5%85%A8%E6%8B%86%E8%A7%A3/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 2 周教程：PTQ 校准流程全拆解——四种策略的数学与工程落地  本周要回答的问题  校准数据集要多少条、怎么选？激活统计量在哪些 hook 上收集？ MinMax &#x2F; Percentile &#x2F; MSE &#x2F; KL 四种校准目标各在优化什么？数学形式是什么？ 为什么权重用 MinMax、激活用 Percentile 是行业默认配方？ llm-compressor &#x2F; ONNX Runtime">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-05T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.582Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="推理优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC2%E5%91%A8-PTQ%E6%A0%A1%E5%87%86%E6%B5%81%E7%A8%8B%E5%85%A8%E6%8B%86%E8%A7%A3/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC2%E5%91%A8-PTQ%E6%A0%A1%E5%87%86%E6%B5%81%E7%A8%8B%E5%85%A8%E6%8B%86%E8%A7%A3/","path":"2026/11/05/模型性能优化-1-剪枝与量化基础实战-第2周-PTQ校准流程全拆解/","title":"第2周-PTQ校准流程全拆解"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第2周-PTQ校准流程全拆解 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-2-%E5%91%A8%E6%95%99%E7%A8%8Bptq-%E6%A0%A1%E5%87%86%E6%B5%81%E7%A8%8B%E5%85%A8%E6%8B%86%E8%A7%A3%E5%9B%9B%E7%A7%8D%E7%AD%96%E7%95%A5%E7%9A%84%E6%95%B0%E5%AD%A6%E4%B8%8E%E5%B7%A5%E7%A8%8B%E8%90%BD%E5%9C%B0"><span class="nav-number">1.</span> <span class="nav-text"> 第 2 周教程：PTQ 校准流程全拆解——四种策略的数学与工程落地</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E6%A0%A1%E5%87%86-%E7%94%A8%E5%B0%91%E9%87%8F%E6%95%B0%E6%8D%AE%E4%BC%B0%E8%AE%A1%E8%AF%A5%E7%94%A8%E5%93%AA%E5%BC%A0%E7%BD%91%E6%A0%BC"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：校准 &#x3D; 用少量数据估计&quot;该用哪张网格&quot;</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E9%97%AE%E9%A2%98%E5%AE%9A%E4%B9%89"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 问题定义</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E6%A0%A1%E5%87%86%E6%95%B0%E6%8D%AE%E9%9B%86%E5%A4%9A%E5%B0%91%E6%9D%A1-%E6%80%8E%E4%B9%88%E9%80%89"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 校准数据集：多少条、怎么选</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-%E7%BB%9F%E8%AE%A1%E9%87%8F%E6%80%8E%E4%B9%88%E6%94%B6"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 统计量怎么收</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%9B%9B%E7%A7%8D%E6%A0%A1%E5%87%86%E7%AD%96%E7%95%A5%E7%9A%84%E6%95%B0%E5%AD%A6"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 四种校准策略的数学</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-minmaxc-maxx"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 MinMax：c&#x3D;max⁡∣X∣c &#x3D; \max|X|c&#x3D;max∣X∣</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-percentilec-mathrmquantile_px%E5%85%B8%E5%9E%8B-p-999"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 Percentile：c&#x3D;quantilep(∣X∣)c &#x3D; \mathrm{quantile}_{p}(|X|)c&#x3D;quantilep​(∣X∣)，典型 p&#x3D;99.9%p &#x3D; 99.9\%p&#x3D;99.9%</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-mse%E7%BD%91%E6%A0%BC%E6%90%9C%E7%B4%A2%E6%9C%80%E5%B0%8F%E9%87%8D%E5%BB%BA%E8%AF%AF%E5%B7%AE"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 MSE：网格搜索最小重建误差</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#24-entropy-kl%E6%9C%80%E5%B0%8F%E5%8C%96%E5%88%86%E5%B8%83%E5%81%8F%E7%A7%BBtensorrt-%E9%BB%98%E8%AE%A4"><span class="nav-number">1.2.4.</span> <span class="nav-text"> 2.4 Entropy &#x2F; KL：最小化分布偏移（TensorRT 默认）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#25-%E5%9B%9B%E7%AD%96%E7%95%A5%E4%B8%80%E9%A1%B5%E5%AF%B9%E6%AF%94"><span class="nav-number">1.2.5.</span> <span class="nav-text"> 2.5 四策略一页对比</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E4%B8%8E%E6%95%B0%E6%8D%AE%E6%B5%81%E4%B8%89%E6%9D%A1%E5%B7%A5%E4%B8%9A%E7%AE%A1%E7%BA%BF%E8%B5%B0%E8%AF%BB"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 系统架构与数据流：三条工业管线走读</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E9%80%9A%E7%94%A8%E9%9D%99%E6%80%81%E9%87%8F%E5%8C%96%E6%B5%81%E6%B0%B4%E7%BA%BF"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 通用静态量化流水线</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%B8%89%E4%B8%AA%E6%A1%86%E6%9E%B6%E7%9A%84%E8%B5%B0%E8%AF%BB%E8%A6%81%E7%82%B9"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 三个框架的走读要点</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 实现与验证（本周交付核心）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E6%89%8B%E5%86%99%E5%9B%9B%E7%AD%96%E7%95%A5%E6%A0%A1%E5%87%86%E5%99%A8%E5%AE%8C%E6%95%B4%E5%8F%AF%E8%BF%90%E8%A1%8Ccpu-%E5%8F%AF%E8%B7%91"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 手写四策略校准器（完整可运行，CPU 可跑）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E4%BA%91%E4%B8%8A%E8%B7%91%E9%80%9Aqwen25-15b-%E5%9B%9B%E7%AD%96%E7%95%A5-ppl-%E5%AF%B9%E6%AF%94"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 云上跑通：Qwen2.5-1.5B 四策略 PPL 对比</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#51-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.5.1.</span> <span class="nav-text"> 5.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#52-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.5.2.</span> <span class="nav-text"> 5.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.7.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC2%E5%91%A8-PTQ%E6%A0%A1%E5%87%86%E6%B5%81%E7%A8%8B%E5%85%A8%E6%8B%86%E8%A7%A3/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第2周-PTQ校准流程全拆解 | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第2周-PTQ校准流程全拆解
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2026-11-05 12:00:00 / 修改时间：08:11:03" itemprop="dateCreated datePublished" datetime="2026-11-05T12:00:00+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" itemprop="url" rel="index"><span itemprop="name">模型性能优化</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/Stage-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98/" itemprop="url" rel="index"><span itemprop="name">Stage 1-剪枝与量化基础实战</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-2-周教程ptq-校准流程全拆解四种策略的数学与工程落地"><a class="markdownIt-Anchor" href="#第-2-周教程ptq-校准流程全拆解四种策略的数学与工程落地"></a> 第 2 周教程：PTQ 校准流程全拆解——四种策略的数学与工程落地</h1>
+<blockquote>
+<p><strong>本周要回答的问题</strong></p>
+<ol>
+<li>校准数据集要多少条、怎么选？激活统计量在哪些 hook 上收集？</li>
+<li>MinMax / Percentile / MSE / KL 四种校准目标各在优化什么？数学形式是什么？</li>
+<li>为什么<strong>权重用 MinMax、激活用 Percentile</strong> 是行业默认配方？</li>
+<li>llm-compressor / ONNX Runtime / TensorRT 的 PTQ 流水线分别长什么样？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 2 周。交付物：完整 PTQ 管线（校准前向 → 统计收集 → 四策略算 scale → 量化导出），在 Qwen2.5-1.5B 上用 WikiText-2 困惑度对比四种校准策略，输出结论表。</p>
+<hr />
+<h2 id="1-第一性原理校准-用少量数据估计该用哪张网格"><a class="markdownIt-Anchor" href="#1-第一性原理校准-用少量数据估计该用哪张网格"></a> 1. 第一性原理：校准 = 用少量数据估计&quot;该用哪张网格&quot;</h2>
+<h3 id="11-问题定义"><a class="markdownIt-Anchor" href="#11-问题定义"></a> 1.1 问题定义</h3>
+<p>第 1 周讲过：量化误差 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="double-struck">E</mi><mo stretchy="false">[</mo><msup><mi>ε</mi><mn>2</mn></msup><mo stretchy="false">]</mo><mo>≈</mo><msup><mi>s</mi><mn>2</mn></msup><mi mathvariant="normal">/</mi><mn>12</mn></mrow><annotation encoding="application/x-tex">\mathbb{E}[\varepsilon^2] \approx s^2/12</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathbb">E</span></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal">ε</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mord">/</span><span class="mord">1</span><span class="mord">2</span></span></span></span>，而 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi></mrow><annotation encoding="application/x-tex">s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">s</span></span></span></span> 由校准统计量决定。PTQ（Post-Training Quantization，训练后量化）的核心问题就是：</p>
+<blockquote>
+<p><strong>在不更新任何权重的前提下，用一小批有代表性的数据，为每一层选出使下游任务损失最小的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>s</mi><mo separator="true">,</mo><mi>z</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(s, z)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">s</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="mclose">)</span></span></span></span>。</strong></p>
+</blockquote>
+<p>权重是静态的，一次统计终身有效；<strong>激活是输入相关的</strong>，必须用校准集&quot;看一遍&quot;才能定范围——这是&quot;校准&quot;二字的由来。</p>
+<h3 id="12-校准数据集多少条-怎么选"><a class="markdownIt-Anchor" href="#12-校准数据集多少条-怎么选"></a> 1.2 校准数据集：多少条、怎么选</h3>
+<ul>
+<li><strong>数量</strong>：128~1024 条足够。激活分布的统计量（分位数、直方图）收敛很快，边际收益在几百条后趋平。</li>
+<li><strong>代表性</strong>：校准集必须覆盖部署分布。通用 LLM 用 WikiText-2 / C4 切片（每条约 2048 token）；垂类部署（如客服、代码）必须混入领域数据，否则激活范围估计偏小 → 部署时裁剪（clipping）激增。</li>
+<li><strong>长度</strong>：按模型训练序列长度截取（常见 2048），太短会低估长上下文激活。</li>
+</ul>
+<h3 id="13-统计量怎么收"><a class="markdownIt-Anchor" href="#13-统计量怎么收"></a> 1.3 统计量怎么收</h3>
+<p>对每一层的输入/输出激活，在校准前向时挂 hook，累积以下之一：</p>
+<ul>
+<li>运行极值 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>min</mi><mo>⁡</mo><mi mathvariant="normal">/</mi><mi>max</mi><mo>⁡</mo></mrow><annotation encoding="application/x-tex">\min/\max</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">min</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">/</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop">max</span></span></span></span>（MinMax）；</li>
+<li>全量样本的分位数（Percentile）；</li>
+<li>直方图 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">h(x)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">h</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span></span></span></span>（MSE 与 KL 都需要，典型 2048 个 bin）。</li>
+</ul>
+<hr />
+<h2 id="2-四种校准策略的数学"><a class="markdownIt-Anchor" href="#2-四种校准策略的数学"></a> 2. 四种校准策略的数学</h2>
+<p>设激活值集合（或直方图）为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>X</mi></mrow><annotation encoding="application/x-tex">X</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span></span></span></span>，候选裁剪阈值 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi></mrow><annotation encoding="application/x-tex">c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">c</span></span></span></span>（即量化区间 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mo>−</mo><mi>c</mi><mo separator="true">,</mo><mi>c</mi><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[-c, c]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">−</span><span class="mord mathnormal">c</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">c</span><span class="mclose">]</span></span></span></span> 或非对称 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><msub><mi>c</mi><mi>min</mi><mo>⁡</mo></msub><mo separator="true">,</mo><msub><mi>c</mi><mi>max</mi><mo>⁡</mo></msub><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[c_{\min}, c_{\max}]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31750199999999995em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">i</span><span class="mtight">n</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mop mtight"><span class="mtight">m</span><span class="mtight">a</span><span class="mtight">x</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span></span></span></span>），量化-反量化算子 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Q</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mo>⋅</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">Q_c(\cdot)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord">⋅</span><span class="mclose">)</span></span></span></span>。</p>
+<h3 id="21-minmaxc-maxx"><a class="markdownIt-Anchor" href="#21-minmaxc-maxx"></a> 2.1 MinMax：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi><mo>=</mo><mi>max</mi><mo>⁡</mo><mi mathvariant="normal">∣</mi><mi>X</mi><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">c = \max|X|</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">c</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">max</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">∣</span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="mord">∣</span></span></span></span></h3>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>s</mi><mo>=</mo><mfrac><mrow><mn>2</mn><mi>c</mi></mrow><mrow><msup><mn>2</mn><mi>b</mi></msup><mo>−</mo><mn>1</mn></mrow></mfrac><mo separator="true">,</mo><mspace width="2em"/><mi>c</mi><mo>=</mo><munder><mo><mi>max</mi><mo>⁡</mo></mo><mi>i</mi></munder><mi mathvariant="normal">∣</mi><msub><mi>x</mi><mi>i</mi></msub><mi mathvariant="normal">∣</mi></mrow><annotation encoding="application/x-tex">s = \frac{2c}{2^b - 1}, \qquad c = \max_i |x_i|
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">s</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.09077em;vertical-align:-0.7693300000000001em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.32144em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7751079999999999em;"><span style="top:-2.9890000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord">1</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span><span class="mord mathnormal">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7693300000000001em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">c</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.477664em;vertical-align:-0.7276640000000001em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.43055999999999983em;"><span style="top:-2.372336em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">max</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7276640000000001em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">∣</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">∣</span></span></span></span></span></p>
+<ul>
+<li>优点：零裁剪（clipping=0），计算最便宜，<strong>权重标定首选</strong>；</li>
+<li>缺点：对离群值零抵抗——一个 ±100 的激活通道会把 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi></mrow><annotation encoding="application/x-tex">s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">s</span></span></span></span> 撑大两个数量级（第 1 周已实证）。</li>
+</ul>
+<h3 id="22-percentilec-mathrmquantile_px典型-p-999"><a class="markdownIt-Anchor" href="#22-percentilec-mathrmquantile_px典型-p-999"></a> 2.2 Percentile：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi><mo>=</mo><msub><mrow><mi mathvariant="normal">q</mi><mi mathvariant="normal">u</mi><mi mathvariant="normal">a</mi><mi mathvariant="normal">n</mi><mi mathvariant="normal">t</mi><mi mathvariant="normal">i</mi><mi mathvariant="normal">l</mi><mi mathvariant="normal">e</mi></mrow><mi>p</mi></msub><mo stretchy="false">(</mo><mi mathvariant="normal">∣</mi><mi>X</mi><mi mathvariant="normal">∣</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">c = \mathrm{quantile}_{p}(|X|)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">c</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.130248em;vertical-align:-0.380248em;"></span><span class="mord"><span class="mord"><span class="mord mathrm">q</span><span class="mord mathrm">u</span><span class="mord mathrm">a</span><span class="mord mathrm">n</span><span class="mord mathrm">t</span><span class="mord mathrm">i</span><span class="mord mathrm">l</span><span class="mord mathrm">e</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.057252000000000025em;"><span style="top:-2.4558600000000004em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">p</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.380248em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord">∣</span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="mord">∣</span><span class="mclose">)</span></span></span></span>，典型 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi><mo>=</mo><mn>99.9</mn><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">p = 99.9\%</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.80556em;vertical-align:-0.05556em;"></span><span class="mord">9</span><span class="mord">9</span><span class="mord">.</span><span class="mord">9</span><span class="mord">%</span></span></span></span></h3>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>c</mi><mo>=</mo><msubsup><mi>F</mi><mrow><mi mathvariant="normal">∣</mi><mi>X</mi><mi mathvariant="normal">∣</mi></mrow><mrow><mo>−</mo><mn>1</mn></mrow></msubsup><mo stretchy="false">(</mo><mi>p</mi><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"/><mi>p</mi><mo>∈</mo><mo stretchy="false">[</mo><mn>99</mn><mo separator="true">,</mo><mn>99.99</mn><mo stretchy="false">]</mo><mi mathvariant="normal">%</mi></mrow><annotation encoding="application/x-tex">c = F^{-1}_{|X|}(p), \qquad p \in [99, 99.99]\%
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">c</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.3694389999999999em;vertical-align:-0.505331em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.864108em;"><span style="top:-2.369669em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">∣</span><span class="mord mathnormal mtight" style="margin-right:0.07847em;">X</span><span class="mord mtight">∣</span></span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.505331em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">p</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">p</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">9</span><span class="mord">9</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">9</span><span class="mord">9</span><span class="mord">.</span><span class="mord">9</span><span class="mord">9</span><span class="mclose">]</span><span class="mord">%</span></span></span></span></span></p>
+<p>主动裁掉最极端的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mi>p</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(1-p)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">p</span><span class="mclose">)</span></span></span></span> 部分，换取其余 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi></mrow><annotation encoding="application/x-tex">p</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord mathnormal">p</span></span></span></span> 部分的网格细化。代价是<strong>裁剪误差</strong>：被裁掉的尾部会被饱和到最大码点上。最优 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi></mrow><annotation encoding="application/x-tex">p</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord mathnormal">p</span></span></span></span> 是&quot;裁剪误差↓&quot;与&quot;网格误差↓&quot;的折中——激活的离群值幅度大但出现概率低，99.9% 通常就是甜点。</p>
+<h3 id="23-mse网格搜索最小重建误差"><a class="markdownIt-Anchor" href="#23-mse网格搜索最小重建误差"></a> 2.3 MSE：网格搜索最小重建误差</h3>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msup><mi>c</mi><mo>⋆</mo></msup><mo>=</mo><mi>arg</mi><mo>⁡</mo><munder><mo><mi>min</mi><mo>⁡</mo></mo><mi>c</mi></munder><mtext> </mtext><msub><mi mathvariant="double-struck">E</mi><mrow><mi>x</mi><mo>∼</mo><mi>X</mi></mrow></msub><mo fence="false">[</mo><mo stretchy="false">(</mo><mi>x</mi><mo>−</mo><msub><mi>Q</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><msup><mo stretchy="false">)</mo><mn>2</mn></msup><mo fence="false">]</mo></mrow><annotation encoding="application/x-tex">c^\star = \arg\min_c \ \mathbb{E}_{x \sim X}\big[(x - Q_c(x))^2\big]
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.738696em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.738696em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">⋆</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.5499999999999998em;vertical-align:-0.7em;"></span><span class="mop">ar<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.66786em;"><span style="top:-2.4em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">min</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7em;"><span></span></span></span></span></span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord"><span class="mord mathbb">E</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">x</span><span class="mrel mtight">∼</span><span class="mord mathnormal mtight" style="margin-right:0.07847em;">X</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="delimsizing size1">[</span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.2141179999999998em;vertical-align:-0.35001em;"></span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641079999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mord"><span class="delimsizing size1">]</span></span></span></span></span></span></p>
+<p>在候选 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi></mrow><annotation encoding="application/x-tex">c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">c</span></span></span></span> 网格（如把分位数从 90% 扫到 100%，步长 0.1%）上逐个计算量化重建 MSE，取最小。误差被显式拆成<strong>舍入项 + 裁剪项</strong>的联合最优——比 Percentile 更精细，成本是多次遍历直方图。</p>
+<h3 id="24-entropy-kl最小化分布偏移tensorrt-默认"><a class="markdownIt-Anchor" href="#24-entropy-kl最小化分布偏移tensorrt-默认"></a> 2.4 Entropy / KL：最小化分布偏移（TensorRT 默认）</h3>
+<p>把激活直方图 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi></mrow><annotation encoding="application/x-tex">P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span>（参考分布，不裁剪）与量化后再上采样回原 bin 的分布 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Q</mi></mrow><annotation encoding="application/x-tex">Q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8777699999999999em;vertical-align:-0.19444em;"></span><span class="mord mathnormal">Q</span></span></span></span> 对齐：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msup><mi>c</mi><mo>⋆</mo></msup><mo>=</mo><mi>arg</mi><mo>⁡</mo><munder><mo><mi>min</mi><mo>⁡</mo></mo><mi>c</mi></munder><mtext> </mtext><msub><mi>D</mi><mrow><mi mathvariant="normal">K</mi><mi mathvariant="normal">L</mi></mrow></msub><mo stretchy="false">(</mo><msub><mi>P</mi><mi>c</mi></msub><mtext> </mtext><mi mathvariant="normal">∥</mi><mtext> </mtext><msub><mi>Q</mi><mi>c</mi></msub><mo stretchy="false">)</mo><mo>=</mo><mi>arg</mi><mo>⁡</mo><munder><mo><mi>min</mi><mo>⁡</mo></mo><mi>c</mi></munder><munder><mo>∑</mo><mi>i</mi></munder><msub><mi>P</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo><mtext> </mtext><mi>log</mi><mo>⁡</mo><mfrac><mrow><msub><mi>P</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow><mrow><msub><mi>Q</mi><mi>c</mi></msub><mo stretchy="false">(</mo><mi>i</mi><mo stretchy="false">)</mo></mrow></mfrac></mrow><annotation encoding="application/x-tex">c^\star = \arg\min_c \ D_{\mathrm{KL}}(P_c \,\|\, Q_c) = \arg\min_c \sum_i P_c(i)\, \log \frac{P_c(i)}{Q_c(i)}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.738696em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.738696em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">⋆</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.45em;vertical-align:-0.7em;"></span><span class="mop">ar<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.66786em;"><span style="top:-2.4em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">min</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7em;"><span></span></span></span></span></span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.02778em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathrm mtight">K</span><span class="mord mathrm mtight">L</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">∥</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.704669em;vertical-align:-1.277669em;"></span><span class="mop">ar<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.66786em;"><span style="top:-2.4em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">min</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0500050000000003em;"><span style="top:-1.872331em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.050005em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.277669em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">i</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop">lo<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.427em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">i</span><span class="mclose">)</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">i</span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.936em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p>其中 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mi>c</mi></msub></mrow><annotation encoding="application/x-tex">P_c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 是裁剪到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi></mrow><annotation encoding="application/x-tex">c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">c</span></span></span></span> 后的直方图，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Q</mi><mi>c</mi></msub></mrow><annotation encoding="application/x-tex">Q_c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8777699999999999em;vertical-align:-0.19444em;"></span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 是&quot;量化到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mi>b</mi></msup></mrow><annotation encoding="application/x-tex">2^b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.849108em;vertical-align:0em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.849108em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span></span></span></span></span></span></span></span> 个 bin 再展开回来&quot;的近似分布。KL 的目标不是逐点重建，而是<strong>让量化后的概率分布形状尽量不变</strong>——对分类/softmax 型输出特别合理。注意 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>Q</mi><mi>c</mi></msub></mrow><annotation encoding="application/x-tex">Q_c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8777699999999999em;vertical-align:-0.19444em;"></span><span class="mord"><span class="mord mathnormal">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 中 bin 概率为 0 的项按惯例跳过或加 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>ϵ</mi></mrow><annotation encoding="application/x-tex">\epsilon</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">ϵ</span></span></span></span>。</p>
+<h3 id="25-四策略一页对比"><a class="markdownIt-Anchor" href="#25-四策略一页对比"></a> 2.5 四策略一页对比</h3>
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>目标函数</th>
+<th>抗离群值</th>
+<th>成本</th>
+<th>典型用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MinMax</td>
+<td>无裁剪、零成本</td>
+<td>✗</td>
+<td>最低</td>
+<td><strong>权重</strong>、无离群的激活</td>
+</tr>
+<tr>
+<td>Percentile(99.9)</td>
+<td>裁尾部换网格</td>
+<td>✓</td>
+<td>低</td>
+<td><strong>激活默认</strong></td>
+</tr>
+<tr>
+<td>MSE</td>
+<td>最小重建误差</td>
+<td>✓✓</td>
+<td>中</td>
+<td>权重也可，逐层精调</td>
+</tr>
+<tr>
+<td>KL</td>
+<td>最小分布偏移</td>
+<td>✓✓</td>
+<td>高</td>
+<td>TensorRT 系、分类头</td>
+</tr>
+</tbody>
+</table>
+<p><strong>为什么权重用 MinMax、激活用 Percentile</strong>：① 权重分布静态、对称、幅度集中（±0.5 量级），MinMax 的&quot;离群撑爆&quot;风险小，且零裁剪保证权重信息无损；② 激活动态、有长尾离群通道（第 1 周 §1.6），必须牺牲 0.1% 尾部换网格——而激活尾部对输出的贡献本就是少数。一句话：<strong>静态对称信 MinMax，动态长尾信 Percentile</strong>。</p>
+<hr />
+<h2 id="3-系统架构与数据流三条工业管线走读"><a class="markdownIt-Anchor" href="#3-系统架构与数据流三条工业管线走读"></a> 3. 系统架构与数据流：三条工业管线走读</h2>
+<h3 id="31-通用静态量化流水线"><a class="markdownIt-Anchor" href="#31-通用静态量化流水线"></a> 3.1 通用静态量化流水线</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">FP16 模型</span><br><span class="line">  │ ① 校准前向（128~1024 条，hook 收集激活统计）</span><br><span class="line">  ▼</span><br><span class="line">每层激活的 &#123;min, max, 直方图&#125;</span><br><span class="line">  │ ② 策略求 scale/zero-point（权重 MinMax / 激活 Percentile…）</span><br><span class="line">  ▼</span><br><span class="line">量化参数表 (per-layer / per-channel / per-group)</span><br><span class="line">  │ ③ 插入 quant/dequant 节点（或直接导出量化权重）</span><br><span class="line">  ▼</span><br><span class="line">INT8/INT4 模型 ──► 引擎特定格式（ORT / TRT / vLLM）</span><br></pre></td></tr></table></figure>
+<h3 id="32-三个框架的走读要点"><a class="markdownIt-Anchor" href="#32-三个框架的走读要点"></a> 3.2 三个框架的走读要点</h3>
+<ul>
+<li><strong>llm-compressor</strong>（vLLM 官方）：<code>oneshot()</code> 一条命令走 GPTQ/AWQ/SmoothQuant/FP8；底层复用 transformers 的校准 dataloader，产出 vLLM 直接可加载的 compressed-tensors 格式。</li>
+<li><strong>ONNX Runtime 静态量化</strong>：<code>quantize_static(model, output, calibration_data_reader)</code>——DataReader 提供校准批次，默认 <code>QuantFormat.QDQ</code> + 校准方法 MinMax，类型默认 <code>weight_type=QInt8</code>、<code>activation_type=QUInt8</code>，按算子粒度插入 QDQ（QuantizeLinear/DequantizeLinear）节点。</li>
+<li><strong>TensorRT</strong>：<code>IInt8EntropyCalibrator2</code>（KL 校准器）——实现 <code>get_batch()</code> 喂校准数据，<code>read_calibration_cache()</code> 复用缓存；builder 打开 <code>INT8</code> flag 后，引擎构建期按 kernel tactic 选择策略逐层挑最快的 INT8/FP16 实现（速度驱动的 tactic 选择，慢的量化内核自动被 FP16 内核替代）。</li>
+</ul>
+<hr />
+<h2 id="4-实现与验证本周交付核心"><a class="markdownIt-Anchor" href="#4-实现与验证本周交付核心"></a> 4. 实现与验证（本周交付核心）</h2>
+<h3 id="41-手写四策略校准器完整可运行cpu-可跑"><a class="markdownIt-Anchor" href="#41-手写四策略校准器完整可运行cpu-可跑"></a> 4.1 手写四策略校准器（完整可运行，CPU 可跑）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">histogram</span>(<span class="params">x: torch.Tensor, bins=<span class="number">2048</span>, symmetric=<span class="literal">True</span></span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;构建激活直方图。返回 (counts, edges)。&quot;&quot;&quot;</span></span><br><span class="line">    amax = x.<span class="built_in">abs</span>().<span class="built_in">max</span>().item()</span><br><span class="line">    lo, hi = (-amax, amax) <span class="keyword">if</span> symmetric <span class="keyword">else</span> (x.<span class="built_in">min</span>().item(), x.<span class="built_in">max</span>().item())</span><br><span class="line">    counts = torch.histc(x.<span class="built_in">float</span>().flatten(), bins=bins, <span class="built_in">min</span>=lo, <span class="built_in">max</span>=hi)</span><br><span class="line">    edges = torch.linspace(lo, hi, bins + <span class="number">1</span>)</span><br><span class="line">    <span class="keyword">return</span> counts, edges</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">calib_minmax</span>(<span class="params">x, bits</span>):</span><br><span class="line">    c = x.<span class="built_in">abs</span>().<span class="built_in">max</span>()</span><br><span class="line">    qmax = <span class="number">2</span> ** (bits - <span class="number">1</span>) - <span class="number">1</span></span><br><span class="line">    <span class="keyword">return</span> (c / qmax).clamp(<span class="built_in">min</span>=<span class="number">1e-8</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">calib_percentile</span>(<span class="params">x, bits, p=<span class="number">99.9</span></span>):</span><br><span class="line">    c = torch.quantile(x.<span class="built_in">float</span>().<span class="built_in">abs</span>().flatten(), p / <span class="number">100</span>)</span><br><span class="line">    qmax = <span class="number">2</span> ** (bits - <span class="number">1</span>) - <span class="number">1</span></span><br><span class="line">    <span class="keyword">return</span> (c / qmax).clamp(<span class="built_in">min</span>=<span class="number">1e-8</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">calib_mse</span>(<span class="params">x, bits, candidates=<span class="number">64</span></span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;在 [80%, 100%] 分位数上网格搜索最小重建 MSE。&quot;&quot;&quot;</span></span><br><span class="line">    flat = x.<span class="built_in">float</span>().flatten()</span><br><span class="line">    qmax = <span class="number">2</span> ** (bits - <span class="number">1</span>) - <span class="number">1</span></span><br><span class="line">    qs = torch.linspace(<span class="number">0.80</span>, <span class="number">1.0</span>, candidates)</span><br><span class="line">    best_s, best_e = <span class="literal">None</span>, <span class="built_in">float</span>(<span class="string">&quot;inf&quot;</span>)</span><br><span class="line">    <span class="keyword">for</span> q <span class="keyword">in</span> qs:</span><br><span class="line">        c = torch.quantile(flat.<span class="built_in">abs</span>(), q.item()).clamp(<span class="built_in">min</span>=<span class="number">1e-8</span>)</span><br><span class="line">        s = c / qmax</span><br><span class="line">        xq = torch.<span class="built_in">round</span>(flat / s).clamp(-qmax - <span class="number">1</span>, qmax) * s</span><br><span class="line">        e = ((flat - xq) ** <span class="number">2</span>).mean().item()</span><br><span class="line">        <span class="keyword">if</span> e &lt; best_e:</span><br><span class="line">            best_s, best_e = s, e</span><br><span class="line">    <span class="keyword">return</span> best_s</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">calib_kl</span>(<span class="params">counts, edges, bits, min_bins=<span class="number">128</span></span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;TensorRT 风格：在候选阈值上最小化 KL(P || Q)。&quot;&quot;&quot;</span></span><br><span class="line">    n = <span class="built_in">len</span>(counts)</span><br><span class="line">    num_q = <span class="number">2</span> ** (bits - <span class="number">1</span>)          <span class="comment"># 对称：正负各 128 档（INT8 取 128）</span></span><br><span class="line">    best_thr, best_kl = <span class="literal">None</span>, <span class="built_in">float</span>(<span class="string">&quot;inf&quot;</span>)</span><br><span class="line">    total = counts.<span class="built_in">sum</span>()</span><br><span class="line">    <span class="keyword">for</span> thr <span class="keyword">in</span> <span class="built_in">range</span>(min_bins, n + <span class="number">1</span>):</span><br><span class="line">        ref = counts[:thr].clone()</span><br><span class="line">        ref = ref / ref.<span class="built_in">sum</span>().clamp(<span class="built_in">min</span>=<span class="number">1</span>)                 <span class="comment"># P：裁剪后直方图</span></span><br><span class="line">        <span class="comment"># Q：把 thr 个 bin 压到 num_q 个量化档，再摊回原 bin</span></span><br><span class="line">        q = torch.zeros(num_q)</span><br><span class="line">        idx = (torch.arange(thr) * num_q // thr)</span><br><span class="line">        q.index_add_(<span class="number">0</span>, idx, ref)</span><br><span class="line">        merged = torch.zeros(thr)</span><br><span class="line">        cnt = torch.zeros(num_q)</span><br><span class="line">        cnt.index_add_(<span class="number">0</span>, idx, torch.ones(thr))</span><br><span class="line">        safe = q / cnt[idx].clamp(<span class="built_in">min</span>=<span class="number">1</span>)                   <span class="comment"># 每 bin 的平均概率</span></span><br><span class="line">        merged = safe[idx]</span><br><span class="line">        mask = (ref &gt; <span class="number">0</span>) &amp; (merged &gt; <span class="number">0</span>)</span><br><span class="line">        kl = (ref[mask] * (ref[mask] / merged[mask]).log()).<span class="built_in">sum</span>().item()</span><br><span class="line">        <span class="keyword">if</span> kl &lt; best_kl:</span><br><span class="line">            best_thr, best_kl = thr, kl</span><br><span class="line">    c = edges[best_thr]                                     <span class="comment"># 阈值对应的幅值</span></span><br><span class="line">    <span class="keyword">return</span> (c.<span class="built_in">abs</span>() / (<span class="number">2</span> ** (bits - <span class="number">1</span>) - <span class="number">1</span>)).clamp(<span class="built_in">min</span>=<span class="number">1e-8</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 单元自检：构造含离群值的分布，验证策略排序 ----</span></span><br><span class="line">torch.manual_seed(<span class="number">0</span>)</span><br><span class="line">x = torch.cat([torch.randn(<span class="number">100_000</span>), torch.tensor([<span class="number">80.0</span>, -<span class="number">80.0</span>])])  <span class="comment"># 0.002% 离群</span></span><br><span class="line">s = &#123;</span><br><span class="line">    <span class="string">&quot;MinMax&quot;</span>: calib_minmax(x, <span class="number">8</span>).item(),</span><br><span class="line">    <span class="string">&quot;Percentile99.9&quot;</span>: calib_percentile(x, <span class="number">8</span>).item(),</span><br><span class="line">    <span class="string">&quot;MSE&quot;</span>: calib_mse(x, <span class="number">8</span>).item(),</span><br><span class="line">    <span class="string">&quot;KL&quot;</span>: calib_kl(*histogram(x), <span class="number">8</span>).item(),</span><br><span class="line">&#125;</span><br><span class="line"><span class="keyword">for</span> k, v <span class="keyword">in</span> s.items():</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;<span class="subst">&#123;k:&gt;16s&#125;</span>: scale=<span class="subst">&#123;v:<span class="number">.5</span>f&#125;</span>&quot;</span>)</span><br><span class="line"><span class="keyword">assert</span> s[<span class="string">&quot;MinMax&quot;</span>] &gt; <span class="number">3</span> * s[<span class="string">&quot;Percentile99.9&quot;</span>], <span class="string">&quot;MinMax 应被离群值撑大&quot;</span></span><br><span class="line"><span class="keyword">assert</span> s[<span class="string">&quot;Percentile99.9&quot;</span>] &gt; s[<span class="string">&quot;KL&quot;</span>] * <span class="number">0.5</span>, <span class="string">&quot;KL/MSE 类策略应收缩阈值&quot;</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;校准策略单元自检通过 ✓&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出</strong>：MinMax 的 scale 被 ±80 撑大约 25 倍（80/127 vs 99.9% 分位 ≈ 3.1 的 3.1/127），其余三策略把裁剪阈值收缩到幅值 3~5 的尾部附近——数值化第 1 周的结论。</p>
+<h3 id="42-云上跑通qwen25-15b-四策略-ppl-对比"><a class="markdownIt-Anchor" href="#42-云上跑通qwen25-15b-四策略-ppl-对比"></a> 4.2 云上跑通：Qwen2.5-1.5B 四策略 PPL 对比</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 在云 GPU 上运行（A10/L20 级别即可，1.5B INT8 权重量化内存 &lt; 8GB）</span></span><br><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">from</span> datasets <span class="keyword">import</span> load_dataset</span><br><span class="line"><span class="keyword">from</span> transformers <span class="keyword">import</span> AutoModelForCausalLM, AutoTokenizer</span><br><span class="line"><span class="keyword">from</span> torch.nn.functional <span class="keyword">import</span> cosine_similarity</span><br><span class="line"></span><br><span class="line">MODEL = <span class="string">&quot;Qwen/Qwen2.5-1.5B&quot;</span></span><br><span class="line">tok = AutoTokenizer.from_pretrained(MODEL)</span><br><span class="line">model = AutoModelForCausalLM.from_pretrained(</span><br><span class="line">    MODEL, torch_dtype=torch.float16, device_map=<span class="string">&quot;cuda&quot;</span>)</span><br><span class="line"></span><br><span class="line">calib = load_dataset(<span class="string">&quot;wikitext&quot;</span>, <span class="string">&quot;wikitext-2-raw-v1&quot;</span>, split=<span class="string">&quot;train&quot;</span>)</span><br><span class="line">texts = [t[<span class="string">&quot;text&quot;</span>] <span class="keyword">for</span> t <span class="keyword">in</span> calib.select(<span class="built_in">range</span>(<span class="number">256</span>)) <span class="keyword">if</span> <span class="built_in">len</span>(t[<span class="string">&quot;text&quot;</span>]) &gt; <span class="number">100</span>][:<span class="number">128</span>]</span><br><span class="line">enc = tok(texts, return_tensors=<span class="string">&quot;pt&quot;</span>, truncation=<span class="literal">True</span>, max_length=<span class="number">2048</span>,</span><br><span class="line">          padding=<span class="string">&quot;max_length&quot;</span>).to(<span class="string">&quot;cuda&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># ① 校准前向：收集每层 down_proj 输入激活的 abs-max 与分位数</span></span><br><span class="line">stats = &#123;&#125;</span><br><span class="line"><span class="keyword">def</span> <span class="title function_">make_hook</span>(<span class="params">name</span>):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">hook</span>(<span class="params">m, inp, out</span>):</span><br><span class="line">        x = inp[<span class="number">0</span>].<span class="built_in">float</span>()</span><br><span class="line">        stats.setdefault(name, []).append(</span><br><span class="line">            (x.<span class="built_in">abs</span>().amax().item(),</span><br><span class="line">             torch.quantile(x.<span class="built_in">abs</span>().flatten().<span class="built_in">float</span>(), <span class="number">0.999</span>).item()))</span><br><span class="line">    <span class="keyword">return</span> hook</span><br><span class="line">handles = [m.register_forward_hook(make_hook(n))</span><br><span class="line">           <span class="keyword">for</span> n, m <span class="keyword">in</span> model.named_modules() <span class="keyword">if</span> n.endswith(<span class="string">&quot;down_proj&quot;</span>)]</span><br><span class="line"><span class="keyword">with</span> torch.no_grad():</span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">0</span>, <span class="built_in">len</span>(texts), <span class="number">8</span>):</span><br><span class="line">        model(**&#123;k: v[i:i+<span class="number">8</span>] <span class="keyword">for</span> k, v <span class="keyword">in</span> enc.items()&#125;)</span><br><span class="line">[h.remove() <span class="keyword">for</span> h <span class="keyword">in</span> handles]</span><br><span class="line"></span><br><span class="line"><span class="comment"># ② 四策略各自算出的 scale，量化→反量化 down_proj 权重，测层输出偏移</span></span><br><span class="line"><span class="keyword">import</span> math</span><br><span class="line">w = model.model.layers[<span class="number">10</span>].mlp.down_proj.weight</span><br><span class="line"><span class="keyword">def</span> <span class="title function_">requant</span>(<span class="params">scale</span>):</span><br><span class="line">    q = torch.<span class="built_in">round</span>(w / scale).clamp(-<span class="number">127</span>, <span class="number">127</span>)</span><br><span class="line">    <span class="keyword">return</span> q * scale</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;各策略 scale / 重建余弦相似度：&quot;</span>)</span><br><span class="line"><span class="keyword">for</span> name, fn <span class="keyword">in</span> [(<span class="string">&quot;MinMax&quot;</span>, <span class="keyword">lambda</span> a: a), (<span class="string">&quot;Percentile&quot;</span>, <span class="keyword">lambda</span> a: a)]:</span><br><span class="line">    <span class="keyword">pass</span>  <span class="comment"># 实际实现见 4.1；此处用 stats 中激活极值指导裁剪</span></span><br></pre></td></tr></table></figure>
+<blockquote>
+<p>说明：完整&quot;量化模型 → WikiText-2 PPL&quot;对比建议直接用 <code>llm-compressor</code> 或 <code>torchao</code> 的 INT8 weight-only 接口跑四组（把 4.1 的四种 scale 注入），每组 128 条校准、1024 条测试。预期结论写进下表（交付要求填实测值）：</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>校准策略</th>
+<th>注入位置</th>
+<th>PPL(WikiText-2)</th>
+<th>vs FP16</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FP16（基线）</td>
+<td>—</td>
+<td><em>实测</em></td>
+<td>—</td>
+</tr>
+<tr>
+<td>MinMax</td>
+<td>激活</td>
+<td><em>实测</em></td>
+<td><em>Δ</em></td>
+</tr>
+<tr>
+<td>Percentile(99.9)</td>
+<td>激活</td>
+<td><em>实测（预期最低）</em></td>
+<td><em>Δ</em></td>
+</tr>
+<tr>
+<td>MSE</td>
+<td>激活</td>
+<td><em>实测</em></td>
+<td><em>Δ</em></td>
+</tr>
+<tr>
+<td>KL</td>
+<td>激活</td>
+<td><em>实测</em></td>
+<td><em>Δ</em></td>
+</tr>
+</tbody>
+</table>
+<p><strong>经验预期</strong>：激活侧 Percentile ≈ MSE &lt; KL &lt; MinMax；MinMax 若撞上离群通道会出现 PPL 暴涨的&quot;悬崖&quot;，这正是 §2.5 结论的实证。</p>
+<hr />
+<h2 id="5-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#5-工程权衡与失效模式"></a> 5. 工程权衡与失效模式</h2>
+<h3 id="51-权衡"><a class="markdownIt-Anchor" href="#51-权衡"></a> 5.1 权衡</h3>
+<ul>
+<li><strong>校准成本 vs 精度</strong>：KL/MSE 要遍历直方图若干遍，比 MinMax 慢一个量级；但只在离线做一次，通常值得。</li>
+<li><strong>裁剪点选择</strong>：阈值越激进（分位数越低），网格越细、裁剪越多——PPL 曲线通常呈 U 形，最优点在 99.5%~99.99% 之间。</li>
+<li><strong>静态量化 vs 动态量化</strong>：动态量化（运行时算激活 scale）免校准但每步多一次统计开销，只适合激活难校准的场景。</li>
+</ul>
+<h3 id="52-失效模式"><a class="markdownIt-Anchor" href="#52-失效模式"></a> 5.2 失效模式</h3>
+<ol>
+<li><strong>校准集与部署分布错位</strong>：症状——评测 PPL 正常、线上长文本崩坏；根因——校准文本过短或领域不符；修复——按真实流量采样校准集、加长序列。</li>
+<li><strong>KL 校准的直方图饱和</strong>：症状——TRT 校准出的模型在极端输入上输出乱码；根因——校准集未覆盖极端幅度，直方图边界即裁剪边界；修复——扩大校准分布范围或用 Percentile 回退。</li>
+<li><strong>逐层误差累积</strong>：症状——浅层单层余弦相似度都 &gt; 0.999，整模型 PPL 仍明显上涨；根因——误差沿深度复合放大，敏感层（通常是第一层与 lm_head 邻近层）需要保护；修复——敏感层保留 FP16（混合精度量化）。</li>
+<li><strong>激活非对称却按对称校准</strong>：症状——ReLU/正偏激活量化后均值漂移；根因——对称网格浪费一半码域；修复——激活改用非对称 + 零点（第 1 周公式）。</li>
+</ol>
+<hr />
+<h2 id="6-延伸思考题含解析"><a class="markdownIt-Anchor" href="#6-延伸思考题含解析"></a> 6. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：为什么 128 条校准数据通常就够了？什么情况下必须加量？<br />
+<strong>A</strong>：激活的分位数/直方图统计量收敛速度是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mn>1</mn><mi mathvariant="normal">/</mi><msqrt><mi>n</mi></msqrt><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(1/\sqrt{n})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.05028em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord">1</span><span class="mord">/</span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8002800000000001em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord mathnormal">n</span></span></span><span style="top:-2.76028em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg width='400em' height='1.08em' viewBox='0 0 400000 1080' preserveAspectRatio='xMinYMin slice'><path d='M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.23972em;"><span></span></span></span></span></span><span class="mclose">)</span></span></span></span>，128 条 ×2048 token ≈ 26 万样本点，估计误差已低于量化步长本身。需要加量的情况：部署分布多峰（多领域混合）、序列极长（长上下文激活漂移）、动态范围随位置变化大。</p>
+<p><strong>Q2</strong>：KL 校准为什么在 TensorRT 上是默认，而在 LLM 社区少见？<br />
+<strong>A</strong>：TRT 面向视觉/分类为主的时代，softmax 输出分布的形状保持是正确目标；LLM 社区更关心权重侧二阶误差（GPTQ）与离群通道（AWQ），KL 对激活长尾的收缩不如显式 Percentile 可控，且 LLM 校准还要喂逐层重建目标，工具链就绕开了 KL。</p>
+<p><strong>Q3</strong>：Percentile 的裁剪误差和舍入误差怎么相互消长？最优点怎么找？<br />
+<strong>A</strong>：阈值 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>c</mi></mrow><annotation encoding="application/x-tex">c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">c</span></span></span></span> 变小 → 步长 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi></mrow><annotation encoding="application/x-tex">s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">s</span></span></span></span> 变小 → 舍入误差 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>↓</mo></mrow><annotation encoding="application/x-tex">\downarrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mrel">↓</span></span></span></span>，但被裁尾部 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>↑</mo></mrow><annotation encoding="application/x-tex">\uparrow</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mrel">↑</span></span></span></span>。总误差 U 形；实践上在分位数 99%~100% 网格搜索重建 MSE（即 §2.3），或直接画&quot;PPL vs 分位数&quot;曲线取最低点。</p>
+<p><strong>Q4</strong>：为什么第一层和嵌入层常常量化收益差、甚至要跳过？<br />
+<strong>A</strong>：第一层直接吃原始嵌入，误差无前置层&quot;平滑&quot;，且其权重分布常有特殊结构（与词表相关）；lm_head 输出直接进 softmax 指数，误差被放大。工业配方通常对这两层保留高精度——混合精度是免费午餐。</p>
+<p><strong>Q5</strong>：如果校准集里混入了大量重复样本，四种策略谁受伤最重？<br />
+<strong>A</strong>：MinMax 受伤最轻（极值不依赖频率）；KL 受伤最重——直方图形状被重复样本扭曲，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi></mrow><annotation encoding="application/x-tex">P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span> 本身就是错的分布，最小化&quot;与错误目标的距离&quot;反而更差。这提示校准集要先去重（呼应数据工程方向）。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 闭卷写出四种校准策略的目标函数（MinMax/Percentile/MSE/KL 各一行公式）。</li>
+<li>[ ] 跑通 4.1 手写校准器，单元自检断言通过，截图四策略 scale 对比。</li>
+<li>[ ] 云上完成 Qwen2.5-1.5B 四策略对比，填写 §4.2 结论表（PPL 实测值）。</li>
+<li>[ ] 用自己的话回答：为什么权重用 MinMax、激活用 Percentile？（≤ 80 字）</li>
+<li>[ ] 走读 llm-compressor / ONNX Runtime / TensorRT 三条管线各 30 分钟，记录接口名。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%8E%A8%E7%90%86%E4%BC%98%E5%8C%96/" rel="tag"># 推理优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC3%E5%91%A8-%E5%89%AA%E6%9E%9D%E4%BB%8E%E9%9D%9E%E7%BB%93%E6%9E%84%E5%8C%96%E5%88%B0%E7%BB%93%E6%9E%84%E5%8C%96/" rel="prev" title="第3周-剪枝从非结构化到结构化">
+                  <i class="fa fa-angle-left"></i> 第3周-剪枝从非结构化到结构化
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC1%E5%91%A8-%E9%87%8F%E5%8C%96%E6%95%B0%E5%AD%A6%E5%9C%B0%E5%9F%BA%E4%B8%8E%E6%89%8B%E5%86%99%E9%87%8F%E5%8C%96%E5%99%A8/" rel="next" title="第1周-量化数学地基与手写量化器">
+                  第1周-量化数学地基与手写量化器 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

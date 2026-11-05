@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 2 周教程：点云 3D 检测——PointNet 系与 PointPillars  本周要回答的四个问题  3D 检测的输出长什么样——7 自由度框每个量是什么？和 2D 框换算关系如何？ 点云是无序的，CNN 吃的图像是有序网格——无序数据怎么进网络？ 体素化后做 3D 卷积为什么慢得离谱？稀疏卷积（sparse convolution）怎么救？ PointPillars（量产上车最多的">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第2周-点云3D检测-PointNet系与PointPillars">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/05/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-2-%E4%BB%8E2D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B%E5%88%B03D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B-%E7%AC%AC2%E5%91%A8-%E7%82%B9%E4%BA%913D%E6%A3%80%E6%B5%8B-PointNet%E7%B3%BB%E4%B8%8EPointPillars/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 2 周教程：点云 3D 检测——PointNet 系与 PointPillars  本周要回答的四个问题  3D 检测的输出长什么样——7 自由度框每个量是什么？和 2D 框换算关系如何？ 点云是无序的，CNN 吃的图像是有序网格——无序数据怎么进网络？ 体素化后做 3D 卷积为什么慢得离谱？稀疏卷积（sparse convolution）怎么救？ PointPillars（量产上车最多的">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-05T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.610Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="自动驾驶">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/05/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-2-%E4%BB%8E2D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B%E5%88%B03D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B-%E7%AC%AC2%E5%91%A8-%E7%82%B9%E4%BA%913D%E6%A3%80%E6%B5%8B-PointNet%E7%B3%BB%E4%B8%8EPointPillars/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/05/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-2-%E4%BB%8E2D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B%E5%88%B03D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B-%E7%AC%AC2%E5%91%A8-%E7%82%B9%E4%BA%913D%E6%A3%80%E6%B5%8B-PointNet%E7%B3%BB%E4%B8%8EPointPillars/","path":"2026/11/05/自动驾驶-2-从2D目标检测到3D目标检测-第2周-点云3D检测-PointNet系与PointPillars/","title":"第2周-点云3D检测-PointNet系与PointPillars"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第2周-点云3D检测-PointNet系与PointPillars | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-2-%E5%91%A8%E6%95%99%E7%A8%8B%E7%82%B9%E4%BA%91-3d-%E6%A3%80%E6%B5%8Bpointnet-%E7%B3%BB%E4%B8%8E-pointpillars"><span class="nav-number">1.</span> <span class="nav-text"> 第 2 周教程：点云 3D 检测——PointNet 系与 PointPillars</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-3d-%E6%A3%80%E6%B5%8B%E8%BE%93%E5%87%BA%E5%AE%9A%E4%B9%897-%E8%87%AA%E7%94%B1%E5%BA%A6%E6%A1%86"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 3D 检测输出定义：7 自由度框</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E7%82%B9%E4%BA%91%E7%9B%B4%E6%8E%A5%E6%A3%80%E6%B5%8B%E7%9A%84%E6%8C%91%E6%88%98%E4%B8%89%E5%BA%A7%E5%A4%A7%E5%B1%B1"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 点云直接检测的挑战：三座大山</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-pointnet%E5%AF%B9%E7%A7%B0%E5%87%BD%E6%95%B0%E6%90%9E%E5%AE%9A%E6%97%A0%E5%BA%8F%E6%80%A7"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. PointNet：对称函数搞定无序性</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E7%BB%93%E6%9E%84%E5%85%B1%E4%BA%AB-mlp-max-pooling"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 结构：共享 MLP + max pooling</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-numpy-%E9%AA%8C%E8%AF%81%E7%BD%AE%E6%8D%A2%E4%B8%8D%E5%8F%98%E6%80%A7"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 NumPy 验证置换不变性</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-voxelnet-%E5%88%B0-second%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E7%A8%80%E7%96%8F%E5%8D%B7%E7%A7%AF"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. VoxelNet 到 SECOND：为什么要稀疏卷积</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-voxelnet%E4%BD%93%E7%B4%A0%E5%8C%96-3d-%E5%8D%B7%E7%A7%AF"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 VoxelNet：体素化 + 3D 卷积</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-second%E7%A8%80%E7%96%8F%E5%8D%B7%E7%A7%AF"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 SECOND：稀疏卷积</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-pointpillars-%E5%85%A8%E6%B5%81%E7%A8%8B%E6%8B%86%E8%A7%A3%E6%9C%AC%E9%98%B6%E6%AE%B5%E6%9C%80%E9%87%8D%E8%A6%81"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. PointPillars 全流程拆解（本阶段最重要）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#51-%E6%A0%B8%E5%BF%83%E6%83%B3%E6%B3%95pillar-%E4%B8%8D%E5%88%87-z-%E7%9A%84-voxel"><span class="nav-number">1.5.1.</span> <span class="nav-text"> 5.1 核心想法：pillar &#x3D; 不切 z 的 voxel</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#52-%E9%80%90%E6%AD%A5%E8%BF%BD%E8%B8%AA-shape-%E9%93%BEnumpy-%E6%A8%A1%E6%8B%9F"><span class="nav-number">1.5.2.</span> <span class="nav-text"> 5.2 逐步追踪 shape 链（NumPy 模拟）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#53-%E9%80%90%E6%A8%A1%E5%9D%97%E8%A7%A3%E8%AF%BB"><span class="nav-number">1.5.3.</span> <span class="nav-text"> 5.3 逐模块解读</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#54-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%87%8F%E4%BA%A7%E9%80%89%E5%AE%83"><span class="nav-number">1.5.4.</span> <span class="nav-text"> 5.4 为什么量产选它</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-anchor-free-heatmap-%E5%A4%B4centerpoint-%E7%9A%84%E7%94%B1%E6%9D%A5"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. anchor-free heatmap 头：CenterPoint 的由来</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%B8%B8%E8%A7%81%E5%9D%91"><span class="nav-number">1.7.</span> <span class="nav-text"> 7. 工程权衡与常见坑</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#8-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.8.</span> <span class="nav-text"> 8. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.9.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/05/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-2-%E4%BB%8E2D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B%E5%88%B03D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B-%E7%AC%AC2%E5%91%A8-%E7%82%B9%E4%BA%913D%E6%A3%80%E6%B5%8B-PointNet%E7%B3%BB%E4%B8%8EPointPillars/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第2周-点云3D检测-PointNet系与PointPillars | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第2周-点云3D检测-PointNet系与PointPillars
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2026-11-05 12:00:00 / 修改时间：08:11:03" itemprop="dateCreated datePublished" datetime="2026-11-05T12:00:00+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6/" itemprop="url" rel="index"><span itemprop="name">自动驾驶</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6/Stage-2-%E4%BB%8E2D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B%E5%88%B03D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B/" itemprop="url" rel="index"><span itemprop="name">Stage 2-从2D目标检测到3D目标检测</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>18 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-2-周教程点云-3d-检测pointnet-系与-pointpillars"><a class="markdownIt-Anchor" href="#第-2-周教程点云-3d-检测pointnet-系与-pointpillars"></a> 第 2 周教程：点云 3D 检测——PointNet 系与 PointPillars</h1>
+<blockquote>
+<p><strong>本周要回答的四个问题</strong></p>
+<ol>
+<li>3D 检测的输出长什么样——7 自由度框每个量是什么？和 2D 框换算关系如何？</li>
+<li>点云是<strong>无序</strong>的，CNN 吃的图像是<strong>有序网格</strong>——无序数据怎么进网络？</li>
+<li>体素化后做 3D 卷积为什么慢得离谱？稀疏卷积（sparse convolution）怎么救？</li>
+<li>PointPillars（量产上车最多的 3D 检测结构）从点云到 3D 框的每一步 shape 是多少？anchor-free 的 heatmap 头又是怎么来的？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 2 周。交付物：NumPy 验证 PointNet 置换不变性；NumPy 模拟 pillar 化 + PFN + scatter 全流程 shape 链。</p>
+<hr />
+<h2 id="1-3d-检测输出定义7-自由度框"><a class="markdownIt-Anchor" href="#1-3d-检测输出定义7-自由度框"></a> 1. 3D 检测输出定义：7 自由度框</h2>
+<p>2D 检测输出 4 个数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>x</mi><mn>1</mn></msub><mo separator="true">,</mo><msub><mi>y</mi><mn>1</mn></msub><mo separator="true">,</mo><msub><mi>x</mi><mn>2</mn></msub><mo separator="true">,</mo><msub><mi>y</mi><mn>2</mn></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x_1, y_1, x_2, y_2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>；3D 检测输出<strong>7 个数</strong>：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mo stretchy="false">(</mo><mi>x</mi><mo separator="true">,</mo><mtext> </mtext><mi>y</mi><mo separator="true">,</mo><mtext> </mtext><mi>z</mi><mo separator="true">,</mo><mtext> </mtext><mi>w</mi><mo separator="true">,</mo><mtext> </mtext><mi>l</mi><mo separator="true">,</mo><mtext> </mtext><mi>h</mi><mo separator="true">,</mo><mtext> yaw</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x,\ y,\ z,\ w,\ l,\ h,\ \text{yaw})
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">h</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord text"><span class="mord">yaw</span></span><span class="mclose">)</span></span></span></span></span></p>
+<p><strong>这行式子在干什么</strong>：位置 3 个 + 尺寸 3 个 + 朝向 1 个，共 7 个自由度（Degrees of Freedom, DoF）：</p>
+<ul>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>x</mi><mo separator="true">,</mo><mi>y</mi><mo separator="true">,</mo><mi>z</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x, y, z)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="mclose">)</span></span></span></span>：<strong>框中心</strong>在传感器/车体坐标系的位置（米）。注意各数据集约定不同：KITTI 的标注以<strong>框底部中心</strong>为锚点，nuScenes 以<strong>几何中心</strong>为锚点——跨数据集移植模型时忘掉这个差异，框会凭空&quot;浮起或下沉&quot;半米；</li>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>w</mi><mo separator="true">,</mo><mi>l</mi><mo separator="true">,</mo><mi>h</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(w, l, h)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">h</span><span class="mclose">)</span></span></span></span>：宽、长、高（米）。约定 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>l</mi></mrow><annotation encoding="application/x-tex">l</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span></span></span></span> 沿目标朝向（车头方向）、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi></mrow><annotation encoding="application/x-tex">w</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span></span></span></span> 垂直朝向、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi></mrow><annotation encoding="application/x-tex">h</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">h</span></span></span></span> 沿重力方向；</li>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>yaw</mtext></mrow><annotation encoding="application/x-tex">\text{yaw}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord text"><span class="mord">yaw</span></span></span></span></span>：朝向角（弧度），目标绕重力轴（z 轴）的旋转。只需要这一个角——车不会飞，俯仰/横滚由地面近似约束掉了，所以是 7 而不是 9 自由度。</li>
+</ul>
+<p><strong>结果拿来做什么</strong>：第 1 周的 2D 度量衡全部升级——IoU 变成 BEV/3D IoU（第 4 周手写），NMS 在 BEV 平面做，mAP 协议由数据集定。模型要回归的量从 4 维变成 7 维，且 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext>yaw</mtext></mrow><annotation encoding="application/x-tex">\text{yaw}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord text"><span class="mord">yaw</span></span></span></span></span> 是角度（有周期性 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>−</mo><mi>π</mi><mo>∼</mo><mi>π</mi></mrow><annotation encoding="application/x-tex">-\pi \sim \pi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.66666em;vertical-align:-0.08333em;"></span><span class="mord">−</span><span class="mord mathnormal" style="margin-right:0.03588em;">π</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">π</span></span></span></span>，回归时要用 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>sin</mi><mo>⁡</mo><mi mathvariant="normal">/</mi><mi>cos</mi><mo>⁡</mo></mrow><annotation encoding="application/x-tex">\sin/\cos</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">sin</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">/</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop">cos</span></span></span></span> 编码避免 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>π</mi></mrow><annotation encoding="application/x-tex">2\pi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.03588em;">π</span></span></span></span> 跳变，第 3 周 CenterPoint 处理）。</p>
+<hr />
+<h2 id="2-点云直接检测的挑战三座大山"><a class="markdownIt-Anchor" href="#2-点云直接检测的挑战三座大山"></a> 2. 点云直接检测的挑战：三座大山</h2>
+<p>Stage 1 已经知道点云是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi><mo>×</mo><mn>4</mn></mrow><annotation encoding="application/x-tex">N×4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">4</span></span></span></span> 的无序集合 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>x</mi><mo separator="true">,</mo><mi>y</mi><mo separator="true">,</mo><mi>z</mi><mo separator="true">,</mo><mtext>intensity</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x, y, z, \text{intensity})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord text"><span class="mord">intensity</span></span><span class="mclose">)</span></span></span></span>。它和图像有本质差异，给检测带来三座大山：</p>
+<ol>
+<li><strong>无序性（permutation）</strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span></span></span></span> 个点没有固定顺序，交换两个点的存储位置，物理上还是同一片点云。图像里交换两行像素就是另一幅图；点云里任何依赖&quot;点的输入顺序&quot;的网络都失效——网络必须对点的排列<strong>置换不变（permutation invariant）</strong>。</li>
+<li><strong>稀疏且不均匀</strong>：点云在 3D 空间里极度稀疏（一个 51.2m×51.2m×6.4m 的检测范围约有 10⁷ 个 0.1m 体素，非空的往往不到 5%），且近密远疏。密集 3D 卷积在空体素上浪费绝大部分计算。</li>
+<li><strong>分辨率不均</strong>：同一个目标 5m 处有几千个点、50m 处可能只有几十个点，特征质量随距离剧烈变化。</li>
+</ol>
+<p>针对这三座山，演化出三条路线：<strong>直接处理点</strong>（PointNet 系）、<strong>体素化后稀疏卷积</strong>（VoxelNet → SECOND）、<strong>柱体化后 2D 卷积</strong>（PointPillars）。本周按这个顺序讲。</p>
+<hr />
+<h2 id="3-pointnet对称函数搞定无序性"><a class="markdownIt-Anchor" href="#3-pointnet对称函数搞定无序性"></a> 3. PointNet：对称函数搞定无序性</h2>
+<h3 id="31-结构共享-mlp-max-pooling"><a class="markdownIt-Anchor" href="#31-结构共享-mlp-max-pooling"></a> 3.1 结构：共享 MLP + max pooling</h3>
+<p>PointNet（CVPR 2017，Qi et al.）是第一个直接吃原始点云的网络。结构只有两句话：</p>
+<ol>
+<li>每个点独立过<strong>同一个</strong>多层感知机（共享 MLP，shared MLP）——权重对所有点相同，天然与点的数量和顺序无关；</li>
+<li>对所有点的特征<strong>逐通道取 max</strong>，把 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span></span></span></span> 个点压缩成一个全局特征向量。</li>
+</ol>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>f</mi><mo stretchy="false">(</mo><mi>P</mi><mo stretchy="false">)</mo><mo>=</mo><munder><munder><munder><mo><mi>max</mi><mo>⁡</mo></mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><mi>N</mi></mrow></munder><mo stretchy="true">⏟</mo></munder><mtext>对点维取 max</mtext></munder><mtext>  </mtext><mi>γ</mi><mo fence="false">(</mo><mtext> </mtext><mo stretchy="false">{</mo><mtext> </mtext><mi>h</mi><mo stretchy="false">(</mo><msub><mi>x</mi><mi>i</mi></msub><mo stretchy="false">)</mo><mo>∣</mo><msub><mi>x</mi><mi>i</mi></msub><mo>∈</mo><mi>P</mi><mtext> </mtext><mo stretchy="false">}</mo><mo fence="false">)</mo></mrow><annotation encoding="application/x-tex">f(P) = \underbrace{\max_{i=1,\dots,N}}_{\text{对点维取 max}}\ \ \gamma\big(\ \{\, h(x_i) \mid x_i \in P \,\}\big)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.10764em;">f</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:3.05677em;vertical-align:-2.20677em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.4305599999999996em;"><span style="top:-0.7932299999999999em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">对点维取</span><span class="mord mtight"> max</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.4305599999999997em;"><span class="svg-align" style="top:-1.471561em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.43055999999999994em;"><span style="top:-2.3556690000000002em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mrel mtight">=</span><span class="mord mtight">1</span><span class="mpunct mtight">,</span><span class="minner mtight">…</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight" style="margin-right:0.10903em;">N</span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">max</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.880439em;"><span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.528439em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:2.20677em;"><span></span></span></span></span></span><span class="mspace"> </span><span class="mspace"> </span><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mspace"> </span><span class="mopen">{</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">h</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.6891em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.20001em;vertical-align:-0.35001em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mclose">}</span><span class="mord"><span class="delimsizing size1">)</span></span></span></span></span></span></p>
+<p><strong>这个公式在干什么</strong>（逐符号拆解）：</p>
+<ul>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi></mrow><annotation encoding="application/x-tex">P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span>：点集 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">{</mo><msub><mi>x</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>x</mi><mi>N</mi></msub><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\{x_1, \dots, x_N\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.10903em;">N</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">}</span></span></span></span>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mi>i</mi></msub><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mn>3</mn></msup></mrow><annotation encoding="application/x-tex">x_i \in \mathbb{R}^3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.6891em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord"><span class="mord mathbb">R</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">3</span></span></span></span></span></span></span></span></span></span></span>（或加 intensity 成 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi mathvariant="double-struck">R</mi><mn>4</mn></msup></mrow><annotation encoding="application/x-tex">\mathbb{R}^4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord"><span class="mord mathbb">R</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span>），<strong>集合</strong>而非序列——公式里没有下标顺序的任何假设；</li>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi><mo stretchy="false">(</mo><mo>⋅</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">h(\cdot)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">h</span><span class="mopen">(</span><span class="mord">⋅</span><span class="mclose">)</span></span></span></span>：共享 MLP，把每个点映射成一个特征向量（论文中 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>h</mi></mrow><annotation encoding="application/x-tex">h</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">h</span></span></span></span> 输出 1024 维）；</li>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">{</mo><mo>⋅</mo><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\{\cdot\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord">⋅</span><span class="mclose">}</span></span></span></span>：把所有点的特征装进一个集合；</li>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mo><mi>max</mi><mo>⁡</mo></mo><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">\max_{i}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.58056em;vertical-align:-0.15em;"></span><span class="mop"><span class="mop">max</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>：<strong>对称函数（symmetric function）</strong>——对 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span></span></span></span> 个特征向量逐通道取最大值。max 满足 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>a</mi><mo separator="true">,</mo><mi>b</mi><mo stretchy="false">)</mo><mo>=</mo><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>b</mi><mo separator="true">,</mo><mi>a</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\max(a, b) = \max(b, a)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">max</span><span class="mopen">(</span><span class="mord mathnormal">a</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">b</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">max</span><span class="mopen">(</span><span class="mord mathnormal">b</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">a</span><span class="mclose">)</span></span></span></span>，所以无论点的顺序怎么排，输出逐元素相同；</li>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>γ</mi></mrow><annotation encoding="application/x-tex">\gamma</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord mathnormal" style="margin-right:0.05556em;">γ</span></span></span></span>：对称函数之后的普通 MLP，对全局特征做进一步变换。</li>
+</ul>
+<p><strong>为什么 max 能兼顾&quot;不变性&quot;与&quot;信息量&quot;</strong>：max 是&quot;每个特征通道上的最大激活&quot;——直觉上网络学到的是&quot;检测器&quot;：某通道对&quot;车顶平面&quot;响应，只要 1024 个点里有一个点激活它，全局特征就记下了&quot;这辆车存在&quot;。max 同时起了<strong>特征选择</strong>作用（每个通道只留最强响应），这也是论文实验里 max 明显优于 sum/mean 的原因——mean 会被无关点稀释，max 不会。</p>
+<p>（PointNet 还有一个 T-Net 小模块预测仿射变换矩阵对输入做姿态对齐，一句话带过；PointNet++ 在此基础上补&quot;局部性&quot;：最远点采样（Farthest Point Sampling, FPS）挑中心点 + 球查询（ball query）取邻域点，再在每个邻域内递归跑 PointNet——层级化提取局部特征，解决了原版只有全局特征、对局部细节不敏感的问题。）</p>
+<h3 id="32-numpy-验证置换不变性"><a class="markdownIt-Anchor" href="#32-numpy-验证置换不变性"></a> 3.2 NumPy 验证置换不变性</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"></span><br><span class="line">rng = np.random.default_rng(<span class="number">0</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">mlp_and_maxpool</span>(<span class="params">points, W1, b1, W2, b2</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;对 (N,3) 点集做共享 MLP（两层），再对点维做 max，输出 (64,) 全局特征。&quot;&quot;&quot;</span></span><br><span class="line">    h = np.maximum(points @ W1 + b1, <span class="number">0</span>)   <span class="comment"># (N, 32) ReLU，每个点独立过同一组权重</span></span><br><span class="line">    f = np.maximum(h @ W2 + b2, <span class="number">0</span>)        <span class="comment"># (N, 64)</span></span><br><span class="line">    <span class="keyword">return</span> f.<span class="built_in">max</span>(axis=<span class="number">0</span>)                  <span class="comment"># (64,) 逐通道取 N 个点中的最大值</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 随机固定一组&quot;共享权重&quot;（相当于训练好的 PointNet）</span></span><br><span class="line">W1 = rng.normal(<span class="number">0</span>, <span class="number">0.5</span>, size=(<span class="number">3</span>, <span class="number">32</span>))</span><br><span class="line">b1 = rng.normal(<span class="number">0</span>, <span class="number">0.1</span>, size=<span class="number">32</span>)</span><br><span class="line">W2 = rng.normal(<span class="number">0</span>, <span class="number">0.5</span>, size=(<span class="number">32</span>, <span class="number">64</span>))</span><br><span class="line">b2 = rng.normal(<span class="number">0</span>, <span class="number">0.1</span>, size=<span class="number">64</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 一片&quot;车顶&quot;点云：N=1024 个点</span></span><br><span class="line">pts = rng.normal(<span class="number">0</span>, <span class="number">0.5</span>, size=(<span class="number">1024</span>, <span class="number">3</span>))</span><br><span class="line">pts[:, <span class="number">2</span>] += <span class="number">1.6</span>                    <span class="comment"># 抬高模拟车顶高度</span></span><br><span class="line"></span><br><span class="line">feat = mlp_and_maxpool(pts, W1, b1, W2, b2)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 实验1：随机打乱点的顺序（置换）</span></span><br><span class="line">perm = rng.permutation(<span class="built_in">len</span>(pts))</span><br><span class="line">feat_perm = mlp_and_maxpool(pts[perm], W1, b1, W2, b2)</span><br><span class="line">d1 = np.<span class="built_in">abs</span>(feat - feat_perm).<span class="built_in">max</span>()</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;实验1 随机置换 1024 个点后，全局特征最大差异 = <span class="subst">&#123;d1:<span class="number">.2</span>e&#125;</span>&quot;</span>)</span><br><span class="line"><span class="keyword">assert</span> d1 &lt; <span class="number">1e-12</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 实验2：完全逆序</span></span><br><span class="line">feat_rev = mlp_and_maxpool(pts[::-<span class="number">1</span>], W1, b1, W2, b2)</span><br><span class="line">d2 = np.<span class="built_in">abs</span>(feat - feat_rev).<span class="built_in">max</span>()</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;实验2 完全逆序后，全局特征最大差异          = <span class="subst">&#123;d2:<span class="number">.2</span>e&#125;</span>&quot;</span>)</span><br><span class="line"><span class="keyword">assert</span> d2 &lt; <span class="number">1e-12</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 对照：max/mean 是对称函数，但&quot;取第一个点&quot;不是——它的结果依赖输入顺序</span></span><br><span class="line">feat_first = np.maximum(pts[<span class="number">0</span>] @ W1 + b1, <span class="number">0</span>) @ W2 + b2   <span class="comment"># 只取第 1 个点</span></span><br><span class="line">feat_first_rev = np.maximum(pts[::-<span class="number">1</span>][<span class="number">0</span>] @ W1 + b1, <span class="number">0</span>) @ W2 + b2</span><br><span class="line">d3 = np.<span class="built_in">abs</span>(feat_first - feat_first_rev).<span class="built_in">max</span>()</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;对照  &#x27;取第一个点&#x27;在逆序后差异（非对称）      = <span class="subst">&#123;d3:<span class="number">.2</span>e&#125;</span>（≠0，会因顺序变化）&quot;</span>)</span><br><span class="line"><span class="keyword">assert</span> d3 &gt; <span class="number">1e-6</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;验证通过：max pooling 是对称函数，PointNet 输出与点的输入顺序无关&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>真实运行输出</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">实验1 随机置换 1024 个点后，全局特征最大差异 = 0.00e+00</span><br><span class="line">实验2 完全逆序后，全局特征最大差异          = 8.88e-16</span><br><span class="line">对照  &#x27;取第一个点&#x27;在逆序后差异（非对称）      = 2.44e+00（≠0，会因顺序变化）</span><br></pre></td></tr></table></figure>
+<p>实验 1 差异精确为 0（max 不看顺序）；实验 2 的 8.88e-16 是浮点累加顺序带来的机器精度噪声，物理上为 0；对照组证明<strong>不变性来自最后那步对称函数</strong>，而不是共享 MLP 本身——如果最后一步换成依赖顺序的操作，一切归零。</p>
+<hr />
+<h2 id="4-voxelnet-到-second为什么要稀疏卷积"><a class="markdownIt-Anchor" href="#4-voxelnet-到-second为什么要稀疏卷积"></a> 4. VoxelNet 到 SECOND：为什么要稀疏卷积</h2>
+<h3 id="41-voxelnet体素化-3d-卷积"><a class="markdownIt-Anchor" href="#41-voxelnet体素化-3d-卷积"></a> 4.1 VoxelNet：体素化 + 3D 卷积</h3>
+<p>VoxelNet（CVPR 2018，Zhou &amp; Tuzel, Apple）把点云切成小立方体（voxel，体素），每个体素内用一个小 PointNet（Voxel Feature Encoding，体素特征编码）聚成一个特征向量，然后在体素网格上做 <strong>3D 卷积</strong>。思路自然，但代价致命：检测范围 0.1m 体素化后是几百 × 几百 × 几十 的 3D 网格，<strong>3D 卷积核是立体的</strong>（如 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>3</mn><mo>×</mo><mn>3</mn><mo>×</mo><mn>3</mn></mrow><annotation encoding="application/x-tex">3×3×3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">3</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">3</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">3</span></span></span></span>），单层计算量比同尺寸 2D 卷积高一个&quot;深度&quot;维度，且绝大多数计算发生在空体素上——点云非空体素占比常不到 5%。</p>
+<h3 id="42-second稀疏卷积"><a class="markdownIt-Anchor" href="#42-second稀疏卷积"></a> 4.2 SECOND：稀疏卷积</h3>
+<p>SECOND（Sensors 2018, Yan et al.）的洞见：<strong>既然非空体素占比 &lt;5%，就只在非空体素上存数据、算卷积</strong>——这就是稀疏卷积（sparse convolution）。数据结构从稠密张量变成&quot;坐标 + 特征&quot;列表（hash 索引），卷积输出只计算&quot;输入感受野内有非空体素&quot;的输出位置。数学上与稠密卷积在非空位置完全等价，计算量却只与非空体素数成正比。SECOND 还实现了 GPU 友好的哈希查表，把 3D 卷积从&quot;跑不动&quot;变成&quot;能上车&quot;，后续所有 voxel-based 方法（Voxel R-CNN、CenterPoint 的 voxel 版本等）的 3D backbone 都建立在它之上。</p>
+<p>但稀疏卷积的 GPU 实现（不规则内存访问、动态索引）工程门槛高、在某些车载芯片上优化困难——这就给了&quot;干脆不用 3D 卷积&quot;的 PointPillars 上位的机会。</p>
+<hr />
+<h2 id="5-pointpillars-全流程拆解本阶段最重要"><a class="markdownIt-Anchor" href="#5-pointpillars-全流程拆解本阶段最重要"></a> 5. PointPillars 全流程拆解（本阶段最重要）</h2>
+<p>PointPillars（CVPR 2019，Lang et al., nuTonomy/Aptiv）的口号：<strong>把整个 3D 检测网络变成纯 2D 卷积</strong>。论文报告 KITTI 上 62 Hz 推理，比当时方法快 2-4 倍，且精度不降——这个速度让它至今仍是量产方案与部署基准的主力结构。</p>
+<h3 id="51-核心想法pillar-不切-z-的-voxel"><a class="markdownIt-Anchor" href="#51-核心想法pillar-不切-z-的-voxel"></a> 5.1 核心想法：pillar = 不切 z 的 voxel</h3>
+<p>体素化慢的根源是 z 维（高度）带来的 3D 卷积。PointPillars 干脆<strong>不沿 z 切分</strong>：只在 BEV 平面按 0.2~0.5m 的网格划分，每一竖条点云（从地面到天空的一根&quot;柱子&quot;）叫一个 pillar（柱体）。柱内用一个小 PointNet（PFN）聚特征，然后 scatter 回 2D 网格——得到一张&quot;伪图像（pseudo-image）&quot;，后面接标准 2D 卷积。三段式：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><munder><munder><mtext>点云</mtext><mo stretchy="true">⏟</mo></munder><mrow><mo stretchy="false">(</mo><mi>N</mi><mo separator="true">,</mo><mn>4</mn><mo stretchy="false">)</mo></mrow></munder><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>pillar 化 + PFN</mtext></mpadded></mover><munder><munder><mtext>伪图像</mtext><mo stretchy="true">⏟</mo></munder><mrow><mo stretchy="false">(</mo><mi>C</mi><mo separator="true">,</mo><mi>H</mi><mo separator="true">,</mo><mi>W</mi><mo stretchy="false">)</mo></mrow></munder><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>2D backbone</mtext></mpadded></mover><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>SSD 头</mtext></mpadded></mover><munder><munder><mtext>3D 框</mtext><mo stretchy="true">⏟</mo></munder><mrow><mn>7</mn><mtext>DoF</mtext></mrow></munder></mrow><annotation encoding="application/x-tex">\underbrace{\text{点云}}_{(N,4)} \xrightarrow{\text{pillar 化 + PFN}} \underbrace{\text{伪图像}}_{(C, H, W)} \xrightarrow{\text{2D backbone}} \xrightarrow{\text{SSD 头}} \underbrace{\text{3D 框}}_{7\text{DoF}}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:2.6561079999999997em;vertical-align:-1.548em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6833299999999998em;"><span style="top:-1.627em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.10903em;">N</span><span class="mpunct mtight">,</span><span class="mord mtight">4</span><span class="mclose mtight">)</span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.68333em;"><span class="svg-align" style="top:-2.352em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord cjk_fallback">点云</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.648em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.548em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1081079999999999em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">pillar </span><span class="mord cjk_fallback mtight">化</span><span class="mord mtight"> + PFN</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.6561079999999997em;vertical-align:-1.548em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6833299999999998em;"><span style="top:-1.627em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.07153em;">C</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight" style="margin-right:0.08125em;">H</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight" style="margin-right:0.13889em;">W</span><span class="mclose mtight">)</span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.68333em;"><span class="svg-align" style="top:-2.352em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord cjk_fallback">伪图像</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.648em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.548em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1081079999999999em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">2D backbone</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.01100000000000012em;"><span></span></span></span></span></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">SSD </span><span class="mord cjk_fallback mtight">头</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.009661em;vertical-align:-1.3263310000000001em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6833299999999998em;"><span style="top:-1.6736689999999999em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">7</span><span class="mord text mtight"><span class="mord mtight">DoF</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.68333em;"><span class="svg-align" style="top:-2.352em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord">3D </span><span class="mord cjk_fallback">框</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.648em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.3263310000000001em;"><span></span></span></span></span></span></span></span></span></span></p>
+<h3 id="52-逐步追踪-shape-链numpy-模拟"><a class="markdownIt-Anchor" href="#52-逐步追踪-shape-链numpy-模拟"></a> 5.2 逐步追踪 shape 链（NumPy 模拟）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"></span><br><span class="line">rng = np.random.default_rng(<span class="number">1</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 0. 模拟一片点云：1000 个点，x∈[0,51.2], y∈[-25.6,25.6]（KITTI 常用范围） ----------</span></span><br><span class="line">N = <span class="number">1000</span></span><br><span class="line">pts = np.empty((N, <span class="number">4</span>))</span><br><span class="line">pts[:, <span class="number">0</span>] = rng.uniform(<span class="number">0</span>, <span class="number">51.2</span>, N)        <span class="comment"># x 前</span></span><br><span class="line">pts[:, <span class="number">1</span>] = rng.uniform(-<span class="number">25.6</span>, <span class="number">25.6</span>, N)    <span class="comment"># y 左</span></span><br><span class="line">pts[:, <span class="number">2</span>] = rng.uniform(-<span class="number">1.7</span>, <span class="number">2.5</span>, N)      <span class="comment"># z 上</span></span><br><span class="line">pts[:, <span class="number">3</span>] = rng.uniform(<span class="number">0</span>, <span class="number">1</span>, N)           <span class="comment"># intensity</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 1. pillar 化：0.5m x 0.5m 网格 ----------</span></span><br><span class="line">pill = <span class="number">0.5</span></span><br><span class="line"><span class="comment"># 每个点落入哪个 pillar：ix = floor(x / 0.5) ∈ [0, 102)，iy 同理</span></span><br><span class="line">ix = np.floor(pts[:, <span class="number">0</span>] / pill).astype(<span class="built_in">int</span>)</span><br><span class="line">iy = np.floor((pts[:, <span class="number">1</span>] + <span class="number">25.6</span>) / pill).astype(<span class="built_in">int</span>)</span><br><span class="line">ix = np.clip(ix, <span class="number">0</span>, <span class="number">101</span>)     <span class="comment"># x=51.2 恰好落在边界上时 floor 会得到 102，夹回网格内</span></span><br><span class="line">iy = np.clip(iy, <span class="number">0</span>, <span class="number">101</span>)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;点云 shape: <span class="subst">&#123;pts.shape&#125;</span> -&gt; pillar 索引 shape: <span class="subst">&#123;ix.shape&#125;</span>&quot;</span>)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;x 方向 pillar 数 = 51.2/0.5 = <span class="subst">&#123;<span class="number">51.2</span> // pill:<span class="number">.0</span>f&#125;</span>, y 方向 = 51.2/0.5 = <span class="subst">&#123;<span class="number">51.2</span> // pill:<span class="number">.0</span>f&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line">pillar_id = ix * <span class="number">102</span> + iy                       <span class="comment"># 二维网格拉平成一维 ID</span></span><br><span class="line">uniq, inverse = np.unique(pillar_id, return_inverse=<span class="literal">True</span>)</span><br><span class="line">M = <span class="built_in">len</span>(uniq)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;非空 pillar 数 M = <span class="subst">&#123;M&#125;</span>（网格总数 102x102=<span class="subst">&#123;<span class="number">102</span>*<span class="number">102</span>&#125;</span>，稀疏！绝大多数是空的）&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 2. 每个非空 pillar：取最多 max_p 个点，补齐/填充 ----------</span></span><br><span class="line">max_p = <span class="number">16</span></span><br><span class="line">D = <span class="number">9</span>                                           <span class="comment"># 特征维度 x,y,z,r + 4 个 xc,yc,zc + x_off,y_off</span></span><br><span class="line">feats = np.zeros((M, max_p, D))</span><br><span class="line">feats[:] = np.nan                               <span class="comment"># 用 NaN 标记&quot;填充点&quot;，实际框架用 0 并靠 mask 屏蔽</span></span><br><span class="line"><span class="keyword">for</span> k <span class="keyword">in</span> <span class="built_in">range</span>(M):</span><br><span class="line">    idx = np.where(inverse == k)[<span class="number">0</span>][:max_p]     <span class="comment"># 超过 16 个点随机截断（论文用随机采样）</span></span><br><span class="line">    n = <span class="built_in">len</span>(idx)</span><br><span class="line">    center = pts[idx, :<span class="number">3</span>].mean(axis=<span class="number">0</span>)          <span class="comment"># pillar 内点集的算术中心 (xc,yc,zc)</span></span><br><span class="line">    feats[k, :n, <span class="number">0</span>:<span class="number">4</span>] = pts[idx]                <span class="comment"># x,y,z,r</span></span><br><span class="line">    feats[k, :n, <span class="number">4</span>:<span class="number">7</span>] = center                  <span class="comment"># xc,yc,zc（pillar 内广播，所有点相同）</span></span><br><span class="line">    feats[k, :n, <span class="number">7</span>:<span class="number">9</span>] = pts[idx, :<span class="number">2</span>] - center[:<span class="number">2</span>]  <span class="comment"># 点到中心的偏移 x-xc, y-yc</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;聚合后张量 shape: (M, max_p, D) = <span class="subst">&#123;feats.shape&#125;</span>   ← 论文中的 (D, P, N) 转置版&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 3. 简化版 PFN：线性层 + ReLU + 逐 pillar max ----------</span></span><br><span class="line"><span class="comment"># 固定随机权重模拟&quot;学到的&quot;线性层，把 D=9 维映到 C=8 维</span></span><br><span class="line">C = <span class="number">8</span></span><br><span class="line">valid = ~np.isnan(feats[..., <span class="number">0</span>])                <span class="comment"># (M, max_p) 有效点 mask</span></span><br><span class="line">f = np.nan_to_num(feats)                        <span class="comment"># (M, max_p, 9)</span></span><br><span class="line">W = rng.normal(<span class="number">0</span>, <span class="number">0.5</span>, size=(D, C)); b = rng.normal(<span class="number">0</span>, <span class="number">0.1</span>, size=C)</span><br><span class="line">h = np.maximum(f @ W + b, <span class="number">0</span>)                    <span class="comment"># (M, max_p, 8) 共享线性层（逐点）</span></span><br><span class="line">h[~valid] = <span class="number">0</span>                                   <span class="comment"># 填充点置 0，max 时被忽略</span></span><br><span class="line">pillar_feat = h.<span class="built_in">max</span>(axis=<span class="number">1</span>)                     <span class="comment"># (M, 8) 对点维 max —— 又是 PointNet 的对称函数！</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;PFN 输出 shape: (M, C) = <span class="subst">&#123;pillar_feat.shape&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 4. scatter 回网格：生成伪图像 ----------</span></span><br><span class="line">H, Wg = <span class="number">102</span>, <span class="number">102</span></span><br><span class="line">pseudo = np.zeros((C, H, Wg))</span><br><span class="line">gx, gy = uniq // <span class="number">102</span>, uniq % <span class="number">102</span>                <span class="comment"># 拉平 ID 还原成网格坐标</span></span><br><span class="line">pseudo[:, gx, gy] = pillar_feat.T               <span class="comment"># 只有 M 个位置非零</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;伪图像 shape: (C, H, W) = <span class="subst">&#123;pseudo.shape&#125;</span>  ← 之后直接接 2D 卷积 backbone&quot;</span>)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;伪图像非零通道占比: <span class="subst">&#123;(pseudo != <span class="number">0</span>).mean() * <span class="number">100</span>:<span class="number">.1</span>f&#125;</span>%（稀疏性延续到 2D 特征图）&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 断言 ----------</span></span><br><span class="line"><span class="keyword">assert</span> feats.shape[<span class="number">1</span>:] == (max_p, D)</span><br><span class="line"><span class="keyword">assert</span> pillar_feat.shape == (M, C)</span><br><span class="line"><span class="keyword">assert</span> pseudo.shape == (C, H, Wg)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;验证通过：点云 (N,4) -&gt; pillar 张量 (M,16,9) -&gt; PFN (M,8) -&gt; 伪图像 (8,102,102)&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>真实运行输出</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">点云 shape: (1000, 4) -&gt; pillar 索引 shape: (1000,)</span><br><span class="line">x 方向 pillar 数 = 51.2/0.5 = 102, y 方向 = 51.2/0.5 = 102</span><br><span class="line">非空 pillar 数 M = 961（网格总数 102x102=10404，稀疏！绝大多数是空的）</span><br><span class="line">聚合后张量 shape: (M, max_p, D) = (961, 16, 9)   ← 论文中的 (D, P, N) 转置版</span><br><span class="line">PFN 输出 shape: (M, C) = (961, 8)</span><br><span class="line">伪图像 shape: (C, H, W) = (8, 102, 102)  ← 之后直接接 2D 卷积 backbone</span><br><span class="line">伪图像非零通道占比: 3.5%（稀疏性延续到 2D 特征图）</span><br><span class="line">验证通过：点云 (N,4) -&gt; pillar 张量 (M,16,9) -&gt; PFN (M,8) -&gt; 伪图像 (8,102,102)</span><br></pre></td></tr></table></figure>
+<h3 id="53-逐模块解读"><a class="markdownIt-Anchor" href="#53-逐模块解读"></a> 5.3 逐模块解读</h3>
+<p><strong>（1）pillar 化</strong>：每个点用两次 <code>floor</code> 找到自己的柱子。整个检测范围 51.2m × 51.2m ÷ 0.5m = 102 × 102 = 10404 个格子，只有 M 个非空（真实点云里 M ≈ 1~2 万，占比 5~10%）。<strong>注意 pillar 数 M 是逐帧变化的</strong>——这就是 pillar 化与图像不同的地方：输入不是固定 shape，需要scatter/gather 这类&quot;不规则&quot;操作。</p>
+<p><strong>（2）增强特征 D=9</strong>：原始 4 维 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>x</mi><mo separator="true">,</mo><mi>y</mi><mo separator="true">,</mo><mi>z</mi><mo separator="true">,</mo><mi>r</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x, y, z, r)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mclose">)</span></span></span></span> 之外，补 5 维——柱内点集的算术中心 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><msub><mi>x</mi><mi>c</mi></msub><mo separator="true">,</mo><msub><mi>y</mi><mi>c</mi></msub><mo separator="true">,</mo><msub><mi>z</mi><mi>c</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x_c, y_c, z_c)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:-0.04398em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>（同柱内广播，让网络知道&quot;这根柱子在哪&quot;）与点到中心的偏移 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>x</mi><mo>−</mo><msub><mi>x</mi><mi>c</mi></msub><mo separator="true">,</mo><mi>y</mi><mo>−</mo><msub><mi>y</mi><mi>c</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x - x_c, y - y_c)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.7777700000000001em;vertical-align:-0.19444em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">c</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>（柱内相对几何）。这 9 维是论文明确给出的特征；缺了&quot;柱子在哪&quot;的信息，PFN 学到的特征将无法区分&quot;前排的车&quot;与&quot;后排的车&quot;。</p>
+<p><strong>（3）PFN（Pillar Feature Network）</strong>：每个 pillar 内部就是一个 mini PointNet——逐点过共享线性层（+BN+ReLU），再对点维做 max。每个 pillar 截断/填充到固定 <code>max_p</code>（论文 100，演示用 16）个点，保证张量形状规整可以拼 batch。<strong>第 3.2 节的置换不变性在此复用：柱内点序无关紧要。</strong></p>
+<p><strong>（4）scatter 回网格（生成伪图像）</strong>：把 M 个 pillar 特征按各自 (ix, iy) 放回 2D 网格，空格子填 0。从此&quot;无序点云&quot;变成了&quot;有空间的 2D 图像&quot;——CNN 的世界欢迎你。</p>
+<p><strong>（5）2D backbone + SSD 头</strong>：backbone 是自顶向下+自底向上的两路结构（top-down 分支逐级下采样提语义、second 分支上采样回原分辨率后逐级拼接，思想上就是第 1 周的 FPN），输出 3 个分辨率的 2D 特征图；检测头用单次多框检测器（Single Shot MultiBox Detector, SSD，ECCV 2016）风格：在每个网格位置放 anchor（BEV 里对每个类别放 0° 和 90° 两个朝向的框），直接回归修正量 + 类别。损失 = 分类（focal loss）+ 回归（Smooth L1，对 (x,y,z,w,l,h,yaw) 与方向分类）。</p>
+<p><strong>完整 shape 链</strong>（KITTI 典型配置，C=64）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mo stretchy="false">(</mo><mi>N</mi><mo separator="true">,</mo><mn>4</mn><mo stretchy="false">)</mo><mo>→</mo><mo stretchy="false">(</mo><mi>M</mi><mo separator="true">,</mo><mn>100</mn><mo separator="true">,</mo><mn>9</mn><mo stretchy="false">)</mo><mo>→</mo><mo stretchy="false">(</mo><mi>M</mi><mo separator="true">,</mo><mn>64</mn><mo stretchy="false">)</mo><mo>→</mo><mo stretchy="false">(</mo><mn>64</mn><mo separator="true">,</mo><mn>512</mn><mo separator="true">,</mo><mn>512</mn><mo stretchy="false">)</mo><mo>→</mo><mo>⋯</mo><mo>→</mo><mo stretchy="false">(</mo><mi>A</mi><mo>×</mo><mo stretchy="false">(</mo><mn>7</mn><mo>+</mo><mn>2</mn><mo>+</mo><mn>1</mn><mo stretchy="false">)</mo><mo separator="true">,</mo><mtext> </mtext><mn>512</mn><mo separator="true">,</mo><mtext> </mtext><mn>512</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(N, 4) \to (M, 100, 9) \to (M, 64) \to (64, 512, 512) \to \cdots \to (A \times (7+2+1),\ 512,\ 512)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">4</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.10903em;">M</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">9</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.10903em;">M</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">6</span><span class="mord">4</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">6</span><span class="mord">4</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">5</span><span class="mord">1</span><span class="mord">2</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">5</span><span class="mord">1</span><span class="mord">2</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.36687em;vertical-align:0em;"></span><span class="minner">⋯</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">7</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">5</span><span class="mord">1</span><span class="mord">2</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">5</span><span class="mord">1</span><span class="mord">2</span><span class="mclose">)</span></span></span></span></span></p>
+<p>最后一项是 SSD 头输出：每个 anchor 7 个框回归量 + 2 个朝向 bin 分类 + 1 个类别得分（A = 每位置 anchor 数）。</p>
+<h3 id="54-为什么量产选它"><a class="markdownIt-Anchor" href="#54-为什么量产选它"></a> 5.4 为什么量产选它</h3>
+<ul>
+<li><strong>全是 2D 卷积</strong>：不需要 SECOND 那套稀疏卷积 CUDA 算子，任何芯片的 2D conv 加速器都吃得很饱；</li>
+<li><strong>延迟低且稳定</strong>：62 Hz（论文数字）意味着 16ms 内出结果，余量给下游跟踪规划；</li>
+<li><strong>精度够用</strong>：在 BEV 感知的精度-速度曲线上，PointPillars 至今仍是最优性价比点之一。</li>
+</ul>
+<hr />
+<h2 id="6-anchor-free-heatmap-头centerpoint-的由来"><a class="markdownIt-Anchor" href="#6-anchor-free-heatmap-头centerpoint-的由来"></a> 6. anchor-free heatmap 头：CenterPoint 的由来</h2>
+<p>SSD 式 anchor 头继承自 2D，用起来有三大痛点：anchor 尺寸/朝向要按类别手工设计（卡车和行人差一个数量级）；正负样本分配逻辑繁琐；输出通道里 anchor 维度把计算翻倍。CenterPoint（CVPR 2021）把 2D 里的 CenterNet 思路搬进 BEV：<strong>不要 anchor，直接在 BEV 特征图上预测&quot;物体中心热图&quot;</strong>——每个类别一张热图，物体中心处激活值接近 1，背景接近 0；再在峰值位置回归出尺寸/朝向/高度/速度。柱内点序无关 → BEV 峰值处逐点解码，第 3 周完整拆解这条路线。</p>
+<blockquote>
+<p><strong>动手验证</strong>：把 5.2 代码里的 <code>max_p</code> 改成 4 再跑——非空 pillar 里超过 4 个点的柱会被截断，伪图像非零占比略降但 shape 链不变；把 <code>pill</code> 改成 0.2——网格变成 256×256，体会&quot;pillar 尺寸 = 空间分辨率 vs 计算量&quot;的权衡。</p>
+<p><strong>一句话总结</strong>：PointPillars = 把 PointNet 的对称函数用在&quot;每根竖柱&quot;上聚特征 → scatter 成伪图像 → 之后的一切都是成熟 2D 检测（FPN 思想 backbone + anchor 头）。</p>
+</blockquote>
+<hr />
+<h2 id="7-工程权衡与常见坑"><a class="markdownIt-Anchor" href="#7-工程权衡与常见坑"></a> 7. 工程权衡与常见坑</h2>
+<ol>
+<li><strong>z 范围与 pillar 高度信息丢失</strong>：pillar 不分高度，上下两辆车（如立交桥）在 BEV 上不可分；z 信息只存在于每个点的 z 值和 z_c 里。悬空/多层场景要回到 voxel-based。</li>
+<li><strong>max_p 截断偏差</strong>：地面点柱（一根柱里几百个地面点）被截到 max_p 后全是地面点，柱特征被地面主导——所以前处理普遍先做地面去除（Stage 1 工具），否则远处小目标特征被地面淹没。</li>
+<li><strong>坐标系转错</strong>：pillar 索引 <code>floor((y + y_min)/pill)</code> 里的 <code>y_min</code> 偏移项漏加，网格整体错位半个场景，loss 不收敛但报错却没有——第一排查项。</li>
+<li><strong>intensity 未归一化</strong>：不同雷达 intensity 量纲不同（0-1 / 0-255），训练推理不一致时 BEV 特征整体漂移。</li>
+<li><strong>验证 shape 链时 M 逐帧变化</strong>：拼 batch 时 pillar 数不同，需要 pad 或使用 scatter 算子——自研部署代码最常见崩溃点。</li>
+</ol>
+<hr />
+<h2 id="8-延伸思考题含解析"><a class="markdownIt-Anchor" href="#8-延伸思考题含解析"></a> 8. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：为什么 PointPillars 不需要稀疏卷积也不慢？<br />
+<strong>A</strong>：因为它把 3D 卷积整个绕开了：pillar 化 + PFN 是逐点小 MLP（计算量 O(N·D·C)），scatter 后的伪图像用稠密 2D 卷积（有成熟加速器）。代价是放弃了 z 维结构，用&quot;每点带 z 的特征&quot;弥补。</p>
+<p><strong>Q2</strong>：PFN 里如果用 mean 替换 max，会发生什么？<br />
+<strong>A</strong>：仍然是置换不变的（mean 也是对称函数），但柱特征变成&quot;柱内平均&quot;——一根柱里 100 个地面点 + 1 个车顶点，mean 几乎全是地面；max 则保住车顶的强响应。max 的特征选择能力是它胜出的原因。</p>
+<p><strong>Q3</strong>：pillar 大小从 0.5m 改成 0.2m，计算量和精度怎么变？<br />
+<strong>A</strong>：网格 102×102 → 256×256（BEV 特征图面积 6.25 倍，2D 卷积计算量同步涨）；空间分辨率提高，远处小目标（行人 0.5m 宽）不再与地面点共柱，精度通常提升。量产常在 0.2~0.4m 之间按算力预算选。</p>
+<p><strong>Q4</strong>：7 自由度里为什么没有 pitch/roll？<br />
+<strong>A</strong>：路面目标近似直立，pitch/roll 由地面法向确定（约 0），标注与回归它们的信息增益极低；个别场景（坡道）通过把坐标旋转到局部地面系隐式处理。9 自由度只在空中目标检测中需要。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 跑通置换不变性实验：max pooling 在随机置换/逆序下差异 &lt; 1e-12，对照&quot;取第一个点&quot;差异显著。</li>
+<li>[ ] 跑通 pillar 化模拟：<code>(1000,4) → (961,16,9) → (961,8) → (8,102,102)</code>，并理解每一步为什么是这个 shape。</li>
+<li>[ ] 把 <code>pill</code> 改 0.2、<code>max_p</code> 改 4 各跑一次，记录 shape 与非零占比变化。</li>
+<li>[ ] 能不看资料复述：对称函数是什么、稀疏卷积省在哪、PointPillars 三段式各模块的输入输出 shape。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6/" rel="tag"># 自动驾驶</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/05/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-2-%E4%BB%8E2D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B%E5%88%B03D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B-%E7%AC%AC3%E5%91%A8-CenterPoint%E4%B8%8E3D%E6%A3%80%E6%B5%8B%E7%AE%97%E6%B3%95%E8%B0%B1%E7%B3%BB/" rel="prev" title="第3周-CenterPoint与3D检测算法谱系">
+                  <i class="fa fa-angle-left"></i> 第3周-CenterPoint与3D检测算法谱系
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/05/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-2-%E4%BB%8E2D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B%E5%88%B03D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B-%E7%AC%AC1%E5%91%A8-2D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B%E5%9F%BA%E7%A1%80%E4%B8%8EYOLO%E6%BC%94%E8%BF%9B/" rel="next" title="第1周-2D目标检测基础与YOLO演进">
+                  第1周-2D目标检测基础与YOLO演进 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

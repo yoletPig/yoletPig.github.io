@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 2 周教程：双向信息增益与模态依赖分析  本周要回答的三个问题  &quot;伪多模态数据&quot;是什么？它对训练的实际危害有多大？ Image Necessity 与 Question Necessity 的公式怎么读？两次前向的具体实现逻辑是什么？ 双向增益如何组合成统一筛选公式？边界情况（负增益）怎么处理？   对应学习计划：第 2 周。交付物：Image Necessity 筛选">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第2周-双向信息增益与模态依赖">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC2%E5%91%A8-%E5%8F%8C%E5%90%91%E4%BF%A1%E6%81%AF%E5%A2%9E%E7%9B%8A%E4%B8%8E%E6%A8%A1%E6%80%81%E4%BE%9D%E8%B5%96/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 2 周教程：双向信息增益与模态依赖分析  本周要回答的三个问题  &quot;伪多模态数据&quot;是什么？它对训练的实际危害有多大？ Image Necessity 与 Question Necessity 的公式怎么读？两次前向的具体实现逻辑是什么？ 双向增益如何组合成统一筛选公式？边界情况（负增益）怎么处理？   对应学习计划：第 2 周。交付物：Image Necessity 筛选">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-05T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.562Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC2%E5%91%A8-%E5%8F%8C%E5%90%91%E4%BF%A1%E6%81%AF%E5%A2%9E%E7%9B%8A%E4%B8%8E%E6%A8%A1%E6%80%81%E4%BE%9D%E8%B5%96/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC2%E5%91%A8-%E5%8F%8C%E5%90%91%E4%BF%A1%E6%81%AF%E5%A2%9E%E7%9B%8A%E4%B8%8E%E6%A8%A1%E6%80%81%E4%BE%9D%E8%B5%96/","path":"2026/11/05/VLM & VLA-5-数据质量评价与高效筛选-第2周-双向信息增益与模态依赖/","title":"第2周-双向信息增益与模态依赖"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第2周-双向信息增益与模态依赖 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-2-%E5%91%A8%E6%95%99%E7%A8%8B%E5%8F%8C%E5%90%91%E4%BF%A1%E6%81%AF%E5%A2%9E%E7%9B%8A%E4%B8%8E%E6%A8%A1%E6%80%81%E4%BE%9D%E8%B5%96%E5%88%86%E6%9E%90"><span class="nav-number">1.</span> <span class="nav-text"> 第 2 周教程：双向信息增益与模态依赖分析</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E6%8A%8A%E7%9C%8B%E6%B2%A1%E7%9C%8B%E5%9B%BE%E5%8F%98%E6%88%90%E5%8F%AF%E6%B5%8B%E7%9A%84%E5%9B%A0%E6%9E%9C%E9%87%8F"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：把&quot;看没看图&quot;变成可测的因果量</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E6%A0%B9%E6%9C%AC%E7%9F%9B%E7%9B%BE%E5%A4%9A%E6%A8%A1%E6%80%81%E6%95%B0%E6%8D%AE%E7%9A%84%E5%90%8D%E5%AE%9E%E4%B8%8D%E7%AC%A6"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 根本矛盾：多模态数据的&quot;名实不符&quot;</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-image-necessity%E5%9B%BE%E5%83%8F%E7%9A%84%E5%9B%A0%E6%9E%9C%E8%B4%A1%E7%8C%AE"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 Image Necessity：图像的因果贡献</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-question-necessity%E9%97%AE%E9%A2%98%E5%AF%B9%E8%A7%86%E8%A7%89%E7%9A%84%E5%8F%96%E6%99%AF%E5%99%A8%E4%BD%9C%E7%94%A8"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 Question Necessity：问题对视觉的&quot;取景器&quot;作用</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#14-%E5%8F%8C%E5%90%91%E7%BB%84%E5%90%88%E7%BB%9F%E4%B8%80%E7%AD%9B%E9%80%89%E5%85%AC%E5%BC%8F"><span class="nav-number">1.1.4.</span> <span class="nav-text"> 1.4 双向组合：统一筛选公式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E6%9C%AC%E5%91%A8-mvpimage-necessity-%E7%AD%9B%E9%80%89%E6%A8%A1%E5%9D%97"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 本周 MVP：Image Necessity 筛选模块</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E4%B8%8E%E7%AC%AC-1-%E5%91%A8%E6%89%93%E5%88%86%E7%9A%84%E5%90%88%E5%B9%B6%E8%A7%86%E5%9B%BE"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 与第 1 周打分的合并视图</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E5%86%B3%E7%AD%96%E8%A1%A8%E7%A0%B4%E5%9D%8F%E5%9B%BE%E5%83%8F%E6%96%B9%E5%BC%8F%E4%B8%8E%E5%8F%82%E8%80%83%E6%A8%A1%E5%9E%8B"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 决策表：破坏图像方式与参考模型</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%B8%89%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 三个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC2%E5%91%A8-%E5%8F%8C%E5%90%91%E4%BF%A1%E6%81%AF%E5%A2%9E%E7%9B%8A%E4%B8%8E%E6%A8%A1%E6%80%81%E4%BE%9D%E8%B5%96/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第2周-双向信息增益与模态依赖 | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第2周-双向信息增益与模态依赖
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2026-11-05 12:00:00 / 修改时间：08:11:03" itemprop="dateCreated datePublished" datetime="2026-11-05T12:00:00+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89/" itemprop="url" rel="index"><span itemprop="name">Stage 5-数据质量评价与高效筛选</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>13 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-2-周教程双向信息增益与模态依赖分析"><a class="markdownIt-Anchor" href="#第-2-周教程双向信息增益与模态依赖分析"></a> 第 2 周教程：双向信息增益与模态依赖分析</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>&quot;伪多模态数据&quot;是什么？它对训练的实际危害有多大？</li>
+<li>Image Necessity 与 Question Necessity 的公式怎么读？两次前向的具体实现逻辑是什么？</li>
+<li>双向增益如何组合成统一筛选公式？边界情况（负增益）怎么处理？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 2 周。交付物：Image Necessity 筛选模块——对 500 条数据分别做 <code>(Image+Q)</code> 与 <code>(Noise/Black Image+Q)</code> 两次前向，计算 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mtext>Img</mtext></msub></mrow><annotation encoding="application/x-tex">\Delta L_{\text{Img}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Img</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span>，导出增益最大的前 30% 作为&quot;强视觉依赖子集&quot;。</p>
+<p><strong>文献标注</strong>（承接索引页）：“Bidirectional Information Gain” 作为专名未检索到唯一出处，但其机制（PPL/Loss 差值度量图像因果贡献）已被 Visual Information Gain（<em>Focusing Where Vision Matters: Selective Training for Large Vision Language Models via Visual Information Gain</em>，arXiv:2602.17186, ICML 2026，把同类指标用于样本级与 Token 级选择）、RAP 的因果差异估计器（<em>Truth in the Few: High-Value Data Selection for Efficient Multi-Modal Reasoning</em>，arXiv:2506.04755）等工作充分验证。本教程按机制严谨性编写，引用处标注已核实来源。</p>
+<hr />
+<h2 id="1-第一性原理把看没看图变成可测的因果量"><a class="markdownIt-Anchor" href="#1-第一性原理把看没看图变成可测的因果量"></a> 1. 第一性原理：把&quot;看没看图&quot;变成可测的因果量</h2>
+<h3 id="11-根本矛盾多模态数据的名实不符"><a class="markdownIt-Anchor" href="#11-根本矛盾多模态数据的名实不符"></a> 1.1 根本矛盾：多模态数据的&quot;名实不符&quot;</h3>
+<p>Stage 3 已经建立了诊断直觉：模型的&quot;语言先验捷径&quot;（不看图靠关键词蒙对）。把镜头掉转对准<strong>数据本身</strong>，会得到更惊心的结论：大量多模态训练样本<strong>根本不需要图</strong>——</p>
+<ul>
+<li>VQAv2 类数据集中，相当比例问题（&quot;这是什么颜色？“配一张大色块图；“这是室内还是室外？”）靠语言先验就能答对相当一部分——这正是 VQA v2（Goyal et al., CVPR 2017）专门用&quot;平衡对”（同类型问题一正一反配对）压缩语言偏置的原因；</li>
+<li>合成数据（Stage 4）放大了这一问题：教师模型按模板出题时，&quot;需要看图才能答&quot;不是硬约束；</li>
+<li>数学/推理类多模态数据里，题目文本往往自含全部信息，图只是装饰。</li>
+</ul>
+<p><strong>危害机制</strong>（Stage 2 的梯度视角）：这类样本训练时，视觉通道的梯度贡献趋近于零，而语言通道在持续被强化——<strong>等效于在做一次&quot;掺了图片噪声的纯文本 SFT&quot;</strong>。数据集名义上是多模态，训练动力学上却是文本主导。更隐蔽的是它污染评测解读：模型在这类数据上的&quot;高训练契合度&quot;与视觉能力毫无关系。</p>
+<h3 id="12-image-necessity图像的因果贡献"><a class="markdownIt-Anchor" href="#12-image-necessity图像的因果贡献"></a> 1.2 Image Necessity：图像的因果贡献</h3>
+<p>定义（学习计划公式，符号统一）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mtext>Img</mtext></msub><mo>=</mo><munder><munder><mrow><mi>L</mi><mo fence="false">(</mo><mi>A</mi><mo>∣</mo><mover accent="true"><mi>X</mi><mo>~</mo></mover><mo separator="true">,</mo><mtext> </mtext><mi>Q</mi><mo fence="false">)</mo></mrow><mo stretchy="true">⏟</mo></munder><mtext>无有效图像时的损失</mtext></munder><mo>−</mo><munder><munder><mrow><mi>L</mi><mo fence="false">(</mo><mi>A</mi><mo>∣</mo><mi>X</mi><mo separator="true">,</mo><mtext> </mtext><mi>Q</mi><mo fence="false">)</mo></mrow><mo stretchy="true">⏟</mo></munder><mtext>真实图像时的损失</mtext></munder></mrow><annotation encoding="application/x-tex">\Delta L_{\text{Img}} = \underbrace{L\big(A \mid \tilde{X},\ Q\big)}_{\text{无有效图像时的损失}} - \underbrace{L\big(A \mid X,\ Q\big)}_{\text{真实图像时的损失}}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Img</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.5965309999999997em;vertical-align:-1.6763409999999999em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9201899999999996em;"><span style="top:-1.3236590000000001em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">无有效图像时的损失</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9201899999999997em;"><span class="svg-align" style="top:-2.00199em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9201899999999998em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">X</span></span></span><span style="top:-3.6023300000000003em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.16666em;"><span class="mord">~</span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">Q</span><span class="mord"><span class="delimsizing size1">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9980100000000001em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.6763409999999999em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:2.5263409999999995em;vertical-align:-1.6763409999999999em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8499999999999999em;"><span style="top:-1.3236590000000001em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">真实图像时的损失</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.85em;"><span class="svg-align" style="top:-2.00199em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">Q</span><span class="mord"><span class="delimsizing size1">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9980100000000001em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.6763409999999999em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>其中 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover accent="true"><mi>X</mi><mo>~</mo></mover></mrow><annotation encoding="application/x-tex">\tilde{X}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9201899999999998em;vertical-align:0em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9201899999999998em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">X</span></span></span><span style="top:-3.6023300000000003em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.16666em;"><span class="mord">~</span></span></span></span></span></span></span></span></span></span> 是被破坏的图像（全黑图/纯噪声图/图序打乱）。读法：</p>
+<ul>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mtext>Img</mtext></msub><mo>≫</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\Delta L_{\text{Img}} \gg 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Img</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≫</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">0</span></span></span></span>：去掉图后模型对答案<strong>更意外</strong>了——图像携带了答案的信息，<strong>真多模态样本</strong>；</li>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mtext>Img</mtext></msub><mo>≈</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\Delta L_{\text{Img}} \approx 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Img</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">0</span></span></span></span>：有没有图模型对答案的意外程度不变——图像对预测<strong>零因果贡献</strong>，伪多模态样本；</li>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mtext>Img</mtext></msub><mo>&lt;</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\Delta L_{\text{Img}} &lt; 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Img</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">0</span></span></span></span>：有图反而更意外——可疑信号（图文矛盾/错标，或模型被图像误导），进入人工审查名单。</li>
+</ul>
+<p><strong>为什么这是因果度量而非相关度量</strong>：它做的是一次<strong>受控干预（intervention）</strong>——固定 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>Q</mi></mrow><annotation encoding="application/x-tex">Q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8777699999999999em;vertical-align:-0.19444em;"></span><span class="mord mathnormal">Q</span></span></span></span> 与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi></mrow><annotation encoding="application/x-tex">A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal">A</span></span></span></span>，只对 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>X</mi></mrow><annotation encoding="application/x-tex">X</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span></span></span></span> 施加扰动，观测损失的响应。这与 Stage 3 的 No-image Baseline 是<strong>同一个思想在数据侧的应用</strong>：Stage 3 用它诊断&quot;模型是否依赖视觉&quot;，本阶段用同样的差分给&quot;每条数据对视觉的依赖度&quot;定量。一个探针，两个视角。</p>
+<p><strong>实现选择的三个分叉点</strong>：</p>
+<ol>
+<li><strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover accent="true"><mi>X</mi><mo>~</mo></mover></mrow><annotation encoding="application/x-tex">\tilde{X}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9201899999999998em;vertical-align:0em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9201899999999998em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">X</span></span></span><span style="top:-3.6023300000000003em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.16666em;"><span class="mord">~</span></span></span></span></span></span></span></span></span></span> 的形态</strong>：全黑图（干净、可复现，推荐）/ 高斯噪声图（更强扰动，可能触发模型 OOD 行为）/ 图序打乱（保留图像统计特征，适合检验&quot;位置信息依赖&quot;）。全黑图与噪声图会给出略不同的分数分布——<strong>全流水线只用一种并归档</strong>。</li>
+<li><strong>loss 口径</strong>：与第 1 周一致，回答区 per-token 平均；<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>L</mi></mrow><annotation encoding="application/x-tex">\Delta L</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">Δ</span><span class="mord mathnormal">L</span></span></span></span> 是同一口径下的差。</li>
+<li><strong>批量对照</strong>：两次前向必须共享同一 batch 构成与 padding（只换 pixel_values），否则批处理差异混进差分。</li>
+</ol>
+<h3 id="13-question-necessity问题对视觉的取景器作用"><a class="markdownIt-Anchor" href="#13-question-necessity问题对视觉的取景器作用"></a> 1.3 Question Necessity：问题对视觉的&quot;取景器&quot;作用</h3>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mtext>Q</mtext></msub><mo>=</mo><mi>L</mi><mo fence="false">(</mo><mi>A</mi><mo>∣</mo><mi>X</mi><mo separator="true">,</mo><mtext> </mtext><mi mathvariant="normal">∅</mi><mo fence="false">)</mo><mo>−</mo><mi>L</mi><mo fence="false">(</mo><mi>A</mi><mo>∣</mo><mi>X</mi><mo separator="true">,</mo><mtext> </mtext><mi>Q</mi><mo fence="false">)</mo></mrow><annotation encoding="application/x-tex">\Delta L_{\text{Q}} = L\big(A \mid X,\ \varnothing\big) - L\big(A \mid X,\ Q\big)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Q</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.20001em;vertical-align:-0.35001em;"></span><span class="mord mathnormal">L</span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.20001em;vertical-align:-0.35001em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord amsrm">∅</span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.20001em;vertical-align:-0.35001em;"></span><span class="mord mathnormal">L</span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.20001em;vertical-align:-0.35001em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">Q</span><span class="mord"><span class="delimsizing size1">)</span></span></span></span></span></span></p>
+<p>其中 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">∅</mi></mrow><annotation encoding="application/x-tex">\varnothing</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.66334em;vertical-align:-0.08167em;"></span><span class="mord amsrm">∅</span></span></span></span> 是空问题（或通用指令如&quot;描述图片&quot;）。读法：固定真实图像，去掉具体问题后损失上升多少。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mtext>Q</mtext></msub><mo>≫</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\Delta L_{\text{Q}} \gg 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Q</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≫</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">0</span></span></span></span> 说明<strong>这个问题精准地&quot;取景&quot;了图中的特定信息</strong>——问题在引导模型利用视觉细节，而非泛泛看图。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mtext>Q</mtext></msub><mo>≈</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\Delta L_{\text{Q}} \approx 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Q</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">0</span></span></span></span> 的样本，问题与图像内容脱节（常见于模板拼凑的合成数据）。</p>
+<h3 id="14-双向组合统一筛选公式"><a class="markdownIt-Anchor" href="#14-双向组合统一筛选公式"></a> 1.4 双向组合：统一筛选公式</h3>
+<p>两维度量的四种组合画像：</p>
+<table>
+<thead>
+<tr>
+<th><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mtext>Img</mtext></msub></mrow><annotation encoding="application/x-tex">\Delta L_{\text{Img}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Img</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span></th>
+<th><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mtext>Q</mtext></msub></mrow><annotation encoding="application/x-tex">\Delta L_{\text{Q}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Q</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span></th>
+<th>画像</th>
+<th>决策</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>高</td>
+<td>高</td>
+<td><strong>强联动</strong>：问题引导视觉聚焦，图像支撑答案</td>
+<td><strong>最高价值，保留</strong></td>
+</tr>
+<tr>
+<td>高</td>
+<td>低</td>
+<td>图像主导：答案依赖图，但问题太泛（&quot;描述图片&quot;类）</td>
+<td>保留（对齐阶段价值高）</td>
+</tr>
+<tr>
+<td>低</td>
+<td>高</td>
+<td>问题主导：问题精准但答案不靠图（文本推理题配图）</td>
+<td>视配比保留（文本推理也有价值）</td>
+</tr>
+<tr>
+<td>低</td>
+<td>低</td>
+<td><strong>双无</strong>：图和问题都与答案弱相关</td>
+<td><strong>丢弃</strong></td>
+</tr>
+</tbody>
+</table>
+<p>工程化的统一打分（加权组合，权重按筛选目标调节）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>S</mi><mo>=</mo><mi>α</mi><mo>⋅</mo><mover accent="true"><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mtext>Img</mtext></msub></mrow><mo stretchy="true">^</mo></mover><mo>+</mo><mi>β</mi><mo>⋅</mo><mover accent="true"><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mtext>Q</mtext></msub></mrow><mo stretchy="true">^</mo></mover><mo separator="true">,</mo><mspace width="1em"/><mover accent="true"><mi mathvariant="normal">Δ</mi><mo stretchy="true">^</mo></mover><mo>=</mo><mtext>rank-normalize</mtext><mo stretchy="false">(</mo><mi mathvariant="normal">Δ</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">S = \alpha \cdot \widehat{\Delta L_{\text{Img}}} + \beta \cdot \widehat{\Delta L_{\text{Q}}}, \quad \widehat{\Delta} = \text{rank-normalize}(\Delta)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.44445em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.269438em;vertical-align:-0.286108em;"></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.98333em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Img</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span><span class="svg-align" style="top:-3.6833299999999998em;"><span class="pstrut" style="height:3em;"></span><span style="height:0.3em;"><svg width='100%' height='0.3em' viewBox='0 0 2364 300' preserveAspectRatio='none'><path d='M1181 0h2l1171 176c6 0 10 5 10 11l-2 23c-1 6-5 10
+-11 10h-1L1182 67 15 220h-1c-6 0-10-4-11-10l-2-23c-1-6 4-11 10-11z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.269438em;vertical-align:-0.286108em;"></span><span class="mord accent"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.98333em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Q</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span><span class="svg-align" style="top:-3.6833299999999998em;"><span class="pstrut" style="height:3em;"></span><span style="height:0.3em;"><svg width='100%' height='0.3em' viewBox='0 0 2364 300' preserveAspectRatio='none'><path d='M1181 0h2l1171 176c6 0 10 5 10 11l-2 23c-1 6-5 10
+-11 10h-1L1182 67 15 220h-1c-6 0-10-4-11-10l-2-23c-1-6 4-11 10-11z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.92333em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">Δ</span></span></span><span class="svg-align" style="top:-3.6833299999999998em;"><span class="pstrut" style="height:3em;"></span><span style="height:0.24em;"><svg width='100%' height='0.24em' viewBox='0 0 1062 239' preserveAspectRatio='none'><path d='M529 0h5l519 115c5 1 9 5 9 10 0 1-1 2-1 3l-4 22
+c-1 5-5 9-11 9h-2L532 67 19 159h-2c-5 0-9-4-11-9l-5-22c-1-6 2-12 8-13z'/></svg></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">rank-normalize</span></span><span class="mopen">(</span><span class="mord">Δ</span><span class="mclose">)</span></span></span></span></span></p>
+<p>（rank 归一化消除两个 Δ 量纲差异；SFT 阶段默认 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo>≥</mo><mi>β</mi></mrow><annotation encoding="application/x-tex">\alpha \geq \beta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.7719400000000001em;vertical-align:-0.13597em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span></span></span></span>，因为&quot;图像必要性&quot;是多模态训练的立身之本。）注意与第 1 周指标的<strong>流水线关系</strong>：NLL 筛&quot;这条数据本身好不好&quot;（第一步、最便宜），<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mtext>Img</mtext></msub></mrow><annotation encoding="application/x-tex">\Delta L_{\text{Img}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Img</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span> 筛&quot;这条数据配不配叫多模态&quot;（第二步、多两次前向），两者是串联闸门而非替代。</p>
+<hr />
+<h2 id="2-实现与验证"><a class="markdownIt-Anchor" href="#2-实现与验证"></a> 2. 实现与验证</h2>
+<h3 id="21-本周-mvpimage-necessity-筛选模块"><a class="markdownIt-Anchor" href="#21-本周-mvpimage-necessity-筛选模块"></a> 2.1 本周 MVP：Image Necessity 筛选模块</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">Image Necessity 筛选: 双前向计算 ΔL_Img, 导出强视觉依赖 Top 30%。</span></span><br><span class="line"><span class="string">运行方式: python stage5_week2_imgnecessity.py --data sft_500.jsonl \</span></span><br><span class="line"><span class="string">            --out visual_dependent.jsonl --frac 0.3</span></span><br><span class="line"><span class="string">依赖: torch, transformers, pillow</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> argparse</span><br><span class="line"><span class="keyword">import</span> json</span><br><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">from</span> PIL <span class="keyword">import</span> Image</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">make_black_image</span>(<span class="params">size=(<span class="params"><span class="number">448</span>, <span class="number">448</span></span>)</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;破坏图像: 全黑图 (可复现; 换噪声图时在此处替换)&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">return</span> Image.new(<span class="string">&quot;RGB&quot;</span>, size, (<span class="number">0</span>, <span class="number">0</span>, <span class="number">0</span>))</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="meta">@torch.no_grad()</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">answer_nll</span>(<span class="params">model, processor, rows, image_override, device</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;对一批样本计算回答区 per-token NLL; image_override 统一替换图像&quot;&quot;&quot;</span></span><br><span class="line">    texts, images = [], []</span><br><span class="line">    <span class="keyword">for</span> r <span class="keyword">in</span> rows:</span><br><span class="line">        msgs = [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: [</span><br><span class="line">            &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;image&quot;</span>&#125;, &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;text&quot;</span>, <span class="string">&quot;text&quot;</span>: r[<span class="string">&quot;question&quot;</span>]&#125;]&#125;]</span><br><span class="line">        prompt = processor.apply_chat_template(msgs, tokenize=<span class="literal">False</span>,</span><br><span class="line">                                               add_generation_prompt=<span class="literal">True</span>)</span><br><span class="line">        texts.append(prompt + r[<span class="string">&quot;answer&quot;</span>])</span><br><span class="line">        images.append(image_override(r[<span class="string">&quot;image&quot;</span>]))</span><br><span class="line">    inputs = processor(text=texts, images=images, return_tensors=<span class="string">&quot;pt&quot;</span>,</span><br><span class="line">                       padding=<span class="literal">True</span>).to(device)</span><br><span class="line">    labels = inputs[<span class="string">&quot;input_ids&quot;</span>].clone()</span><br><span class="line">    labels[inputs[<span class="string">&quot;attention_mask&quot;</span>] == <span class="number">0</span>] = -<span class="number">100</span></span><br><span class="line">    <span class="comment"># 回答区起点: 与第 1 周同构的两次渲染长度差</span></span><br><span class="line">    <span class="keyword">for</span> i, r <span class="keyword">in</span> <span class="built_in">enumerate</span>(rows):</span><br><span class="line">        msgs = [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: [</span><br><span class="line">            &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;image&quot;</span>&#125;, &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;text&quot;</span>, <span class="string">&quot;text&quot;</span>: r[<span class="string">&quot;question&quot;</span>]&#125;]&#125;]</span><br><span class="line">        p = processor.apply_chat_template(msgs, tokenize=<span class="literal">False</span>,</span><br><span class="line">                                          add_generation_prompt=<span class="literal">True</span>)</span><br><span class="line">        plen = <span class="built_in">len</span>(processor.tokenizer(p, add_special_tokens=<span class="literal">False</span>)[<span class="string">&quot;input_ids&quot;</span>])</span><br><span class="line">        labels[i, :plen] = -<span class="number">100</span></span><br><span class="line">    out = model(**inputs, labels=labels)</span><br><span class="line">    logits = out.logits[:, :-<span class="number">1</span>]</span><br><span class="line">    tgt = labels[:, <span class="number">1</span>:]</span><br><span class="line">    mask = tgt != -<span class="number">100</span></span><br><span class="line">    logp = torch.log_softmax(logits.<span class="built_in">float</span>(), dim=-<span class="number">1</span>)</span><br><span class="line">    tok_nll = -logp.gather(-<span class="number">1</span>, tgt.clamp(<span class="built_in">min</span>=<span class="number">0</span>).unsqueeze(-<span class="number">1</span>)).squeeze(-<span class="number">1</span>)</span><br><span class="line">    <span class="keyword">return</span> ((tok_nll * mask).<span class="built_in">sum</span>(<span class="number">1</span>) / mask.<span class="built_in">sum</span>(<span class="number">1</span>).clamp(<span class="built_in">min</span>=<span class="number">1</span>)).tolist()</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">rank_normalize</span>(<span class="params">xs</span>):</span><br><span class="line">    order = <span class="built_in">sorted</span>(<span class="built_in">range</span>(<span class="built_in">len</span>(xs)), key=<span class="keyword">lambda</span> i: xs[i])</span><br><span class="line">    rank = [<span class="number">0</span>] * <span class="built_in">len</span>(xs)</span><br><span class="line">    <span class="keyword">for</span> r, i <span class="keyword">in</span> <span class="built_in">enumerate</span>(order):</span><br><span class="line">        rank[i] = r / <span class="built_in">max</span>(<span class="number">1</span>, <span class="built_in">len</span>(xs) - <span class="number">1</span>)</span><br><span class="line">    <span class="keyword">return</span> rank</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    ap = argparse.ArgumentParser()</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--data&quot;</span>, required=<span class="literal">True</span>); ap.add_argument(<span class="string">&quot;--out&quot;</span>, default=<span class="string">&quot;visual_dependent.jsonl&quot;</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--frac&quot;</span>, <span class="built_in">type</span>=<span class="built_in">float</span>, default=<span class="number">0.3</span>); ap.add_argument(<span class="string">&quot;--bs&quot;</span>, <span class="built_in">type</span>=<span class="built_in">int</span>, default=<span class="number">8</span>)</span><br><span class="line">    args = ap.parse_args()</span><br><span class="line">    device = <span class="string">&quot;cuda&quot;</span> <span class="keyword">if</span> torch.cuda.is_available() <span class="keyword">else</span> <span class="string">&quot;cpu&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">from</span> transformers <span class="keyword">import</span> AutoProcessor, Qwen2VLForConditionalGeneration</span><br><span class="line">    MID = <span class="string">&quot;Qwen/Qwen2-VL-2B-Instruct&quot;</span>                 <span class="comment"># 参考模型 (与第1周归档绑定)</span></span><br><span class="line">    model = Qwen2VLForConditionalGeneration.from_pretrained(</span><br><span class="line">        MID, torch_dtype=torch.bfloat16).to(device).<span class="built_in">eval</span>()</span><br><span class="line">    processor = AutoProcessor.from_pretrained(MID)</span><br><span class="line"></span><br><span class="line">    rows = [json.loads(l) <span class="keyword">for</span> l <span class="keyword">in</span> <span class="built_in">open</span>(args.data)]</span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">len</span>(rows) &gt;= <span class="number">100</span>, <span class="string">&quot;样本过少&quot;</span></span><br><span class="line">    delta = [<span class="number">0.0</span>] * <span class="built_in">len</span>(rows)</span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">0</span>, <span class="built_in">len</span>(rows), args.bs):</span><br><span class="line">        batch = rows[i: i + args.bs]</span><br><span class="line">        nll_real = answer_nll(model, processor, batch, <span class="keyword">lambda</span> im: im, device)</span><br><span class="line">        nll_black = answer_nll(model, processor, batch,</span><br><span class="line">                               <span class="keyword">lambda</span> im: make_black_image(), device)</span><br><span class="line">        <span class="keyword">for</span> j, (a, b) <span class="keyword">in</span> <span class="built_in">enumerate</span>(<span class="built_in">zip</span>(nll_black, nll_real)):</span><br><span class="line">            delta[i + j] = a - b                       <span class="comment"># ΔL_Img = L(无图) - L(有图)</span></span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;\r<span class="subst">&#123;i + <span class="built_in">len</span>(batch)&#125;</span>/<span class="subst">&#123;<span class="built_in">len</span>(rows)&#125;</span>&quot;</span>, end=<span class="string">&quot;&quot;</span>)</span><br><span class="line"></span><br><span class="line">    ranked = rank_normalize(delta)</span><br><span class="line">    order = <span class="built_in">sorted</span>(<span class="built_in">range</span>(<span class="built_in">len</span>(rows)), key=<span class="keyword">lambda</span> i: -delta[i])</span><br><span class="line">    n_keep = <span class="built_in">int</span>(<span class="built_in">len</span>(rows) * args.frac)</span><br><span class="line">    keep = order[:n_keep]</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 断言: 关键行为 ----</span></span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">all</span>(d &gt; -<span class="number">1.0</span> <span class="keyword">for</span> d <span class="keyword">in</span> delta), <span class="string">&quot;ΔL 出现极端负值, 疑似实现错误&quot;</span></span><br><span class="line">    pos = <span class="built_in">sum</span>(d &gt; <span class="number">0.02</span> <span class="keyword">for</span> d <span class="keyword">in</span> delta) / <span class="built_in">len</span>(delta)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;\nΔL_Img: 中位=<span class="subst">&#123;<span class="built_in">sorted</span>(delta)[<span class="built_in">len</span>(delta)//<span class="number">2</span>]:<span class="number">.4</span>f&#125;</span> &quot;</span></span><br><span class="line">          <span class="string">f&quot;正增益占比=<span class="subst">&#123;pos:<span class="number">.1</span>%&#125;</span> (伪多模态嫌疑: <span class="subst">&#123;<span class="number">1</span>-pos:<span class="number">.1</span>%&#125;</span>)&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> <span class="number">0</span> &lt; pos &lt; <span class="number">1</span>, <span class="string">&quot;全正/全负的 ΔL 分布不符合真实数据的预期形态&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(args.out, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> keep:</span><br><span class="line">            f.write(json.dumps(&#123;**rows[i], <span class="string">&quot;delta_img&quot;</span>: <span class="built_in">round</span>(delta[i], <span class="number">4</span>),</span><br><span class="line">                                <span class="string">&quot;visual_gain_rank&quot;</span>: <span class="built_in">round</span>(ranked[i], <span class="number">4</span>)&#125;,</span><br><span class="line">                               ensure_ascii=<span class="literal">False</span>) + <span class="string">&quot;\n&quot;</span>)</span><br><span class="line">    <span class="comment"># 对照组导出 (供人工审查): ΔL 最低的 10%</span></span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(<span class="string">&quot;pseudo_multimodal_review.json&quot;</span>, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        json.dump([&#123;**rows[i], <span class="string">&quot;delta_img&quot;</span>: <span class="built_in">round</span>(delta[i], <span class="number">4</span>)&#125;</span><br><span class="line">                   <span class="keyword">for</span> i <span class="keyword">in</span> order[-<span class="built_in">len</span>(rows) // <span class="number">10</span>:]], f, ensure_ascii=<span class="literal">False</span>, indent=<span class="number">1</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;强视觉依赖 Top<span class="subst">&#123;args.frac:<span class="number">.0</span>%&#125;</span>: <span class="subst">&#123;n_keep&#125;</span> 条 -&gt; <span class="subst">&#123;args.out&#125;</span>&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;伪多模态审查名单 (ΔL 最低 10%): pseudo_multimodal_review.json&quot;</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    main()</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出形态</strong>：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">500/500</span><br><span class="line">ΔL_Img: 中位=0.0187 正增益占比=62.3% (伪多模态嫌疑: 37.7%)</span><br><span class="line">强视觉依赖 Top30%: 150 条 -&gt; visual_dependent.jsonl</span><br><span class="line">伪多模态审查名单 (ΔL 最低 10%): pseudo_multimodal_review.json</span><br></pre></td></tr></table></figure>
+<p><strong>人工验收</strong>：打开 <code>pseudo_multimodal_review.json</code> 抽查 20 条——预期是&quot;这什么颜色？/大的还是小的？&quot;之类语言先验可答的题目；若其中混有强视觉任务（OCR/定位）样本，优先怀疑全黑图替换后的 processor 处理或批 padding 错位。<strong>正增益占比 60~70% 是真实混合数据集的典型形态</strong>（VQAv2 类公开集的报告量级也在此附近）——如果你的数据集接近 100% 正增益，检查是否 ΔL 符号写反（常见 bug：<code>L(有图) - L(无图)</code>）。</p>
+<h3 id="22-与第-1-周打分的合并视图"><a class="markdownIt-Anchor" href="#22-与第-1-周打分的合并视图"></a> 2.2 与第 1 周打分的合并视图</h3>
+<p>把 <code>delta_img</code> 与第 1 周的 <code>nll/clip</code> 合并成一张四列打分表后，每条数据就有了完整画像。三个高价值交叉象限值得单独导出审查：</p>
+<ul>
+<li><strong>高 NLL + 低 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mrow><mi>I</mi><mi>m</mi><mi>g</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\Delta L_{Img}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.07847em;">I</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight" style="margin-right:0.03588em;">g</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span></strong>：模型觉得难、但难的不是图——文本推理或噪声，分流判断；</li>
+<li><strong>高 CLIP + 低 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mrow><mi>I</mi><mi>m</mi><mi>g</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\Delta L_{Img}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.07847em;">I</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight" style="margin-right:0.03588em;">g</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span></strong>：图文相关但答案不靠图——典型伪多模态；</li>
+<li><strong>低 CLIP + 高 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mrow><mi>I</mi><mi>m</mi><mi>g</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\Delta L_{Img}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.07847em;">I</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight" style="margin-right:0.03588em;">g</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span></strong>：CLIP 认为不相关但模型确实在用图——常是细粒度任务（CLIP 的已知弱区，第 1 周失效 3），<strong>不要误删</strong>。</li>
+</ul>
+<hr />
+<h2 id="3-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#3-工程权衡与失效模式"></a> 3. 工程权衡与失效模式</h2>
+<h3 id="31-决策表破坏图像方式与参考模型"><a class="markdownIt-Anchor" href="#31-决策表破坏图像方式与参考模型"></a> 3.1 决策表：破坏图像方式与参考模型</h3>
+<table>
+<thead>
+<tr>
+<th>决策点</th>
+<th>选项</th>
+<th>推荐</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover accent="true"><mi>X</mi><mo>~</mo></mover></mrow><annotation encoding="application/x-tex">\tilde{X}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9201899999999998em;vertical-align:0em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9201899999999998em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">X</span></span></span><span style="top:-3.6023300000000003em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.16666em;"><span class="mord">~</span></span></span></span></span></span></span></span></span></span> 形态</td>
+<td>全黑 / 噪声 / 图序打乱</td>
+<td>全黑（可复现、不引入额外 OOD 噪声）</td>
+</tr>
+<tr>
+<td>参考模型</td>
+<td>同底座 / 教师模型 / 更强模型</td>
+<td>与第 1 周 NLL 打分<strong>同一模型</strong>（保证指标间可比）</td>
+</tr>
+<tr>
+<td>ΔL 口径</td>
+<td>per-token 平均 / 整句和</td>
+<td>per-token（与第 1 周一致）</td>
+</tr>
+<tr>
+<td>截取策略</td>
+<td>Top-K by ΔL / 双阈值（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mrow><mi>I</mi><mi>m</mi><mi>g</mi></mrow></msub><mo>&gt;</mo><msub><mi>τ</mi><mn>1</mn></msub><mo>∧</mo><mi>S</mi><mo>&gt;</mo><msub><mi>τ</mi><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">\Delta L_{Img}&gt;\tau_1 \wedge S&gt;\tau_2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.07847em;">I</span><span class="mord mathnormal mtight">m</span><span class="mord mathnormal mtight" style="margin-right:0.03588em;">g</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.7055600000000001em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.1132em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">∧</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72243em;vertical-align:-0.0391em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.58056em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.1132em;">τ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.1132em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>）</td>
+<td>预算明确时 Top-K，质量底线优先时双阈值</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-三个代表性失效模式"><a class="markdownIt-Anchor" href="#32-三个代表性失效模式"></a> 3.2 三个代表性失效模式</h3>
+<p><strong>失效 1：全黑图&quot;太黑&quot;——ΔL 全体为负</strong></p>
+<ul>
+<li><strong>症状</strong>：<code>ΔL_Img</code> 几乎全为负值，&quot;强视觉依赖子集&quot;实际选出的是&quot;黑图下损失最高&quot;的奇怪样本。</li>
+<li><strong>根因</strong>：全黑图远超参考模型的训练分布（OOD），其对任何回答都给出高且无意义的损失；差分被 OOD 噪声主导而非&quot;图像信息量&quot;。</li>
+<li><strong>定位</strong>：统计 <code>L(黑图)</code> 的分布——若整体远高于 <code>L(真实图)</code> 且方差极小，即确认 OOD 支配。</li>
+<li><strong>修复</strong>：换更温和的破坏方式（高斯模糊/马赛克，保留低层统计特征）；或用&quot;图像 Token 置换&quot;（打乱视觉 Token 顺序，破坏语义保留分布）；或以&quot;两倍标准差内的图像 + 随机裁剪不匹配图&quot;做负对照。<strong>修复后必须重跑正增益占比 sanity check。</strong></li>
+</ul>
+<p><strong>失效 2：批内长度差异污染差分</strong></p>
+<ul>
+<li><strong>症状</strong>：同一批样本重跑两次，ΔL 数值不稳定（±0.05 量级抖动）。</li>
+<li><strong>根因</strong>：两次前向的 batch 构成或 padding 长度不同（DataLoader 顺序不确定），attention mask 与 position 差异传导进 loss。</li>
+<li><strong>定位</strong>：固定样本子集、固定顺序跑三遍，方差应 &lt;1e-4。</li>
+<li><strong>修复</strong>：两次前向强制同构 batch（同一 <code>rows</code> 切片、同一 collator 配置）；确定性 <code>torch.use_deterministic_algorithms</code> 可选。</li>
+</ul>
+<p><strong>失效 3：把 ΔL 当&quot;质量分&quot;单一使用</strong></p>
+<ul>
+<li><strong>症状</strong>：只用 ΔL Top 30% 训练，模型视觉依赖变强但通用能力/文本推理退化。</li>
+<li><strong>根因</strong>：ΔL 度量的是&quot;模态联动强度&quot;，不是&quot;数据质量&quot;——低 ΔL 的高质量文本推理数据同样有价值（Stage 2 的配比教训）。</li>
+<li><strong>定位</strong>：对照第 3 周三维矩阵看被删样本的 NLL 分布——若删掉的多是低 NLL 好样本，即确认误用。</li>
+<li><strong>修复</strong>：ΔL 只作为多模态占比的<strong>调节旋钮</strong>（配比中强视觉子集的权重），而非删除开关；与 NLL/CLIP 组合成第 3 周的矩阵视角。</li>
+</ul>
+<hr />
+<h2 id="4-延伸思考题"><a class="markdownIt-Anchor" href="#4-延伸思考题"></a> 4. 延伸思考题</h2>
+<ol>
+<li><strong>Token 级的 Image Necessity</strong>：样本级 ΔL 之外，把差分下钻到 Token 级（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msubsup><mi>L</mi><mtext>Img</mtext><mrow><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo></mrow></msubsup><mo>=</mo><msub><mi>L</mi><mi>t</mi></msub><mo stretchy="false">(</mo><mover accent="true"><mi>X</mi><mo>~</mo></mover><mo stretchy="false">)</mo><mo>−</mo><msub><mi>L</mi><mi>t</mi></msub><mo stretchy="false">(</mo><mi>X</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\Delta L_{\text{Img}}^{(t)} = L_t(\tilde{X}) - L_t(X)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.4744389999999998em;vertical-align:-0.4296389999999999em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em;"><span style="top:-2.4064690000000004em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Img</span></span></span></span></span><span style="top:-3.2198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight">t</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.4296389999999999em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.1701899999999998em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2805559999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9201899999999998em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">X</span></span></span><span style="top:-3.6023300000000003em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.16666em;"><span class="mord">~</span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2805559999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="mclose">)</span></span></span></span>），可以定位&quot;答案中哪些 Token 真正依赖图像&quot;（VIG 的工作正是此方向，arXiv:2602.17186）。设计一个用 Token 级 ΔL 增强训练的方案（如：对高依赖 Token 加权 loss），并讨论其与&quot;整条样本加权&quot;的优劣。</li>
+<li><strong>问题必要性的边界</strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mi>Q</mi></msub></mrow><annotation encoding="application/x-tex">\Delta L_Q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">Q</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span> 高是否总是好事？构造反例——一个 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>L</mi><mi>Q</mi></msub></mrow><annotation encoding="application/x-tex">\Delta L_Q</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">Q</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span> 极高但价值极低的样本形态。（提示：问题本身泄露答案的&quot;反问式&quot;样本——去掉问题后模型失去的是&quot;抄答案&quot;途径，不是视觉信息；这类样本 ΔL_Q 高、ΔL_Img 低，正是双向矩阵存在的意义。）</li>
+<li><strong>动手实验</strong>：对同一批数据分别用&quot;全黑图&quot;与&quot;高斯模糊图&quot;作为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover accent="true"><mi>X</mi><mo>~</mo></mover></mrow><annotation encoding="application/x-tex">\tilde{X}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9201899999999998em;vertical-align:0em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.9201899999999998em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">X</span></span></span><span style="top:-3.6023300000000003em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.16666em;"><span class="mord">~</span></span></span></span></span></span></span></span></span></span> 各跑一遍，画两条 ΔL 分布的对比直方图，并计算两种口径下 Top 30% 子集的 Jaccard 重合度。若重合度 &lt;70%，写一段&quot;破坏方式敏感性&quot;说明放入筛选报告——这是筛选结论稳健性的必要证据。</li>
+</ol>
+<hr />
+<p><em>下一篇：第 3 周：困难度矩阵、多样性与 Coreset 选择</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/05/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC3%E5%91%A8-%E5%9B%B0%E9%9A%BE%E5%BA%A6%E7%9F%A9%E9%98%B5%E4%B8%8ECoreset%E9%80%89%E6%8B%A9/" rel="prev" title="第3周-困难度矩阵与Coreset选择">
+                  <i class="fa fa-angle-left"></i> 第3周-困难度矩阵与Coreset选择
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/05/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC1%E5%91%A8-%E5%9F%BA%E7%A1%80%E6%8C%87%E6%A0%87NLL%E4%B8%8ECLIPScore/" rel="next" title="第1周-基础指标NLL与CLIPScore">
+                  第1周-基础指标NLL与CLIPScore <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

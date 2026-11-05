@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 1 周教程：TTS 全景与声码器演进  本周要回答的三个问题  从文本到波形要经过哪些环节？&quot;声学模型&quot;和&quot;声码器&quot;各管什么？ 梅尔谱 → 波形的&quot;一对多&quot;难题是什么？VAE &#x2F; Flow &#x2F; GAN 各自怎么破解？ HiFi-GAN 为什么能做到并行生成且高保真？它的判别器在挑什么毛病？   对应学习计划：第 1 周。交付物：画出">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第1周-TTS全景与声码器演进">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-5-%E8%AF%AD%E9%9F%B3%E7%94%9F%E6%88%90%E4%B8%8E%E9%9B%B6%E6%A0%B7%E6%9C%AC%E5%85%8B%E9%9A%86-%E7%AC%AC1%E5%91%A8-TTS%E5%85%A8%E6%99%AF%E4%B8%8E%E5%A3%B0%E7%A0%81%E5%99%A8%E6%BC%94%E8%BF%9B/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 1 周教程：TTS 全景与声码器演进  本周要回答的三个问题  从文本到波形要经过哪些环节？&quot;声学模型&quot;和&quot;声码器&quot;各管什么？ 梅尔谱 → 波形的&quot;一对多&quot;难题是什么？VAE &#x2F; Flow &#x2F; GAN 各自怎么破解？ HiFi-GAN 为什么能做到并行生成且高保真？它的判别器在挑什么毛病？   对应学习计划：第 1 周。交付物：画出">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-04T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.526Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="语音">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-5-%E8%AF%AD%E9%9F%B3%E7%94%9F%E6%88%90%E4%B8%8E%E9%9B%B6%E6%A0%B7%E6%9C%AC%E5%85%8B%E9%9A%86-%E7%AC%AC1%E5%91%A8-TTS%E5%85%A8%E6%99%AF%E4%B8%8E%E5%A3%B0%E7%A0%81%E5%99%A8%E6%BC%94%E8%BF%9B/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-5-%E8%AF%AD%E9%9F%B3%E7%94%9F%E6%88%90%E4%B8%8E%E9%9B%B6%E6%A0%B7%E6%9C%AC%E5%85%8B%E9%9A%86-%E7%AC%AC1%E5%91%A8-TTS%E5%85%A8%E6%99%AF%E4%B8%8E%E5%A3%B0%E7%A0%81%E5%99%A8%E6%BC%94%E8%BF%9B/","path":"2026/11/04/语音方向-5-语音生成与零样本克隆-第1周-TTS全景与声码器演进/","title":"第1周-TTS全景与声码器演进"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第1周-TTS全景与声码器演进 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-1-%E5%91%A8%E6%95%99%E7%A8%8Btts-%E5%85%A8%E6%99%AF%E4%B8%8E%E5%A3%B0%E7%A0%81%E5%99%A8%E6%BC%94%E8%BF%9B"><span class="nav-number">1.</span> <span class="nav-text"> 第 1 周教程：TTS 全景与声码器演进</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86tts-%E7%9A%84%E4%B8%A4%E6%AE%B5%E5%BC%8F%E5%88%86%E8%A7%A3"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：TTS 的两段式分解</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E4%BB%BB%E5%8A%A1%E5%AE%9A%E4%B9%89"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 任务定义</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E7%BB%8F%E5%85%B8%E4%B8%A4%E6%AE%B5%E5%BC%8F%E5%88%86%E8%A7%A3"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 经典两段式分解</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%A3%B0%E5%AD%A6%E6%A8%A1%E5%9E%8B%E6%BC%94%E8%BF%9Btacotron-fastspeech"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 声学模型演进：Tacotron → FastSpeech</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-tacotronseq2seq-attention"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 Tacotron（Seq2Seq + Attention）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-fastspeech%E9%9D%9E%E8%87%AA%E5%9B%9E%E5%BD%92-%E6%98%BE%E5%BC%8F%E6%97%B6%E9%95%BF"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 FastSpeech（非自回归 + 显式时长）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-fastspeech-2-%E7%9A%84%E6%94%B9%E8%BF%9B"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 FastSpeech 2 的改进</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%A3%B0%E7%A0%81%E5%99%A8%E6%A2%85%E5%B0%94%E8%B0%B1-%E6%B3%A2%E5%BD%A2%E7%9A%84%E4%B8%80%E5%AF%B9%E5%A4%9A%E9%9A%BE%E9%A2%98"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 声码器：梅尔谱 → 波形的&quot;一对多&quot;难题</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E9%9A%BE%E9%A2%98%E6%9C%AC%E8%B4%A8"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 难题本质</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%B8%89%E4%BB%A3%E5%A3%B0%E7%A0%81%E5%99%A8"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 三代声码器</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-hifi-gan-%E6%B7%B1%E6%8B%86"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. HiFi-GAN 深拆</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E7%94%9F%E6%88%90%E5%99%A8%E4%BB%8E%E6%A2%85%E5%B0%94%E8%B0%B1%E7%9B%B4%E6%8E%A5%E4%B8%8A%E9%87%87%E6%A0%B7%E5%87%BA%E6%B3%A2%E5%BD%A2"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 生成器：从梅尔谱直接&quot;上采样&quot;出波形</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E5%88%A4%E5%88%AB%E5%99%A8mpd-msd"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 判别器：MPD + MSD</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#43-%E6%8D%9F%E5%A4%B1"><span class="nav-number">1.4.3.</span> <span class="nav-text"> 4.3 损失</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-vits%E7%AB%AF%E5%88%B0%E7%AB%AF%E7%9A%84%E7%BB%9F%E4%B8%80"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. VITS：端到端的统一</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#51-%E5%8A%A8%E6%9C%BA"><span class="nav-number">1.5.1.</span> <span class="nav-text"> 5.1 动机</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#52-%E4%B8%89%E5%A4%A7%E7%BB%84%E4%BB%B6"><span class="nav-number">1.5.2.</span> <span class="nav-text"> 5.2 三大组件</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#53-vits-%E7%9A%84%E4%BC%98%E5%8A%BF%E4%B8%8E%E4%BB%A3%E4%BB%B7"><span class="nav-number">1.5.3.</span> <span class="nav-text"> 5.3 VITS 的优势与代价</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 实现与验证（交付核心）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#61-%E4%B8%A4%E6%9D%A1%E9%93%BE%E8%B7%AF%E5%90%88%E6%88%90%E5%AF%B9%E6%AF%94"><span class="nav-number">1.6.1.</span> <span class="nav-text"> 6.1 两条链路合成对比</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#62-%E4%B8%BB%E8%A7%82-mos-%E7%9B%B2%E8%AF%84%E4%BA%A4%E4%BB%98"><span class="nav-number">1.6.2.</span> <span class="nav-text"> 6.2 主观 MOS 盲评（交付）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#63-%E8%80%97%E6%97%B6%E5%8D%A0%E6%AF%94%E5%88%86%E6%9E%90"><span class="nav-number">1.6.3.</span> <span class="nav-text"> 6.3 耗时占比分析</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.7.</span> <span class="nav-text"> 7. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#71-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.7.1.</span> <span class="nav-text"> 7.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#72-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.7.2.</span> <span class="nav-text"> 7.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#8-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.8.</span> <span class="nav-text"> 8. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.9.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-5-%E8%AF%AD%E9%9F%B3%E7%94%9F%E6%88%90%E4%B8%8E%E9%9B%B6%E6%A0%B7%E6%9C%AC%E5%85%8B%E9%9A%86-%E7%AC%AC1%E5%91%A8-TTS%E5%85%A8%E6%99%AF%E4%B8%8E%E5%A3%B0%E7%A0%81%E5%99%A8%E6%BC%94%E8%BF%9B/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第1周-TTS全景与声码器演进 | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第1周-TTS全景与声码器演进
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-11-04 12:00:00" itemprop="dateCreated datePublished" datetime="2026-11-04T12:00:00+08:00">2026-11-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-05 08:11:03" itemprop="dateModified" datetime="2026-11-05T08:11:03+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91/" itemprop="url" rel="index"><span itemprop="name">语音方向</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91/Stage-5-%E8%AF%AD%E9%9F%B3%E7%94%9F%E6%88%90%E4%B8%8E%E9%9B%B6%E6%A0%B7%E6%9C%AC%E5%85%8B%E9%9A%86/" itemprop="url" rel="index"><span itemprop="name">Stage 5-语音生成与零样本克隆</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.6k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>17 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-1-周教程tts-全景与声码器演进"><a class="markdownIt-Anchor" href="#第-1-周教程tts-全景与声码器演进"></a> 第 1 周教程：TTS 全景与声码器演进</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>从文本到波形要经过哪些环节？&quot;声学模型&quot;和&quot;声码器&quot;各管什么？</li>
+<li>梅尔谱 → 波形的&quot;一对多&quot;难题是什么？VAE / Flow / GAN 各自怎么破解？</li>
+<li>HiFi-GAN 为什么能做到并行生成且高保真？它的判别器在挑什么毛病？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 1 周。交付物：画出「Tacotron2 + HiFi-GAN」与「VITS 端到端」两条推理链路对比图；用官方模型合成你的自我介绍，做主观 MOS 盲评。</p>
+<hr />
+<h2 id="1-第一性原理tts-的两段式分解"><a class="markdownIt-Anchor" href="#1-第一性原理tts-的两段式分解"></a> 1. 第一性原理：TTS 的两段式分解</h2>
+<h3 id="11-任务定义"><a class="markdownIt-Anchor" href="#11-任务定义"></a> 1.1 任务定义</h3>
+<p>给定文本，生成自然、流畅、（可选）像特定人的语音波形。难点在于：<strong>文本是离散、稀疏、无韵律信息的符号序列，而语音是连续、稠密、带丰富韵律的信号</strong>——两者之间隔着巨大的信息鸿沟。</p>
+<h3 id="12-经典两段式分解"><a class="markdownIt-Anchor" href="#12-经典两段式分解"></a> 1.2 经典两段式分解</h3>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>文本</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>文本前端</mtext></mpadded></mover><mtext>音素序列</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>声学模型</mtext></mpadded></mover><mtext>梅尔谱</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>声码器</mtext></mpadded></mover><mtext>波形</mtext></mrow><annotation encoding="application/x-tex">\text{文本} \xrightarrow{\text{文本前端}} \text{音素序列} \xrightarrow{\text{声学模型}} \text{梅尔谱} \xrightarrow{\text{声码器}} \text{波形}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">文本</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">文本前端</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">音素序列</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">声学模型</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">梅尔谱</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">声码器</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">波形</span></span></span></span></span></span></p>
+<ul>
+<li><strong>文本前端（Text Frontend）</strong>：文本 → 音素（G2P, grapheme-to-phoneme），处理多音字、数字、标点停顿；</li>
+<li><strong>声学模型（Acoustic Model）</strong>：音素 → 梅尔谱，决定&quot;说什么、什么韵律&quot;；</li>
+<li><strong>声码器（Vocoder）</strong>：梅尔谱 → 波形，决定&quot;音质&quot;。</li>
+</ul>
+<p>这个分解的意义：<strong>把难题拆开</strong>。声学模型专注内容与韵律，声码器专注音质，各自可独立优化。</p>
+<hr />
+<h2 id="2-声学模型演进tacotron-fastspeech"><a class="markdownIt-Anchor" href="#2-声学模型演进tacotron-fastspeech"></a> 2. 声学模型演进：Tacotron → FastSpeech</h2>
+<h3 id="21-tacotronseq2seq-attention"><a class="markdownIt-Anchor" href="#21-tacotronseq2seq-attention"></a> 2.1 Tacotron（Seq2Seq + Attention）</h3>
+<p>把 TTS 当序列到序列（Seq2Seq，源自机器翻译）：编码器读音素，解码器<strong>自回归</strong>逐帧生成梅尔谱。中间靠 <strong>attention（注意力）</strong> 对齐&quot;当前该生成第几帧、对应哪个音素&quot;。</p>
+<p><strong>这个机制在干什么</strong>：把翻译里的&quot;对齐源词与目标词&quot;搬到语音里——对齐&quot;第 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.65952em;vertical-align:0em;"></span><span class="mord mathnormal">i</span></span></span></span> 步解码 ↔ 第 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>j</mi></mrow><annotation encoding="application/x-tex">j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.85396em;vertical-align:-0.19444em;"></span><span class="mord mathnormal" style="margin-right:0.05724em;">j</span></span></span></span> 个音素&quot;。每一步解码时，解码器状态 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>s</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">s_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.58056em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">s</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 与编码器每个音素的隐状态 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>h</mi><mi>j</mi></msub></mrow><annotation encoding="application/x-tex">h_j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.980548em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span> 算一个匹配分数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>e</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">e_{ij}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.716668em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal">e</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span>，softmax 归一化成权重 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>α</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub></mrow><annotation encoding="application/x-tex">\alpha_{ij}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.716668em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:-0.0037em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span>，再对音素加权求和得到上下文向量 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mi>i</mi></msub><mo>=</mo><msub><mo>∑</mo><mi>j</mi></msub><msub><mi>α</mi><mrow><mi>i</mi><mi>j</mi></mrow></msub><msub><mi>h</mi><mi>j</mi></msub></mrow><annotation encoding="application/x-tex">c_i = \sum_j \alpha_{ij} h_j</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.58056em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.185818em;vertical-align:-0.43581800000000004em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:-0.0000050000000000050004em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.16195399999999993em;"><span style="top:-2.40029em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.43581800000000004em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:-0.0037em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span>。<strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">c_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.58056em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 回答的问题是：“现在生成这一帧，该重点参考哪个音素。”</strong> 权重应该沿时间轴单调移动（读完一个音素再读下一个）， Tacotron 系列用位置敏感 attention 等约束近似保证这一点。</p>
+<p><strong>问题</strong>：</p>
+<ul>
+<li>自回归慢（逐帧生成）；</li>
+<li>attention 对齐易出错 → 跳字、重复、漏字（权重突然跳回前面音素，就会&quot;复读&quot;；跨过某音素，就会&quot;漏读&quot;）；</li>
+<li>鲁棒性依赖 attention 的单调性约束。</li>
+</ul>
+<h3 id="22-fastspeech非自回归-显式时长"><a class="markdownIt-Anchor" href="#22-fastspeech非自回归-显式时长"></a> 2.2 FastSpeech（非自回归 + 显式时长）</h3>
+<p>FastSpeech 的突破：<strong>不让模型自己学对齐，而是显式预测每个音素的时长（duration）</strong>。</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>音素序列</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>时长预测器</mtext></mpadded></mover><mtext>每个音素的帧数</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>长度调节器展开</mtext></mpadded></mover><mtext>帧级序列</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>解码</mtext></mpadded></mover><mtext>梅尔谱</mtext></mrow><annotation encoding="application/x-tex">\text{音素序列} \xrightarrow{\text{时长预测器}} \text{每个音素的帧数} \xrightarrow{\text{长度调节器展开}} \text{帧级序列} \xrightarrow{\text{解码}} \text{梅尔谱}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">音素序列</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">时长预测器</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">每个音素的帧数</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">长度调节器展开</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">帧级序列</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">解码</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">梅尔谱</span></span></span></span></span></span></p>
+<p><strong>这条流水线在干什么</strong>：核心是中间那步&quot;<strong>长度调节器</strong>（Length Regulator）“——它把每个音素的表征<strong>原样复制 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>d</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">d_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 帧</strong>（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>d</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">d_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 是时长预测器给出的该音素占多少帧）。这样&quot;几个音素&quot;就变成了&quot;一串帧”，解码器可以<strong>一次性对所有帧并行出梅尔谱</strong>，不再一步一步走。</p>
+<p><strong>手算小例</strong>：文本 4 个音素 <code>w o ai n</code>，时长预测器输出 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>=</mo><mo stretchy="false">[</mo><mn>3</mn><mo separator="true">,</mo><mn>2</mn><mo separator="true">,</mo><mn>4</mn><mo separator="true">,</mo><mn>2</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">d = [3, 2, 4, 2]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">3</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">2</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">4</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">2</span><span class="mclose">]</span></span></span></span>（共 11 帧）。长度调节器把序列展开成：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">w w w | o o | ai ai ai ai | n n     （11 帧级表征，一次前向并行解码）</span><br></pre></td></tr></table></figure>
+<p>想加速/减速？给 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi></mrow><annotation encoding="application/x-tex">d</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">d</span></span></span></span> 乘个系数（0.8 倍速 = 每个时长缩短 20%），这就是 FastSpeech 系&quot;语速可控&quot;的来源。</p>
+<p><strong>关键</strong>：有了显式时长，就能<strong>并行</strong>生成所有帧（不用自回归），速度提升数十倍；对齐由时长决定，不再依赖脆弱的 attention。</p>
+<p><strong>时长标签哪来</strong>：第一代 FastSpeech 用预训练 teacher（Transformer-TTS/Tacotron2 系）的 attention 对齐提取——这是&quot;知识蒸馏&quot;思想在 TTS 的早期应用；但 teacher 自己对齐就会出错，标签是&quot;二手&quot;的。</p>
+<h3 id="23-fastspeech-2-的改进"><a class="markdownIt-Anchor" href="#23-fastspeech-2-的改进"></a> 2.3 FastSpeech 2 的改进</h3>
+<p>FastSpeech 2 直接放弃了 teacher 蒸馏：<strong>用 Montreal Forced Aligner（MFA）等强制对齐工具从 (文本, 真实音频) 对里提取精确时长</strong>，同时加入<strong>音高（pitch）预测器</strong>和<strong>能量（energy）预测器</strong>，把韵律也显式建模，可控性更强——这就是它的 <strong>variance adaptor（方差适配器）</strong>：时长、音高、能量三个&quot;可变量&quot;各由一个小预测器显式给出，训练时用真实值做标签，推理时用预测值。FastSpeech 2 是工业 TTS 的基石架构。</p>
+<hr />
+<h2 id="3-声码器梅尔谱-波形的一对多难题"><a class="markdownIt-Anchor" href="#3-声码器梅尔谱-波形的一对多难题"></a> 3. 声码器：梅尔谱 → 波形的&quot;一对多&quot;难题</h2>
+<h3 id="31-难题本质"><a class="markdownIt-Anchor" href="#31-难题本质"></a> 3.1 难题本质</h3>
+<p>梅尔谱只保留<strong>幅度</strong>，丢失了<strong>相位</strong>。而重建波形需要两者。更麻烦的是：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>同一个梅尔谱</mtext><mtext>  </mtext><mo>⟷</mo><mtext>  </mtext><mtext>无数种可能的波形</mtext></mrow><annotation encoding="application/x-tex">\text{同一个梅尔谱} \;\longleftrightarrow\; \text{无数种可能的波形}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69433em;vertical-align:-0.011em;"></span><span class="mord text"><span class="mord cjk_fallback">同一个梅尔谱</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⟷</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">无数种可能的波形</span></span></span></span></span></span></p>
+<p>因为相位不确定，且人耳对相位不敏感。这就是&quot;一对多&quot;问题——声码器的任务是<strong>从一对多的映射里，挑出一个听起来自然的波形</strong>。</p>
+<p><strong>类比</strong>：梅尔谱像一张&quot;黑白素描&quot;（只有轮廓和明暗），波形是&quot;全彩照片&quot;。上色方案有无穷多种，每种上色听起来（看起来）都成立——声码器就是要挑一种&quot;画得像真人画的&quot;的上色方案。</p>
+<blockquote>
+<p><strong>一句话总结</strong>：梅尔谱丢掉了相位，&quot;一谱多波&quot;不可逆转；声码器的本质是在这个不确定集合里，生成一个相位结构自然、骗过人耳（和判别器）的波形。</p>
+</blockquote>
+<h3 id="32-三代声码器"><a class="markdownIt-Anchor" href="#32-三代声码器"></a> 3.2 三代声码器</h3>
+<p><strong>第一代：Griffin-Lim（无模型）</strong></p>
+<p>迭代地从幅度谱估计相位（你在 Stage 1 第 2 周实现过）：先随机/零初始化相位 → FFT 变到频域 → 把幅度替换成已知的真实幅度 → 逆变换回时域，重复几十轮，相位会逐渐&quot;长&quot;出与幅度谱一致的结构。<strong>复杂度</strong>：每轮一次 FFT + 一次逆 FFT，即 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mi>N</mi><mi>log</mi><mo>⁡</mo><mi>N</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(N \log N)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop">lo<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mclose">)</span></span></span></span>（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span></span></span></span> 为样本数），常用 32–60 轮（<code>librosa</code> 默认 32），所以整段合成是&quot;秒级、CPU 可跑&quot;——比逐点自回归快得多，但音质差、有&quot;金属感&quot;伪影：它只会让相位&quot;自洽&quot;，<strong>完全无法建模真实语音的相位结构</strong>（比如辅音的相位突变）。</p>
+<p><strong>第二代：WaveNet（自回归）</strong></p>
+<p>DeepMind 的 WaveNet（van den Oord et al., 2016）用<strong>因果膨胀卷积逐采样点</strong>生成波形，把联合概率按链式法则拆成逐点条件概率：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>p</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>=</mo><munder><mo>∏</mo><mi>t</mi></munder><mi>p</mi><mo stretchy="false">(</mo><msub><mi>x</mi><mi>t</mi></msub><mo>∣</mo><msub><mi>x</mi><mrow><mo>&lt;</mo><mi>t</mi></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">p(x) = \prod_{t} p(x_t \mid x_{&lt;t})
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">p</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.3000100000000003em;vertical-align:-1.250005em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.050005em;"><span style="top:-1.8999949999999999em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span style="top:-3.0500049999999996em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∏</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.250005em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">p</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2805559999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2805559999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mrel mtight">&lt;</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.17737em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span></p>
+<p><strong>这个公式在干什么</strong>：它就是&quot;接龙&quot;——把&quot;生成一整段波形&quot;这个大问题拆成无数个小的&quot;下一个采样点是什么&quot;问题，每个小问题都用神经网络输出一个概率分布（对 16-bit 音频是 65536 类的分类），采样一个点，拼回条件里继续。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mo>∏</mo><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">\prod_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0497100000000001em;vertical-align:-0.29971000000000003em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:-0.0000050000000000050004em;">∏</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1308459999999999em;"><span style="top:-2.40029em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.29971000000000003em;"><span></span></span></span></span></span></span></span></span></span> 表示整段语音的概率 = 每个点条件概率的连乘。<strong>结果拿来做什么</strong>：训练时最大化 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>log</mi><mo>⁡</mo><mi>p</mi><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\log p(x)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">lo<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">p</span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span></span></span></span>（逐点交叉熵），推理时从左到右逐点采样。</p>
+<p>音质极好（首次把合成语音的自然度做到接近真人，MOS 差距缩小到 0.1–0.2 以内），但<strong>逐采样点自回归</strong>——16 kHz 意味着每秒要串行前向 16000 次，<strong>慢到无法实用</strong>（WaveNet 论文里是&quot;每秒音频需要数分钟合成&quot;量级）。</p>
+<p><strong>第三代：HiFi-GAN（并行 GAN）</strong></p>
+<p>HiFi-GAN 的突破：<strong>用 GAN 一次性并行生成整段波形</strong>，不再是逐点自回归。</p>
+<hr />
+<h2 id="4-hifi-gan-深拆"><a class="markdownIt-Anchor" href="#4-hifi-gan-深拆"></a> 4. HiFi-GAN 深拆</h2>
+<h3 id="41-生成器从梅尔谱直接上采样出波形"><a class="markdownIt-Anchor" href="#41-生成器从梅尔谱直接上采样出波形"></a> 4.1 生成器：从梅尔谱直接&quot;上采样&quot;出波形</h3>
+<p>生成器是一串<strong>转置卷积（上采样）</strong>，把低帧率的梅尔谱逐步放大到高采样率波形：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>梅尔谱</mtext><mo stretchy="false">(</mo><mn>80</mn><mo separator="true">,</mo><mi>T</mi><mo stretchy="false">)</mo><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>上采样</mtext></mpadded></mover><mo stretchy="false">(</mo><mn>1</mn><mo separator="true">,</mo><mi>T</mi><mo>×</mo><mtext>hop</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{梅尔谱} (80, T) \xrightarrow{\text{上采样}} (1, T \times \text{hop})
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.350331em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord cjk_fallback">梅尔谱</span></span><span class="mopen">(</span><span class="mord">8</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">上采样</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">hop</span></span><span class="mclose">)</span></span></span></span></span></p>
+<p><strong>这条流程在干什么</strong>：梅尔谱每帧对应波形里 hop 个采样点（HiFi-GAN 原配置 22.05 kHz、hop = 256），生成器就是要把每一帧&quot;摊开&quot;成 256 个波形点，再把这些点雕琢成真实振动的形状。<strong>类比</strong>：梅尔谱是&quot;分镜脚本&quot;（每秒 86 帧），波形是&quot;逐格动画&quot;（每秒 22050 张），转置卷积负责把脚本摊开成动画帧，MRF 负责给每帧补细节。</p>
+<p>配合 <strong>MRF（Multi-Receptive Field Fusion，多感受野融合）模块</strong>：每级上采样后接多个不同 (卷积核, 膨胀率) 组合的残差块（论文用核 3/7/11 × 膨胀 1/3/5），并行处理后逐元素相加取平均。<strong>为什么需要</strong>：小感受野抓&quot;即时波形纹理&quot;，大感受野抓&quot;跨周期的谐波结构&quot;，融合后细节与结构兼得——类似多焦距镜头同时拍清近景与远景。</p>
+<h3 id="42-判别器mpd-msd"><a class="markdownIt-Anchor" href="#42-判别器mpd-msd"></a> 4.2 判别器：MPD + MSD</h3>
+<p>HiFi-GAN 用<strong>两个判别器</strong>从不同角度挑毛病：</p>
+<ul>
+<li><strong>MPD（Multi-Period Discriminator，多周期判别器）</strong>：把一维波形按周期 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span> 重排成二维——即每 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span> 个采样点抽出一列，形状从 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>N</mi><mo separator="true">,</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(N,)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mclose">)</span></span></span></span> 变成 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>N</mi><mi mathvariant="normal">/</mi><mi>k</mi><mo separator="true">,</mo><mtext> </mtext><mi>k</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(N/k,\, k)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mclose">)</span></span></span></span>，用 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>∈</mo><mo stretchy="false">{</mo><mn>2</mn><mo separator="true">,</mo><mn>3</mn><mo separator="true">,</mo><mn>5</mn><mo separator="true">,</mo><mn>7</mn><mo separator="true">,</mo><mn>11</mn><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">k \in \{2, 3, 5, 7, 11\}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.73354em;vertical-align:-0.0391em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord">2</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">3</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">5</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">7</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">1</span><span class="mord">1</span><span class="mclose">}</span></span></span></span>（质数，避免不同 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span> 的切分方式重叠）。<strong>这个重排在干什么</strong>：语音波形有强周期性（基频与谐波）。重排后，<strong>同一列里的点恰好相隔 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span> 个采样点</strong>——如果 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span> 接近信号的真实周期，每一列的形态就高度相关，“周期对没对上&quot;在二维图上一眼看穿。<strong>手算小例</strong>：波形 <code>[1,2,3,4,5,6,7,8]</code> 按 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi><mo>=</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">k=2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">2</span></span></span></span> 重排得 <code>[[1,2],[3,4],[5,6],[7,8]]</code>，第一列全是奇数位置的点——判别器沿列扫一眼，就能判断&quot;这个周期规律自然吗”。</li>
+<li><strong>MSD（Multi-Scale Discriminator，多尺度判别器）</strong>：先对波形做 1/2、1/4 平均池化（下采样），再分别判别——粗尺度看整体包络与响度起伏，细尺度看局部纹理。</li>
+</ul>
+<p><strong>为什么两个</strong>：单一判别器有盲区。MPD 抓周期结构，MSD 抓多尺度波形形态，两者互补，逼生成器同时做好周期性和整体形态。</p>
+<h3 id="43-损失"><a class="markdownIt-Anchor" href="#43-损失"></a> 4.3 损失</h3>
+<p>HiFi-GAN（Kong et al., NeurIPS 2020, arXiv:2010.05646）的生成器受三项损失共同约束，各自回答不同的问题：</p>
+<p><strong>（1）对抗损失（adversarial）</strong>——“像不像真的？”：标准 GAN 判别器给分，生成器想让判别器把假话当真话。</p>
+<p><strong>（2）特征匹配损失（feature matching, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mtext>fm</mtext></msub></mrow><annotation encoding="application/x-tex">L_{\text{fm}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">fm</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>）</strong>——“中间特征像不像？”</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>L</mi><mtext>fm</mtext></msub><mo>=</mo><mfrac><mn>1</mn><mrow><mi>K</mi><mi>L</mi></mrow></mfrac><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>K</mi></munderover><munderover><mo>∑</mo><mrow><mi>l</mi><mo>=</mo><mn>1</mn></mrow><mi>L</mi></munderover><msub><mrow><mo fence="true">∥</mo><msubsup><mi>D</mi><mi>l</mi><mrow><mo stretchy="false">(</mo><mi>k</mi><mo stretchy="false">)</mo></mrow></msubsup><mo stretchy="false">(</mo><mi>x</mi><mo stretchy="false">)</mo><mo>−</mo><msubsup><mi>D</mi><mi>l</mi><mrow><mo stretchy="false">(</mo><mi>k</mi><mo stretchy="false">)</mo></mrow></msubsup><mo stretchy="false">(</mo><mi>G</mi><mo stretchy="false">(</mo><mi>s</mi><mo stretchy="false">)</mo><mo stretchy="false">)</mo><mo fence="true">∥</mo></mrow><mn>1</mn></msub></mrow><annotation encoding="application/x-tex">L_{\text{fm}} = \frac{1}{K L}\sum_{k=1}^{K}\sum_{l=1}^{L} \left\| D^{(k)}_l(x) - D^{(k)}_l(G(s)) \right\|_1
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">fm</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:3.1304490000000005em;vertical-align:-1.302113em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.32144em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07153em;">K</span><span class="mord mathnormal">L</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8283360000000002em;"><span style="top:-1.8478869999999998em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.0500049999999996em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.300005em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.07153em;">K</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.302113em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8283360000000002em;"><span style="top:-1.8478869999999998em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.01968em;">l</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.0500049999999996em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.300005em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">L</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.302113em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="minner"><span class="mopen"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.173975em;"><span style="top:-1.955985em;"><span class="pstrut" style="height:2.606em;"></span><span class="delimsizinginner delim-size1"><span>∥</span></span></span><span style="top:-2.556985em;"><span class="pstrut" style="height:2.606em;"></span><span class="delimsizinginner delim-size1"><span>∥</span></span></span><span style="top:-2.572975em;"><span class="pstrut" style="height:2.606em;"></span><span class="delimsizinginner delim-size1"><span>∥</span></span></span><span style="top:-3.173975em;"><span class="pstrut" style="height:2.606em;"></span><span class="delimsizinginner delim-size1"><span>∥</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.6500149999999999em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em;"><span style="top:-2.3986920000000005em;margin-left:-0.02778em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.01968em;">l</span></span></span><span style="top:-3.2198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3013079999999999em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em;"><span style="top:-2.3986920000000005em;margin-left:-0.02778em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.01968em;">l</span></span></span><span style="top:-3.2198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3013079999999999em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal">G</span><span class="mopen">(</span><span class="mord mathnormal">s</span><span class="mclose">)</span><span class="mclose">)</span><span class="mclose"><span class="delimsizing mult"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.173975em;"><span style="top:-1.955985em;"><span class="pstrut" style="height:2.606em;"></span><span class="delimsizinginner delim-size1"><span>∥</span></span></span><span style="top:-2.556985em;"><span class="pstrut" style="height:2.606em;"></span><span class="delimsizinginner delim-size1"><span>∥</span></span></span><span style="top:-2.572975em;"><span class="pstrut" style="height:2.606em;"></span><span class="delimsizinginner delim-size1"><span>∥</span></span></span><span style="top:-3.173975em;"><span class="pstrut" style="height:2.606em;"></span><span class="delimsizinginner delim-size1"><span>∥</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.6500149999999999em;"><span></span></span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:-0.2486069999999999em;"><span style="top:-2.0002850000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.6997149999999999em;"><span></span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>这个公式在干什么</strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msubsup><mi>D</mi><mi>l</mi><mrow><mo stretchy="false">(</mo><mi>k</mi><mo stretchy="false">)</mo></mrow></msubsup><mo stretchy="false">(</mo><mo>⋅</mo><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">D^{(k)}_l(\cdot)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.3461079999999999em;vertical-align:-0.30130799999999996em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">D</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0448em;"><span style="top:-2.398692em;margin-left:-0.02778em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.01968em;">l</span></span></span><span style="top:-3.2197999999999998em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.30130799999999996em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord">⋅</span><span class="mclose">)</span></span></span></span> 是第 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>k</mi></mrow><annotation encoding="application/x-tex">k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span> 个判别器的第 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>l</mi></mrow><annotation encoding="application/x-tex">l</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span></span></span></span> 层中间特征，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>K</mi></mrow><annotation encoding="application/x-tex">K</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.07153em;">K</span></span></span></span> 个判别器、每层取 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi></mrow><annotation encoding="application/x-tex">L</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal">L</span></span></span></span> 层；真实样本 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">x</span></span></span></span> 与生成样本 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>G</mi><mo stretchy="false">(</mo><mi>s</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">G(s)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">G</span><span class="mopen">(</span><span class="mord mathnormal">s</span><span class="mclose">)</span></span></span></span> 各过一遍判别器，算中间特征的 L1 距离。<strong>为什么需要它</strong>：只看判别器&quot;最终判真假&quot;的信号太稀疏（真/假二值），中间特征是稠密的多维&quot;体检报告&quot;，能更平稳地告诉生成器&quot;差在哪&quot;，显著稳定 GAN 训练。</p>
+<p><strong>（3）梅尔谱重建损失（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mtext>mel</mtext></msub></mrow><annotation encoding="application/x-tex">L_{\text{mel}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">mel</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>）</strong>——“内容对不对？”：把生成波形再转回梅尔谱，与输入条件 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi></mrow><annotation encoding="application/x-tex">s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">s</span></span></span></span> 做 L1 距离，保证声学一致（论文中权重 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>λ</mi><mo>=</mo><mn>45</mn></mrow><annotation encoding="application/x-tex">\lambda = 45</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">λ</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">4</span><span class="mord">5</span></span></span></span>，是三项里最大的，说明内容保真是硬约束）。</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>生成器总损失</mtext><mo>=</mo><msub><mi>L</mi><mtext>adv</mtext></msub><mo>+</mo><msub><mi>λ</mi><mtext>fm</mtext></msub><msub><mi>L</mi><mtext>fm</mtext></msub><mo>+</mo><msub><mi>λ</mi><mtext>mel</mtext></msub><msub><mi>L</mi><mtext>mel</mtext></msub></mrow><annotation encoding="application/x-tex">\text{生成器总损失} = L_{\text{adv}} + \lambda_{\text{fm}} L_{\text{fm}} + \lambda_{\text{mel}} L_{\text{mel}}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">生成器总损失</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">adv</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">λ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">fm</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">fm</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">λ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">mel</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">mel</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>三者的分工类比</strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mtext>mel</mtext></msub></mrow><annotation encoding="application/x-tex">L_{\text{mel}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">mel</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 管内容不出错（像老师布置的必答题），<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mtext>fm</mtext></msub></mrow><annotation encoding="application/x-tex">L_{\text{fm}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">fm</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 管细节纹理（像逐层质检），<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mtext>adv</mtext></msub></mrow><annotation encoding="application/x-tex">L_{\text{adv}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">adv</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 管整体听感自然（像最终盲评）。缺一项都会出问题：只有 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mtext>mel</mtext></msub></mrow><annotation encoding="application/x-tex">L_{\text{mel}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">mel</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 会糊，只有 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>L</mi><mtext>adv</mtext></msub></mrow><annotation encoding="application/x-tex">L_{\text{adv}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">adv</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 会幻觉。</p>
+<hr />
+<h2 id="5-vits端到端的统一"><a class="markdownIt-Anchor" href="#5-vits端到端的统一"></a> 5. VITS：端到端的统一</h2>
+<h3 id="51-动机"><a class="markdownIt-Anchor" href="#51-动机"></a> 5.1 动机</h3>
+<p>两段式（声学模型 + 声码器）要分别训练、误差累积。VITS（Kim et al., Kakao, arXiv:2106.06103, ICML 2022）把整个流程<strong>端到端</strong>进一个模型：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>文本</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>编码器</mtext></mpadded></mover><mtext>隐变量</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>Normalizing Flow</mtext></mpadded></mover><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>解码器（HiFi-GAN 式）</mtext></mpadded></mover><mtext>波形</mtext></mrow><annotation encoding="application/x-tex">\text{文本} \xrightarrow{\text{编码器}} \text{隐变量} \xrightarrow{\text{Normalizing Flow}} \xrightarrow{\text{解码器（HiFi-GAN 式）}} \text{波形}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">文本</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">编码器</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.1191079999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">隐变量</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1081079999999999em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Normalizing Flow</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">解码器（</span><span class="mord mtight">HiFi-GAN </span><span class="mord cjk_fallback mtight">式）</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">波形</span></span></span></span></span></span></p>
+<h3 id="52-三大组件"><a class="markdownIt-Anchor" href="#52-三大组件"></a> 5.2 三大组件</h3>
+<ol>
+<li><strong>VAE（变分自编码器）</strong>：把语音编码到隐变量空间 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>z</mi></mrow><annotation encoding="application/x-tex">z</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.04398em;">z</span></span></span></span>（后验编码器），再从 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>z</mi></mrow><annotation encoding="application/x-tex">z</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.04398em;">z</span></span></span></span> 解码波形；训练时从真实语音压出 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>z</mi></mrow><annotation encoding="application/x-tex">z</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.04398em;">z</span></span></span></span>（可见&quot;答案&quot;），推理时从&quot;文本条件下的先验分布&quot;采样 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>z</mi></mrow><annotation encoding="application/x-tex">z</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.04398em;">z</span></span></span></span>。<strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>z</mi></mrow><annotation encoding="application/x-tex">z</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.04398em;">z</span></span></span></span> 的作用</strong>：它是一个&quot;声学配方&quot;——承载音色、韵律、相位等梅尔谱装不下的连续细节。</li>
+<li><strong>Normalizing Flow（规范化流）</strong>：一个可逆变换，把&quot;文本条件下的简单先验（高斯）&quot;变换成与真实语音隐变量匹配的复杂分布。<strong>类比</strong>：把随手捏的橡皮泥（高斯）通过一套固定模具（可逆网络）捏成精确的目标形状——可逆性保证了训练时能算严格的似然。</li>
+<li><strong>MAS（Monotonic Alignment Search，单调对齐搜索）</strong>：训练时用动态规划在&quot;文本 ↔ 语音帧&quot;的所有<strong>单调</strong>对齐方式里，找出使数据似然最大的那一个，从而得到每个音素的时长——<strong>不需要外部时长标签</strong>（对比 FastSpeech 需要 teacher/MFA）。</li>
+</ol>
+<blockquote>
+<p><strong>一句话总结</strong>：VAE 负责&quot;隐空间里有东西&quot;，Flow 负责&quot;文本能指到对的隐变量&quot;，MAS 负责&quot;不靠别人标注也能学对齐&quot;——三者合起来，文本直通波形。</p>
+</blockquote>
+<h3 id="53-vits-的优势与代价"><a class="markdownIt-Anchor" href="#53-vits-的优势与代价"></a> 5.3 VITS 的优势与代价</h3>
+<ul>
+<li><strong>优势</strong>：端到端、对齐自学、音质高、自然度好；推理是<strong>全并行</strong>的（一次前向出整段波形），速度并不慢；</li>
+<li><strong>代价</strong>：训练复杂、调参难（GAN + VAE + Flow 三种目标要平衡），工程实现门槛高。</li>
+</ul>
+<p>VITS 是&quot;端到端零样本克隆&quot;的重要基座（GPT-SoVITS 的 SoVITS 模块、Bert-VITS2 等大量克隆系统都基于 VITS 改造）。</p>
+<hr />
+<h2 id="6-实现与验证交付核心"><a class="markdownIt-Anchor" href="#6-实现与验证交付核心"></a> 6. 实现与验证（交付核心）</h2>
+<h3 id="61-两条链路合成对比"><a class="markdownIt-Anchor" href="#61-两条链路合成对比"></a> 6.1 两条链路合成对比</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 以官方预训练模型为例（具体加载方式按各仓库文档）</span></span><br><span class="line"><span class="comment"># 链路 A：Tacotron2(声学) + HiFi-GAN(声码)</span></span><br><span class="line"><span class="comment"># 链路 B：VITS 端到端</span></span><br><span class="line"></span><br><span class="line">text = <span class="string">&quot;大家好，这是我的自我介绍，很高兴认识你们。&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 链路 A（伪代码骨架，实际按仓库 API）</span></span><br><span class="line"><span class="comment"># mel = tacotron2.synthesize(text)</span></span><br><span class="line"><span class="comment"># wav_a = hifigan(mel)</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 链路 B</span></span><br><span class="line"><span class="comment"># wav_b = vits.synthesize(text)</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> soundfile <span class="keyword">as</span> sf</span><br><span class="line"><span class="comment"># sf.write(&quot;tts_tacotron_hifigan.wav&quot;, wav_a, 22050)</span></span><br><span class="line"><span class="comment"># sf.write(&quot;tts_vits.wav&quot;, wav_b, 22050)</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;请分别用两个模型合成，保存为两个 wav 供盲评&quot;</span>)</span><br></pre></td></tr></table></figure>
+<h3 id="62-主观-mos-盲评交付"><a class="markdownIt-Anchor" href="#62-主观-mos-盲评交付"></a> 6.2 主观 MOS 盲评（交付）</h3>
+<p>MOS（Mean Opinion Score）：找 3 个朋友盲听打分（1-5 分，5 最好），不告知哪个是哪个模型。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 盲评表模板</span></span><br><span class="line">eval_sheet = <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">请为以下两条语音打分（1=差, 5=自然）：</span></span><br><span class="line"><span class="string">样本 1（随机顺序）: ____ 分</span></span><br><span class="line"><span class="string">样本 2（随机顺序）: ____ 分</span></span><br><span class="line"><span class="string">自然度、清晰度、有无机械感，各记一句评语。</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br></pre></td></tr></table></figure>
+<p><strong>记录维度</strong>：自然度、清晰度、机械感/伪影、整体偏好。这建立你的&quot;主观评价&quot;方法论。</p>
+<p><strong>评测指标工具箱</strong>（先混个脸熟，第 6-8 周会用）：</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>全称</th>
+<th>测什么</th>
+<th>主/客观</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MOS</td>
+<td>Mean Opinion Score</td>
+<td>综合自然度（1-5 分）</td>
+<td>主观（人听）</td>
+</tr>
+<tr>
+<td>CMOS</td>
+<td>Comparative MOS</td>
+<td>两版语音的<strong>相对</strong>优劣（-3~+3）</td>
+<td>主观</td>
+</tr>
+<tr>
+<td>SMOS</td>
+<td>Speaker similarity MOS</td>
+<td>与参考人<strong>像不像</strong></td>
+<td>主观</td>
+</tr>
+<tr>
+<td>UTMOS</td>
+<td>UTokyo MOS（Saeki et al., 2022）</td>
+<td>用神经模型<strong>预测</strong> MOS，免请人</td>
+<td>客观（代理）</td>
+</tr>
+<tr>
+<td>WER/CER</td>
+<td>Word/Character Error Rate</td>
+<td>合成语音喂 ASR 回识别，测<strong>可懂度</strong></td>
+<td>客观</td>
+</tr>
+</tbody>
+</table>
+<p>注意最后两行：TTS <strong>有</strong>客观指标——WER/CER 守&quot;咬字清晰&quot;的底线，UTMOS 代理自然度。但它们都不完全等于&quot;好听&quot;，所以<strong>主观 MOS 仍是 TTS 评测的金标准</strong>，主客观结合才是完整方法论。</p>
+<h3 id="63-耗时占比分析"><a class="markdownIt-Anchor" href="#63-耗时占比分析"></a> 6.3 耗时占比分析</h3>
+<p>对两条链路，分别记录各环节耗时：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">链路 A：文本前端 ___ms | 声学模型 ___ms | 声码器 ___ms</span><br><span class="line">链路 B：VITS 端到端 ___ms</span><br></pre></td></tr></table></figure>
+<p><strong>观察点</strong>：声学模型（尤其自回归）通常是链路 A 的瓶颈；VITS 端到端总耗时更短但单次前向更重。</p>
+<hr />
+<h2 id="7-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#7-工程权衡与失效模式"></a> 7. 工程权衡与失效模式</h2>
+<h3 id="71-权衡"><a class="markdownIt-Anchor" href="#71-权衡"></a> 7.1 权衡</h3>
+<ul>
+<li><strong>自回归 vs 非自回归</strong>：自回归质量高但慢（WaveNet/Tacotron）；非自回归快但需显式时长（FastSpeech）；</li>
+<li><strong>两段式 vs 端到端</strong>：两段式灵活可替换、但误差累积；端到端一致性好、但训练复杂；</li>
+<li><strong>采样率</strong>：22/24 kHz 音质好但算力高；16 kHz 省算力。</li>
+</ul>
+<h3 id="72-失效模式"><a class="markdownIt-Anchor" href="#72-失效模式"></a> 7.2 失效模式</h3>
+<ol>
+<li><strong>attention 对齐错误</strong>（Tacotron）：跳字、重复。修复：单调约束、位置敏感 attention。</li>
+<li><strong>时长预测不准</strong>（FastSpeech）：语速忽快忽慢。修复：更好的时长标签、韵律控制。</li>
+<li><strong>声码器伪影</strong>：GAN 生成出现噪声、嗡嗡声。修复：判别器增强、训练更久。</li>
+<li><strong>多音字/韵律平淡</strong>：文本前端或韵律建模不足。修复：G2P 词典、显式韵律控制。</li>
+</ol>
+<hr />
+<h2 id="8-延伸思考题含解析"><a class="markdownIt-Anchor" href="#8-延伸思考题含解析"></a> 8. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：梅尔谱 → 波形的一对多难题是什么？三种声码器各怎么破？<br />
+<strong>A</strong>：梅尔谱丢相位，同一谱对应无数波形。Griffin-Lim 迭代估相位（无模型、音质差）；WaveNet 自回归逐点生成（建模相位但慢）；HiFi-GAN 用 GAN 并行生成（判别器逼出自然波形，快且好）。</p>
+<p><strong>Q2</strong>：HiFi-GAN 为什么要 MPD + MSD 两个判别器？<br />
+<strong>A</strong>：MPD 按周期重排判别周期性结构（谐波、音高），MSD 在多尺度判别整体波形形态。单一判别器有盲区，两者互补逼生成器同时做好周期性与形态。</p>
+<p><strong>Q3</strong>：FastSpeech 为什么比 Tacotron 快且稳？<br />
+<strong>A</strong>：FastSpeech 用显式时长预测器替代 attention 对齐，能并行生成所有帧（非自回归），且对齐由时长决定不再依赖易错的 attention。速度数十倍提升、鲁棒性更好。</p>
+<p><strong>Q4</strong>：VITS 的 MAS 相比 FastSpeech 的时长标签，优势是什么？<br />
+<strong>A</strong>：FastSpeech 需要外部 teacher 的 attention 提取时长标签（依赖预训练、误差传递）；VITS 的 MAS 在训练中自动单调对齐，端到端自学，无需外部标签，更简洁一致。</p>
+<p><strong>Q5</strong>：为什么现代零样本克隆多基于 VITS 或 flow matching，而不是 FastSpeech+HiFi-GAN？<br />
+<strong>A</strong>：克隆需要注入参考音频的说话人信息并高保真重建音色。VITS/flow 的端到端隐变量/流建模更能表达说话人细节与多样性；FastSpeech 的确定性梅尔谱路线对音色细节表达受限。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 画「Tacotron2+HiFi-GAN」vs「VITS」两条链路对比图，标注各模块输入输出。</li>
+<li>[ ] 用官方模型合成你的自我介绍，保存两个 wav。</li>
+<li>[ ] 组织 3 人盲评，记录 MOS 与评语。</li>
+<li>[ ] 记录两条链路各环节耗时占比。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%AF%AD%E9%9F%B3/" rel="tag"># 语音</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-5-%E8%AF%AD%E9%9F%B3%E7%94%9F%E6%88%90%E4%B8%8E%E9%9B%B6%E6%A0%B7%E6%9C%AC%E5%85%8B%E9%9A%86-%E7%AC%AC2%E5%91%A8-LM-based-TTS%E4%B8%8E%E9%9F%B3%E9%A2%91%E7%A6%BB%E6%95%A3%E5%8C%96/" rel="prev" title="第2周-LM-based-TTS与音频离散化">
+                  <i class="fa fa-angle-left"></i> 第2周-LM-based-TTS与音频离散化
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-4-%E8%AF%B4%E8%AF%9D%E4%BA%BA%E5%88%86%E7%A6%BB%E4%B8%8E%E5%A3%B0%E7%BA%B9%E8%AF%86%E5%88%AB-%E7%AC%AC3%E5%91%A8-%E8%AF%B4%E8%AF%9D%E4%BA%BA%E5%88%86%E7%A6%BB%E8%81%9A%E7%B1%BB%E8%B7%AF%E7%BA%BF/" rel="next" title="第3周-说话人分离聚类路线">
+                  第3周-说话人分离聚类路线 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

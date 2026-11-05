@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 4 周教程：前沿推理系统——SGLang 与 Prefix Caching  本周要回答的三个问题  RadixAttention 用 Radix Tree 管 KV Cache，与 vLLM 的前缀共享有什么本质差异？ Chunked Prefill 与 Piggybacking 混合调度省的是什么&quot;空闲&quot;？ VLM 的图像 Token 波动对 batching 的冲击">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第4周-SGLang与PrefixCaching">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC4%E5%91%A8-SGLang%E4%B8%8EPrefixCaching/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 4 周教程：前沿推理系统——SGLang 与 Prefix Caching  本周要回答的三个问题  RadixAttention 用 Radix Tree 管 KV Cache，与 vLLM 的前缀共享有什么本质差异？ Chunked Prefill 与 Piggybacking 混合调度省的是什么&quot;空闲&quot;？ VLM 的图像 Token 波动对 batching 的冲击">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-05T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.574Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC4%E5%91%A8-SGLang%E4%B8%8EPrefixCaching/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC4%E5%91%A8-SGLang%E4%B8%8EPrefixCaching/","path":"2026/11/05/VLM & VLA-8-大模型与多模态训练系统及推理工程-第4周-SGLang与PrefixCaching/","title":"第4周-SGLang与PrefixCaching"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第4周-SGLang与PrefixCaching | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-4-%E5%91%A8%E6%95%99%E7%A8%8B%E5%89%8D%E6%B2%BF%E6%8E%A8%E7%90%86%E7%B3%BB%E7%BB%9Fsglang-%E4%B8%8E-prefix-caching"><span class="nav-number">1.</span> <span class="nav-text"> 第 4 周教程：前沿推理系统——SGLang 与 Prefix Caching</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86prefill-%E6%98%AF%E5%8F%AF%E4%BB%A5%E8%AE%B0%E4%BD%8F%E7%9A%84"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：Prefill 是可以&quot;记住&quot;的</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E6%A0%B9%E6%9C%AC%E7%9F%9B%E7%9B%BE%E7%9C%9F%E5%AE%9E%E8%B4%9F%E8%BD%BD%E7%9A%84%E5%89%8D%E7%BC%80%E9%87%8D%E5%A4%8D%E7%8E%87%E8%A2%AB%E5%BC%95%E6%93%8E%E8%A7%86%E8%80%8C%E4%B8%8D%E8%A7%81"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 根本矛盾：真实负载的前缀重复率被引擎视而不见</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-radixattention%E7%94%A8%E5%9F%BA%E6%95%B0%E6%A0%91%E8%AE%A9%E5%A4%8D%E7%94%A8%E8%87%AA%E5%8A%A8%E5%8F%91%E7%94%9F"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 RadixAttention：用基数树让复用&quot;自动&quot;发生</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-chunked-prefill-%E4%B8%8E-piggybacking%E5%A1%AB%E6%BB%A1-decode-%E7%9A%84%E7%A9%BA%E9%9A%99"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 Chunked Prefill 与 Piggybacking：填满 decode 的空隙</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#14-vlm-%E5%8A%A8%E6%80%81%E5%9B%BE%E5%83%8F-token-%E7%9A%84-batching-%E5%86%B2%E5%87%BB"><span class="nav-number">1.1.4.</span> <span class="nav-text"> 1.4 VLM 动态图像 Token 的 batching 冲击</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E9%83%A8%E7%BD%B2-sglang-%E5%B9%B6%E6%B5%8B-prefix-cache-hit-rate"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 部署 SGLang 并测 Prefix Cache Hit Rate</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E5%86%B3%E7%AD%96%E8%A1%A8vllm-vs-sglang-%E7%9A%84%E9%80%89%E5%9E%8B"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 决策表：vLLM vs SGLang 的选型</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%B8%89%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 三个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC4%E5%91%A8-SGLang%E4%B8%8EPrefixCaching/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第4周-SGLang与PrefixCaching | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第4周-SGLang与PrefixCaching
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2026-11-05 12:00:00 / 修改时间：08:11:03" itemprop="dateCreated datePublished" datetime="2026-11-05T12:00:00+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Stage 8-大模型与多模态训练系统及推理工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.7k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>10 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-4-周教程前沿推理系统sglang-与-prefix-caching"><a class="markdownIt-Anchor" href="#第-4-周教程前沿推理系统sglang-与-prefix-caching"></a> 第 4 周教程：前沿推理系统——SGLang 与 Prefix Caching</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>RadixAttention 用 Radix Tree 管 KV Cache，与 vLLM 的前缀共享有什么本质差异？</li>
+<li>Chunked Prefill 与 Piggybacking 混合调度省的是什么&quot;空闲&quot;？</li>
+<li>VLM 的图像 Token 波动对 batching 的冲击怎么治理？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 4 周。交付物：部署 SGLang 后端，在长 System Prompt / 重复图像的任务上测 Prefix Cache Hit Rate，证明多轮对话场景下相比传统引擎有 2 倍以上 Prefill 延迟缩减。</p>
+<hr />
+<h2 id="1-第一性原理prefill-是可以记住的"><a class="markdownIt-Anchor" href="#1-第一性原理prefill-是可以记住的"></a> 1. 第一性原理：Prefill 是可以&quot;记住&quot;的</h2>
+<h3 id="11-根本矛盾真实负载的前缀重复率被引擎视而不见"><a class="markdownIt-Anchor" href="#11-根本矛盾真实负载的前缀重复率被引擎视而不见"></a> 1.1 根本矛盾：真实负载的前缀重复率被引擎视而不见</h3>
+<p>推理负载的两段式成本结构（Stage 8 第 3 周已铺垫）：</p>
+<ul>
+<li><strong>Prefill</strong>（处理 prompt）：<strong>计算密集</strong>——一次前向过全部输入 Token；</li>
+<li><strong>Decode</strong>（逐 Token 生成）：<strong>访存密集</strong>——每步读全量权重。</li>
+</ul>
+<p>真实服务负载里 prompt 的重复率惊人：多轮对话的历史前缀（第 2 轮包含第 1 轮的全部）、固定 System Prompt（数百~数千 Token，所有请求相同）、Few-shot 示例、多模态场景里的<strong>同一张图被反复询问</strong>（Stage 4 第 5 周的&quot;同图多条数据&quot;合成、Stage 7 的 GRPO 同组 G 条 rollout 都是这个模式）。<strong>传统引擎对每个请求重新 prefill 全部前缀——这部分计算本来 100% 可以复用</strong>。</p>
+<h3 id="12-radixattention用基数树让复用自动发生"><a class="markdownIt-Anchor" href="#12-radixattention用基数树让复用自动发生"></a> 1.2 RadixAttention：用基数树让复用&quot;自动&quot;发生</h3>
+<p>vLLM 的自动前缀缓存（APC）是&quot;前缀哈希命中&quot;式：请求的 prompt 前缀逐段哈希，命中即复用——但只复用<strong>从头开始的连续公共前缀</strong>，且前缀集合是扁平的。</p>
+<p>SGLang 的 <strong>RadixAttention</strong>（论文 <em>Efficiently Programming Large Language Models using SGLang</em>, arXiv:2312.07104）把所有请求的 KV Cache 组织成一棵**基数树（Radix Tree）**放在 LRU 缓存里：</p>
+<ul>
+<li><strong>树的每条边</strong> = 一段 Token 序列的 KV 块；</li>
+<li><strong>路径</strong> = 一个具体前缀；两条请求在树上共享的路径深度 = 可复用的前缀长度；</li>
+<li><strong>任意分支级复用</strong>：请求 A 的前缀 <code>[S1][S2][S3]</code> 与请求 B 的 <code>[S1][S2][S5]</code> 共享 <code>[S1][S2]</code> 段的 KV——<strong>不需要从头对齐</strong>（vLLM APC 其实也支持块级前缀，但 Radix 树把&quot;复用&quot;建模成树操作，跨请求、跨轮次的渐增式共享（第 k 轮在树上是第 k-1 轮路径的延伸）更自然，多轮对话与 agent 多轮工具调用场景是 RadixAttention 的主场）；</li>
+<li><strong>LRU 淘汰</strong>：显存紧张时从叶子向根淘汰最久未用的分支；</li>
+<li><strong>零手工声明</strong>：不同于手动 prefix 声明方案，任何公共前缀被<strong>自动发现</strong>——这就是 SGLang 文档口径的&quot;automatic KV cache sharing&quot;。</li>
+</ul>
+<p><strong>与 Stage 4 的关系</strong>：Stage 4 用的是&quot;显式把公共前缀排前面&quot;吃 hash 命中；RadixAttention 把这个优化从&quot;prompt 工程纪律&quot;升级为&quot;系统自动行为&quot;——但<strong>prompt 排布纪律依然有效</strong>：公共段在前、变化段在后，树才能长得深。</p>
+<h3 id="13-chunked-prefill-与-piggybacking填满-decode-的空隙"><a class="markdownIt-Anchor" href="#13-chunked-prefill-与-piggybacking填满-decode-的空隙"></a> 1.3 Chunked Prefill 与 Piggybacking：填满 decode 的空隙</h3>
+<p>新请求到达时要 prefill 它的 prompt（计算密集，几百毫秒级）——这段时间同 batch 的 decode 请求<strong>必须等待</strong>（GPU 被 prefill 独占），表现为 TTFT 与 ITL 的互相拖累：</p>
+<ul>
+<li>新请求多 → decode 请求的 ITL 被拉长（排队等 prefill）；</li>
+<li>不让新请求插入 → prefill 的算力空转错失。</li>
+</ul>
+<p><strong>Chunked Prefill</strong>：把长 prompt 的 prefill 切成若干 chunk，与 decode 的 token 一起混进每个调度批次——prefill 不再一次性独占 GPU，而是分多次&quot;掺&quot;进 decode 批中。<strong>Piggybacking（搭车）</strong>：把 decode 搭在 prefill chunk 同批执行——该术语出自 Sarathi 论文（<em>Efficient LLM Inference by Piggybacking Decodes with Chunked Prefills</em>, arXiv:2308.16369），其续作 Sarathi-Serve（OSDI 2024）给出 stall-free 调度；SGLang 以 <code>--enable-mixed-chunk</code> 支持这一混合批，vLLM 也已默认支持 chunked prefill。合并效果（Sarathi-Serve 论文口径）：<strong>延迟（ITL 平滑度）与吞吐同时改善</strong>——因为 prefill（compute-bound）与 decode（memory-bound）的资源瓶颈互补，混批让 GPU 的算力与带宽同时被利用。这是第 2 周&quot;memory-bound vs compute-bound&quot;概念在调度层的直接应用。</p>
+<h3 id="14-vlm-动态图像-token-的-batching-冲击"><a class="markdownIt-Anchor" href="#14-vlm-动态图像-token-的-batching-冲击"></a> 1.4 VLM 动态图像 Token 的 batching 冲击</h3>
+<p>多模态请求的 prefill 长度不再由文本决定：同 batch 里 448px 图（~700 视觉 Token）与 1344px 图（~4000 视觉 Token，Stage 1 公式）的 prefill 开销差 6 倍。传统 static batching 按请求数组批 → batch 的 prefill 耗时由最大的图决定。治理策略（SGLang/vLLM 均在做）：<strong>token 级预算调度</strong>（batch 按&quot;总 Token 预算&quot;而非&quot;请求数&quot;组批）、图像 Token 的 prefix 复用（同图多问只编码一次——Stage 7 GRPO 的 G 条共享视觉前缀就是此机制）、大图请求分 chunk。</p>
+<hr />
+<h2 id="2-实现与验证"><a class="markdownIt-Anchor" href="#2-实现与验证"></a> 2. 实现与验证</h2>
+<h3 id="21-部署-sglang-并测-prefix-cache-hit-rate"><a class="markdownIt-Anchor" href="#21-部署-sglang-并测-prefix-cache-hit-rate"></a> 2.1 部署 SGLang 并测 Prefix Cache Hit Rate</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">pip install <span class="string">&quot;sglang[all]&quot;</span></span><br><span class="line"><span class="comment"># 部署 (多轮对话 + 长 system prompt 场景)</span></span><br><span class="line">python -m sglang.launch_server \</span><br><span class="line">  --model-path Qwen/Qwen2.5-7B-Instruct \</span><br><span class="line">  --context-length 16384 \</span><br><span class="line">  --mem-fraction-static 0.8</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">RadixAttention 命中率与 Prefill 缩减实测: 多轮对话场景 10 轮 × 累积上下文。</span></span><br><span class="line"><span class="string">运行方式: python stage8_week4_prefix.py --rounds 10</span></span><br><span class="line"><span class="string">依赖: openai, time</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"><span class="keyword">import</span> statistics <span class="keyword">as</span> st</span><br><span class="line"><span class="keyword">from</span> openai <span class="keyword">import</span> OpenAI</span><br><span class="line"></span><br><span class="line">client = OpenAI(base_url=<span class="string">&quot;http://localhost:30000/v1&quot;</span>, api_key=<span class="string">&quot;EMPTY&quot;</span>)</span><br><span class="line">SYS = <span class="string">&quot;You are a careful assistant. &quot;</span> + (<span class="string">&quot;Follow these detailed rules. &quot;</span> * <span class="number">120</span>)  <span class="comment"># ~1k+ Token 常驻前缀</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">chat_round</span>(<span class="params">history, question, system=SYS</span>):</span><br><span class="line">    msgs = [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;system&quot;</span>, <span class="string">&quot;content&quot;</span>: system&#125;] + history + [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: question&#125;]</span><br><span class="line">    t0 = time.perf_counter()</span><br><span class="line">    rsp = client.chat.completions.create(model=<span class="string">&quot;m&quot;</span>, messages=msgs,</span><br><span class="line">                                         max_tokens=<span class="number">64</span>, temperature=<span class="number">0</span>)</span><br><span class="line">    dt = time.perf_counter() - t0</span><br><span class="line">    history += [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: question&#125;,</span><br><span class="line">                &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;assistant&quot;</span>, <span class="string">&quot;content&quot;</span>: rsp.choices[<span class="number">0</span>].message.content&#125;]</span><br><span class="line">    <span class="keyword">return</span> dt</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>(<span class="params">rounds=<span class="number">10</span></span>):</span><br><span class="line">    <span class="comment"># 场景 A: 独立请求 (每轮系统前缀各不相同 -&gt; 无可复用前缀, 才是真&quot;冷启动&quot;;</span></span><br><span class="line">    <span class="comment"># 若都用同一个 SYS, 第 1 轮之后 Radix 树已缓存它, &quot;冷&quot;组也会命中, 基线被污染)</span></span><br><span class="line">    cold = [chat_round([], <span class="string">f&quot;问题 <span class="subst">&#123;i&#125;</span>: 请给出一个 20 以内的质数。&quot;</span>,</span><br><span class="line">                       system=SYS + <span class="string">f&quot;\n[variant <span class="subst">&#123;i&#125;</span>]&quot;</span>) <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(rounds)]</span><br><span class="line">    <span class="comment"># 场景 B: 多轮累积 (Radix 树上路径逐轮延伸, 命中前缀越来越长)</span></span><br><span class="line">    hot, hist = [], []</span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(rounds):</span><br><span class="line">        hot.append(chat_round(hist, <span class="string">f&quot;问题 <span class="subst">&#123;i&#125;</span>: 请给出一个 20 以内的质数。&quot;</span>))</span><br><span class="line">    speedup = [c / h <span class="keyword">for</span> c, h <span class="keyword">in</span> <span class="built_in">zip</span>(cold, hot)]</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;轮次:&quot;</span>, [<span class="string">f&quot;<span class="subst">&#123;i+<span class="number">1</span>&#125;</span>&quot;</span> <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(rounds)])</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;冷启动 ms:&quot;</span>, [<span class="string">f&quot;<span class="subst">&#123;c*<span class="number">1000</span>:<span class="number">.0</span>f&#125;</span>&quot;</span> <span class="keyword">for</span> c <span class="keyword">in</span> cold])</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;多轮命中 ms:&quot;</span>, [<span class="string">f&quot;<span class="subst">&#123;h*<span class="number">1000</span>:<span class="number">.0</span>f&#125;</span>&quot;</span> <span class="keyword">for</span> h <span class="keyword">in</span> hot])</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;单轮加速比: <span class="subst">&#123;[<span class="string">f&#x27;<span class="subst">&#123;s:<span class="number">.1</span>f&#125;</span>x&#x27;</span> <span class="keyword">for</span> s <span class="keyword">in</span> speedup]&#125;</span>&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;整体: 冷 <span class="subst">&#123;st.mean(cold)*<span class="number">1000</span>:<span class="number">.0</span>f&#125;</span>ms vs 热 <span class="subst">&#123;st.mean(hot)*<span class="number">1000</span>:<span class="number">.0</span>f&#125;</span>ms &quot;</span></span><br><span class="line">          <span class="string">f&quot;-&gt; <span class="subst">&#123;st.mean(cold)/st.mean(hot):<span class="number">.1</span>f&#125;</span>x prefill 缩减&quot;</span>)</span><br><span class="line">    <span class="comment"># 服务端命中率查询 (SGLang 暴露 internal metrics; 无则按加速比反推)</span></span><br><span class="line">    <span class="keyword">assert</span> st.mean(cold) / st.mean(hot) &gt; <span class="number">2.0</span>, <span class="string">&quot;多轮场景未达 2x, 检查前缀是否逐字节一致&quot;</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    main()</span><br></pre></td></tr></table></figure>
+<p><strong>预期形态</strong>（示意读数，本地 7B 口径，绝对值随硬件与引擎版本变，以实测为准）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">轮次: 1 2 3 4 5 6 7 8 9 10</span><br><span class="line">冷启动 ms: 312 308 315 309 311 314 307 310 313 309</span><br><span class="line">多轮命中 ms: 305 188 152 141 133 128 126 124 123 121</span><br><span class="line">单轮加速比: 1.0x 1.6x 2.1x 2.2x 2.3x 2.5x 2.4x 2.5x 2.5x 2.6x</span><br><span class="line">整体: 冷 311ms vs 热 144ms -&gt; 2.2x prefill 缩减</span><br></pre></td></tr></table></figure>
+<p>判读要点：第 1 轮必然冷（树为空）；从第 2 轮起命中 system+历史前缀，加速比随共享段占比上升——<strong>加速比上限 = 可复用前缀 Token / 总 prompt Token</strong>。多模态重复图像场景把图像 Token 也放进共享段，比例可更高。若第 2 轮后仍无加速，按失效模式 1 排查（前缀逐字节一致性）。</p>
+<hr />
+<h2 id="3-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#3-工程权衡与失效模式"></a> 3. 工程权衡与失效模式</h2>
+<h3 id="31-决策表vllm-vs-sglang-的选型"><a class="markdownIt-Anchor" href="#31-决策表vllm-vs-sglang-的选型"></a> 3.1 决策表：vLLM vs SGLang 的选型</h3>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>推荐</th>
+<th>依据</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>通用 API 服务、负载前缀随机</td>
+<td>vLLM（生态成熟、PagedAttention 基线强）</td>
+<td>前缀复用收益小</td>
+</tr>
+<tr>
+<td>多轮对话 / Agent 多轮工具调用</td>
+<td><strong>SGLang（RadixAttention 主场）</strong></td>
+<td>轮次路径延伸自动复用</td>
+</tr>
+<tr>
+<td>GRPO/VLM 同图多 rollout（Stage 7）</td>
+<td>两者均可（均支持前缀复用），SGLang 的多轮/VLM 支持活跃</td>
+<td>verl 两者后端都官方支持</td>
+</tr>
+<tr>
+<td>结构化输出 / 复杂调度需求</td>
+<td>SGLang（原生结构化生成、前沿特性迭代快）</td>
+<td>论文即以此起家</td>
+</tr>
+<tr>
+<td>生态与工具链稳定性优先</td>
+<td>vLLM</td>
+<td>社区与集成更广</td>
+</tr>
+</tbody>
+</table>
+<p>（verl 官方对两个后端均完整支持；Stage 7 已注明&quot;以你的负载实测为准&quot;——本篇给了实测方法。）</p>
+<h3 id="32-三个代表性失效模式"><a class="markdownIt-Anchor" href="#32-三个代表性失效模式"></a> 3.2 三个代表性失效模式</h3>
+<p><strong>失效 1：前缀&quot;看起来一样、字节不一样&quot;——命中率归零</strong></p>
+<ul>
+<li><strong>症状</strong>：多轮场景无加速；Radix 树退化成一根链。</li>
+<li><strong>根因</strong>：System Prompt 里有时间戳/请求 ID；或模板渲染在变量上插入了位置不同的空格/换行；或 chat 模板对 system 段做了动态拼接。</li>
+<li><strong>定位</strong>：dump 两次请求的最终 prompt 做逐字节 diff（Stage 1 周期的老朋友：第 4 阶段失效 2 的同源）。</li>
+<li><strong>修复</strong>：变量后置；前缀内容做规范化（去时间戳）；渲染层缓存模板实例。</li>
+</ul>
+<p><strong>失效 2：缓存被打爆——LRU 淘汰风暴</strong></p>
+<ul>
+<li><strong>症状</strong>：命中率随并发数上升而下降；长尾 TTFT 抖动。</li>
+<li><strong>根因</strong>：活跃前缀集合的 KV 总量超过缓存预算（<code>mem-fraction-static</code> 留给 KV 的部分），LRU 高频淘汰刚建的分支——刚复用就被挤出。</li>
+<li><strong>定位</strong>：SGLang 的 cache 命中/淘汰指标；估算活跃前缀集的 KV 足迹（第 1 周 KV 公式）。</li>
+<li><strong>修复</strong>：提预算；或业务侧收敛前缀多样性（System Prompt 归一化）；对超长历史做摘要压缩而非全量累积。</li>
+</ul>
+<p><strong>失效 3：Chunked Prefill 调参不当——ITL 反而恶化</strong></p>
+<ul>
+<li><strong>症状</strong>：开 chunked prefill 后 P99 ITL 比不开还差。</li>
+<li><strong>根因</strong>：chunk 过大 → 每批里的 prefill chunk 仍独占过久；chunk 过小 → 调度开销与碎片化。</li>
+<li><strong>定位</strong>：ITL 直方图分位数对比（p50/p99 分开看——chunked 的目标是 p99）。</li>
+<li><strong>修复</strong>：扫 chunk 预算参数（如 max_prefill_tokens）；混合批的 decode 配额保底。</li>
+</ul>
+<hr />
+<h2 id="4-延伸思考题"><a class="markdownIt-Anchor" href="#4-延伸思考题"></a> 4. 延伸思考题</h2>
+<ol>
+<li><strong>Radix 树的并发语义</strong>：两个请求同时到达、共享前缀但都未缓存——推理并发下如何避免重复 prefill 同一段？查 SGLang 的实现（prefix 段锁/单飞机制），对比 OS 的 page fault 去重（同页只加载一次）。</li>
+<li><strong>命中率的经济账</strong>：你的业务 System Prompt 1200 Token、平均对话 8 轮、每轮新增 300 Token。算 RadixAttention 相对无缓存的 prefill 计算节省比例（提示：总 prefill 从 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mo>∑</mo><mi>k</mi></msub><mo stretchy="false">(</mo><mn>1200</mn><mo>+</mo><mn>300</mn><mi>k</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\sum_k (1200 + 300k)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0497100000000001em;vertical-align:-0.29971000000000003em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:-0.0000050000000000050004em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1863979999999999em;"><span style="top:-2.40029em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.29971000000000003em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord">1</span><span class="mord">2</span><span class="mord">0</span><span class="mord">0</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">3</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mclose">)</span></span></span></span> 降到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1200</mn><mo>+</mo><mn>300</mn><mi>N</mi><mo>+</mo><mtext>新增</mtext></mrow><annotation encoding="application/x-tex">1200 + 300N + \text{新增}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mord">2</span><span class="mord">0</span><span class="mord">0</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord">3</span><span class="mord">0</span><span class="mord">0</span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">新增</span></span></span></span></span>，节省率随轮数增长）；再乘以你的 QPS 得出每日节省的 GPU 秒——把系统优化翻译成成本报告。</li>
+<li><strong>前瞻：分布式前缀缓存</strong>：多副本推理服务里，Radix 树是每副本独立的——同一前缀在不同副本上被重复 prefill。思考跨副本共享 KV（或路由到已缓存副本）的可行方案与一致性代价（这是当前推理系统研究的前沿话题，SGLang 社区有相关讨论）。</li>
+</ol>
+<hr />
+<p><em>下一篇：第 5 周：性能诊断 Profiling 与量化/内核加速</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/05/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC5%E5%91%A8-Profiling%E4%B8%8E%E9%87%8F%E5%8C%96%E5%8A%A0%E9%80%9F/" rel="prev" title="第5周-Profiling与量化加速">
+                  <i class="fa fa-angle-left"></i> 第5周-Profiling与量化加速
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/05/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC2%E5%91%A8-ZeRO%E4%B8%8EFlashAttention/" rel="next" title="第2周-ZeRO与FlashAttention">
+                  第2周-ZeRO与FlashAttention <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

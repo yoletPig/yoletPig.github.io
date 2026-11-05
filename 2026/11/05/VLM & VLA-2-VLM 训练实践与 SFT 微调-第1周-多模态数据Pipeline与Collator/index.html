@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 1 周教程：多模态数据格式与 Pipeline 深度构造  本周要回答的三个问题  一条图文对话样本，是怎么一步步变成 input_ids、attention_mask、pixel_values、labels 四件套的？ labels 里的 -100 掩码，边界到底画在哪些 Token 上？ 变长分辨率和多轮对话，是怎么被 Padding &#x2F; Packing 统一成一个 batch 的？">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第1周-多模态数据Pipeline与Collator">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-2-VLM%20%E8%AE%AD%E7%BB%83%E5%AE%9E%E8%B7%B5%E4%B8%8E%20SFT%20%E5%BE%AE%E8%B0%83-%E7%AC%AC1%E5%91%A8-%E5%A4%9A%E6%A8%A1%E6%80%81%E6%95%B0%E6%8D%AEPipeline%E4%B8%8ECollator/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 1 周教程：多模态数据格式与 Pipeline 深度构造  本周要回答的三个问题  一条图文对话样本，是怎么一步步变成 input_ids、attention_mask、pixel_values、labels 四件套的？ labels 里的 -100 掩码，边界到底画在哪些 Token 上？ 变长分辨率和多轮对话，是怎么被 Padding &#x2F; Packing 统一成一个 batch 的？">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-05T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.550Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-2-VLM%20%E8%AE%AD%E7%BB%83%E5%AE%9E%E8%B7%B5%E4%B8%8E%20SFT%20%E5%BE%AE%E8%B0%83-%E7%AC%AC1%E5%91%A8-%E5%A4%9A%E6%A8%A1%E6%80%81%E6%95%B0%E6%8D%AEPipeline%E4%B8%8ECollator/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-2-VLM%20%E8%AE%AD%E7%BB%83%E5%AE%9E%E8%B7%B5%E4%B8%8E%20SFT%20%E5%BE%AE%E8%B0%83-%E7%AC%AC1%E5%91%A8-%E5%A4%9A%E6%A8%A1%E6%80%81%E6%95%B0%E6%8D%AEPipeline%E4%B8%8ECollator/","path":"2026/11/05/VLM & VLA-2-VLM 训练实践与 SFT 微调-第1周-多模态数据Pipeline与Collator/","title":"第1周-多模态数据Pipeline与Collator"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第1周-多模态数据Pipeline与Collator | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-1-%E5%91%A8%E6%95%99%E7%A8%8B%E5%A4%9A%E6%A8%A1%E6%80%81%E6%95%B0%E6%8D%AE%E6%A0%BC%E5%BC%8F%E4%B8%8E-pipeline-%E6%B7%B1%E5%BA%A6%E6%9E%84%E9%80%A0"><span class="nav-number">1.</span> <span class="nav-text"> 第 1 周教程：多模态数据格式与 Pipeline 深度构造</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81-processor-%E4%B8%8E-collator-%E4%B8%A4%E7%BA%A7%E8%BD%AC%E6%8D%A2"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：为什么需要 Processor 与 Collator 两级转换</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E6%A0%B9%E6%9C%AC%E7%9F%9B%E7%9B%BE"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 根本矛盾</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E6%B6%88%E6%81%AF%E7%BB%93%E6%9E%84chatml-%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E5%8D%A0%E4%BD%8D"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 消息结构：ChatML 与多模态占位</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E4%B8%8E%E6%95%B0%E6%8D%AE%E6%B5%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 系统架构与数据流</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E4%BB%8E-json-%E5%88%B0%E6%89%B9%E6%AC%A1%E5%BC%A0%E9%87%8F%E7%9A%84%E5%AE%8C%E6%95%B4%E6%B5%81%E6%B0%B4%E7%BA%BF"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 从 JSON 到批次张量的完整流水线</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-image_grid_thw%E5%8F%98%E9%95%BF%E8%A7%86%E8%A7%89-token-%E7%9A%84%E5%85%83%E6%95%B0%E6%8D%AE%E6%96%B9%E6%A1%88"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 image_grid_thw：变长视觉 Token 的元数据方案</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-labels-%E6%8E%A9%E7%A0%81%E7%9A%84%E7%B2%BE%E7%A1%AE%E8%BE%B9%E7%95%8C"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 labels 掩码的精确边界</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#24-padding-%E4%B8%8E-packing-%E7%9A%84%E5%8F%96%E8%88%8D"><span class="nav-number">1.2.4.</span> <span class="nav-text"> 2.4 Padding 与 Packing 的取舍</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E6%9C%AC%E5%91%A8-mvp%E6%89%8B%E5%86%99-dataset-datacollator"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 本周 MVP：手写 Dataset + DataCollator</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%B8%8E-llama-factory-%E5%AE%9E%E7%8E%B0%E5%AF%B9%E7%85%A7%E6%BA%90%E7%A0%81%E7%A0%94%E8%AF%BB%E6%8C%87%E5%BC%95"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 与 LLaMA-Factory 实现对照（源码研读指引）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E6%A0%B8%E5%BF%83%E6%9D%83%E8%A1%A1"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 核心权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E4%B8%89%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 三个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/05/VLM%20&%20VLA-2-VLM%20%E8%AE%AD%E7%BB%83%E5%AE%9E%E8%B7%B5%E4%B8%8E%20SFT%20%E5%BE%AE%E8%B0%83-%E7%AC%AC1%E5%91%A8-%E5%A4%9A%E6%A8%A1%E6%80%81%E6%95%B0%E6%8D%AEPipeline%E4%B8%8ECollator/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第1周-多模态数据Pipeline与Collator | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第1周-多模态数据Pipeline与Collator
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2026-11-05 12:00:00 / 修改时间：08:11:03" itemprop="dateCreated datePublished" datetime="2026-11-05T12:00:00+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-2-VLM-%E8%AE%AD%E7%BB%83%E5%AE%9E%E8%B7%B5%E4%B8%8E-SFT-%E5%BE%AE%E8%B0%83/" itemprop="url" rel="index"><span itemprop="name">Stage 2-VLM 训练实践与 SFT 微调</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.3k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>16 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-1-周教程多模态数据格式与-pipeline-深度构造"><a class="markdownIt-Anchor" href="#第-1-周教程多模态数据格式与-pipeline-深度构造"></a> 第 1 周教程：多模态数据格式与 Pipeline 深度构造</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>一条图文对话样本，是怎么一步步变成 <code>input_ids</code>、<code>attention_mask</code>、<code>pixel_values</code>、<code>labels</code> 四件套的？</li>
+<li><code>labels</code> 里的 <code>-100</code> 掩码，边界到底画在哪些 Token 上？</li>
+<li>变长分辨率和多轮对话，是怎么被 Padding / Packing 统一成一个 batch 的？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 1 周。交付物：手写 <code>Dataset</code> + <code>DataCollator</code>，加载 10 条自定义图文 JSON，输出模型可用的四件套并用断言验证掩码正确。</p>
+<p><strong>源码路径勘误</strong>：学习计划写的 <code>src/llamafactory/data/collator/</code> 实际是单文件 <a target="_blank" rel="noopener" href="https://github.com/hiyouga/LLaMA-Factory/blob/main/src/llamafactory/data/collator.py"><code>src/llamafactory/data/collator.py</code></a>（已核实 main 分支）；多模态 Processor 组装逻辑在 <a target="_blank" rel="noopener" href="https://github.com/hiyouga/LLaMA-Factory/tree/main/src/llamafactory/data/processor"><code>data/processor/</code></a> 目录与 <a target="_blank" rel="noopener" href="https://github.com/hiyouga/LLaMA-Factory/blob/main/src/llamafactory/data/mm_plugin.py"><code>data/mm_plugin.py</code></a>。本文按真实路径引用。</p>
+<hr />
+<h2 id="1-第一性原理为什么需要-processor-与-collator-两级转换"><a class="markdownIt-Anchor" href="#1-第一性原理为什么需要-processor-与-collator-两级转换"></a> 1. 第一性原理：为什么需要 Processor 与 Collator 两级转换</h2>
+<h3 id="11-根本矛盾"><a class="markdownIt-Anchor" href="#11-根本矛盾"></a> 1.1 根本矛盾</h3>
+<p>模型前向需要的是<strong>形状规整的张量批次</strong>（<code>input_ids: [B, L]</code>、<code>pixel_values: [B, C, H, W]</code>），而真实世界的数据是<strong>异构的</strong>：文本长度不一、图片分辨率各异、对话轮数不同、视觉 Token 数随分辨率漂移。从&quot;磁盘上的一堆 JSON + JPG&quot;到&quot;GPU 上的一批对齐张量&quot;，必然存在一条多级转换流水线。</p>
+<p>这条流水线为什么拆成两级？</p>
+<ul>
+<li><strong>Processor（样本级）</strong>：处理<strong>单条样本</strong>——JSON 转成 prompt 字符串、图片转成视觉张量。工作在 <code>Dataset.__getitem__</code> 内，可以被多进程并行（<code>num_workers</code>），且与 batch 无关。</li>
+<li><strong>Collator（批次级）</strong>：处理<strong>一批样本的拼装</strong>——padding 到同一长度、stack 张量、构造 labels 掩码。工作在 <code>DataLoader</code> 的 <code>collate_fn</code>，必须在主进程（或收集点）执行，因为它要看到整个 batch。</li>
+</ul>
+<p>拆两级的原因是<strong>并行性约束</strong>：图片解码 + resize 是整个流水线中最重的 CPU 操作（单张高清图可占几十毫秒），必须放进 <code>Dataset</code> 才能享受多 worker 并行；而 padding 必须知道 batch 内最长序列，只能后置。混淆两级职责（比如在 Collator 里做图片解码）会让 DataLoader 退化成单进程，数据加载成为训练瓶颈。</p>
+<h3 id="12-消息结构chatml-与多模态占位"><a class="markdownIt-Anchor" href="#12-消息结构chatml-与多模态占位"></a> 1.2 消息结构：ChatML 与多模态占位</h3>
+<p>一条多轮图文对话的原始形态（<code>sharegpt</code> 风格）：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;conversations&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;from&quot;</span><span class="punctuation">:</span> <span class="string">&quot;human&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;value&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&lt;image&gt;这张图里是什么？&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;from&quot;</span><span class="punctuation">:</span> <span class="string">&quot;gpt&quot;</span><span class="punctuation">,</span>   <span class="attr">&quot;value&quot;</span><span class="punctuation">:</span> <span class="string">&quot;两只猫坐在粉色沙发上。&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;from&quot;</span><span class="punctuation">:</span> <span class="string">&quot;human&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;value&quot;</span><span class="punctuation">:</span> <span class="string">&quot;它们是什么颜色？&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;from&quot;</span><span class="punctuation">:</span> <span class="string">&quot;gpt&quot;</span><span class="punctuation">,</span>   <span class="attr">&quot;value&quot;</span><span class="punctuation">:</span> <span class="string">&quot;一只是橘猫，另一只是黑白花色的猫。&quot;</span><span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;images&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;img/cat_sofa.jpg&quot;</span><span class="punctuation">]</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<p>经过模板渲染（LLaMA-Factory 中 <code>data/template.py</code>，Qwen2-VL 用 ChatML 变体），它变成一条带角色标记的 Token 序列：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">&lt;|im_start|&gt;system</span><br><span class="line">You are a helpful assistant.&lt;|im_end|&gt;\n</span><br><span class="line">&lt;|im_start|&gt;user</span><br><span class="line">&lt;VISUAL_TOKENS×N&gt;这张图里是什么？&lt;|im_end|&gt;\n</span><br><span class="line">&lt;|im_start|&gt;assistant</span><br><span class="line">两只猫坐在粉色沙发上。&lt;|im_end|&gt;\n</span><br><span class="line">&lt;|im_start|&gt;user</span><br><span class="line">它们是什么颜色？&lt;|im_end|&gt;\n</span><br><span class="line">&lt;|im_start|&gt;assistant</span><br><span class="line">一只是橘猫，另一只是黑白花色的猫。&lt;|im_end|&gt;\n</span><br></pre></td></tr></table></figure>
+<p>两个关键细节：</p>
+<ol>
+<li><strong><code>&lt;image&gt;</code> 占位符扩展为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span></span></span></span> 个视觉 Token ID</strong>（Qwen2-VL 中是专门的 <code>vision_start</code> + 连续视觉 Token；LLaVA 中是一个占位 ID 在 embedding 层展开）。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>N</mi></mrow><annotation encoding="application/x-tex">N</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span></span></span></span> 由图片分辨率决定（Stage 1 第 3 周的公式：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mfrac><mi>H</mi><mn>28</mn></mfrac><mo>×</mo><mfrac><mi>W</mi><mn>28</mn></mfrac></mrow><annotation encoding="application/x-tex">\frac{H}{28} \times \frac{W}{28}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.217331em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.872331em;"><span style="top:-2.6550000000000002em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span><span class="mord mtight">8</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.08125em;">H</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.217331em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.872331em;"><span style="top:-2.6550000000000002em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span><span class="mord mtight">8</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">W</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span>），<strong>同一条样本在不同分辨率配置下长度会变</strong>，这是多模态 padding 比纯文本复杂的根源。</li>
+<li><strong>每轮 assistant 回答末尾的 <code>&lt;|im_end|&gt;</code>（或 EOS）必须保留在 Token 序列里</strong>，它是模型学会&quot;何时闭嘴&quot;的唯一监督信号。丢掉它，微调后模型会答完一句继续自问自答。</li>
+</ol>
+<hr />
+<h2 id="2-系统架构与数据流"><a class="markdownIt-Anchor" href="#2-系统架构与数据流"></a> 2. 系统架构与数据流</h2>
+<h3 id="21-从-json-到批次张量的完整流水线"><a class="markdownIt-Anchor" href="#21-从-json-到批次张量的完整流水线"></a> 2.1 从 JSON 到批次张量的完整流水线</h3>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line">磁盘数据 (JSON + JPG)</span><br><span class="line">   │  Dataset.__getitem__  ←── 多进程并行区 (num_workers=8)</span><br><span class="line">   ▼</span><br><span class="line">┌────────────── Processor (样本级) ──────────────┐</span><br><span class="line">│ 1. 渲染对话模板 → 完整 prompt 字符串             │</span><br><span class="line">│ 2. 图片加载 + Resize → pixel_values [C,H,W]     │</span><br><span class="line">│ 3. 计算 image_grid_thw (Qwen2-VL 的网格元数据)   │</span><br><span class="line">│ 4. 分词 → input_ids [L]  (占位符已展开为 N 个)   │</span><br><span class="line">│ 5. 定位回答区间 → labels [L] (区间外=-100)       │</span><br><span class="line">└────────────────────────────────────────────────┘</span><br><span class="line">   │  DataCollator (批次级)  ←── 主进程收集点</span><br><span class="line">   ▼</span><br><span class="line">┌────────────── Collator ────────────────────────┐</span><br><span class="line">│ 6. 找 batch 内最长 L_max → 右/左 padding        │</span><br><span class="line">│ 7. pixel_values 变长 → 沿 batch 维 concat 成    │</span><br><span class="line">│    [Σpatches, 1176] + image_grid_thw [B, 3]     │</span><br><span class="line">│    (Qwen2-VL 风格, 交给模型按网格切分)           │</span><br><span class="line">│ 8. attention_mask: 真实=1, padding=0            │</span><br><span class="line">│ 9. labels: 回答区=token_id, 其余=-100           │</span><br><span class="line">└────────────────────────────────────────────────┘</span><br><span class="line">   ▼</span><br><span class="line">input_ids [B, L_max] | attention_mask [B, L_max]</span><br><span class="line">labels [B, L_max]    | pixel_values [Σpatches, 1176] | image_grid_thw</span><br></pre></td></tr></table></figure>
+<h3 id="22-image_grid_thw变长视觉-token-的元数据方案"><a class="markdownIt-Anchor" href="#22-image_grid_thw变长视觉-token-的元数据方案"></a> 2.2 <code>image_grid_thw</code>：变长视觉 Token 的元数据方案</h3>
+<p>LLaVA 的做法是&quot;占位符在 embedding 层展开&quot;，batch 内 <code>pixel_values</code> 形状统一（固定分辨率时）；而 Qwen2-VL 系的动态分辨率下，<strong>每张图的视觉 Token 数都不同</strong>，无法 stack 成规则四维张量。工程解法：</p>
+<ul>
+<li><code>pixel_values</code> 把 batch 内所有图的 patch <strong>沿第 0 维 concat 成一个二维矩阵</strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><msub><mo>∑</mo><mi>b</mi></msub><msub><mi>N</mi><mi>b</mi></msub><mo separator="true">,</mo><mn>1176</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[\sum_{b} N_b, 1176]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0497100000000001em;vertical-align:-0.29971000000000003em;"></span><span class="mopen">[</span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:-0.0000050000000000050004em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1863979999999999em;"><span style="top:-2.40029em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.29971000000000003em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">1</span><span class="mord">1</span><span class="mord">7</span><span class="mord">6</span><span class="mclose">]</span></span></span></span>（每行是一个展平的 patch：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>3</mn></mrow><annotation encoding="application/x-tex">3</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">3</span></span></span></span> 通道 × 时间 2 × <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>14</mn><mo>×</mo><mn>14</mn></mrow><annotation encoding="application/x-tex">14 \times 14</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord">4</span></span></span></span> = 1176，仍是 Merger 之前的原始 patch）；</li>
+<li>附带 <code>image_grid_thw: [\sum B, 3]</code>（每张图的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>t</mi><mo separator="true">,</mo><mi>h</mi><mo separator="true">,</mo><mi>w</mi></mrow><annotation encoding="application/x-tex">t, h, w</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord mathnormal">t</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">h</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span></span></span></span> 网格数），模型内部据此把连续的 patch 序列<strong>切回每张图</strong>，做 Merger 与 2D 位置编码；</li>
+<li>文本侧 <code>input_ids</code> 中每个视觉 Token 占一个坑位（<code>&lt;|vision_start|&gt;</code> + 连续的 <code>&lt;|image_pad|&gt;</code> + <code>&lt;|vision_end|&gt;</code>），前向时用 <code>torch.where</code> 替换为对应 patch embedding。</li>
+</ul>
+<p>理解这个设计的钥匙：<strong>变长问题在张量世界里只有两条出路——要么 padding 成规则形状，要么 concat + 元数据记录边界</strong>。视觉用后者（因为视觉 Token 动辄数百个，padding 浪费太大），文本用前者（文本短，padding 便宜）。</p>
+<h3 id="23-labels-掩码的精确边界"><a class="markdownIt-Anchor" href="#23-labels-掩码的精确边界"></a> 2.3 labels 掩码的精确边界</h3>
+<p>对 2.1 节的多轮样本，labels 的取值逐 Token 展开：</p>
+<table>
+<thead>
+<tr>
+<th>区间</th>
+<th>Token 内容</th>
+<th>label</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>system 头</td>
+<td>`&lt;|im_start|&gt;system … &lt;</td>
+<td>im_end|&gt;`</td>
+</tr>
+<tr>
+<td>第 1 轮 user（含视觉占位）</td>
+<td>`&lt;|im_start|&gt;user [N个视觉Token] 问题 &lt;</td>
+<td>im_end|&gt;`</td>
+</tr>
+<tr>
+<td>第 1 轮 assistant</td>
+<td><code>&lt;|im_start|&gt;assistant</code></td>
+<td>-100（角色头也不算）</td>
+</tr>
+<tr>
+<td>第 1 轮回答</td>
+<td>`两只猫坐在粉色沙发上。&lt;</td>
+<td>im_end|&gt;`</td>
+</tr>
+<tr>
+<td>第 2 轮 user</td>
+<td>全部</td>
+<td>-100</td>
+</tr>
+<tr>
+<td>第 2 轮回答</td>
+<td><strong>token_id（含 im_end）</strong></td>
+<td><strong>token_id</strong></td>
+</tr>
+<tr>
+<td>padding 区</td>
+<td>pad token</td>
+<td>-100</td>
+</tr>
+</tbody>
+</table>
+<p>注意三处易错点：</p>
+<ol>
+<li><strong>每个 assistant 轮的起始角色头 <code>&lt;|im_start|&gt;assistant</code> 是 -100，但回答末尾的 <code>&lt;|im_end|&gt;</code> 要算 loss</strong>——前者是&quot;格式&quot;，模型不该学&quot;何时开始说&quot;，后者是&quot;停止&quot;，必须学。</li>
+<li><strong>多轮对话有两种流派</strong>：上面是&quot;全程掩码，只学每轮回答&quot;（主流）；也有实现对最后一轮前的回答同样掩码、只学最后一轮（更保守）。混用会静默改变有效数据量，训练前务必确认框架行为。</li>
+<li><strong>视觉 Token 区域必须整体掩码</strong>——它们是条件输入而非预测目标，若不掩码，576+ 个 Token 的 loss 会淹没真正的文本监督（Stage 1 第 4-5 周教程 2.2 节已论证）。</li>
+</ol>
+<h3 id="24-padding-与-packing-的取舍"><a class="markdownIt-Anchor" href="#24-padding-与-packing-的取舍"></a> 2.4 Padding 与 Packing 的取舍</h3>
+<table>
+<thead>
+<tr>
+<th>机制</th>
+<th>做法</th>
+<th>算力利用率</th>
+<th>实现复杂度</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Padding（默认）</td>
+<td>batch 内补到等长</td>
+<td>低（极端短长混批时 &lt;50%）</td>
+<td>低</td>
+<td>小规模、原型验证</td>
+</tr>
+<tr>
+<td>Length Grouping</td>
+<td>按长度分桶组 batch</td>
+<td>中高</td>
+<td>低</td>
+<td>单图固定分辨率</td>
+</tr>
+<tr>
+<td><strong>Sample Packing</strong></td>
+<td>多条样本拼接成固定长度序列</td>
+<td><strong>&gt;95%</strong></td>
+<td>高（需位置编码/掩码配合）</td>
+<td><strong>大规模 SFT 标配</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Packing 的关键细节（也是 90% 的坑所在）：</p>
+<ul>
+<li><strong>跨样本注意力隔离</strong>：朴素拼接后，样本 B 的 Token 会注意到样本 A 的内容（信息泄漏 + 分布污染）。两种解法：
+<ul>
+<li><strong>FlashAttention varlen 模式</strong>：传入 <code>cu_seqlens</code>（累积序列长度），attention kernel 按段计算，段间零交互——<strong>这是正确且主流的做法</strong>；</li>
+<li>注意力掩码矩阵（block-diagonal）：正确但 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><msup><mi>L</mi><mn>2</mn></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(L^2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> 显存，长序列下不可行；</li>
+<li>偷懒不隔离（仅靠位置重置）：<strong>错误</strong>，loss 会假性偏低。</li>
+</ul>
+</li>
+<li><strong>位置编码重置</strong>：每条样本内 position id 从 0 重新计数（Qwen2-VL 的 packed M-RoPE 还要重置三维位置，这正是 LLaMA-Factory 近期提交 <code>fix position ids after merging packed-mrope</code> 修复的问题——packing 与 M-RoPE 的组合是当前工程前沿坑区）。</li>
+<li><strong>跨样本边界不吞 Token</strong>：拼接点要保证上一条的最后一个 Token（如 <code>&lt;|im_end|&gt;</code>）与下一条的第一个 Token 完整，边界截断需按样本边界而非固定字符数。</li>
+</ul>
+<hr />
+<h2 id="3-实现与验证"><a class="markdownIt-Anchor" href="#3-实现与验证"></a> 3. 实现与验证</h2>
+<h3 id="31-本周-mvp手写-dataset-datacollator"><a class="markdownIt-Anchor" href="#31-本周-mvp手写-dataset-datacollator"></a> 3.1 本周 MVP：手写 Dataset + DataCollator</h3>
+<p>以下代码<strong>不依赖任何微调框架</strong>，只依赖 <code>transformers</code> 的 Processor，可直接运行。它完整实现了 2.1 节流水线的核心路径（单图单轮简化版 + 断言验证），多轮/多图的扩展点在注释中标出。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">手写多模态 Dataset 与 DataCollator，输出模型输入四件套并验证 labels 掩码。</span></span><br><span class="line"><span class="string">运行方式: python stage2_week1_dataset_collator.py</span></span><br><span class="line"><span class="string">依赖: torch, transformers, pillow   (首次运行会下载 Qwen2-VL-2B 的 processor)</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> json</span><br><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">from</span> torch.utils.data <span class="keyword">import</span> Dataset</span><br><span class="line"><span class="keyword">from</span> transformers <span class="keyword">import</span> AutoProcessor, Qwen2VLForConditionalGeneration</span><br><span class="line"></span><br><span class="line">MODEL_ID = <span class="string">&quot;Qwen/Qwen2-VL-2B-Instruct&quot;</span></span><br><span class="line">IMG_TOKEN_ID = <span class="number">151653</span>          <span class="comment"># &lt;|image_pad|&gt;: 每个视觉 patch 一个坑位</span></span><br><span class="line">IM_END_ID = <span class="number">151645</span>             <span class="comment"># &lt;|im_end|&gt;</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">MyImageTextDataset</span>(<span class="title class_ inherited__">Dataset</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;样本级处理: JSON -&gt; 渲染 prompt -&gt; 图片 + 分词&quot;&quot;&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, path: <span class="built_in">str</span>, processor: AutoProcessor, images: <span class="built_in">list</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>.samples = json.load(<span class="built_in">open</span>(path))</span><br><span class="line">        <span class="variable language_">self</span>.processor = processor</span><br><span class="line">        <span class="variable language_">self</span>.images = images            <span class="comment"># PIL.Image 列表, 与样本一一对应</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__len__</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">len</span>(<span class="variable language_">self</span>.samples)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__getitem__</span>(<span class="params">self, idx</span>):</span><br><span class="line">        s = <span class="variable language_">self</span>.samples[idx]</span><br><span class="line">        image = <span class="variable language_">self</span>.images[idx]        <span class="comment"># 真实项目中这里做 Image.open + convert(&quot;RGB&quot;)</span></span><br><span class="line">        messages = [</span><br><span class="line">            &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: [</span><br><span class="line">                &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;image&quot;</span>&#125;,</span><br><span class="line">                &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;text&quot;</span>, <span class="string">&quot;text&quot;</span>: s[<span class="string">&quot;conversations&quot;</span>][<span class="number">0</span>][<span class="string">&quot;value&quot;</span>].replace(<span class="string">&quot;&lt;image&gt;&quot;</span>, <span class="string">&quot;&quot;</span>)&#125;,</span><br><span class="line">            ]&#125;,</span><br><span class="line">            &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;assistant&quot;</span>, <span class="string">&quot;content&quot;</span>: [&#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;text&quot;</span>, <span class="string">&quot;text&quot;</span>: s[<span class="string">&quot;conversations&quot;</span>][<span class="number">1</span>][<span class="string">&quot;value&quot;</span>]&#125;]&#125;,</span><br><span class="line">        ]</span><br><span class="line">        <span class="comment"># apply_chat_template 分两段: prompt(含视觉占位) 与完整序列</span></span><br><span class="line">        prompt_text = <span class="variable language_">self</span>.processor.apply_chat_template(</span><br><span class="line">            messages[:<span class="number">1</span>], tokenize=<span class="literal">False</span>, add_generation_prompt=<span class="literal">True</span>)  <span class="comment"># 到 &lt;|im_start|&gt;assistant\n 为止</span></span><br><span class="line">        full_text = <span class="variable language_">self</span>.processor.apply_chat_template(</span><br><span class="line">            messages, tokenize=<span class="literal">False</span>, add_generation_prompt=<span class="literal">True</span>)      <span class="comment"># 加上回答与 &lt;|im_end|&gt;</span></span><br><span class="line"></span><br><span class="line">        prompt_ids = <span class="variable language_">self</span>.processor(text=[prompt_text], images=[image],</span><br><span class="line">                                    return_tensors=<span class="string">&quot;pt&quot;</span>).input_ids[<span class="number">0</span>]</span><br><span class="line">        full_ids = <span class="variable language_">self</span>.processor(text=[full_text], images=[image],</span><br><span class="line">                                  return_tensors=<span class="string">&quot;pt&quot;</span>).input_ids[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">        <span class="comment"># 掩码构造: 在完整序列上把 prompt 段置 -100</span></span><br><span class="line">        labels = full_ids.clone()</span><br><span class="line">        labels[: <span class="built_in">len</span>(prompt_ids)] = -<span class="number">100</span></span><br><span class="line">        <span class="comment"># 防御性检查: prompt 长度对齐处不应是回答内容</span></span><br><span class="line">        <span class="keyword">assert</span> (full_ids[: <span class="built_in">len</span>(prompt_ids)] == prompt_ids).<span class="built_in">all</span>(), \</span><br><span class="line">            <span class="string">&quot;full 序列前缀与 prompt 不一致, 模板渲染有问题&quot;</span></span><br><span class="line">        <span class="keyword">return</span> &#123;</span><br><span class="line">            <span class="string">&quot;input_ids&quot;</span>: full_ids,</span><br><span class="line">            <span class="string">&quot;labels&quot;</span>: labels,</span><br><span class="line">            <span class="string">&quot;image&quot;</span>: image,             <span class="comment"># 原图交给 collator 统一过 processor</span></span><br><span class="line">            <span class="string">&quot;prompt_len&quot;</span>: <span class="built_in">len</span>(prompt_ids),</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">MyDataCollator</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;批次级处理: padding -&gt; attention_mask -&gt; 张量堆叠&quot;&quot;&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, processor: AutoProcessor, pad_to_multiple_of: <span class="built_in">int</span> = <span class="number">16</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>.processor = processor</span><br><span class="line">        <span class="variable language_">self</span>.pad_id = processor.tokenizer.pad_token_id <span class="keyword">or</span> IM_END_ID</span><br><span class="line">        <span class="variable language_">self</span>.mult = pad_to_multiple_of          <span class="comment"># 对齐到 16 的倍数, 利好 tensor core</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__call__</span>(<span class="params">self, batch</span>):</span><br><span class="line">        L_max = <span class="built_in">max</span>(<span class="built_in">len</span>(x[<span class="string">&quot;input_ids&quot;</span>]) <span class="keyword">for</span> x <span class="keyword">in</span> batch)</span><br><span class="line">        L_max = ((L_max + <span class="variable language_">self</span>.mult - <span class="number">1</span>) // <span class="variable language_">self</span>.mult) * <span class="variable language_">self</span>.mult</span><br><span class="line"></span><br><span class="line">        input_ids, labels, attn = [], [], []</span><br><span class="line">        <span class="keyword">for</span> x <span class="keyword">in</span> batch:</span><br><span class="line">            L = <span class="built_in">len</span>(x[<span class="string">&quot;input_ids&quot;</span>])</span><br><span class="line">            pad = L_max - L</span><br><span class="line">            input_ids.append(torch.cat([x[<span class="string">&quot;input_ids&quot;</span>],</span><br><span class="line">                                        torch.full((pad,), <span class="variable language_">self</span>.pad_id)]))</span><br><span class="line">            labels.append(torch.cat([x[<span class="string">&quot;labels&quot;</span>],</span><br><span class="line">                                     torch.full((pad,), -<span class="number">100</span>)]))</span><br><span class="line">            attn.append(torch.cat([torch.ones(L,), torch.zeros(pad,)]))</span><br><span class="line"></span><br><span class="line">        proc_out = <span class="variable language_">self</span>.processor(</span><br><span class="line">            images=[x[<span class="string">&quot;image&quot;</span>] <span class="keyword">for</span> x <span class="keyword">in</span> batch], return_tensors=<span class="string">&quot;pt&quot;</span>)</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> &#123;</span><br><span class="line">            <span class="string">&quot;input_ids&quot;</span>: torch.stack(input_ids),</span><br><span class="line">            <span class="string">&quot;labels&quot;</span>: torch.stack(labels),</span><br><span class="line">            <span class="string">&quot;attention_mask&quot;</span>: torch.stack(attn),</span><br><span class="line">            <span class="string">&quot;pixel_values&quot;</span>: proc_out[<span class="string">&quot;pixel_values&quot;</span>],        <span class="comment"># [Σpatches, 1176]</span></span><br><span class="line">            <span class="string">&quot;image_grid_thw&quot;</span>: proc_out[<span class="string">&quot;image_grid_thw&quot;</span>],    <span class="comment"># [B, 3]</span></span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    <span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line">    <span class="keyword">from</span> PIL <span class="keyword">import</span> Image</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 构造 10 条测试数据 (JSON 只存对话; 图片在内存中构造为 PIL) ----</span></span><br><span class="line">    data = [&#123;</span><br><span class="line">        <span class="string">&quot;conversations&quot;</span>: [</span><br><span class="line">            &#123;<span class="string">&quot;from&quot;</span>: <span class="string">&quot;human&quot;</span>, <span class="string">&quot;value&quot;</span>: <span class="string">&quot;&lt;image&gt;用一句话描述图片。&quot;</span>&#125;,</span><br><span class="line">            &#123;<span class="string">&quot;from&quot;</span>: <span class="string">&quot;gpt&quot;</span>, <span class="string">&quot;value&quot;</span>: <span class="string">f&quot;图片展示了一个测试场景 <span class="subst">&#123;i&#125;</span>。&quot;</span>&#125;</span><br><span class="line">        ]</span><br><span class="line">    &#125; <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">10</span>)]</span><br><span class="line">    json.dump(data, <span class="built_in">open</span>(<span class="string">&quot;/tmp/sft_mini.json&quot;</span>, <span class="string">&quot;w&quot;</span>))</span><br><span class="line">    images = [Image.fromarray((np.random.rand(<span class="number">448</span>, <span class="number">448</span>, <span class="number">3</span>) * <span class="number">255</span>).astype(<span class="string">&quot;uint8&quot;</span>))</span><br><span class="line">              <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">10</span>)]</span><br><span class="line"></span><br><span class="line">    processor = AutoProcessor.from_pretrained(MODEL_ID)</span><br><span class="line">    ds = MyImageTextDataset(<span class="string">&quot;/tmp/sft_mini.json&quot;</span>, processor, images=images)</span><br><span class="line">    collator = MyDataCollator(processor)</span><br><span class="line">    batch = collator([ds[i] <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">4</span>)])</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 四件套形状断言 ----</span></span><br><span class="line">    B, L = batch[<span class="string">&quot;input_ids&quot;</span>].shape</span><br><span class="line">    <span class="keyword">assert</span> batch[<span class="string">&quot;input_ids&quot;</span>].shape == (<span class="number">4</span>, L) <span class="keyword">and</span> L % <span class="number">16</span> == <span class="number">0</span></span><br><span class="line">    <span class="keyword">assert</span> batch[<span class="string">&quot;attention_mask&quot;</span>].shape == (<span class="number">4</span>, L)</span><br><span class="line">    <span class="keyword">assert</span> batch[<span class="string">&quot;labels&quot;</span>].shape == (<span class="number">4</span>, L)</span><br><span class="line">    <span class="comment"># Qwen2-VL 的 pixel_values 是展平 patch 矩阵: [Σpatches, 3*2*14*14=1176]</span></span><br><span class="line">    <span class="keyword">assert</span> batch[<span class="string">&quot;pixel_values&quot;</span>].dim() == <span class="number">2</span> <span class="keyword">and</span> batch[<span class="string">&quot;pixel_values&quot;</span>].shape[-<span class="number">1</span>] == <span class="number">1176</span></span><br><span class="line">    <span class="keyword">assert</span> batch[<span class="string">&quot;image_grid_thw&quot;</span>].shape == (<span class="number">4</span>, <span class="number">3</span>)</span><br><span class="line">    <span class="comment"># 448x448 -&gt; 32x32=1024 个原始 patch, 时间维成对合并后 512 行/图, 共 2048 行</span></span><br><span class="line">    <span class="keyword">assert</span> batch[<span class="string">&quot;pixel_values&quot;</span>].shape[<span class="number">0</span>] == <span class="number">2048</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 核心验证 1: prompt 区间 labels 全为 -100, 回答区间为真实 id ----</span></span><br><span class="line">    <span class="keyword">for</span> b <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">4</span>):</span><br><span class="line">        p = (ds[b][<span class="string">&quot;labels&quot;</span>] != -<span class="number">100</span>).nonzero()[<span class="number">0</span>, <span class="number">0</span>]</span><br><span class="line">        <span class="keyword">assert</span> (ds[b][<span class="string">&quot;labels&quot;</span>][:p] == -<span class="number">100</span>).<span class="built_in">all</span>(), <span class="string">f&quot;样本<span class="subst">&#123;b&#125;</span>: prompt 区未完全掩码&quot;</span></span><br><span class="line">        <span class="keyword">assert</span> (ds[b][<span class="string">&quot;labels&quot;</span>][p:] != -<span class="number">100</span>).<span class="built_in">any</span>(), <span class="string">f&quot;样本<span class="subst">&#123;b&#125;</span>: 回答区没有监督信号&quot;</span></span><br><span class="line">        <span class="comment"># 回答区最后一个监督 Token 应是 &lt;|im_end|&gt; (学会停止的关键)</span></span><br><span class="line">        <span class="keyword">assert</span> ds[b][<span class="string">&quot;labels&quot;</span>][p:][ds[b][<span class="string">&quot;labels&quot;</span>][p:] != -<span class="number">100</span>][-<span class="number">1</span>] == IM_END_ID</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 核心验证 2: labels 与 input_ids 在监督区间严格对齐 ----</span></span><br><span class="line">    supervised = batch[<span class="string">&quot;labels&quot;</span>] != -<span class="number">100</span></span><br><span class="line">    <span class="keyword">assert</span> (batch[<span class="string">&quot;labels&quot;</span>][supervised] == batch[<span class="string">&quot;input_ids&quot;</span>][supervised]).<span class="built_in">all</span>()</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 核心验证 3: padding 区 label=-100 且 attention=0 且 id=pad ----</span></span><br><span class="line">    pad_pos = batch[<span class="string">&quot;attention_mask&quot;</span>] == <span class="number">0</span></span><br><span class="line">    <span class="keyword">if</span> pad_pos.<span class="built_in">any</span>():</span><br><span class="line">        <span class="keyword">assert</span> (batch[<span class="string">&quot;labels&quot;</span>][pad_pos] == -<span class="number">100</span>).<span class="built_in">all</span>()</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 核心验证 4: 视觉占位 token 确实被展开进了序列 (Qwen2-VL) ----</span></span><br><span class="line">    <span class="keyword">assert</span> (batch[<span class="string">&quot;input_ids&quot;</span>] == IMG_TOKEN_ID).<span class="built_in">any</span>(), <span class="string">&quot;未找到视觉占位符&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;✅ batch 四件套: input_ids<span class="subst">&#123;<span class="built_in">tuple</span>(batch[<span class="string">&#x27;input_ids&#x27;</span>].shape)&#125;</span>, &quot;</span></span><br><span class="line">          <span class="string">f&quot;pixel_values<span class="subst">&#123;<span class="built_in">tuple</span>(batch[<span class="string">&#x27;pixel_values&#x27;</span>].shape)&#125;</span>, &quot;</span></span><br><span class="line">          <span class="string">f&quot;image_grid_thw<span class="subst">&#123;<span class="built_in">tuple</span>(batch[<span class="string">&#x27;image_grid_thw&#x27;</span>].shape)&#125;</span>, &quot;</span></span><br><span class="line">          <span class="string">f&quot;监督 Token 占比 <span class="subst">&#123;supervised.<span class="built_in">float</span>().mean():<span class="number">.1</span>%&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出</strong>（形状数字随图片分辨率/文本长度浮动；448×448 单图 = 256 个合并后的视觉 Token）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">✅ batch 四件套: input_ids(4, 304), pixel_values(2048, 1176), image_grid_thw(4, 3), 监督 Token 占比 4.0%</span><br></pre></td></tr></table></figure>
+<p><strong>一个值得注意的现象</strong>：监督 Token 占比通常只有 3%~15%——prompt、视觉占位、格式头占掉了序列的绝大部分。这正是第 4 周 Sample Packing 有价值的原因：这些被掩码的 Token 虽不算 loss，但仍要参与前向计算，浪费必须靠打包来摊薄。</p>
+<h3 id="32-与-llama-factory-实现对照源码研读指引"><a class="markdownIt-Anchor" href="#32-与-llama-factory-实现对照源码研读指引"></a> 3.2 与 LLaMA-Factory 实现对照（源码研读指引）</h3>
+<p>带着本周的概念读框架源码，对应关系如下：</p>
+<table>
+<thead>
+<tr>
+<th>本周概念</th>
+<th>LLaMA-Factory 位置（已核实）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>样本级模板渲染与分词</td>
+<td><code>data/processor/processor_utils.py</code>、<code>data/template.py</code></td>
+</tr>
+<tr>
+<td>多模态输入组装（占位符展开、<code>image_grid_thw</code>）</td>
+<td><code>data/mm_plugin.py</code>（各模型的 Plugin 子类）</td>
+</tr>
+<tr>
+<td>labels 掩码构造</td>
+<td><code>data/processor/supervised.py</code>（<code>_encode_data_example</code> 附近）</td>
+</tr>
+<tr>
+<td>批次级 padding / packing</td>
+<td><code>data/collator.py</code>（<code>MultiModalDataCollatorForSeq2Seq</code>，其中用 <code>get_position_ids</code>/<code>get_seqlens</code> 处理 packed M-RoPE）</td>
+</tr>
+</tbody>
+</table>
+<p>阅读顺序建议：<code>template.py</code>（理解渲染）→ <code>supervised.py</code>（理解掩码）→ <code>collator.py</code>（理解拼装）→ <code>mm_plugin.py</code>（理解多模态特殊处理）。读完再回头看 3.1 的手写版，会发现结构一一对应——区别只在框架版处理了多轮、多图、工具调用、packing 等生产细节。</p>
+<hr />
+<h2 id="4-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#4-工程权衡与失效模式"></a> 4. 工程权衡与失效模式</h2>
+<h3 id="41-核心权衡"><a class="markdownIt-Anchor" href="#41-核心权衡"></a> 4.1 核心权衡</h3>
+<ol>
+<li><strong>Processor 放 Dataset 还是 Collator</strong>：图片重处理必须在 Dataset（多进程并行）；轻量文本拼接放 Collator。判据是&quot;是否需要看到整个 batch&quot;。</li>
+<li><strong>pad_to_multiple_of 的取值</strong>：对齐 16/64 可触发 tensor core 的最优 tile，长序列下吞吐提升可观（经验规则 5%~15%）；代价是轻微的 padding 浪费。bf16 训练建议必开。</li>
+<li><strong>Packing vs Padding 的临界点</strong>：样本平均长度 &lt; 序列预算的 30% 时，packing 收益巨大（3 倍以上吞吐）；样本本来就接近满长时收益趋零。1000 条以内的小规模实验不必折腾 packing，10k 条以上必开。</li>
+</ol>
+<h3 id="42-三个代表性失效模式"><a class="markdownIt-Anchor" href="#42-三个代表性失效模式"></a> 4.2 三个代表性失效模式</h3>
+<p><strong>失效 1：<code>&lt;image&gt;</code> 占位符数量与图片数不匹配</strong></p>
+<ul>
+<li><strong>症状</strong>：预处理报 <code>ValueError: Image features and image tokens do not match</code>，或训练正常但推理时模型声称&quot;没看到图&quot;。</li>
+<li><strong>根因</strong>：prompt 里写了 2 个 <code>&lt;image&gt;</code> 但 <code>images</code> 字段只有 1 张图；或文本答案里意外包含了占位符字符串。</li>
+<li><strong>定位</strong>：打印一条预处理完成的样本，数 <code>input_ids</code> 中占位 ID 的个数 vs <code>pixel_values</code> 的第 0 维。</li>
+<li><strong>修复</strong>：数据构造脚本中对 <code>&lt;image&gt;</code> 出现次数做 <code>assert == len(images)</code>；答案文本做占位符黑名单过滤。</li>
+</ul>
+<p><strong>失效 2：掩码边界差一位——回答的第一个 Token 被掩掉</strong></p>
+<ul>
+<li><strong>症状</strong>：训练 loss 比预期低一截、推理输出整体&quot;延后一拍&quot;或答非所问的风格。</li>
+<li><strong>根因</strong>：<code>labels[: len(prompt_ids)] = -100</code> 时，<code>add_generation_prompt</code> 渲染的 prompt 末尾是 <code>&lt;|im_start|&gt;assistant\n</code>，若模板变体把换行符归到回答侧，<code>len(prompt_ids)</code> 的切分点就错位一个 Token。Causal LM 中错位一个位置意味着模型学到的&quot;下一词预测&quot;整体平移。</li>
+<li><strong>定位</strong>：把一条样本的 <code>labels</code> 中非 -100 的 Token decode 回字符串肉眼看——若开头带了标点/空白错位即确认。</li>
+<li><strong>修复</strong>：不要依赖&quot;长度切分&quot;，改用<strong>内容锚点</strong>：找到回答区间第一个真实内容 Token 的位置，从它开始放开掩码；升级框架版本时重跑掩码断言。</li>
+</ul>
+<p><strong>失效 3：Packing 后 loss 假性偏低、评测指标反而下降</strong></p>
+<ul>
+<li><strong>症状</strong>：开启 packing 后训练 loss 明显低于不 packing 的同配置，但 benchmark 分数不升反降。</li>
+<li><strong>根因</strong>：跨样本注意力未隔离（样本间互相&quot;背答案&quot;），loss 被稀释为&quot;在别的样本语境下预测本样本&quot;的假任务。</li>
+<li><strong>定位</strong>：构造两条语义矛盾的单轮样本（如 A 问&quot;天空什么颜色&quot;答&quot;红色&quot;、B 同问答&quot;蓝色&quot;），packing 后同批训练，观察模型回答是否出现串扰；或检查位置编码在样本边界是否重置。</li>
+<li><strong>修复</strong>：确认 collator 使用 FlashAttention varlen 路径（<code>cu_seqlens</code>）而非纯拼接；检查 M-RoPE/1D 位置在样本边界重置逻辑（LLaMA-Factory 近期的 packed-mrope 修复即此类问题）。</li>
+</ul>
+<hr />
+<h2 id="5-延伸思考题"><a class="markdownIt-Anchor" href="#5-延伸思考题"></a> 5. 延伸思考题</h2>
+<ol>
+<li><strong>占比分析</strong>：3.1 节输出的&quot;监督 Token 占比&quot;只有约 10%。如果一条样本有 3 张高分辨率图但回答只有 10 个字，占比会低到什么程度？这种样本对训练是增益还是噪声？（提示：算一算 3×(H/28×W/28) vs 10 个监督 Token 的比例；极低占比样本等效于用大量算力换极少监督，配方层面应设最低占比过滤线。）</li>
+<li><strong>左 padding 的秘密</strong>：推理（generation）时框架用左 padding 而训练用右 padding，为什么？（提示：生成从序列末尾续写，左 padding 保证所有样本的&quot;最后一个真实 Token&quot;对齐在末位；训练则是从每个位置预测下一个位置，右 padding 自然。）</li>
+<li><strong>动手实验</strong>：把 3.1 的 collator 改造成 packing 版本：两条样本拼进一条长度 2048 的序列，用 <code>transformers</code> 的 <code>FlashAttentionKwargs</code>（<code>cu_seq_lens_q/k</code>）实现段间隔离，并断言两条样本各自的 loss 与单独前向一致（容差 1e-3）。这个实验完成后，你对 collator 的理解会超过多数调参者。</li>
+</ol>
+<hr />
+<p><em>下一篇：第 2 周：训练阶段划分、Loss 设计与参数效率微调</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/05/VLM%20&%20VLA-3-VLM%20%E8%AF%84%E6%B5%8B%E4%BD%93%E7%B3%BB%E4%B8%8E%E5%B9%BB%E8%A7%89%E5%88%86%E6%9E%90-README/" rel="prev" title="README">
+                  <i class="fa fa-angle-left"></i> README
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/05/VLM%20&%20VLA-2-VLM%20%E8%AE%AD%E7%BB%83%E5%AE%9E%E8%B7%B5%E4%B8%8E%20SFT%20%E5%BE%AE%E8%B0%83-%E7%AC%AC4%E5%91%A8-%E5%A4%A7%E8%A7%84%E6%A8%A1%E8%AE%AD%E7%BB%83%E5%B7%A5%E7%A8%8B%E4%B8%8E%E6%98%BE%E5%AD%98%E8%B0%83%E4%BC%98/" rel="next" title="第4周-大规模训练工程与显存调优">
+                  第4周-大规模训练工程与显存调优 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

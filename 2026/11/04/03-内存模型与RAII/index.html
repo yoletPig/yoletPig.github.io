@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="03 - 内存模型与 RAII  本篇回答的问题：  C++ 程序的内存分几块？栈和堆各管什么？对象从出生到死亡经历了什么？ 裸 new&#x2F;delete 有哪四大坑？RAII 是什么？为什么说它是 C++ 最重要的思想？ &quot;所有权&quot;是什么意思？（为下一篇智能指针铺路） const std::string&amp; s &#x3D; make_something(); 绑定临时对象，安全吗">
+<meta property="og:type" content="article">
+<meta property="og:title" content="03-内存模型与RAII">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/04/03-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E4%B8%8ERAII/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="03 - 内存模型与 RAII  本篇回答的问题：  C++ 程序的内存分几块？栈和堆各管什么？对象从出生到死亡经历了什么？ 裸 new&#x2F;delete 有哪四大坑？RAII 是什么？为什么说它是 C++ 最重要的思想？ &quot;所有权&quot;是什么意思？（为下一篇智能指针铺路） const std::string&amp; s &#x3D; make_something(); 绑定临时对象，安全吗">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-04T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.490Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="C++">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/04/03-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E4%B8%8ERAII/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/04/03-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E4%B8%8ERAII/","path":"2026/11/04/03-内存模型与RAII/","title":"03-内存模型与RAII"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>03-内存模型与RAII | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#03-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E4%B8%8E-raii"><span class="nav-number">1.</span> <span class="nav-text"> 03 - 内存模型与 RAII</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E6%A0%88-vs-%E5%A0%86%E4%B8%A4%E7%A7%8D%E5%86%85%E5%AD%98%E4%B8%A4%E7%A7%8D%E4%BA%BA%E7%94%9F"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 栈 vs 堆：两种内存，两种人生</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E8%A3%B8-new-delete-%E7%9A%84%E5%9B%9B%E5%A4%A7%E5%9D%91"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 裸 new &#x2F; delete 的四大坑</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-raii%E8%AE%A9%E4%BD%9C%E7%94%A8%E5%9F%9F%E6%9B%BF%E4%BD%A0%E7%AE%A1%E7%90%86%E8%B5%84%E6%BA%90"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. RAII：让作用域替你管理资源</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E6%A0%B8%E5%BF%83%E6%80%9D%E6%83%B3"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 核心思想</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E5%AE%8C%E6%95%B4%E7%A4%BA%E4%BE%8Braii-%E5%8C%85%E8%A3%85-file"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 完整示例：RAII 包装 FILE*</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-%E5%86%8D%E6%9D%A5%E4%B8%80%E4%B8%AAraii-%E8%AE%A1%E6%97%B6%E5%99%A8"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 再来一个：RAII 计时器</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E6%89%80%E6%9C%89%E6%9D%83ownership%E4%B8%8B%E4%B8%80%E7%AF%87%E7%9A%84%E9%93%BA%E5%9E%AB"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 所有权（ownership）：下一篇的铺垫</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E7%94%9F%E5%AD%98%E6%9C%9F%E5%BB%B6%E4%BC%B8const-%E5%BC%95%E7%94%A8%E7%BB%91%E5%AE%9A%E4%B8%B4%E6%97%B6%E5%AF%B9%E8%B1%A1"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 生存期延伸：const 引用绑定临时对象</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E7%94%A8-asan-%E6%8A%93%E6%B3%84%E6%BC%8F"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 用 ASan 抓泄漏</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E5%9D%91"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见坑</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%87%AA%E6%B5%8B%E9%A2%98"><span class="nav-number">1.9.</span> <span class="nav-text"> 自测题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/04/03-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E4%B8%8ERAII/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="03-内存模型与RAII | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          03-内存模型与RAII
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-11-04 12:00:00" itemprop="dateCreated datePublished" datetime="2026-11-04T12:00:00+08:00">2026-11-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-05 08:11:03" itemprop="dateModified" datetime="2026-11-05T08:11:03+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/C/" itemprop="url" rel="index"><span itemprop="name">C++</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>15 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="03-内存模型与-raii"><a class="markdownIt-Anchor" href="#03-内存模型与-raii"></a> 03 - 内存模型与 RAII</h1>
+<blockquote>
+<p>本篇回答的问题：</p>
+<ul>
+<li>C++ 程序的内存分几块？栈和堆各管什么？对象从出生到死亡经历了什么？</li>
+<li>裸 <code>new</code>/<code>delete</code> 有哪四大坑？RAII 是什么？为什么说它是 C++ 最重要的思想？</li>
+<li>&quot;所有权&quot;是什么意思？（为下一篇智能指针铺路）</li>
+<li><code>const std::string&amp; s = make_something();</code> 绑定临时对象，安全吗？</li>
+<li>怎么用 ASan 抓内存泄漏？</li>
+</ul>
+</blockquote>
+<p>前置要求：已读第 01、02 篇；知道对象有构造和析构（下一篇系统讲类）。</p>
+<hr />
+<h2 id="1-栈-vs-堆两种内存两种人生"><a class="markdownIt-Anchor" href="#1-栈-vs-堆两种内存两种人生"></a> 1. 栈 vs 堆：两种内存，两种人生</h2>
+<p>C++ 程序的内存大致分三块，本篇关心前两块：</p>
+<ul>
+<li><strong>栈（stack）</strong>：函数调用时自动分配、返回时自动回收。局部变量都住这里，分配/回收就是移动栈指针，快到可忽略；但空间有限（默认几 MB），且<strong>生命周期严格等于所在作用域</strong>。</li>
+<li><strong>堆（heap）</strong>：全局大内存池，由你在运行期显式申请（<code>new</code>/<code>malloc</code>），<strong>大小只受物理内存限制，生命周期由你手动控制</strong>——麻烦就麻烦在这。</li>
+<li><strong>静态/全局区</strong>：全局变量和 <code>static</code> 变量的家，程序启动创建、退出销毁，本篇不展开。</li>
+</ul>
+<p>一个对象的完整人生，由它住在哪决定：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">栈对象：  进入作用域 &#123; ──构造── 使用 ──离开作用域自动析构── &#125;   死期写进了户口本，编译器准时执行</span><br><span class="line">堆对象：  new ──使用── delete                                   死期全靠手动操作；忘了 delete 是泄漏，delete 早了是悬垂</span><br></pre></td></tr></table></figure>
+<p>看构造/析构的真实时间线（这里用到最简单的类：构造函数、析构函数，下一篇细讲）：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// lifetime.cpp</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdio&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Frame</span> &#123;</span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">Frame</span><span class="params">(<span class="type">int</span> id)</span> : id_(id) &#123;</span></span><br><span class="line">        std::<span class="built_in">printf</span>(<span class="string">&quot;  Frame(%d) 构造\n&quot;</span>, id_);</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">Frame</span>() &#123;</span><br><span class="line">        std::<span class="built_in">printf</span>(<span class="string">&quot;  Frame(%d) 析构\n&quot;</span>, id_);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="type">int</span> id_;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function">Frame <span class="title">make_frame</span><span class="params">(<span class="type">int</span> id)</span> </span>&#123;</span><br><span class="line">    Frame f&#123;id&#125;;              <span class="comment">// 栈对象：函数结束就销毁</span></span><br><span class="line">    std::<span class="built_in">printf</span>(<span class="string">&quot;  return 前的 f\n&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> f;                 <span class="comment">// 值返回（编译器会做拷贝消除，不必担心拷贝开销）</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    std::<span class="built_in">printf</span>(<span class="string">&quot;-- 进入 main --\n&quot;</span>);</span><br><span class="line">    &#123;</span><br><span class="line">        Frame a&#123;<span class="number">1</span>&#125;;                 <span class="comment">// 出了这对大括号，a 立刻销毁</span></span><br><span class="line">        std::<span class="built_in">printf</span>(<span class="string">&quot;  块内使用 a\n&quot;</span>);</span><br><span class="line">    &#125;                               <span class="comment">// &lt;-- a 在这里析构</span></span><br><span class="line">    std::<span class="built_in">printf</span>(<span class="string">&quot;-- 离开块 --\n&quot;</span>);</span><br><span class="line"></span><br><span class="line">    Frame b = <span class="built_in">make_frame</span>(<span class="number">2</span>);        <span class="comment">// 返回值被&quot;接住&quot;，活到 main 结束</span></span><br><span class="line">    std::<span class="built_in">printf</span>(<span class="string">&quot;main 末尾\n&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;                       <span class="comment">// &lt;-- b 在这里析构（后构造的先析构）</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>预期输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">-- 进入 main --</span><br><span class="line">  Frame(1) 构造</span><br><span class="line">  块内使用 a</span><br><span class="line">  Frame(1) 析构</span><br><span class="line">-- 离开块 --</span><br><span class="line">  Frame(2) 构造</span><br><span class="line">  return 前的 f</span><br><span class="line">main 末尾</span><br><span class="line">  Frame(2) 析构</span><br></pre></td></tr></table></figure>
+<p>读两遍这个输出，你就理解了 C++ 内存模型的一半：<code>a</code> 的析构精确发生在<strong>离开大括号的那一行</strong>（栈对象生命周期=作用域，编译器保证，无一例外）；同一作用域多个栈对象<strong>构造与析构顺序相反</strong>（想象一摞盘子）；<code>make_frame</code> 里的局部 <code>f</code> 没有立刻析构——它被值返回&quot;接住&quot;了，这是编译器的拷贝消除（C++17 起对这种写法是<strong>强制</strong>的，不是玄学）。</p>
+<p>什么时候需要堆？——<strong>大小运行期才知道</strong>（用户上传了一段 3 秒的 wav）、<strong>活得比当前作用域久</strong>（把结果交出去）、<strong>太大</strong>（几百 MB 的模型权重不适合塞栈上）。</p>
+<hr />
+<h2 id="2-裸-new-delete-的四大坑"><a class="markdownIt-Anchor" href="#2-裸-new-delete-的四大坑"></a> 2. 裸 new / delete 的四大坑</h2>
+<p>堆对象必须手动管理，&quot;手动&quot;意味着四种经典死法：</p>
+<ol>
+<li><strong>内存泄漏</strong>：<code>new</code> 了没 <code>delete</code>。长跑的推理服务每秒漏一点，几天后 OOM 被运维叫醒。</li>
+<li><strong>双重释放（double free）</strong>：同一块内存 <code>delete</code> 两次。堆结构被破坏，崩溃点可能离案发现场十万八千里，极难查。</li>
+<li><strong>悬垂指针（dangling pointer）</strong>：<code>delete</code> 之后还在用那个指针——内存还回去了，指针还指着它。读到垃圾是好事，写到被复用的内存就是安全漏洞。</li>
+<li><strong>异常不安全</strong>：<code>new</code> 之后、<code>delete</code> 之前抛了异常（或提前 <code>return</code>），<code>delete</code> 那行被跳过——泄漏。第 02 篇的 <code>std::string</code> 为什么随便抛异常也不泄漏？因为它内部替你管住了。</li>
+</ol>
+<blockquote>
+<p>这四种死法可以同时出现在一个函数里：<code>new</code> 完提前 <code>return</code>（泄漏）、两条路径各 <code>delete</code> 一次（双重释放）、delete 后继续用（悬垂）。下面用 RAII 一次性解决。</p>
+</blockquote>
+<hr />
+<h2 id="3-raii让作用域替你管理资源"><a class="markdownIt-Anchor" href="#3-raii让作用域替你管理资源"></a> 3. RAII：让作用域替你管理资源</h2>
+<h3 id="31-核心思想"><a class="markdownIt-Anchor" href="#31-核心思想"></a> 3.1 核心思想</h3>
+<p>C++ 给了你一个其他语言少见的保证：<strong>栈对象离开作用域时，析构函数百分之百会被调用</strong>（哪怕中间抛了异常）。RAII（Resource Acquisition Is Initialization，资源获取即初始化）就把它变成资源管理的基石：</p>
+<blockquote>
+<p><strong>把资源绑到栈对象的生死上：构造函数里获取资源，析构函数里释放资源。</strong> 之后你只管声明对象，释放交给作用域，永远不会忘。</p>
+</blockquote>
+<p>资源远不止内存：文件句柄、互斥锁、音频设备、GPU 显存、socket……凡是&quot;要获取、要归还&quot;的都适用。第 02 篇的 <code>std::string</code>/<code>std::vector</code> 就是标准库里的 RAII 类——构造时按需向堆要内存，析构时归还，你从来没为它们写过 <code>delete</code>。<strong>你已经在用 RAII 了，本篇只是教你给任意资源手写一个。</strong></p>
+<h3 id="32-完整示例raii-包装-file"><a class="markdownIt-Anchor" href="#32-完整示例raii-包装-file"></a> 3.2 完整示例：RAII 包装 FILE*</h3>
+<p>以语音工程最日常的资源——音频文件为例，把 <code>FILE*</code> 管起来：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// raii_file.cpp</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdio&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdexcept&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;vector&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="comment">// RAII：构造 = 获取资源，析构 = 释放资源。</span></span><br><span class="line"><span class="comment">// FILE* 交给这个类管理之后，就再也不用手写 fclose。</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">WavFile</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">WavFile</span><span class="params">(<span class="type">const</span> std::string&amp; path)</span></span></span><br><span class="line"><span class="function">        : handle_(std::fopen(path.c_str(), <span class="string">&quot;rb&quot;</span>)) &#123;</span></span><br><span class="line">        <span class="keyword">if</span> (handle_ == <span class="literal">nullptr</span>) &#123;</span><br><span class="line">            <span class="keyword">throw</span> std::<span class="built_in">runtime_error</span>(<span class="string">&quot;cannot open &quot;</span> + path);</span><br><span class="line">        &#125;</span><br><span class="line">        std::<span class="built_in">printf</span>(<span class="string">&quot;[WavFile] opened %s\n&quot;</span>, path.<span class="built_in">c_str</span>());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    ~<span class="built_in">WavFile</span>() &#123;</span><br><span class="line">        <span class="keyword">if</span> (handle_ != <span class="literal">nullptr</span>) &#123;</span><br><span class="line">            std::<span class="built_in">fclose</span>(handle_);</span><br><span class="line">            std::<span class="built_in">printf</span>(<span class="string">&quot;[WavFile] closed\n&quot;</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 禁止拷贝：两个对象管同一个 FILE* 会导致双重 fclose（第 04 篇细讲）</span></span><br><span class="line">    <span class="built_in">WavFile</span>(<span class="type">const</span> WavFile&amp;) = <span class="keyword">delete</span>;</span><br><span class="line">    WavFile&amp; <span class="keyword">operator</span>=(<span class="type">const</span> WavFile&amp;) = <span class="keyword">delete</span>;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="type">bool</span> <span class="title">read_samples</span><span class="params">(std::vector&lt;<span class="type">float</span>&gt;&amp; out, <span class="type">int</span> n)</span> </span>&#123;</span><br><span class="line">        out.<span class="built_in">resize</span>(<span class="keyword">static_cast</span>&lt;<span class="type">size_t</span>&gt;(n));</span><br><span class="line">        <span class="keyword">return</span> std::<span class="built_in">fread</span>(out.<span class="built_in">data</span>(), <span class="keyword">sizeof</span>(<span class="type">float</span>),</span><br><span class="line">                          <span class="keyword">static_cast</span>&lt;<span class="type">size_t</span>&gt;(n), handle_) ==</span><br><span class="line">               <span class="keyword">static_cast</span>&lt;<span class="type">size_t</span>&gt;(n);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    std::FILE* handle_;    <span class="comment">// 资源句柄藏在这里</span></span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 先造一个测试文件</span></span><br><span class="line">    &#123;</span><br><span class="line">        std::FILE* f = std::<span class="built_in">fopen</span>(<span class="string">&quot;test.f32&quot;</span>, <span class="string">&quot;wb&quot;</span>);</span><br><span class="line">        <span class="type">const</span> <span class="type">float</span> samples[<span class="number">4</span>] = &#123;<span class="number">0.1f</span>, <span class="number">0.2f</span>, <span class="number">0.3f</span>, <span class="number">0.4f</span>&#125;;</span><br><span class="line">        <span class="keyword">if</span> (f != <span class="literal">nullptr</span>) &#123;</span><br><span class="line">            std::<span class="built_in">fwrite</span>(samples, <span class="keyword">sizeof</span>(<span class="type">float</span>), <span class="number">4</span>, f);</span><br><span class="line">            std::<span class="built_in">fclose</span>(f);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="function">WavFile <span class="title">wav</span><span class="params">(<span class="string">&quot;test.f32&quot;</span>)</span></span>;</span><br><span class="line">        std::vector&lt;<span class="type">float</span>&gt; buf;</span><br><span class="line">        <span class="keyword">if</span> (wav.<span class="built_in">read_samples</span>(buf, <span class="number">4</span>)) &#123;</span><br><span class="line">            std::<span class="built_in">printf</span>(<span class="string">&quot;read ok:&quot;</span>);</span><br><span class="line">            <span class="keyword">for</span> (<span class="type">const</span> <span class="keyword">auto</span>&amp; s : buf) &#123;</span><br><span class="line">                std::<span class="built_in">printf</span>(<span class="string">&quot; %g&quot;</span>, s);</span><br><span class="line">            &#125;</span><br><span class="line">            std::<span class="built_in">printf</span>(<span class="string">&quot;\n&quot;</span>);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;   <span class="comment">// &lt;-- 不管中间发生什么（哪怕抛异常），离开作用域都会 fclose</span></span><br><span class="line">    <span class="keyword">catch</span> (<span class="type">const</span> std::exception&amp; e) &#123;</span><br><span class="line">        std::<span class="built_in">printf</span>(<span class="string">&quot;error: %s\n&quot;</span>, e.<span class="built_in">what</span>());</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">try</span> &#123;</span><br><span class="line">        <span class="function">WavFile <span class="title">bad</span><span class="params">(<span class="string">&quot;not_exist.f32&quot;</span>)</span></span>;                      <span class="comment">// 打开失败 -&gt; 抛异常</span></span><br><span class="line">    &#125; <span class="keyword">catch</span> (<span class="type">const</span> std::exception&amp; e) &#123;</span><br><span class="line">        std::<span class="built_in">printf</span>(<span class="string">&quot;error: %s\n&quot;</span>, e.<span class="built_in">what</span>());              <span class="comment">// 没有泄漏，因为没构造成功就不用析构</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>预期输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[WavFile] opened test.f32</span><br><span class="line">read ok: 0.1 0.2 0.3 0.4</span><br><span class="line">[WavFile] closed</span><br><span class="line">error: cannot open not_exist.f32</span><br></pre></td></tr></table></figure>
+<p>逐点品味：<code>main</code> 里<strong>没有出现任何 fclose</strong>，但句柄都被正确关闭——包括打开失败那次（构造函数抛异常前没拿到资源，析构自然无事可做，这正是异常安全的标准答案）。对比裸指针版本：<code>fopen</code> 后每条路径（正常、提前 return、抛异常）都要记得 <code>fclose</code>，漏一条就是泄漏，而 RAII 版只有<strong>一个析构函数</strong>管释放，逻辑集中、无法遗漏。<code>= delete</code> 删除拷贝是 RAII 类的标准动作（资源句柄只有一份，&quot;拷贝管理权&quot;必须显式设计，见下一节）。装资源的 <code>std::FILE* handle_;</code> 是裸的，但被<strong>封装在类内</strong>，外界碰不到——RAII 不是消灭裸指针，而是把裸指针圈进牢笼。</p>
+<h3 id="33-再来一个raii-计时器"><a class="markdownIt-Anchor" href="#33-再来一个raii-计时器"></a> 3.3 再来一个：RAII 计时器</h3>
+<p>RAII 不只管&quot;释放&quot;，一切&quot;进入时做 X、退出时必须做 Y&quot;的成对操作都适合，比如性能剖析：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// raii_timer.cpp</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;chrono&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdio&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;thread&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 作用域计时器：构造时开始计时，析构时自动打印耗时。</span></span><br><span class="line"><span class="comment">// 用法：在想知道耗时的作用域里放一行 ScopedTimer t(&quot;名字&quot;); 就完了。</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">ScopedTimer</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">ScopedTimer</span><span class="params">(std::string name)</span></span></span><br><span class="line"><span class="function">        : name_(std::move(name)),</span></span><br><span class="line"><span class="function">          start_(std::chrono::steady_clock::now()) &#123;</span>&#125;</span><br><span class="line"></span><br><span class="line">    ~<span class="built_in">ScopedTimer</span>() &#123;</span><br><span class="line">        <span class="type">const</span> <span class="keyword">auto</span> end = std::chrono::steady_clock::<span class="built_in">now</span>();</span><br><span class="line">        <span class="type">const</span> <span class="keyword">auto</span> us =</span><br><span class="line">            std::chrono::<span class="built_in">duration_cast</span>&lt;std::chrono::microseconds&gt;(end - start_)</span><br><span class="line">                .<span class="built_in">count</span>();</span><br><span class="line">        std::<span class="built_in">printf</span>(<span class="string">&quot;[timer] %s took %lld us\n&quot;</span>, name_.<span class="built_in">c_str</span>(),</span><br><span class="line">                    <span class="keyword">static_cast</span>&lt;<span class="type">long</span> <span class="type">long</span>&gt;(us));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">ScopedTimer</span>(<span class="type">const</span> ScopedTimer&amp;) = <span class="keyword">delete</span>;</span><br><span class="line">    ScopedTimer&amp; <span class="keyword">operator</span>=(<span class="type">const</span> ScopedTimer&amp;) = <span class="keyword">delete</span>;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    std::string name_;</span><br><span class="line">    std::chrono::steady_clock::time_point start_;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">fake_inference</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="function">ScopedTimer <span class="title">t</span><span class="params">(<span class="string">&quot;mel_spectrogram&quot;</span>)</span></span>;</span><br><span class="line">    std::this_thread::<span class="built_in">sleep_for</span>(std::chrono::<span class="built_in">milliseconds</span>(<span class="number">12</span>));   <span class="comment">// 假装在算</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="built_in">fake_inference</span>();</span><br><span class="line">    std::<span class="built_in">printf</span>(<span class="string">&quot;main done\n&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>预期输出（耗时数字每次不同）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">[timer] mel_spectrogram took 12066 us</span><br><span class="line">main done</span><br></pre></td></tr></table></figure>
+<p>想测哪段代码，就在作用域第一行放个计时器，退出时自动出结果——Python 里 <code>with</code> 语句/装饰器的体验，C++ 用 RAII 原生实现。同样的模式能写锁守卫（<code>std::lock_guard</code>，第 12 篇会见到）。</p>
+<hr />
+<h2 id="4-所有权ownership下一篇的铺垫"><a class="markdownIt-Anchor" href="#4-所有权ownership下一篇的铺垫"></a> 4. 所有权（ownership）：下一篇的铺垫</h2>
+<p>上面 <code>WavFile</code> 的设计里藏着一个关键概念：<strong>所有权</strong>——<strong>谁负责释放这个资源，谁就拥有它。</strong></p>
+<ul>
+<li><code>handle_</code> 这个 <code>FILE*</code> 归 <code>WavFile</code> 对象所有：析构时由它 fclose，别的代码不许碰。所以必须 <code>= delete</code> 删除拷贝——两个对象同时&quot;拥有&quot;就等于谁都不负责，必然双重释放。</li>
+<li>裸指针时代，所有权只存在于程序员脑子里（注释里那句 “// 调用方负责 delete” 是 C++ 史上最不可靠的文档）。现代 C++ 把所有权写进<strong>类型系统</strong>：<code>std::unique_ptr&lt;T&gt;</code> 独占所有权、出作用域自动释放（= RAII 的指针形态，<strong>以后你的默认选择</strong>）；<code>std::shared_ptr&lt;T&gt;</code> 共享所有权，最后一个放手的负责释放。</li>
+</ul>
+<p>第 04 篇系统讲智能指针。本篇带走一句话：<strong>对每个堆资源问一句&quot;谁拥有它？“，答案应该是一个明确的类型，而不是&quot;大家商量着来”。</strong></p>
+<hr />
+<h2 id="5-生存期延伸const-引用绑定临时对象"><a class="markdownIt-Anchor" href="#5-生存期延伸const-引用绑定临时对象"></a> 5. 生存期延伸：const 引用绑定临时对象</h2>
+<p>第 02 篇说过引用必须绑定已存在的对象，那临时对象（函数返回值）能不能绑？规则微妙：</p>
+<ul>
+<li><code>const T&amp;</code> 绑定临时对象：<strong>合法</strong>，且标准保证临时对象的寿命<strong>延长到引用的作用域结束</strong>；</li>
+<li>非 const 的 <code>T&amp;</code> 绑定临时对象：编译错误（“都说是临时的了，凭什么允许别人改”）。</li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// constref.cpp</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdio&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function">std::string <span class="title">make_tag</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">return</span> <span class="string">&quot;frame_001&quot;</span>;     <span class="comment">// 返回一个临时 string</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// const 引用绑定临时对象：临时对象的生命周期被延长到引用的作用域结束，</span></span><br><span class="line">    <span class="comment">// 这是合法且安全的，标准明确保证。</span></span><br><span class="line">    <span class="type">const</span> std::string&amp; tag = <span class="built_in">make_tag</span>();</span><br><span class="line">    std::<span class="built_in">printf</span>(<span class="string">&quot;tag=%s\n&quot;</span>, tag.<span class="built_in">c_str</span>());   <span class="comment">// 完全没问题</span></span><br><span class="line"></span><br><span class="line">    <span class="comment">// 而非 const 的引用绑不了临时对象，下面这行编译不过：</span></span><br><span class="line">    <span class="comment">// std::string&amp; bad = make_tag();   // error: cannot bind non-const lvalue ref</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>预期输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">tag=frame_001</span><br></pre></td></tr></table></figure>
+<p><strong>重要限定</strong>：延长只发生在&quot;<strong>局部 const 引用直接绑定临时对象</strong>&quot;这一种场景。临时对象被传进函数、存进类的引用成员、或经返回引用转了一手，延长不生效——那就是悬垂。工程上更省心的做法是按值接（<code>std::string tag = make_tag();</code>，有移动语义兜底，通常并不贵）。</p>
+<hr />
+<h2 id="6-用-asan-抓泄漏"><a class="markdownIt-Anchor" href="#6-用-asan-抓泄漏"></a> 6. 用 ASan 抓泄漏</h2>
+<p>第 01 篇用 ASan 抓了越界；它的子模块 <strong>LeakSanitizer</strong> 会在程序退出时盘点所有未释放的堆内存。看一个标准泄漏：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// leak_asan.cpp</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdio&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">auto</span>* buffer = <span class="keyword">new</span> <span class="type">float</span>[<span class="number">16000</span>];   <span class="comment">// 1 秒的 16kHz 音频缓冲</span></span><br><span class="line">    buffer[<span class="number">0</span>] = <span class="number">0.0f</span>;</span><br><span class="line">    std::<span class="built_in">printf</span>(<span class="string">&quot;forgot to delete...\n&quot;</span>);</span><br><span class="line">    <span class="comment">// 没有 delete[] buffer;  —— 泄漏！</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++17 -g -Wall -Wextra -pedantic -fsanitize=address -o leak_asan leak_asan.cpp</span><br><span class="line">./leak_asan</span><br></pre></td></tr></table></figure>
+<p>真实输出（关键行）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">=================================================================</span><br><span class="line">==4245==ERROR: LeakSanitizer: detected memory leaks</span><br><span class="line"></span><br><span class="line">Direct leak of 64000 byte(s) in 1 object(s) allocated from:</span><br><span class="line">    #0 ... in operator new[](unsigned long)</span><br><span class="line">    #1 ... in main leak_asan.cpp:5</span><br><span class="line"></span><br><span class="line">SUMMARY: AddressSanitizer: 64000 byte(s) leaked in 1 allocation(s).</span><br></pre></td></tr></table></figure>
+<p>报告直接给出：泄漏多少字节、在<strong>哪一行</strong>分配的。16000 个 float 正好 64000 字节，数字对得上。</p>
+<p>双重释放同样当场抓获（<code>delete p; delete p;</code>）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">==30142==ERROR: AddressSanitizer: attempting double-free on 0x502000000010 ...</span><br><span class="line">    #1 ... in main double_free_asan.cpp:7</span><br><span class="line">freed by thread T0 here:</span><br><span class="line">    #1 ... in main double_free_asan.cpp:6</span><br></pre></td></tr></table></figure>
+<p>第一次 free 和第二次 free 的行号、分配位置全在完整报告里——手工查这种问题可能要一整天，ASan 几秒抓完。把 <code>-fsanitize=address</code> 加进你的测试构建习惯里（比如单元测试永远带它跑）。</p>
+<hr />
+<h2 id="常见坑"><a class="markdownIt-Anchor" href="#常见坑"></a> 常见坑</h2>
+<ol>
+<li><strong><code>new[]</code> 配 <code>delete[]</code>，<code>new</code> 配 <code>delete</code></strong>：写错组合是未定义行为。好消息：学了第 04 篇后你几乎不再手写任何 delete。</li>
+<li><strong>以为&quot;程序退出了泄漏就没事&quot;</strong>：短命脚本或许没事；长跑服务、循环里分配、给别人的库做回调——泄漏会滚雪球。</li>
+<li><strong>悬垂引用假装是延长生存期</strong>：只有&quot;局部 const 引用直接绑临时&quot;这一种延长；放进容器、成员、函数返回值里的引用一律不延长。</li>
+<li><strong>RAII 类忘了处理拷贝</strong>：默认拷贝逐成员复制，两个对象会管同一个句柄。要么 <code>= delete</code>，要么实现移动（第 06 篇），要么干脆存智能指针。</li>
+<li><strong>构造函数里抛异常前留了资源</strong>：构造函数抛异常时析构函数<strong>不会</strong>被调用（对象没出生完），先获取的资源会漏掉——资源应全部交给 RAII 成员托管（成员会自动析构）。</li>
+<li><strong>栈上开大数组爆栈</strong>：<code>float buf[16000 * 60 * 10];</code>（10 分钟音频）约 38 MB，默认栈只有 8 MB，直接段错误。大缓冲用 <code>std::vector</code>（住堆上，自动 RAII）。</li>
+</ol>
+<hr />
+<h2 id="小结"><a class="markdownIt-Anchor" href="#小结"></a> 小结</h2>
+<ul>
+<li>栈：分配快、生命周期=作用域、编译器全自动；堆：大小与寿命自由、代价是手动管理。</li>
+<li>裸 new/delete 四大坑：泄漏、双重释放、悬垂、异常不安全。</li>
+<li>RAII：构造获取、析构释放，把资源绑到作用域上；文件句柄、锁、计时器都能用同一模式包装。</li>
+<li>所有权：谁负责释放谁拥有；所有权应写进类型（第 04 篇 <code>unique_ptr</code>/<code>shared_ptr</code>），而不是注释。</li>
+<li><code>const T&amp;</code> 绑临时对象会延长其寿命到引用作用域结束，但仅限局部直接绑定这一种场景。</li>
+<li><code>-fsanitize=address</code> 同时抓越界、双重释放、泄漏（LeakSanitizer），报告带行号和分配栈。</li>
+</ul>
+<h2 id="自测题"><a class="markdownIt-Anchor" href="#自测题"></a> 自测题</h2>
+<ol>
+<li><code>struct T { ~T() { puts(&quot;bye&quot;); } };</code> 配上 <code>int main() { T a; { T b; puts(&quot;mid&quot;); } puts(&quot;end&quot;); }</code>，输出顺序是什么？为什么？</li>
+<li>裸 new/delete 的四大坑分别是什么？各举一句话场景。</li>
+<li>RAII 用一句中文概括。为什么 RAII 类在异常存在时也安全，而裸 new/delete 不安全？</li>
+<li>RAII 类为什么要 <code>= delete</code> 拷贝构造？不删会发生什么？</li>
+<li><code>const std::string&amp; s = std::string(&quot;hi&quot;);</code> 合法吗？把 <code>s</code> 换成某个类的引用成员呢？</li>
+<li>ASan 打印 <code>Direct leak of 64000 byte(s) ... app.cpp:12</code>，你该去查什么？</li>
+</ol>
+<details><summary>答案</summary>
+<ol>
+<li>输出顺序是 <code>mid</code>、<code>bye</code>、<code>end</code>、<code>bye</code>：先打印 <code>mid</code>；随后内层块结束，<code>b</code> 立刻析构（第一个 <code>bye</code>）；接着打印 <code>end</code>；main 结束时轮到 <code>a</code> 析构（第二个 <code>bye</code>）。考点：析构精确发生在离开作用域处。</li>
+<li>① 泄漏：异常/提前 return 跳过 delete，长跑服务内存滚雪球；② 双重释放：两条路径都 delete 同一指针，堆结构损坏；③ 悬垂：delete 后继续用指针，读写已归还的内存；④ 异常不安全：new 与 delete 之间任何一条抛异常的路径都造成泄漏。</li>
+<li>“把资源的获取和释放绑到栈对象的构造和析构上，释放交给作用域自动完成。” 异常安全：栈展开时析构函数保证被调用，即使中途抛异常释放代码也必然执行；裸 delete 是普通语句，异常路径直接跳过。</li>
+<li>默认拷贝逐成员复制，拷贝出的对象和原对象持有<strong>同一个</strong>资源句柄，两个析构都会释放它 → 双重释放。<code>= delete</code> 在编译期禁止拷贝，逼使用者明确管理权转移（移动）。</li>
+<li>第一句合法：局部 const 引用直接绑定临时对象，寿命延长到作用域结束。第二句危险：延长不适用于&quot;经参数/成员转手&quot;的场景，构造函数结束后临时实参消亡，成员里留下悬垂引用。</li>
+<li>查 app.cpp 第 12 行的分配（16000 个 float = 64000 字节，正是那段音频缓冲）在哪条路径上没有对应的释放。修复方式是改用 <code>std::vector</code> 或智能指针，而不是手动补一个 delete。</li>
+</ol>
+</details>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/C/" rel="tag"># C++</a>
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/04/01-%E7%8E%AF%E5%A2%83%E6%90%AD%E5%BB%BA%E4%B8%8E%E5%B7%A5%E5%85%B7%E9%93%BE/" rel="prev" title="01-环境搭建与工具链">
+                  <i class="fa fa-angle-left"></i> 01-环境搭建与工具链
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/04/02-%E7%8E%B0%E4%BB%A3C++%E5%9F%BA%E7%A1%80%E8%AF%AD%E6%B3%95/" rel="next" title="02-现代C++基础语法">
+                  02-现代C++基础语法 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

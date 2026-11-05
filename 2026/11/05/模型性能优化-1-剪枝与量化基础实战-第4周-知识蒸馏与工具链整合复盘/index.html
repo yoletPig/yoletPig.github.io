@@ -1,0 +1,721 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 4 周教程：知识蒸馏与工具链整合——压缩的第三条路与评测基线  本周要回答的问题  温度 TTT 在蒸馏里到底起什么作用？为什么软标签比硬标签信息量大？ MiniLLM 为什么要用反向 KL？&quot;模式覆盖&quot;与&quot;模式寻找&quot;有什么区别？ 蒸馏、量化、剪枝如何组成工业界的压缩流水线？ llm-compressor &#x2F; AutoGPTQ &#x2F; bitsandbyt">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第4周-知识蒸馏与工具链整合复盘">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC4%E5%91%A8-%E7%9F%A5%E8%AF%86%E8%92%B8%E9%A6%8F%E4%B8%8E%E5%B7%A5%E5%85%B7%E9%93%BE%E6%95%B4%E5%90%88%E5%A4%8D%E7%9B%98/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 4 周教程：知识蒸馏与工具链整合——压缩的第三条路与评测基线  本周要回答的问题  温度 TTT 在蒸馏里到底起什么作用？为什么软标签比硬标签信息量大？ MiniLLM 为什么要用反向 KL？&quot;模式覆盖&quot;与&quot;模式寻找&quot;有什么区别？ 蒸馏、量化、剪枝如何组成工业界的压缩流水线？ llm-compressor &#x2F; AutoGPTQ &#x2F; bitsandbyt">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-05T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.582Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="推理优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC4%E5%91%A8-%E7%9F%A5%E8%AF%86%E8%92%B8%E9%A6%8F%E4%B8%8E%E5%B7%A5%E5%85%B7%E9%93%BE%E6%95%B4%E5%90%88%E5%A4%8D%E7%9B%98/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC4%E5%91%A8-%E7%9F%A5%E8%AF%86%E8%92%B8%E9%A6%8F%E4%B8%8E%E5%B7%A5%E5%85%B7%E9%93%BE%E6%95%B4%E5%90%88%E5%A4%8D%E7%9B%98/","path":"2026/11/05/模型性能优化-1-剪枝与量化基础实战-第4周-知识蒸馏与工具链整合复盘/","title":"第4周-知识蒸馏与工具链整合复盘"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第4周-知识蒸馏与工具链整合复盘 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-4-%E5%91%A8%E6%95%99%E7%A8%8B%E7%9F%A5%E8%AF%86%E8%92%B8%E9%A6%8F%E4%B8%8E%E5%B7%A5%E5%85%B7%E9%93%BE%E6%95%B4%E5%90%88%E5%8E%8B%E7%BC%A9%E7%9A%84%E7%AC%AC%E4%B8%89%E6%9D%A1%E8%B7%AF%E4%B8%8E%E8%AF%84%E6%B5%8B%E5%9F%BA%E7%BA%BF"><span class="nav-number">1.</span> <span class="nav-text"> 第 4 周教程：知识蒸馏与工具链整合——压缩的第三条路与评测基线</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E8%92%B8%E9%A6%8F-%E7%94%A8%E6%95%99%E5%B8%88%E7%9A%84%E5%88%86%E5%B8%83%E5%BD%A2%E7%8A%B6%E5%BD%93%E7%9B%91%E7%9D%A3%E4%BF%A1%E5%8F%B7"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：蒸馏 &#x3D; 用教师的分布形状当监督信号</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E8%BD%AF%E6%A0%87%E7%AD%BE%E7%9A%84%E4%BF%A1%E6%81%AF%E9%87%8F"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 软标签的信息量</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-llm-%E8%92%B8%E9%A6%8F%E7%9A%84%E7%89%B9%E6%AE%8A%E6%80%A7%E9%80%90-token-%E7%9A%84%E5%BA%8F%E5%88%97%E8%92%B8%E9%A6%8F"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 LLM 蒸馏的特殊性：逐 token 的序列蒸馏</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-minillm%E5%8F%8D%E5%90%91-kl-%E9%81%BF%E5%85%8D%E6%A8%A1%E5%BC%8F%E8%A6%86%E7%9B%96"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 MiniLLM：反向 KL 避免模式覆盖</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#14-%E8%92%B8%E9%A6%8F%E7%9A%84%E4%B8%89%E7%A7%8D%E6%95%B0%E6%8D%AE%E8%B7%AF%E7%BA%BF"><span class="nav-number">1.1.4.</span> <span class="nav-text"> 1.4 蒸馏的三种数据路线</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#15-%E7%BB%84%E5%90%88%E6%8B%B3%E5%85%88%E8%92%B8%E9%A6%8F%E5%86%8D%E9%87%8F%E5%8C%96%E7%9A%84%E5%B7%A5%E4%B8%9A%E6%B5%81%E6%B0%B4%E7%BA%BF"><span class="nav-number">1.1.5.</span> <span class="nav-text"> 1.5 组合拳：先蒸馏再量化的工业流水线</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E4%B8%8E%E6%95%B0%E6%8D%AE%E6%B5%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 系统架构与数据流</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 实现与验证（本周交付核心）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E6%B8%A9%E5%BA%A6%E8%BD%AF%E6%A0%87%E7%AD%BE%E6%8D%9F%E5%A4%B1%E5%AE%8C%E6%95%B4%E5%8F%AF%E8%BF%90%E8%A1%8Ccpu-%E5%8F%AF%E9%AA%8C%E8%AF%81"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 温度软标签损失（完整可运行，CPU 可验证）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%BA%91%E4%B8%8A%E7%9C%9F%E5%AE%9E%E8%92%B8%E9%A6%8F7b-%E6%95%99%E5%B8%88-15b-lora-%E5%AD%A6%E7%94%9F"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 云上真实蒸馏：7B 教师 → 1.5B LoRA 学生</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-%E8%92%B8%E9%A6%8F%E7%9B%91%E6%8E%A7%E4%BB%AA%E8%A1%A8%E6%9D%BF%E8%B7%91%E5%AE%9E%E9%AA%8C%E6%97%B6%E7%9B%AF%E4%BD%8F%E8%BF%99%E5%9B%9B%E6%9D%A1%E6%9B%B2%E7%BA%BF"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 蒸馏监控仪表板（跑实验时盯住这四条曲线）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#34-%E5%8E%8B%E7%BC%A9%E8%AF%84%E6%B5%8B%E5%9F%BA%E7%BA%BF%E6%8A%A5%E5%91%8A%E7%9F%A9%E9%98%B5%E8%AE%BE%E8%AE%A1%E7%AC%AC-5-6-%E5%91%A8%E4%BA%A4%E4%BB%98"><span class="nav-number">1.3.4.</span> <span class="nav-text"> 3.4 《压缩评测基线报告》矩阵设计（第 5-6 周交付）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%9F%BA%E7%BA%BF%E6%8A%A5%E5%91%8A%E7%9A%84%E8%84%9A%E6%9C%AC%E5%8C%96%E8%AE%A9%E8%AF%84%E6%B5%8B%E4%B8%80%E6%AC%A1%E5%86%99%E5%A5%BD-%E5%A4%84%E5%A4%84%E5%A4%8D%E7%94%A8"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 基线报告的脚本化：让评测&quot;一次写好、处处复用&quot;</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#61-%E5%9B%9B%E7%BB%B4%E6%8C%87%E6%A0%87%E7%9A%84%E6%9C%80%E5%B0%8F%E8%AF%84%E6%B5%8B%E8%84%9A%E6%9C%AC%E5%AE%8C%E6%95%B4%E5%8F%AF%E8%BF%90%E8%A1%8C"><span class="nav-number">1.6.1.</span> <span class="nav-text"> 6.1 四维指标的最小评测脚本（完整可运行）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#62-%E4%BA%91%E8%B5%84%E6%BA%90%E4%BD%BF%E7%94%A8%E7%BA%A6%E5%AE%9A%E9%A2%84%E7%AE%97%E6%97%A0%E4%B8%8A%E9%99%90%E4%B9%9F%E8%A6%81%E6%9C%89%E5%B7%A5%E7%A8%8B%E4%B9%A0%E6%83%AF"><span class="nav-number">1.6.2.</span> <span class="nav-text"> 6.2 云资源使用约定（预算无上限也要有工程习惯）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.7.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC4%E5%91%A8-%E7%9F%A5%E8%AF%86%E8%92%B8%E9%A6%8F%E4%B8%8E%E5%B7%A5%E5%85%B7%E9%93%BE%E6%95%B4%E5%90%88%E5%A4%8D%E7%9B%98/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第4周-知识蒸馏与工具链整合复盘 | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第4周-知识蒸馏与工具链整合复盘
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+      
+
+      <time title="创建时间：2026-11-05 12:00:00 / 修改时间：08:11:03" itemprop="dateCreated datePublished" datetime="2026-11-05T12:00:00+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" itemprop="url" rel="index"><span itemprop="name">模型性能优化</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/Stage-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98/" itemprop="url" rel="index"><span itemprop="name">Stage 1-剪枝与量化基础实战</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.8k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>14 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-4-周教程知识蒸馏与工具链整合压缩的第三条路与评测基线"><a class="markdownIt-Anchor" href="#第-4-周教程知识蒸馏与工具链整合压缩的第三条路与评测基线"></a> 第 4 周教程：知识蒸馏与工具链整合——压缩的第三条路与评测基线</h1>
+<blockquote>
+<p><strong>本周要回答的问题</strong></p>
+<ol>
+<li>温度 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi></mrow><annotation encoding="application/x-tex">T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span></span></span> 在蒸馏里到底起什么作用？为什么软标签比硬标签信息量大？</li>
+<li>MiniLLM 为什么要用反向 KL？&quot;模式覆盖&quot;与&quot;模式寻找&quot;有什么区别？</li>
+<li>蒸馏、量化、剪枝如何组成工业界的压缩流水线？</li>
+<li>llm-compressor / AutoGPTQ / bitsandbytes / SparseML / torchao 五大工具链怎么选？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 4-6 周。交付物：① 云上用 Qwen2.5-7B 蒸馏 Qwen2.5-1.5B（LoRA 学生），实现温度软标签损失并对比直接 SFT；② 设计并产出《压缩评测基线报告》矩阵。</p>
+<hr />
+<h2 id="1-第一性原理蒸馏-用教师的分布形状当监督信号"><a class="markdownIt-Anchor" href="#1-第一性原理蒸馏-用教师的分布形状当监督信号"></a> 1. 第一性原理：蒸馏 = 用教师的分布形状当监督信号</h2>
+<h3 id="11-软标签的信息量"><a class="markdownIt-Anchor" href="#11-软标签的信息量"></a> 1.1 软标签的信息量</h3>
+<p>分类的 one-hot 标签只说&quot;答案是 3&quot;，而教师的 softmax 输出说&quot;答案是 3（0.85），但 5 也有点像（0.10），7 有一点点像（0.03）&quot;。这些**类间相似性（dark knowledge，暗知识）**正是泛化的来源。Hinton et al.（2015, <em>Distilling the Knowledge in a Neural Network</em>）的原始配方：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msubsup><mi>p</mi><mi>i</mi><mi>T</mi></msubsup><mo>=</mo><mfrac><mrow><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>z</mi><mi>i</mi></msub><mi mathvariant="normal">/</mi><mi>T</mi><mo stretchy="false">)</mo></mrow><mrow><munder><mo>∑</mo><mi>j</mi></munder><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>z</mi><mi>j</mi></msub><mi mathvariant="normal">/</mi><mi>T</mi><mo stretchy="false">)</mo></mrow></mfrac><mo separator="true">,</mo><mspace width="2em"/><msub><mi mathvariant="script">L</mi><mtext>KD</mtext></msub><mo>=</mo><msup><mi>T</mi><mn>2</mn></msup><mo>⋅</mo><mrow><mi mathvariant="normal">K</mi><mi mathvariant="normal">L</mi></mrow><mtext> ⁣</mtext><mrow><mo fence="true">(</mo><msubsup><mi>p</mi><mtext>teacher</mtext><mi>T</mi></msubsup><mtext> </mtext><mi mathvariant="normal">∥</mi><mtext> </mtext><msubsup><mi>p</mi><mtext>student</mtext><mi>T</mi></msubsup><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">p_i^T = \frac{\exp(z_i / T)}{\sum_j \exp(z_j / T)}, \qquad
+\mathcal{L}_{\text{KD}} = T^2 \cdot \mathrm{KL}\!\left(p^T_{\text{teacher}} \,\|\, p^T_{\text{student}}\right)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.138331em;vertical-align:-0.247em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8913309999999999em;"><span style="top:-2.4530000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.5488180000000003em;vertical-align:-1.1218180000000002em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.427em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:-0.0000050000000000050004em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.16195399999999993em;"><span style="top:-2.40029em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.43581800000000004em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop">exp</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:-0.04398em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05724em;">j</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="mclose">)</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mop">exp</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:-0.04398em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.1218180000000002em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord"><span class="mord mathcal">L</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">KD</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8641079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8641079999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.2413409999999998em;vertical-align:-0.35001em;"></span><span class="mord"><span class="mord mathrm">K</span><span class="mord mathrm">L</span></span><span class="mspace" style="margin-right:-0.16666666666666666em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8913309999999999em;"><span style="top:-2.4530000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">teacher</span></span></span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">∥</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8913309999999999em;"><span style="top:-2.4530000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">student</span></span></span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">)</span></span></span></span></span></span></span></p>
+<ul>
+<li><strong>温度 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi></mrow><annotation encoding="application/x-tex">T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span></span></span></strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi><mo>→</mo><mn>1</mn></mrow><annotation encoding="application/x-tex">T \to 1</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span></span></span></span> 退化为一键分布；<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi></mrow><annotation encoding="application/x-tex">T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span></span></span> 升高把概率质量从头部摊向尾部，暴露类间结构。典型 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi><mo>∈</mo><mo stretchy="false">[</mo><mn>2</mn><mo separator="true">,</mo><mn>10</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">T \in [2, 10]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72243em;vertical-align:-0.0391em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">2</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">1</span><span class="mord">0</span><span class="mclose">]</span></span></span></span>。</li>
+<li><strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>T</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">T^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span> 系数</strong>：温度升高后梯度幅度按 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><msup><mi>T</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">1/T^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span> 缩小，乘回 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>T</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">T^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span> 保持蒸馏损失与交叉熵同量级（这是推导题常考点：对 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>z</mi><mi mathvariant="normal">/</mi><mi>T</mi></mrow><annotation encoding="application/x-tex">z/T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span></span></span> 求导多出一个 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><mi>T</mi></mrow><annotation encoding="application/x-tex">1/T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span></span></span>，两处共 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><msup><mi>T</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">1/T^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span>）。</li>
+</ul>
+<h3 id="12-llm-蒸馏的特殊性逐-token-的序列蒸馏"><a class="markdownIt-Anchor" href="#12-llm-蒸馏的特殊性逐-token-的序列蒸馏"></a> 1.2 LLM 蒸馏的特殊性：逐 token 的序列蒸馏</h3>
+<p>语言模型的蒸馏天然发生在每个生成位置上：教师在上下文 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mrow><mo>&lt;</mo><mi>t</mi></mrow></msub></mrow><annotation encoding="application/x-tex">x_{&lt;t}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.60793em;vertical-align:-0.17737em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2805559999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mrel mtight">&lt;</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.17737em;"><span></span></span></span></span></span></span></span></span></span> 下给出整个词表的分布 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>p</mi><mi>T</mi></msub><mo stretchy="false">(</mo><mo>⋅</mo><mo>∣</mo><msub><mi>x</mi><mrow><mo>&lt;</mo><mi>t</mi></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">p_T(\cdot \mid x_{&lt;t})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord">⋅</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2805559999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mrel mtight">&lt;</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.17737em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>，学生在同样上下文上拟合它：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi mathvariant="script">L</mi><mtext>KD</mtext></msub><mo>=</mo><munder><mo>∑</mo><mi>t</mi></munder><mrow><mi mathvariant="normal">K</mi><mi mathvariant="normal">L</mi></mrow><mtext> ⁣</mtext><mrow><mo fence="true">(</mo><msub><mi>p</mi><mi>T</mi></msub><mo stretchy="false">(</mo><mo>⋅</mo><mo>∣</mo><msub><mi>x</mi><mrow><mo>&lt;</mo><mi>t</mi></mrow></msub><mo stretchy="false">)</mo><mtext> </mtext><mi mathvariant="normal">∥</mi><mtext> </mtext><msub><mi>p</mi><mi>S</mi></msub><mo stretchy="false">(</mo><mo>⋅</mo><mo>∣</mo><msub><mi>x</mi><mrow><mo>&lt;</mo><mi>t</mi></mrow></msub><mo stretchy="false">)</mo><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">\mathcal{L}_{\text{KD}} = \sum_t \mathrm{KL}\!\left(p_T(\cdot \mid x_{&lt;t}) \,\|\, p_S(\cdot \mid x_{&lt;t})\right)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord"><span class="mord mathcal">L</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">KD</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.3000100000000003em;vertical-align:-1.250005em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.050005em;"><span style="top:-1.8999949999999999em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span><span style="top:-3.0500049999999996em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.250005em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathrm">K</span><span class="mord mathrm">L</span></span><span class="mspace" style="margin-right:-0.16666666666666666em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord">⋅</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2805559999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mrel mtight">&lt;</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.17737em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">∥</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05764em;">S</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord">⋅</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2805559999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mrel mtight">&lt;</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.17737em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mclose delimcenter" style="top:0em;">)</span></span></span></span></span></span></p>
+<p>教师与学生共享同一输入序列（on-policy/off-policy 的选择见 §1.4），无需任何标签——<strong>教师本身就是标注器</strong>。这正是 7B → 1.5B 蒸馏比&quot;先标注再 SFT&quot;便宜且信息更稠密的原因。</p>
+<h3 id="13-minillm反向-kl-避免模式覆盖"><a class="markdownIt-Anchor" href="#13-minillm反向-kl-避免模式覆盖"></a> 1.3 MiniLLM：反向 KL 避免模式覆盖</h3>
+<p>标准蒸馏用前向 KL <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">K</mi><mi mathvariant="normal">L</mi></mrow><mo stretchy="false">(</mo><msub><mi>p</mi><mi>T</mi></msub><mi mathvariant="normal">∥</mi><msub><mi>p</mi><mi>S</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathrm{KL}(p_T \| p_S)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">K</span><span class="mord mathrm">L</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">∥</span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05764em;">S</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>（教师在前）。它的失效模式是<strong>模式覆盖（mode-covering）</strong>：学生在教师概率低的地方也被迫分配概率，导致输出稀释、质量平庸。MiniLLM（Gu et al., 2023）改用<strong>反向 KL</strong>：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi mathvariant="script">L</mi><mtext>MiniLLM</mtext></msub><mo>=</mo><msub><mi mathvariant="double-struck">E</mi><mrow><mi>y</mi><mo>∼</mo><msub><mi>p</mi><mi>S</mi></msub></mrow></msub><mo fence="false">[</mo><mrow><mi mathvariant="normal">K</mi><mi mathvariant="normal">L</mi></mrow><mo fence="false">(</mo><msub><mi>p</mi><mi>S</mi></msub><mo stretchy="false">(</mo><mo>⋅</mo><mo>∣</mo><mi>x</mi><mo stretchy="false">)</mo><mtext> </mtext><mi mathvariant="normal">∥</mi><mtext> </mtext><msub><mi>p</mi><mi>T</mi></msub><mo stretchy="false">(</mo><mo>⋅</mo><mo>∣</mo><mi>x</mi><mo stretchy="false">)</mo><mo fence="false">)</mo><mo fence="false">]</mo></mrow><annotation encoding="application/x-tex">\mathcal{L}_{\text{MiniLLM}} = \mathbb{E}_{y \sim p_S}\Big[\mathrm{KL}\big(p_S(\cdot \mid x) \,\|\, p_T(\cdot \mid x)\big)\Big]
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord"><span class="mord mathcal">L</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">MiniLLM</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.80002em;vertical-align:-0.65002em;"></span><span class="mord"><span class="mord"><span class="mord mathbb">E</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.15139200000000003em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03588em;">y</span><span class="mrel mtight">∼</span><span class="mord mtight"><span class="mord mathnormal mtight">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567071428571427em;margin-left:0em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05764em;">S</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.14329285714285717em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mord"><span class="delimsizing size2">[</span></span><span class="mord"><span class="mord mathrm">K</span><span class="mord mathrm">L</span></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05764em;">S</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord">⋅</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">∥</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord">⋅</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.80002em;vertical-align:-0.65002em;"></span><span class="mord mathnormal">x</span><span class="mclose">)</span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mord"><span class="delimsizing size2">]</span></span></span></span></span></span></p>
+<ul>
+<li>反向 KL 是<strong>模式寻找（mode-seeking）</strong>：学生集中拟合教师的高概率模式，在教师不支持的区域主动清零；</li>
+<li>期望在学生自己采样的序列上计算（policy gradient + 长度归一化 + 单步分解技巧），这是它工程上比前向 KL 贵的原因。</li>
+</ul>
+<p>一句话记忆：<strong>前向 KL 让学生&quot;处处讨好&quot;，反向 KL 让学生&quot;重点精通&quot;</strong>——生成式模型要的是后者。</p>
+<h3 id="14-蒸馏的三种数据路线"><a class="markdownIt-Anchor" href="#14-蒸馏的三种数据路线"></a> 1.4 蒸馏的三种数据路线</h3>
+<table>
+<thead>
+<tr>
+<th>路线</th>
+<th>学生看到的序列</th>
+<th>代表</th>
+<th>特点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>教师离线生成语料</td>
+<td>教师采样文本</td>
+<td>数据集蒸馏（Alpaca 系）</td>
+<td>便宜，但学生只见教师&quot;说出口&quot;的分布</td>
+</tr>
+<tr>
+<td>真实语料上对齐</td>
+<td>人类语料</td>
+<td>标准逐 token KD</td>
+<td>分布覆盖全，但受语料质量约束</td>
+</tr>
+<tr>
+<td>学生自采样</td>
+<td>学生自己的生成</td>
+<td>MiniLLM / GKD</td>
+<td>修训练-推理分布不一致，成本最高</td>
+</tr>
+</tbody>
+</table>
+<h3 id="15-组合拳先蒸馏再量化的工业流水线"><a class="markdownIt-Anchor" href="#15-组合拳先蒸馏再量化的工业流水线"></a> 1.5 组合拳：先蒸馏再量化的工业流水线</h3>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>大教师</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>蒸馏</mtext></mpadded></mover><mtext>小学生</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>量化/剪枝</mtext></mpadded></mover><mtext>压缩模型</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>QAT 收尾（可选）</mtext></mpadded></mover><mtext>部署</mtext></mrow><annotation encoding="application/x-tex">\text{大教师} \xrightarrow{\text{蒸馏}} \text{小学生} \xrightarrow{\text{量化/剪枝}} \text{压缩模型} \xrightarrow{\text{QAT 收尾（可选）}} \text{部署}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">大教师</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">蒸馏</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.158em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">小学生</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.147em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">量化</span><span class="mord mtight">/</span><span class="mord cjk_fallback mtight">剪枝</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">压缩模型</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">QAT </span><span class="mord cjk_fallback mtight">收尾（可选）</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">部署</span></span></span></span></span></span></p>
+<p>顺序的理由：① 蒸馏改变的是模型本身（权重全动），必须在量化定型之前做；② 小模型容量低，量化掉点更狠，反而更需要蒸馏把教师知识&quot;灌满&quot;再压；③ 若量化后仍有预算，加一段 QAT（Stage 2 第 4 周）收尾。你的语音方向同构：ASR/TTS 小模型几乎都走&quot;大模型蒸馏 → 量化部署&quot;这条链。</p>
+<hr />
+<h2 id="2-系统架构与数据流"><a class="markdownIt-Anchor" href="#2-系统架构与数据流"></a> 2. 系统架构与数据流</h2>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">教师 7B（冻结，仅前向）</span><br><span class="line">  │ 每个 batch：教师与学生同时吃同一批文本</span><br><span class="line">  ▼</span><br><span class="line">教师 logits z_T ──► softmax(z_T / T) ──┐</span><br><span class="line">学生 logits z_S ──► softmax(z_S / T) ──┼──► T² · KL(p_T ‖ p_S)   （蒸馏损失）</span><br><span class="line">                      softmax(z_S)    ──┼──► CE(labels)            （SFT 损失，可选加权）</span><br><span class="line">  ▼</span><br><span class="line">总损失 = α · L_KD + (1-α) · L_CE  ──► 只更新学生（或仅其 LoRA）</span><br></pre></td></tr></table></figure>
+<p>工程要点：教师与学生可不同卡放置（教师推理、学生训练）；教师前向开 <code>torch.no_grad()</code> 且用 <code>bfloat16</code>；词表必须一致（Qwen2.5 家族同词表，天然满足）。</p>
+<hr />
+<h2 id="3-实现与验证本周交付核心"><a class="markdownIt-Anchor" href="#3-实现与验证本周交付核心"></a> 3. 实现与验证（本周交付核心）</h2>
+<h3 id="31-温度软标签损失完整可运行cpu-可验证"><a class="markdownIt-Anchor" href="#31-温度软标签损失完整可运行cpu-可验证"></a> 3.1 温度软标签损失（完整可运行，CPU 可验证）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">import</span> torch.nn.functional <span class="keyword">as</span> F</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">kd_loss</span>(<span class="params">student_logits, teacher_logits, labels=<span class="literal">None</span>,</span></span><br><span class="line"><span class="params">            T=<span class="number">4.0</span>, alpha=<span class="number">0.7</span></span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">    温度蒸馏损失。返回 (total, kd_part, ce_part)。</span></span><br><span class="line"><span class="string">    student/teacher_logits: (B, L, V)</span></span><br><span class="line"><span class="string">    &quot;&quot;&quot;</span></span><br><span class="line">    B, L, V = student_logits.shape</span><br><span class="line">    log_ps = F.log_softmax(student_logits / T, dim=-<span class="number">1</span>).reshape(-<span class="number">1</span>, V)</span><br><span class="line">    p_t = F.softmax(teacher_logits / T, dim=-<span class="number">1</span>).reshape(-<span class="number">1</span>, V)</span><br><span class="line">    <span class="comment"># KL(p_t || p_s) = Σ p_t (log p_t - log p_s)，batchmean 在 (B·L, V) 上</span></span><br><span class="line">    <span class="comment"># = 对词表求和、对每个位置（B·L 个）求均值</span></span><br><span class="line">    kd = F.kl_div(log_ps, p_t, reduction=<span class="string">&quot;batchmean&quot;</span>) * (T ** <span class="number">2</span>)</span><br><span class="line">    ce = torch.tensor(<span class="number">0.0</span>)</span><br><span class="line">    <span class="keyword">if</span> labels <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span>:</span><br><span class="line">        ce = F.cross_entropy(</span><br><span class="line">            student_logits.view(-<span class="number">1</span>, student_logits.size(-<span class="number">1</span>)), labels.view(-<span class="number">1</span>))</span><br><span class="line">    <span class="keyword">return</span> alpha * kd + (<span class="number">1</span> - alpha) * ce, kd.item(), ce.item()</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 单元自检 ----</span></span><br><span class="line">torch.manual_seed(<span class="number">0</span>)</span><br><span class="line">B, L, V = <span class="number">2</span>, <span class="number">8</span>, <span class="number">100</span></span><br><span class="line">zt = torch.randn(B, L, V)</span><br><span class="line">zs = zt + <span class="number">0.1</span> * torch.randn(B, L, V)      <span class="comment"># 学生接近教师 → 损失应小</span></span><br><span class="line">zs_far = torch.randn(B, L, V)              <span class="comment"># 学生随机 → 损失应大</span></span><br><span class="line">labels = zt.argmax(-<span class="number">1</span>)</span><br><span class="line">l_near, _, _ = kd_loss(zs, zt, labels, T=<span class="number">4.0</span>)</span><br><span class="line">l_far,  _, _ = kd_loss(zs_far, zt, labels, T=<span class="number">4.0</span>)</span><br><span class="line"><span class="keyword">assert</span> l_near.item() &lt; l_far.item(), <span class="string">&quot;接近教师的学生损失应更小&quot;</span></span><br><span class="line"><span class="comment"># T → 1 时 KD 应退化逼近一键 CE（教师=学生时两者都 → 0）</span></span><br><span class="line">l_t1, kd_t1, _ = kd_loss(zt, zt, T=<span class="number">1.0</span>)</span><br><span class="line"><span class="keyword">assert</span> kd_t1 &lt; <span class="number">1e-5</span>, <span class="string">&quot;教师=学生时 KL 应为 0&quot;</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;蒸馏损失单元自检通过 ✓&quot;</span>)</span><br></pre></td></tr></table></figure>
+<h3 id="32-云上真实蒸馏7b-教师-15b-lora-学生"><a class="markdownIt-Anchor" href="#32-云上真实蒸馏7b-教师-15b-lora-学生"></a> 3.2 云上真实蒸馏：7B 教师 → 1.5B LoRA 学生</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 云环境：建议单卡 A100-40G（教师 7B bf16 前向 + 学生 1.5B LoRA 训练）</span></span><br><span class="line"><span class="comment"># 或双卡：教师 device_map 单独一张</span></span><br><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">from</span> datasets <span class="keyword">import</span> load_dataset</span><br><span class="line"><span class="keyword">from</span> transformers <span class="keyword">import</span> AutoModelForCausalLM, AutoTokenizer</span><br><span class="line"><span class="keyword">from</span> peft <span class="keyword">import</span> LoraConfig, get_peft_model</span><br><span class="line"></span><br><span class="line">TOK = AutoTokenizer.from_pretrained(<span class="string">&quot;Qwen/Qwen2.5-7B&quot;</span>)</span><br><span class="line">teacher = AutoModelForCausalLM.from_pretrained(</span><br><span class="line">    <span class="string">&quot;Qwen/Qwen2.5-7B&quot;</span>, torch_dtype=torch.bfloat16,</span><br><span class="line">    device_map=<span class="string">&quot;cuda:0&quot;</span>).<span class="built_in">eval</span>()</span><br><span class="line">student = AutoModelForCausalLM.from_pretrained(</span><br><span class="line">    <span class="string">&quot;Qwen/Qwen2.5-1.5B&quot;</span>, torch_dtype=torch.bfloat16, device_map=<span class="string">&quot;cuda:0&quot;</span>)</span><br><span class="line">student = get_peft_model(student, LoraConfig(</span><br><span class="line">    r=<span class="number">32</span>, lora_alpha=<span class="number">64</span>, target_modules=<span class="string">&quot;all-linear&quot;</span>, task_type=<span class="string">&quot;CAUSAL_LM&quot;</span>))</span><br><span class="line"></span><br><span class="line">data = load_dataset(<span class="string">&quot;tatsu-lab/alpaca&quot;</span>, split=<span class="string">&quot;train[:2000]&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">collate</span>(<span class="params">batch</span>):</span><br><span class="line">    texts = [b[<span class="string">&quot;instruction&quot;</span>] + <span class="string">&quot;\n&quot;</span> + b[<span class="string">&quot;output&quot;</span>] <span class="keyword">for</span> b <span class="keyword">in</span> batch]</span><br><span class="line">    enc = TOK(texts, return_tensors=<span class="string">&quot;pt&quot;</span>, truncation=<span class="literal">True</span>,</span><br><span class="line">              max_length=<span class="number">1024</span>, padding=<span class="literal">True</span>)</span><br><span class="line">    enc[<span class="string">&quot;labels&quot;</span>] = enc[<span class="string">&quot;input_ids&quot;</span>].clone()</span><br><span class="line">    <span class="comment"># 生产实现应把 padding 与 prompt 段的 labels 置 -100（不计损失），</span></span><br><span class="line">    <span class="comment"># MVP 演示从简——但要知道这里有水分</span></span><br><span class="line">    <span class="keyword">return</span> enc.to(<span class="string">&quot;cuda:0&quot;</span>)</span><br><span class="line"></span><br><span class="line">opt = torch.optim.AdamW(student.parameters(), lr=<span class="number">1e-4</span>)</span><br><span class="line">student.train()</span><br><span class="line"><span class="keyword">for</span> step <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">200</span>):                       <span class="comment"># MVP 规模：200 步演示收敛趋势</span></span><br><span class="line">    batch = collate(data[step*<span class="number">8</span>:(step+<span class="number">1</span>)*<span class="number">8</span>])</span><br><span class="line">    <span class="keyword">with</span> torch.no_grad():</span><br><span class="line">        zt = teacher(**batch).logits</span><br><span class="line">    zs = student(**batch).logits</span><br><span class="line">    loss, kd, ce = kd_loss(zs.<span class="built_in">float</span>(), zt.<span class="built_in">float</span>(), batch[<span class="string">&quot;labels&quot;</span>],</span><br><span class="line">                           T=<span class="number">4.0</span>, alpha=<span class="number">0.7</span>)</span><br><span class="line">    loss.backward(); opt.step(); opt.zero_grad()</span><br><span class="line">    <span class="keyword">if</span> step % <span class="number">20</span> == <span class="number">0</span>:</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;step <span class="subst">&#123;step&#125;</span>: total=<span class="subst">&#123;loss:<span class="number">.3</span>f&#125;</span> kd=<span class="subst">&#123;kd:<span class="number">.3</span>f&#125;</span> ce=<span class="subst">&#123;ce:<span class="number">.3</span>f&#125;</span>&quot;</span>)</span><br><span class="line">student.save_pretrained(<span class="string">&quot;qwen1.5b-distill-lora&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>对照实验（交付要求）</strong>：同样的数据与步数，跑一组 <code>alpha=0</code>（纯 SFT，只用 labels），对比两组学生在同一测试集上的 PPL 与人评流畅度。预期：<strong>蒸馏组 PPL 更低、长文本更连贯</strong>——教师的分布形状补上了 2000 条数据喂不出的语言先验。</p>
+<h3 id="33-蒸馏监控仪表板跑实验时盯住这四条曲线"><a class="markdownIt-Anchor" href="#33-蒸馏监控仪表板跑实验时盯住这四条曲线"></a> 3.3 蒸馏监控仪表板（跑实验时盯住这四条曲线）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 在 3.2 训练循环中记录（用 tensorboard 或简单 CSV 均可）</span></span><br><span class="line"><span class="keyword">import</span> csv</span><br><span class="line">log = <span class="built_in">open</span>(<span class="string">&quot;distill_log.csv&quot;</span>, <span class="string">&quot;w&quot;</span>)</span><br><span class="line">csv.writer(log).writerow([<span class="string">&quot;step&quot;</span>, <span class="string">&quot;total&quot;</span>, <span class="string">&quot;kd&quot;</span>, <span class="string">&quot;ce&quot;</span>, <span class="string">&quot;grad_norm&quot;</span>])</span><br><span class="line"><span class="comment"># 每 20 步写一行：</span></span><br><span class="line"><span class="comment">#   ① kd 损失曲线：应平稳下降——若震荡，查温度与学习率</span></span><br><span class="line"><span class="comment">#   ② ce 损失曲线：学生自己的语言建模能力——蒸馏不应让它变差</span></span><br><span class="line"><span class="comment">#   ③ kd/ce 比值：若 kd 远大于 ce，说明温度或 α 失衡</span></span><br><span class="line"><span class="comment">#   ④ 梯度范数：突然飙升是教师-学生分布错位的前兆</span></span><br></pre></td></tr></table></figure>
+<p><strong>常见曲线形态解读</strong>：</p>
+<ul>
+<li>KD 损失前 50 步骤降后平台：正常——学生先学头部概率，再学尾部结构；</li>
+<li>KD 损失不降：检查教师是否在 <code>no_grad</code> + <code>eval()</code> 模式、词表是否对齐；</li>
+<li>CE 变差而 KD 变好：α 过大，学生在&quot;模仿教师&quot;但忘了&quot;自己说话&quot;——回调 α。</li>
+</ul>
+<h3 id="34-压缩评测基线报告矩阵设计第-5-6-周交付"><a class="markdownIt-Anchor" href="#34-压缩评测基线报告矩阵设计第-5-6-周交付"></a> 3.4 《压缩评测基线报告》矩阵设计（第 5-6 周交付）</h3>
+<p>评测台四维指标，脚本化后所有 Stage 复用：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>指标</th>
+<th>工具</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>困惑度</td>
+<td>WikiText-2 / C4 PPL</td>
+<td><code>transformers</code> + 滑动窗口</td>
+</tr>
+<tr>
+<td>下游任务</td>
+<td>MMLU / CEval 子集（各 500 题抽样）</td>
+<td><code>lm-evaluation-harness</code></td>
+</tr>
+<tr>
+<td>延迟</td>
+<td>tokens/s（batch=1 与 batch=8）、首 token 延迟</td>
+<td>vLLM / llama.cpp bench</td>
+</tr>
+<tr>
+<td>资源</td>
+<td>峰值显存/内存、模型文件体积（GB）</td>
+<td><code>torch.cuda.max_memory_allocated</code> / <code>du -h</code></td>
+</tr>
+</tbody>
+</table>
+<p>基线矩阵（第 5-6 周实测填写）：</p>
+<table>
+<thead>
+<tr>
+<th>模型 × 方案</th>
+<th>PPL(WikiText-2)</th>
+<th>MMLU(5-shot)</th>
+<th>tokens/s(b=1)</th>
+<th>显存/内存</th>
+<th>体积</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Qwen2.5-0.5B FP16</td>
+<td><em>实测</em></td>
+<td><em>实测</em></td>
+<td><em>实测</em></td>
+<td><em>实测</em></td>
+<td><em>实测</em></td>
+</tr>
+<tr>
+<td>Qwen2.5-0.5B INT8 PTQ</td>
+<td><em>实测</em></td>
+<td><em>实测</em></td>
+<td><em>实测</em></td>
+<td><em>实测</em></td>
+<td><em>实测</em></td>
+</tr>
+<tr>
+<td>Qwen2.5-0.5B INT4 手写RTN</td>
+<td><em>实测</em></td>
+<td><em>实测</em></td>
+<td><em>实测</em></td>
+<td><em>实测</em></td>
+<td><em>实测</em></td>
+</tr>
+<tr>
+<td>Qwen2.5-1.5B ×（同上四行）</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+</tr>
+<tr>
+<td>Qwen2.5-7B ×（同上 + Wanda 50%）</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+<td>…</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p>这张表是后面一切的对照系：Stage 2 的七方案横评、Stage 5 的引擎调优，都往这张表上追加行，绝不重建。</p>
+</blockquote>
+<hr />
+<h2 id="4-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#4-工程权衡与失效模式"></a> 4. 工程权衡与失效模式</h2>
+<h3 id="41-权衡"><a class="markdownIt-Anchor" href="#41-权衡"></a> 4.1 权衡</h3>
+<ul>
+<li><strong>蒸馏成本</strong>：需要教师全程前向，训练成本 ≈ 教师的推理 + 学生的训练；对 7B→1.5B，教师前向通常是大头 → 教师量化前向（INT8）是常见省钱手段。</li>
+<li><strong>温度选择</strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi></mrow><annotation encoding="application/x-tex">T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span></span></span> 太小 ≈ 硬标签失去暗知识；<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi></mrow><annotation encoding="application/x-tex">T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span></span></span> 太大分布趋平，学生学到的是噪声。2~10 区间网格搜 3 个点即可。</li>
+<li><strong>工具链选型矩阵</strong>（面试直接背）：</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>工具</th>
+<th>定位</th>
+<th>强项</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>llm-compressor</strong></td>
+<td>vLLM 官方一站式</td>
+<td>GPTQ/AWQ/SmoothQuant/FP8/QAT，产出 vLLM 直载格式</td>
+<td>云端部署首选</td>
+</tr>
+<tr>
+<td><strong>AutoGPTQ</strong></td>
+<td>单一算法精耕</td>
+<td>GPTQ 成熟稳定、生态老</td>
+<td>只要 GPTQ 时的稳妥选择</td>
+</tr>
+<tr>
+<td><strong>bitsandbytes</strong></td>
+<td>训练侧即时量化</td>
+<td>NF4/INT8 零配置、QLoRA 生态</td>
+<td>微调/研究，不做部署产物</td>
+</tr>
+<tr>
+<td><strong>SparseML</strong></td>
+<td>Neural Magic 剪枝+量化</td>
+<td>Wanda/SparseGPT、稀疏-量化联合</td>
+<td>剪枝实验与 CPU 稀疏部署</td>
+</tr>
+<tr>
+<td><strong>torchao</strong></td>
+<td>PyTorch 官方</td>
+<td>INT4/INT8/FP8 与 <code>torch.compile</code> 深度集成</td>
+<td>训练推理一体、追新</td>
+</tr>
+</tbody>
+</table>
+<p>一句话：<strong>要部署产物选 llm-compressor，要训练时量化选 bitsandbytes，要剪枝选 SparseML，要 PyTorch 原生集成选 torchao</strong>。</p>
+<h3 id="42-失效模式"><a class="markdownIt-Anchor" href="#42-失效模式"></a> 4.2 失效模式</h3>
+<ol>
+<li><strong>学生词表/分词器与教师不一致</strong>：症状——KL 损失算出来无意义；根因——跨家族蒸馏时词表错位；修复——同家族蒸馏或加词表映射层。</li>
+<li><strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>T</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">T^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span> 系数漏写</strong>：症状——蒸馏损失数值巨大或微小，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi></mrow><annotation encoding="application/x-tex">\alpha</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span></span></span></span> 怎么调都不对；根因——温度缩放后梯度量级失衡；修复——补 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>T</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">T^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span>（§3.1 已实现）。</li>
+<li><strong>蒸馏数据过拟合教师口头禅</strong>：症状——学生复读教师的格式化套话（如总以&quot;当然！&quot;开头）；根因——教师采样语料的风格偏差被当成知识；修复——混入真实语料的逐 token KD。</li>
+<li><strong>评测基线漂移</strong>：症状——不同周的数字对不上；根因——换了评测集版本/生成长度/设备；修复——评测脚本锁死所有超参，写进报告脚注。</li>
+</ol>
+<hr />
+<h2 id="5-延伸思考题含解析"><a class="markdownIt-Anchor" href="#5-延伸思考题含解析"></a> 5. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：为什么蒸馏损失里要乘 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>T</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">T^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span>？不乘会怎样？<br />
+<strong>A</strong>：softmax 对 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>z</mi><mi mathvariant="normal">/</mi><mi>T</mi></mrow><annotation encoding="application/x-tex">z/T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span></span></span> 求导带出 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><mi>T</mi></mrow><annotation encoding="application/x-tex">1/T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span></span></span>，前向与反向各一次共 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><msup><mi>T</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">1/T^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span>，蒸馏梯度随 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi></mrow><annotation encoding="application/x-tex">T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span></span></span> 增大而缩小；乘 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>T</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">T^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span> 恢复与 CE 同量级，使 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi></mrow><annotation encoding="application/x-tex">\alpha</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span></span></span></span> 的加权有意义。不乘则需要把 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi></mrow><annotation encoding="application/x-tex">\alpha</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span></span></span></span> 调到接近 1 且随 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi></mrow><annotation encoding="application/x-tex">T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span></span></span> 重调，失去可解释性。</p>
+<p><strong>Q2</strong>：MiniLLM 的反向 KL 为什么必须在学生自己的采样上算？<br />
+<strong>A</strong>：反向 KL <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mrow><mi mathvariant="normal">K</mi><mi mathvariant="normal">L</mi></mrow><mo stretchy="false">(</mo><msub><mi>p</mi><mi>S</mi></msub><mi mathvariant="normal">∥</mi><msub><mi>p</mi><mi>T</mi></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathrm{KL}(p_S \| p_T)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathrm">K</span><span class="mord mathrm">L</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.05764em;">S</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord">∥</span><span class="mord"><span class="mord mathnormal">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> 的期望下标是学生分布——在教师语料上算会系统性漏掉学生自己会走到的状态（分布不匹配），这正是 on-policy 采样修正训练-推理 gap 的动机。</p>
+<p><strong>Q3</strong>：学生比教师小很多时，为什么&quot;蒸馏后再量化&quot;比&quot;直接量化大模型&quot;常常更优？<br />
+<strong>A</strong>：大模型 INT4 已接近无损，但体积仍大、端侧跑不动；蒸馏出的小模型 FP16 就放得下，再量化是锦上添花。选型逻辑是<strong>先满足部署预算（体积/延迟），再谈精度保留</strong>。</p>
+<p><strong>Q4</strong>：llm-compressor 产出的模型为什么能被 vLLM 直接加载，AutoGPTQ 的却需要转换？<br />
+<strong>A</strong>：llm-compressor 输出 compressed-tensors 规范（量化配置写进 config，权重按 vLLM 加载器预期的布局打包）；AutoGPTQ 是自己的 checkpoint 格式，需要 vLLM 内置的 GPTQ 加载分支。格式与引擎匹配是 Stage 2 第 5-6 周的主题。</p>
+<p><strong>Q5</strong>：你的语音方向里，哪些模型会走&quot;蒸馏 → 量化 → 端侧&quot;这条链？<br />
+<strong>A</strong>：端侧 ASR（如 SenseVoice-Small 这类为端侧延迟与部署设计的模型）、TTS 声码器/轻量解码器、VAD/降噪小模型。共同点：教师提供质量上限，学生满足实时率与内存预算——与本方向完全同构。</p>
+<hr />
+<h2 id="6-基线报告的脚本化让评测一次写好-处处复用"><a class="markdownIt-Anchor" href="#6-基线报告的脚本化让评测一次写好-处处复用"></a> 6. 基线报告的脚本化：让评测&quot;一次写好、处处复用&quot;</h2>
+<h3 id="61-四维指标的最小评测脚本完整可运行"><a class="markdownIt-Anchor" href="#61-四维指标的最小评测脚本完整可运行"></a> 6.1 四维指标的最小评测脚本（完整可运行）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># eval_suite.py —— Stage 1 基线台的骨架：PPL + 延迟 + 显存 + 体积</span></span><br><span class="line"><span class="keyword">import</span> time, torch, os</span><br><span class="line"><span class="keyword">from</span> transformers <span class="keyword">import</span> AutoModelForCausalLM, AutoTokenizer</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">ppl_wikitext</span>(<span class="params">model, tok, max_batches=<span class="number">8</span>, stride=<span class="number">512</span>, device=<span class="string">&quot;cuda&quot;</span></span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;WikiText-2 滑动窗口 PPL（简化版，完整版加 padding 处理）。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">from</span> datasets <span class="keyword">import</span> load_dataset</span><br><span class="line">    txt = <span class="string">&quot;\n&quot;</span>.join(load_dataset(<span class="string">&quot;wikitext&quot;</span>, <span class="string">&quot;wikitext-2-raw-v1&quot;</span>,</span><br><span class="line">                                 split=<span class="string">&quot;test&quot;</span>)[<span class="string">&quot;text&quot;</span>])</span><br><span class="line">    enc = tok(txt, return_tensors=<span class="string">&quot;pt&quot;</span>).input_ids.to(device)</span><br><span class="line">    nll, n = <span class="number">0.0</span>, <span class="number">0</span></span><br><span class="line">    <span class="keyword">with</span> torch.no_grad():</span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">0</span>, enc.shape[<span class="number">1</span>] - stride, stride):</span><br><span class="line">            <span class="keyword">if</span> i // stride &gt;= max_batches: <span class="keyword">break</span></span><br><span class="line">            seg = enc[:, i:i + stride * <span class="number">2</span>]</span><br><span class="line">            out = model(seg, labels=seg)</span><br><span class="line">            nll += out.loss.item() * seg.shape[<span class="number">1</span>]; n += seg.shape[<span class="number">1</span>]</span><br><span class="line">    <span class="keyword">return</span> torch.exp(torch.tensor(nll / n)).item()</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">latency_tps</span>(<span class="params">model, tok, prompt=<span class="string">&quot;介绍模型量化技术。&quot;</span>, n_new=<span class="number">128</span>, device=<span class="string">&quot;cuda&quot;</span></span>):</span><br><span class="line">    inp = tok(prompt, return_tensors=<span class="string">&quot;pt&quot;</span>).to(device)</span><br><span class="line">    torch.cuda.synchronize(); t0 = time.time()</span><br><span class="line">    out = model.generate(**inp, max_new_tokens=n_new, do_sample=<span class="literal">False</span>)</span><br><span class="line">    torch.cuda.synchronize()</span><br><span class="line">    n_gen = out.shape[<span class="number">1</span>] - inp.input_ids.shape[<span class="number">1</span>]</span><br><span class="line">    <span class="keyword">return</span> n_gen / (time.time() - t0)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">footprint_gb</span>(<span class="params">model</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;模型体积：参数总量 × 每参数字节数。&quot;&quot;&quot;</span></span><br><span class="line">    total = <span class="built_in">sum</span>(p.numel() * p.element_size() <span class="keyword">for</span> p <span class="keyword">in</span> model.parameters())</span><br><span class="line">    <span class="keyword">return</span> total / <span class="number">1e9</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 用法：对 &#123;FP16, INT8, INT4 手写, Wanda 50%&#125; 逐一跑三个函数，填基线矩阵</span></span><br><span class="line"><span class="comment"># 断言式自检：任何一行 PPL &lt; 1 或 &gt; 100 都说明管线坏了，立刻停机排查</span></span><br></pre></td></tr></table></figure>
+<p><strong>纪律</strong>：这个脚本从本周起冻结——所有后续 Stage 的量化方案都用它评测，参数一字不改。评测台的价值 = 可比性，可比性 = 不变性。</p>
+<h3 id="62-云资源使用约定预算无上限也要有工程习惯"><a class="markdownIt-Anchor" href="#62-云资源使用约定预算无上限也要有工程习惯"></a> 6.2 云资源使用约定（预算无上限也要有工程习惯）</h3>
+<ol>
+<li><strong>实验脚本化</strong>：每次上云只跑脚本（<code>run_all.sh</code>），不做手工交互实验——可复现、可估时、可计费对账；</li>
+<li><strong>用完即释放</strong>：脚本末尾自带关机钩子，或设定最大运行时长兜底；</li>
+<li><strong>结果落盘即走</strong>：所有指标写进 <code>results/</code> 目录，实例释放前先同步回本地（git 或对象存储）。</li>
+</ol>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 闭卷推导温度蒸馏公式，说明 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>T</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">T^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span> 系数的来源。</li>
+<li>[ ] 跑通 <code>kd_loss</code> 单元自检（接近教师 &lt; 随机学生、教师=学生时 KL→0）。</li>
+<li>[ ] 云上完成 7B→1.5B LoRA 蒸馏 200 步，记录 loss 曲线。</li>
+<li>[ ] 对照实验：蒸馏组 vs 纯 SFT 组的 PPL 对比（同数据同步数）。</li>
+<li>[ ] 完成《压缩评测基线报告》四维指标脚本 + 首版基线矩阵（0.5B/1.5B 至少各两行实测）。</li>
+<li>[ ] 背下五大工具链选型矩阵（面试题）。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%8E%A8%E7%90%86%E4%BC%98%E5%8C%96/" rel="tag"># 推理优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-2-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E8%BF%9B%E9%98%B6%E9%87%8F%E5%8C%96%E4%B8%8E%20QAT-%E7%AC%AC1%E5%91%A8-GPTQ%E9%80%90%E5%B1%82%E6%9C%80%E4%BC%98%E4%BA%8C%E9%98%B6%E9%87%8F%E5%8C%96/" rel="prev" title="第1周-GPTQ逐层最优二阶量化">
+                  <i class="fa fa-angle-left"></i> 第1周-GPTQ逐层最优二阶量化
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-1-%E5%89%AA%E6%9E%9D%E4%B8%8E%E9%87%8F%E5%8C%96%E5%9F%BA%E7%A1%80%E5%AE%9E%E6%88%98-%E7%AC%AC3%E5%91%A8-%E5%89%AA%E6%9E%9D%E4%BB%8E%E9%9D%9E%E7%BB%93%E6%9E%84%E5%8C%96%E5%88%B0%E7%BB%93%E6%9E%84%E5%8C%96/" rel="next" title="第3周-剪枝从非结构化到结构化">
+                  第3周-剪枝从非结构化到结构化 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

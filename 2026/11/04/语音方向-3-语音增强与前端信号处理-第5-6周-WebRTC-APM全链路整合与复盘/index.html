@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 5-6 周教程：WebRTC APM 全链路整合与阶段复盘  本周要回答的四个问题  AEC → NS → AGC → VAD 的调用顺序为什么不能乱？ WebRTC APM 每个模块的保守&#x2F;激进档位各有什么代价？ 前端提升对下游 ASR 到底有多大增益？怎么量化？ 如何把前四周的组件焊成一条可复用的&quot;录音 → 干净文本&quot;流水线？   对应学习计划：第 5-6 周。交付物">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第5-6周-WebRTC-APM全链路整合与复盘">
+<meta property="og:url" content="https://yoletpig.github.io/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-3-%E8%AF%AD%E9%9F%B3%E5%A2%9E%E5%BC%BA%E4%B8%8E%E5%89%8D%E7%AB%AF%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86-%E7%AC%AC5-6%E5%91%A8-WebRTC-APM%E5%85%A8%E9%93%BE%E8%B7%AF%E6%95%B4%E5%90%88%E4%B8%8E%E5%A4%8D%E7%9B%98/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 5-6 周教程：WebRTC APM 全链路整合与阶段复盘  本周要回答的四个问题  AEC → NS → AGC → VAD 的调用顺序为什么不能乱？ WebRTC APM 每个模块的保守&#x2F;激进档位各有什么代价？ 前端提升对下游 ASR 到底有多大增益？怎么量化？ 如何把前四周的组件焊成一条可复用的&quot;录音 → 干净文本&quot;流水线？   对应学习计划：第 5-6 周。交付物">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-11-04T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.518Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="语音">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-3-%E8%AF%AD%E9%9F%B3%E5%A2%9E%E5%BC%BA%E4%B8%8E%E5%89%8D%E7%AB%AF%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86-%E7%AC%AC5-6%E5%91%A8-WebRTC-APM%E5%85%A8%E9%93%BE%E8%B7%AF%E6%95%B4%E5%90%88%E4%B8%8E%E5%A4%8D%E7%9B%98/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-3-%E8%AF%AD%E9%9F%B3%E5%A2%9E%E5%BC%BA%E4%B8%8E%E5%89%8D%E7%AB%AF%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86-%E7%AC%AC5-6%E5%91%A8-WebRTC-APM%E5%85%A8%E9%93%BE%E8%B7%AF%E6%95%B4%E5%90%88%E4%B8%8E%E5%A4%8D%E7%9B%98/","path":"2026/11/04/语音方向-3-语音增强与前端信号处理-第5-6周-WebRTC-APM全链路整合与复盘/","title":"第5-6周-WebRTC-APM全链路整合与复盘"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第5-6周-WebRTC-APM全链路整合与复盘 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-5-6-%E5%91%A8%E6%95%99%E7%A8%8Bwebrtc-apm-%E5%85%A8%E9%93%BE%E8%B7%AF%E6%95%B4%E5%90%88%E4%B8%8E%E9%98%B6%E6%AE%B5%E5%A4%8D%E7%9B%98"><span class="nav-number">1.</span> <span class="nav-text"> 第 5-6 周教程：WebRTC APM 全链路整合与阶段复盘</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E6%B5%81%E6%B0%B4%E7%BA%BF%E9%A1%BA%E5%BA%8F%E6%98%AF%E5%9B%A0%E6%9E%9C%E7%BA%A6%E6%9D%9F%E7%9A%84%E4%BD%93%E7%8E%B0"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：流水线顺序是因果约束的体现</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E4%B8%BA%E4%BB%80%E4%B9%88-aec-%E5%BF%85%E9%A1%BB%E5%9C%A8-ns-%E5%89%8D"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 为什么 AEC 必须在 NS 前</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E4%B8%BA%E4%BB%80%E4%B9%88-agc-%E5%9C%A8-ns-%E5%90%8E"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 为什么 AGC 在 NS 后</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-%E4%B8%BA%E4%BB%80%E4%B9%88-vad-%E5%9C%A8%E6%9C%80%E5%90%8E"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 为什么 VAD 在最后</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-webrtc-apm-%E6%A8%A1%E5%9D%97%E4%B8%8E%E9%85%8D%E7%BD%AE"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. WebRTC APM 模块与配置</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E6%A8%A1%E5%9D%97%E8%81%8C%E8%B4%A3"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 模块职责</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E6%A1%A3%E4%BD%8D%E6%9D%83%E8%A1%A1"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 档位权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-python-%E8%B0%83%E7%94%A8"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 Python 调用</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%9E%84%E5%BB%BA%E5%AE%8C%E6%95%B4%E5%89%8D%E7%AB%AF%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 构建完整前端流水线（交付核心）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E6%B5%81%E6%B0%B4%E7%BA%BF%E7%B1%BB"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 流水线类</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E7%AB%AF%E5%88%B0%E7%AB%AF%E5%89%8D%E7%AB%AF-asr"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 端到端：前端 + ASR</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E6%B6%88%E8%9E%8D%E5%AE%9E%E9%AA%8C%E5%89%8D%E7%AB%AF%E5%AF%B9-asr-%E7%9A%84%E5%A2%9E%E7%9B%8A%E4%BA%A4%E4%BB%98"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 消融实验：前端对 ASR 的增益（交付）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E5%AE%9E%E9%AA%8C%E8%AE%BE%E8%AE%A1"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 实验设计</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E7%BB%93%E6%9E%9C%E8%A7%A3%E8%AF%BB%E6%A8%A1%E6%9D%BF"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 结果解读模板</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#51-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.5.1.</span> <span class="nav-text"> 5.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#52-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.5.2.</span> <span class="nav-text"> 5.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.7.</span> <span class="nav-text"> 本周交付清单</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#stage-3-%E6%80%BB%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> Stage 3 总结</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-3-%E8%AF%AD%E9%9F%B3%E5%A2%9E%E5%BC%BA%E4%B8%8E%E5%89%8D%E7%AB%AF%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86-%E7%AC%AC5-6%E5%91%A8-WebRTC-APM%E5%85%A8%E9%93%BE%E8%B7%AF%E6%95%B4%E5%90%88%E4%B8%8E%E5%A4%8D%E7%9B%98/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第5-6周-WebRTC-APM全链路整合与复盘 | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第5-6周-WebRTC-APM全链路整合与复盘
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-11-04 12:00:00" itemprop="dateCreated datePublished" datetime="2026-11-04T12:00:00+08:00">2026-11-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-05 08:11:03" itemprop="dateModified" datetime="2026-11-05T08:11:03+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91/" itemprop="url" rel="index"><span itemprop="name">语音方向</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91/Stage-3-%E8%AF%AD%E9%9F%B3%E5%A2%9E%E5%BC%BA%E4%B8%8E%E5%89%8D%E7%AB%AF%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86/" itemprop="url" rel="index"><span itemprop="name">Stage 3-语音增强与前端信号处理</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.8k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>10 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-5-6-周教程webrtc-apm-全链路整合与阶段复盘"><a class="markdownIt-Anchor" href="#第-5-6-周教程webrtc-apm-全链路整合与阶段复盘"></a> 第 5-6 周教程：WebRTC APM 全链路整合与阶段复盘</h1>
+<blockquote>
+<p><strong>本周要回答的四个问题</strong></p>
+<ol>
+<li>AEC → NS → AGC → VAD 的调用顺序为什么不能乱？</li>
+<li>WebRTC APM 每个模块的保守/激进档位各有什么代价？</li>
+<li>前端提升对下游 ASR 到底有多大增益？怎么量化？</li>
+<li>如何把前四周的组件焊成一条可复用的&quot;录音 → 干净文本&quot;流水线？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 5-6 周。交付物：构建「录音 → AEC → NS → AGC → VAD → ASR」完整前端，输出各阶段音频对比试听、DNSMOS 分数链、前端开关对 ASR CER 的消融表。</p>
+<hr />
+<h2 id="1-第一性原理流水线顺序是因果约束的体现"><a class="markdownIt-Anchor" href="#1-第一性原理流水线顺序是因果约束的体现"></a> 1. 第一性原理：流水线顺序是因果约束的体现</h2>
+<h3 id="11-为什么-aec-必须在-ns-前"><a class="markdownIt-Anchor" href="#11-为什么-aec-必须在-ns-前"></a> 1.1 为什么 AEC 必须在 NS 前</h3>
+<p>AEC 假设&quot;麦克风信号里的回声 = 参考信号经线性路径卷积&quot;。降噪（NS）对频谱做<strong>非线性</strong>修改，会破坏回声与参考之间的线性对应——AEC 找不到回声、消不掉。因此：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>AEC（线性对齐消回声）</mtext><mtext>  </mtext><mo>→</mo><mtext>  </mtext><mtext>NS（非线性去噪）</mtext><mtext>  </mtext><mo>→</mo><mtext>  </mtext><mtext>AGC</mtext><mtext>  </mtext><mo>→</mo><mtext>  </mtext><mtext>VAD</mtext></mrow><annotation encoding="application/x-tex">\text{AEC（线性对齐消回声）} \;\to\; \text{NS（非线性去噪）} \;\to\; \text{AGC} \;\to\; \text{VAD}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord">AEC</span><span class="mord cjk_fallback">（线性对齐消回声）</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord">NS</span><span class="mord cjk_fallback">（非线性去噪）</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord">AGC</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord">VAD</span></span></span></span></span></span></p>
+<p><strong>这条链在干什么</strong>：把四个模块按&quot;破坏性&quot;排序——越靠前的模块对信号的改动越&quot;温柔、可逆、线性&quot;，越靠后越&quot;自由、非线性&quot;。AEC 做的是减法（减去与参考线性相关的回声），必须最先；NS 做谱整形（乘时变增益）；AGC 乘整体增益（最温和，但会改变后续模块看到的电平）；VAD 只做判决不改信号，放最后还能享受前面所有处理的红利。<strong>任何一个对信号做了非线性改动的模块，都会让排在它后面的&quot;依赖线性结构&quot;的模块失效</strong>——这就是顺序的因果逻辑。</p>
+<h3 id="12-为什么-agc-在-ns-后"><a class="markdownIt-Anchor" href="#12-为什么-agc-在-ns-后"></a> 1.2 为什么 AGC 在 NS 后</h3>
+<p>降噪需要稳定的信噪比估计；若先 AGC 放大弱信号，噪声也被放大，干扰降噪的噪声谱估计。先降噪稳住信号，再 AGC 调响度。</p>
+<h3 id="13-为什么-vad-在最后"><a class="markdownIt-Anchor" href="#13-为什么-vad-在最后"></a> 1.3 为什么 VAD 在最后</h3>
+<p>VAD 需要尽可能干净的信号来判断&quot;是否有语音&quot;；放在链尾受益于前面所有处理。同时 VAD 的输出（语音段）供 ASR 只处理有效区间。</p>
+<p><strong>这条顺序就是本周交付流水线的骨架</strong>——也是自测题&quot;前端与后端接口&quot;的答案。</p>
+<hr />
+<h2 id="2-webrtc-apm-模块与配置"><a class="markdownIt-Anchor" href="#2-webrtc-apm-模块与配置"></a> 2. WebRTC APM 模块与配置</h2>
+<h3 id="21-模块职责"><a class="markdownIt-Anchor" href="#21-模块职责"></a> 2.1 模块职责</h3>
+<table>
+<thead>
+<tr>
+<th>模块</th>
+<th>作用</th>
+<th>关键配置</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AEC3</td>
+<td>回声消除</td>
+<td>延迟估计、保守/激进</td>
+</tr>
+<tr>
+<td>NS（NoiseSuppression）</td>
+<td>噪声抑制</td>
+<td>档位（低/中/高/极高）</td>
+</tr>
+<tr>
+<td>AGC2</td>
+<td>自动增益</td>
+<td>目标电平、限幅</td>
+</tr>
+<tr>
+<td>VAD</td>
+<td>语音检测</td>
+<td>模式 0-3（激进程度）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="22-档位权衡"><a class="markdownIt-Anchor" href="#22-档位权衡"></a> 2.2 档位权衡</h3>
+<ul>
+<li><strong>保守档</strong>：处理轻、语音失真小，但残留噪声/回声多；</li>
+<li><strong>激进档</strong>：去噪/回声狠，但可能伤语音（发闷、音乐噪声）。</li>
+</ul>
+<p>生产上通常 NS 用中-高档、AEC 用默认、AGC 限幅防削波。<strong>没有万能配置，按场景调</strong>。</p>
+<h3 id="23-python-调用"><a class="markdownIt-Anchor" href="#23-python-调用"></a> 2.3 Python 调用</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install webrtc-noise-gain       <span class="comment"># NS + AGC + VAD（基于 freedesktop webrtc-audio-processing）</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"><span class="keyword">from</span> webrtc_noise_gain <span class="keyword">import</span> AudioProcessor</span><br><span class="line"></span><br><span class="line"><span class="comment"># 参数：auto_gain 0-31（目标 dBFS，0=关闭）；noise_suppression 0-4（抑制强度，0=关闭）</span></span><br><span class="line"><span class="comment"># 输入：16 kHz 单声道 int16；每次处理 10 ms = 160 样本 = 320 字节</span></span><br><span class="line">ap = AudioProcessor(<span class="number">15</span>, <span class="number">2</span>)</span><br><span class="line"></span><br><span class="line">chunk_in = (np.random.randn(<span class="number">160</span>) * <span class="number">1000</span>).astype(np.int16).tobytes()</span><br><span class="line">out = ap.Process10ms(chunk_in)</span><br><span class="line"><span class="built_in">print</span>(out.is_speech)                          <span class="comment"># 内置 VAD 的判决</span></span><br><span class="line"><span class="built_in">print</span>(np.frombuffer(out.audio, dtype=np.int16).shape)   <span class="comment"># (160,) 处理后的 10 ms 音频</span></span><br></pre></td></tr></table></figure>
+<p><strong>关于 AEC 的现实情况</strong>：这个包<strong>不含 AEC</strong>；PyPI 上名为 <code>webrtc-audio-processing</code> 的旧绑定（0.1.3）基于约 2016 年的 C++ 库 v0.3（老 AEC 而非 AEC3），维护也停滞。要在 Python 里跑真正的 AEC3，目前需自行编译 freedesktop 的 webrtc-audio-processing（≥1.0 含 AEC3）并写绑定。因此本教程流水线中 AEC 用第 3 周的手写 NLMS 作为占位实现，NS/AGC/VAD 用上面的包真实接入。</p>
+<hr />
+<h2 id="3-构建完整前端流水线交付核心"><a class="markdownIt-Anchor" href="#3-构建完整前端流水线交付核心"></a> 3. 构建完整前端流水线（交付核心）</h2>
+<h3 id="31-流水线类"><a class="markdownIt-Anchor" href="#31-流水线类"></a> 3.1 流水线类</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">SpeechFrontend</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">    录音 -&gt; AEC -&gt; NS -&gt; AGC -&gt; VAD 的完整前端。</span></span><br><span class="line"><span class="string">    各模块可开关，用于消融实验。</span></span><br><span class="line"><span class="string">    NS/AGC 用 webrtc-noise-gain 真实接入；AEC 留接入点（第 3 周 NLMS 或自编译 AEC3）。</span></span><br><span class="line"><span class="string">    &quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, sr=<span class="number">16000</span>,</span></span><br><span class="line"><span class="params">                 enable_aec=<span class="literal">True</span>, enable_ns=<span class="literal">True</span>,</span></span><br><span class="line"><span class="params">                 enable_agc=<span class="literal">True</span>, enable_vad=<span class="literal">True</span></span>):</span><br><span class="line">        <span class="keyword">assert</span> sr == <span class="number">16000</span>, <span class="string">&quot;webrtc-noise-gain 仅支持 16 kHz&quot;</span></span><br><span class="line">        <span class="variable language_">self</span>.sr = sr</span><br><span class="line">        <span class="variable language_">self</span>.enable_aec = enable_aec</span><br><span class="line">        <span class="variable language_">self</span>.enable_ns = enable_ns</span><br><span class="line">        <span class="variable language_">self</span>.enable_agc = enable_agc</span><br><span class="line">        <span class="variable language_">self</span>.enable_vad = enable_vad</span><br><span class="line">        <span class="variable language_">self</span>._init_modules()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">_init_modules</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">if</span> <span class="variable language_">self</span>.enable_vad:</span><br><span class="line">            <span class="variable language_">self</span>.vad_model, <span class="variable language_">self</span>.vad_utils = torch.hub.load(</span><br><span class="line">                <span class="string">&#x27;snakers4/silero-vad&#x27;</span>, <span class="string">&#x27;silero_vad&#x27;</span>, trust_repo=<span class="literal">True</span>)</span><br><span class="line">            <span class="variable language_">self</span>.get_ts = <span class="variable language_">self</span>.vad_utils[<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">process</span>(<span class="params">self, mic: np.ndarray, far: np.ndarray = <span class="literal">None</span></span>):</span><br><span class="line">        <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">        mic: 麦克风信号; far: 远端参考（AEC 用，可空）。</span></span><br><span class="line"><span class="string">        返回 (增强后波形, 语音段时间戳列表)。</span></span><br><span class="line"><span class="string">        &quot;&quot;&quot;</span></span><br><span class="line">        x = mic.astype(np.float32).copy()</span><br><span class="line"></span><br><span class="line">        <span class="comment"># 1. AEC（需要远端参考；接入第 3 周的 nlms_aec 或自编译的 AEC3 绑定）</span></span><br><span class="line">        <span class="keyword">if</span> <span class="variable language_">self</span>.enable_aec <span class="keyword">and</span> far <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span>:</span><br><span class="line">            <span class="comment"># from week3 import nlms_aec</span></span><br><span class="line">            <span class="comment"># x, _ = nlms_aec(x, far, L=int(0.15 * self.sr), freeze=True)</span></span><br><span class="line">            <span class="keyword">pass</span></span><br><span class="line"></span><br><span class="line">        <span class="comment"># 2+3. NS + AGC（webrtc-noise-gain：一次实例同时做两件事，按开关配置档位）</span></span><br><span class="line">        <span class="keyword">if</span> <span class="variable language_">self</span>.enable_ns <span class="keyword">or</span> <span class="variable language_">self</span>.enable_agc:</span><br><span class="line">            <span class="keyword">from</span> webrtc_noise_gain <span class="keyword">import</span> AudioProcessor</span><br><span class="line">            auto_gain = <span class="number">15</span> <span class="keyword">if</span> <span class="variable language_">self</span>.enable_agc <span class="keyword">else</span> <span class="number">0</span>     <span class="comment"># 0=关闭；[0,31] dBFS</span></span><br><span class="line">            ns_level = <span class="number">2</span> <span class="keyword">if</span> <span class="variable language_">self</span>.enable_ns <span class="keyword">else</span> <span class="number">0</span>        <span class="comment"># 0=关闭；[0,4]</span></span><br><span class="line">            ap = AudioProcessor(auto_gain, ns_level)</span><br><span class="line">            x_i16 = np.clip(x * <span class="number">32768</span>, -<span class="number">32768</span>, <span class="number">32767</span>).astype(np.int16)</span><br><span class="line">            out = []</span><br><span class="line">            <span class="keyword">for</span> j <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">0</span>, <span class="built_in">len</span>(x_i16) - <span class="number">159</span>, <span class="number">160</span>):    <span class="comment"># 每次处理 10 ms（不足 10 ms 的尾部丢弃）</span></span><br><span class="line">                chunk = ap.Process10ms(x_i16[j:j+<span class="number">160</span>].tobytes())</span><br><span class="line">                out.append(np.frombuffer(chunk.audio, dtype=np.int16))</span><br><span class="line">            x = np.concatenate(out).astype(np.float32) / <span class="number">32768.0</span></span><br><span class="line"></span><br><span class="line">        <span class="comment"># 4. VAD：返回语音段（放链尾，享受前面所有处理的红利）</span></span><br><span class="line">        segments = <span class="literal">None</span></span><br><span class="line">        <span class="keyword">if</span> <span class="variable language_">self</span>.enable_vad:</span><br><span class="line">            segments = <span class="variable language_">self</span>.get_ts(torch.from_numpy(x).<span class="built_in">float</span>(),</span><br><span class="line">                                   <span class="variable language_">self</span>.vad_model, sampling_rate=<span class="variable language_">self</span>.sr)</span><br><span class="line">        <span class="keyword">return</span> x, segments</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">keep_speech</span>(<span class="params">self, x: np.ndarray, segments</span>) -&gt; np.ndarray:</span><br><span class="line">        <span class="string">&quot;&quot;&quot;按 VAD 时间戳拼接语音段（无语音时返回空数组）。&quot;&quot;&quot;</span></span><br><span class="line">        <span class="keyword">if</span> <span class="keyword">not</span> segments:</span><br><span class="line">            <span class="keyword">return</span> np.zeros(<span class="number">0</span>, dtype=np.float32)</span><br><span class="line">        <span class="keyword">return</span> np.concatenate([x[t[<span class="string">&#x27;start&#x27;</span>]:t[<span class="string">&#x27;end&#x27;</span>]] <span class="keyword">for</span> t <span class="keyword">in</span> segments])</span><br></pre></td></tr></table></figure>
+<p><strong>注意</strong>：</p>
+<ul>
+<li><code>AudioProcessor(auto_gain, ns_level)</code> 的两个参数控制 NS/AGC 的档位，把 <code>0</code> 传给任一项即关闭它——这正是消融实验需要的&quot;逐模块开关&quot;；</li>
+<li>AEC 是唯一的占位接入点（Python 生态暂无维护良好的 AEC3 绑定，见 2.3 节）——把第 3 周的 <code>nlms_aec</code> 接进去即可闭环。这个类的价值在于<strong>统一编排 + 可开关消融</strong>。</li>
+</ul>
+<h3 id="32-端到端前端-asr"><a class="markdownIt-Anchor" href="#32-端到端前端-asr"></a> 3.2 端到端：前端 + ASR</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> tempfile</span><br><span class="line"><span class="keyword">import</span> soundfile <span class="keyword">as</span> sf</span><br><span class="line"><span class="keyword">from</span> funasr <span class="keyword">import</span> AutoModel</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">FrontendASR</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="variable language_">self</span>.frontend = SpeechFrontend()</span><br><span class="line">        <span class="comment"># SenseVoiceSmall：多语言 ASR，CPU 可跑，首次运行自动下载权重</span></span><br><span class="line">        <span class="variable language_">self</span>.asr = AutoModel(model=<span class="string">&quot;iic/SenseVoiceSmall&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">transcribe</span>(<span class="params">self, mic, far=<span class="literal">None</span></span>):</span><br><span class="line">        enhanced, segments = <span class="variable language_">self</span>.frontend.process(mic, far)</span><br><span class="line">        <span class="comment"># 只把语音段喂给 ASR（VAD 的价值：跳过静音/噪声段）</span></span><br><span class="line">        speech = <span class="variable language_">self</span>.frontend.keep_speech(enhanced, segments)</span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">len</span>(speech) == <span class="number">0</span>:</span><br><span class="line">            <span class="keyword">return</span> <span class="string">&quot;&quot;</span></span><br><span class="line">        <span class="comment"># FunASR 对数组输入的支持随版本变化，写临时 wav 最稳</span></span><br><span class="line">        <span class="keyword">with</span> tempfile.NamedTemporaryFile(suffix=<span class="string">&quot;.wav&quot;</span>, delete=<span class="literal">False</span>) <span class="keyword">as</span> f:</span><br><span class="line">            sf.write(f.name, speech, <span class="variable language_">self</span>.frontend.sr)</span><br><span class="line">            res = <span class="variable language_">self</span>.asr.generate(<span class="built_in">input</span>=f.name)</span><br><span class="line">        <span class="keyword">return</span> res[<span class="number">0</span>][<span class="string">&quot;text&quot;</span>]</span><br></pre></td></tr></table></figure>
+<hr />
+<h2 id="4-消融实验前端对-asr-的增益交付"><a class="markdownIt-Anchor" href="#4-消融实验前端对-asr-的增益交付"></a> 4. 消融实验：前端对 ASR 的增益（交付）</h2>
+<h3 id="41-实验设计"><a class="markdownIt-Anchor" href="#41-实验设计"></a> 4.1 实验设计</h3>
+<p>核心问题：<strong>前端处理到底让 ASR 准了多少？</strong> 设计：</p>
+<ol>
+<li>准备 10 条带噪/带回声录音 + 人工标注文本；</li>
+<li>四种配置跑 ASR：
+<ul>
+<li>A：无前端（原始音频直接识别）；</li>
+<li>B：仅降噪；</li>
+<li>C：降噪 + AGC；</li>
+<li>D：完整前端（AEC+NS+AGC+VAD）；</li>
+</ul>
+</li>
+<li>每种配置算 CER，输出消融表。</li>
+</ol>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> jiwer <span class="keyword">import</span> cer</span><br><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">normalize_zh</span>(<span class="params">s</span>):</span><br><span class="line">    <span class="keyword">import</span> re</span><br><span class="line">    <span class="keyword">return</span> re.sub(<span class="string">r&quot;[，。！？、,.!?\s\&quot;&#x27;《》&lt;&gt;()\[\]]&quot;</span>, <span class="string">&quot;&quot;</span>, s).lower()</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">eval_config</span>(<span class="params">fe_asr, pairs, config</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;config: dict 控制前端各模块开关&quot;&quot;&quot;</span></span><br><span class="line">    fe_asr.frontend.enable_ns = config.get(<span class="string">&quot;ns&quot;</span>, <span class="literal">False</span>)</span><br><span class="line">    fe_asr.frontend.enable_agc = config.get(<span class="string">&quot;agc&quot;</span>, <span class="literal">False</span>)</span><br><span class="line">    fe_asr.frontend.enable_vad = config.get(<span class="string">&quot;vad&quot;</span>, <span class="literal">False</span>)</span><br><span class="line">    refs, hyps = [], []</span><br><span class="line">    <span class="keyword">for</span> wav_path, ref <span class="keyword">in</span> pairs:</span><br><span class="line">        <span class="keyword">import</span> soundfile <span class="keyword">as</span> sf</span><br><span class="line">        mic, _ = sf.read(wav_path, dtype=<span class="string">&quot;float32&quot;</span>)</span><br><span class="line">        <span class="keyword">if</span> mic.ndim &gt; <span class="number">1</span>: mic = mic.mean(axis=<span class="number">1</span>)</span><br><span class="line">        hyp = fe_asr.transcribe(mic)</span><br><span class="line">        refs.append(normalize_zh(ref))</span><br><span class="line">        hyps.append(normalize_zh(hyp))</span><br><span class="line">    <span class="keyword">return</span> cer(refs, hyps)</span><br><span class="line"></span><br><span class="line">configs = &#123;</span><br><span class="line">    <span class="string">&quot;A_无前端&quot;</span>: &#123;&#125;,</span><br><span class="line">    <span class="string">&quot;B_仅降噪&quot;</span>: &#123;<span class="string">&quot;ns&quot;</span>: <span class="literal">True</span>&#125;,</span><br><span class="line">    <span class="string">&quot;C_降噪+AGC&quot;</span>: &#123;<span class="string">&quot;ns&quot;</span>: <span class="literal">True</span>, <span class="string">&quot;agc&quot;</span>: <span class="literal">True</span>&#125;,</span><br><span class="line">    <span class="string">&quot;D_完整前端&quot;</span>: &#123;<span class="string">&quot;ns&quot;</span>: <span class="literal">True</span>, <span class="string">&quot;agc&quot;</span>: <span class="literal">True</span>, <span class="string">&quot;vad&quot;</span>: <span class="literal">True</span>&#125;,</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment"># pairs = [(wav_path, ref_text), ...] 你的 10 条测试数据</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;<span class="subst">&#123;<span class="string">&#x27;配置&#x27;</span>:&lt;<span class="number">14</span>&#125;</span><span class="subst">&#123;<span class="string">&#x27;CER&#x27;</span>:&gt;<span class="number">8</span>&#125;</span>&quot;</span>)</span><br><span class="line"><span class="keyword">for</span> name, cfg <span class="keyword">in</span> configs.items():</span><br><span class="line">    <span class="comment"># c = eval_config(fe_asr, pairs, cfg); print(f&quot;&#123;name:&lt;14&#125;&#123;c*100:&gt;7.2f&#125;%&quot;)</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;<span class="subst">&#123;name:&lt;<span class="number">14</span>&#125;</span>  (填入实测)&quot;</span>)</span><br></pre></td></tr></table></figure>
+<h3 id="42-结果解读模板"><a class="markdownIt-Anchor" href="#42-结果解读模板"></a> 4.2 结果解读模板</h3>
+<p><strong>预期趋势</strong>：A（无前端）CER 最高；加降噪（B）显著下降；加 AGC/VAD（C/D）进一步小幅改善。这张表直接回答学习计划的问题——“<strong>前端提升 1 分贝，ASR CER 改善多少</strong>”，用你的实测数字填。</p>
+<p><strong>同时记录</strong>：</p>
+<ul>
+<li>各阶段音频的试听对比（原始/降噪后/完整前端）；</li>
+<li>若有 DNSMOS，输出分数链（原始 → 各阶段）。</li>
+</ul>
+<hr />
+<h2 id="5-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#5-工程权衡与失效模式"></a> 5. 工程权衡与失效模式</h2>
+<h3 id="51-权衡"><a class="markdownIt-Anchor" href="#51-权衡"></a> 5.1 权衡</h3>
+<ul>
+<li><strong>处理强度</strong>：激进前端更干净但可能伤语音、增加延迟；按场景调档；</li>
+<li><strong>模块级联误差</strong>：每级都可能引入失真，级联放大。需消融验证每级的净收益；</li>
+<li><strong>实时性</strong>：完整前端有累积延迟，实时通信要控制每级帧长。</li>
+</ul>
+<h3 id="52-失效模式"><a class="markdownIt-Anchor" href="#52-失效模式"></a> 5.2 失效模式</h3>
+<ol>
+<li><strong>顺序颠倒</strong>：NS 在 AEC 前 → 回声消不掉（第 1 节原理）。这是最经典的配置错误。</li>
+<li><strong>过度处理</strong>：全开激进档，语音发闷、ASR 反而下降。消融表会暴露。</li>
+<li><strong>VAD 切词</strong>：VAD 在词中误断，ASR 漏字。调端点参数。</li>
+<li><strong>AGC 放大噪声</strong>：降噪不足时 AGC 把噪声也放大。确保降噪在前。</li>
+</ol>
+<hr />
+<h2 id="6-延伸思考题含解析"><a class="markdownIt-Anchor" href="#6-延伸思考题含解析"></a> 6. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：为什么前端顺序是 AEC → NS → AGC → VAD？任意两级颠倒会怎样？<br />
+<strong>A</strong>：AEC 依赖回声与参考的线性关系，必须最先（非线性处理会破坏它）；NS 在 AGC 前以稳定信噪比估计；VAD 最后用干净信号判活。颠倒如 NS→AEC 会让回声消不掉；AGC→NS 会让降噪的噪声谱估计失真。</p>
+<p><strong>Q2</strong>：怎么量化&quot;前端对 ASR 的增益&quot;？只看音频质量指标够吗？<br />
+<strong>A</strong>：不够。音频指标（PESQ/DNSMOS）衡量听感，但 ASR 关心可懂度与特征稳定性。必须在下游 ASR 上测 CER 消融，才能证明前端对最终任务的净收益。两者结合：音频指标解释&quot;干净了多少&quot;，CER 回答&quot;识别准了多少&quot;。</p>
+<p><strong>Q3</strong>：完整前端全开激进档，ASR 反而变差，可能为什么？<br />
+<strong>A</strong>：过度降噪引入音乐噪声/频谱失真，AGC 放大残留噪声，这些伪影破坏 ASR 特征。激进档的失真代价超过了去噪收益。需消融找到每级的最优强度。</p>
+<p><strong>Q4</strong>：实时通信场景，前端延迟怎么控制？<br />
+<strong>A</strong>：每级用因果、短帧设计；AEC/NS 用流式模型（如 DeepFilterNet：20 ms 帧 + 20 ms 前瞻，总延迟 40 ms）；避免需要长上下文的非因果处理。总算法延迟控制在几十毫秒内。</p>
+<p><strong>Q5</strong>：你的前端如何与 Stage 7 的端侧助手对接？<br />
+<strong>A</strong>：前端（AEC+NS+AGC+VAD）作为助手的麦克风输入预处理，输出干净语音段喂端侧 ASR（SenseVoice-Small）。前端质量直接决定 ASR 上限，是助手可用性的关键一环。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 构建 <code>SpeechFrontend</code> 流水线类（AEC/NS/AGC/VAD 可开关）。</li>
+<li>[ ] 接入第 2 周降噪、第 3 周 AEC、第 4 周 AGC/VAD。</li>
+<li>[ ] 跑通「前端 + SenseVoice」端到端，输出 10 条测试的转写。</li>
+<li>[ ] 完成四配置消融表（CER），记录各阶段试听与质量分数链。</li>
+<li>[ ] 能解释流水线顺序的因果逻辑。</li>
+</ul>
+<h2 id="stage-3-总结"><a class="markdownIt-Anchor" href="#stage-3-总结"></a> Stage 3 总结</h2>
+<p>完成本阶段，你已能：</p>
+<ol>
+<li><strong>推导</strong>：维纳增益 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>G</mi><mo>=</mo><mi>ξ</mi><mi mathvariant="normal">/</mi><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mi>ξ</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">G=\xi/(1+\xi)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal">G</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.04601em;">ξ</span><span class="mord">/</span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.04601em;">ξ</span><span class="mclose">)</span></span></span></span>、DD 递推、NLMS 更新、FXLMS filtered-x；</li>
+<li><strong>实现</strong>：维纳滤波、DeepFilterNet 推理、NLMS 回声消除、AGC、Silero VAD；</li>
+<li><strong>系统</strong>：WebRTC 级前端流水线 + 对 ASR 增益的消融验证。</li>
+</ol>
+<p>对照学习计划第 5-6 周自测清单核验后，进入 <strong>Stage 4：说话人分离与声纹识别</strong>。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%AF%AD%E9%9F%B3/" rel="tag"># 语音</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-4-%E8%AF%B4%E8%AF%9D%E4%BA%BA%E5%88%86%E7%A6%BB%E4%B8%8E%E5%A3%B0%E7%BA%B9%E8%AF%86%E5%88%AB-README/" rel="prev" title="README">
+                  <i class="fa fa-angle-left"></i> README
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/11/04/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-3-%E8%AF%AD%E9%9F%B3%E5%A2%9E%E5%BC%BA%E4%B8%8E%E5%89%8D%E7%AB%AF%E4%BF%A1%E5%8F%B7%E5%A4%84%E7%90%86-%E7%AC%AC4%E5%91%A8-AGC-VAD%E4%B8%8E%E4%B8%BB%E5%8A%A8%E9%99%8D%E5%99%AAANC/" rel="next" title="第4周-AGC-VAD与主动降噪ANC">
+                  第4周-AGC-VAD与主动降噪ANC <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

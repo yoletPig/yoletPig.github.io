@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="第 4 周教程：torch_npu 训练迁移与精度排查  本周要回答的三个问题  一段在 CUDA 上跑的训练脚本，迁到 910B 需要改哪几行？ 迁移后精度对不齐，系统化的排查路径是什么？ 哪些算子会&quot;悄悄&quot; fallback 到 CPU？为什么这是性能杀手？   对应学习计划：第 4 周。交付物：云上 910B 完成一次「CUDA 脚本 → torch_npu」迁移（用你">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第4周-torch_npu训练迁移与精度排查">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-6-%E6%98%87%E8%85%BE%20CANN%20%E4%B8%8E%E7%AE%97%E5%AD%90%E5%BC%80%E5%8F%91-%E7%AC%AC4%E5%91%A8-torch_npu%E8%AE%AD%E7%BB%83%E8%BF%81%E7%A7%BB%E4%B8%8E%E7%B2%BE%E5%BA%A6%E6%8E%92%E6%9F%A5/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="第 4 周教程：torch_npu 训练迁移与精度排查  本周要回答的三个问题  一段在 CUDA 上跑的训练脚本，迁到 910B 需要改哪几行？ 迁移后精度对不齐，系统化的排查路径是什么？ 哪些算子会&quot;悄悄&quot; fallback 到 CPU？为什么这是性能杀手？   对应学习计划：第 4 周。交付物：云上 910B 完成一次「CUDA 脚本 → torch_npu」迁移（用你">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-04T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T00:11:03.598Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="推理优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-6-%E6%98%87%E8%85%BE%20CANN%20%E4%B8%8E%E7%AE%97%E5%AD%90%E5%BC%80%E5%8F%91-%E7%AC%AC4%E5%91%A8-torch_npu%E8%AE%AD%E7%BB%83%E8%BF%81%E7%A7%BB%E4%B8%8E%E7%B2%BE%E5%BA%A6%E6%8E%92%E6%9F%A5/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-6-%E6%98%87%E8%85%BE%20CANN%20%E4%B8%8E%E7%AE%97%E5%AD%90%E5%BC%80%E5%8F%91-%E7%AC%AC4%E5%91%A8-torch_npu%E8%AE%AD%E7%BB%83%E8%BF%81%E7%A7%BB%E4%B8%8E%E7%B2%BE%E5%BA%A6%E6%8E%92%E6%9F%A5/","path":"2026/09/04/模型性能优化-6-昇腾 CANN 与算子开发-第4周-torch_npu训练迁移与精度排查/","title":"第4周-torch_npu训练迁移与精度排查"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第4周-torch_npu训练迁移与精度排查 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-4-%E5%91%A8%E6%95%99%E7%A8%8Btorch_npu-%E8%AE%AD%E7%BB%83%E8%BF%81%E7%A7%BB%E4%B8%8E%E7%B2%BE%E5%BA%A6%E6%8E%92%E6%9F%A5"><span class="nav-number">1.</span> <span class="nav-text"> 第 4 周教程：torch_npu 训练迁移与精度排查</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86torch_npu-%E5%9C%A8-pytorch-%E9%87%8C%E5%8A%A8%E4%BA%86%E4%BB%80%E4%B9%88"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：torch_npu 在 PyTorch 里动了什么</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-device-%E6%8A%BD%E8%B1%A1%E7%9A%84%E5%8F%AF%E6%89%A9%E5%B1%95%E6%80%A7"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 device 抽象的可扩展性</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E7%AE%97%E5%AD%90%E7%9A%84%E4%B8%89%E6%9D%A1%E5%8E%BB%E8%B7%AF"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 算子的三条去路</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E8%BF%81%E7%A7%BB%E4%B8%89%E6%9D%BF%E6%96%A7"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 迁移三板斧</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E7%AC%AC%E4%B8%80%E6%96%A7device-%E6%94%B9%E9%80%A0"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 第一斧：device 改造</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E7%AC%AC%E4%BA%8C%E6%96%A7%E7%B2%BE%E5%BA%A6%E5%AF%B9%E9%BD%90"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 第二斧：精度对齐</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-%E7%AC%AC%E4%B8%89%E6%96%A7%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 第三斧：性能调优</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E7%B2%BE%E5%BA%A6%E9%97%AE%E9%A2%98%E6%8E%92%E6%9F%A5%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83%E6%8A%80%E8%83%BD"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 精度问题排查（交付核心技能）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E6%8E%92%E6%9F%A5%E5%86%B3%E7%AD%96%E6%A0%91"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 排查决策树</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-bf16-vs-fp16-%E5%9C%A8%E6%98%87%E8%85%BE%E4%B8%8A"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 BF16 vs FP16 在昇腾上</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-%E6%A3%80%E6%B5%8B-fallback"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 检测 fallback</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%AE%9E%E6%88%98%E8%BF%81%E7%A7%BB%E4%B8%80%E6%AC%A1-lora-%E5%BE%AE%E8%B0%83%E4%BA%A4%E4%BB%98"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 实战：迁移一次 LoRA 微调（交付）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E6%B5%81%E7%A8%8B"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 流程</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E8%BF%81%E7%A7%BB%E4%BD%A0%E7%9A%84%E5%BE%AE%E8%B0%83%E8%84%9A%E6%9C%AC"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 迁移你的微调脚本</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#43-%E5%AF%B9%E6%AF%94%E8%AE%B0%E5%BD%95"><span class="nav-number">1.4.3.</span> <span class="nav-text"> 4.3 对比记录</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#44-%E8%B8%A9%E5%9D%91%E6%B8%85%E5%8D%95%E4%BA%A4%E4%BB%98-3-%E6%9D%A1"><span class="nav-number">1.4.4.</span> <span class="nav-text"> 4.4 踩坑清单（交付 ≥3 条）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#51-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.5.1.</span> <span class="nav-text"> 5.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#52-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.5.2.</span> <span class="nav-text"> 5.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.7.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">199</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-6-%E6%98%87%E8%85%BE%20CANN%20%E4%B8%8E%E7%AE%97%E5%AD%90%E5%BC%80%E5%8F%91-%E7%AC%AC4%E5%91%A8-torch_npu%E8%AE%AD%E7%BB%83%E8%BF%81%E7%A7%BB%E4%B8%8E%E7%B2%BE%E5%BA%A6%E6%8E%92%E6%9F%A5/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士在读，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第4周-torch_npu训练迁移与精度排查 | Yoleen的博客">
+      <meta itemprop="description" content="">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第4周-torch_npu训练迁移与精度排查
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 12:00:00" itemprop="dateCreated datePublished" datetime="2026-09-04T12:00:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-05 08:11:03" itemprop="dateModified" datetime="2026-11-05T08:11:03+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" itemprop="url" rel="index"><span itemprop="name">模型性能优化</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/Stage-6-%E6%98%87%E8%85%BE-CANN-%E4%B8%8E%E7%AE%97%E5%AD%90%E5%BC%80%E5%8F%91/" itemprop="url" rel="index"><span itemprop="name">Stage 6-昇腾 CANN 与算子开发</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>1.7k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>6 分钟</span>
+    </span>
+</div>
+
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-4-周教程torch_npu-训练迁移与精度排查"><a class="markdownIt-Anchor" href="#第-4-周教程torch_npu-训练迁移与精度排查"></a> 第 4 周教程：torch_npu 训练迁移与精度排查</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>一段在 CUDA 上跑的训练脚本，迁到 910B 需要改哪几行？</li>
+<li>迁移后精度对不齐，系统化的排查路径是什么？</li>
+<li>哪些算子会&quot;悄悄&quot; fallback 到 CPU？为什么这是性能杀手？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 4 周。交付物：云上 910B 完成一次「CUDA 脚本 → torch_npu」迁移（用你的 LoRA 微调脚本），输出训练速度/loss 对比，记录 ≥3 个踩坑。</p>
+<hr />
+<h2 id="1-第一性原理torch_npu-在-pytorch-里动了什么"><a class="markdownIt-Anchor" href="#1-第一性原理torch_npu-在-pytorch-里动了什么"></a> 1. 第一性原理：torch_npu 在 PyTorch 里动了什么</h2>
+<h3 id="11-device-抽象的可扩展性"><a class="markdownIt-Anchor" href="#11-device-抽象的可扩展性"></a> 1.1 device 抽象的可扩展性</h3>
+<p>PyTorch 把&quot;设备&quot;做成可扩展的抽象。<code>torch_npu</code> 通过注册机制把 <code>npu</code> 变成一种新设备类型，于是：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">import</span> torch_npu                     <span class="comment"># 导入即注册 &#x27;npu&#x27; 设备</span></span><br><span class="line"></span><br><span class="line">x = torch.randn(<span class="number">4</span>, <span class="number">4</span>).to(<span class="string">&quot;npu&quot;</span>)      <span class="comment"># 张量上 NPU</span></span><br><span class="line">y = x @ x.T                          <span class="comment"># 算子在 NPU 上执行（走 CANN）</span></span><br></pre></td></tr></table></figure>
+<p><strong>你只需导入 <code>torch_npu</code> 并把 <code>.cuda()</code> 换成 <code>.npu()</code></strong>——这是迁移的第一板斧。</p>
+<h3 id="12-算子的三条去路"><a class="markdownIt-Anchor" href="#12-算子的三条去路"></a> 1.2 算子的三条去路</h3>
+<p>调用一个算子时，torch_npu 有三种可能：</p>
+<ol>
+<li><strong>昇腾有实现</strong> → 在 NPU 上跑（理想）；</li>
+<li><strong>昇腾无实现</strong> → <strong>fallback 到 CPU</strong> 计算，再搬回（性能杀手）；</li>
+<li><strong>算子映射到等价实现</strong> → 行为可能微调。</li>
+</ol>
+<p><strong>fallback 是隐蔽的性能杀手</strong>——代码照常跑，但某些算子在 CPU 上慢几十倍，还夹杂大量 NPU↔CPU 数据搬运。</p>
+<hr />
+<h2 id="2-迁移三板斧"><a class="markdownIt-Anchor" href="#2-迁移三板斧"></a> 2. 迁移三板斧</h2>
+<h3 id="21-第一斧device-改造"><a class="markdownIt-Anchor" href="#21-第一斧device-改造"></a> 2.1 第一斧：device 改造</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 迁移前（CUDA）</span></span><br><span class="line">device = torch.device(<span class="string">&quot;cuda&quot;</span> <span class="keyword">if</span> torch.cuda.is_available() <span class="keyword">else</span> <span class="string">&quot;cpu&quot;</span>)</span><br><span class="line">model = model.to(device)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 迁移后（NPU）—— 推荐写法：环境无关</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">get_device</span>():</span><br><span class="line">    <span class="keyword">if</span> torch.cuda.is_available():</span><br><span class="line">        <span class="keyword">return</span> torch.device(<span class="string">&quot;cuda&quot;</span>)</span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        <span class="keyword">import</span> torch_npu</span><br><span class="line">        <span class="keyword">if</span> torch.npu.is_available():</span><br><span class="line">            <span class="keyword">return</span> torch.device(<span class="string">&quot;npu&quot;</span>)</span><br><span class="line">    <span class="keyword">except</span> ImportError:</span><br><span class="line">        <span class="keyword">pass</span></span><br><span class="line">    <span class="keyword">return</span> torch.device(<span class="string">&quot;cpu&quot;</span>)</span><br><span class="line"></span><br><span class="line">device = get_device()</span><br><span class="line">model = model.to(device)</span><br></pre></td></tr></table></figure>
+<p>其余改动：<code>.cuda()</code> → <code>.to(device)</code>、<code>torch.cuda.amp</code> → 对应 NPU 混合精度 API、CUDA 特有的同步/计时调用替换。</p>
+<h3 id="22-第二斧精度对齐"><a class="markdownIt-Anchor" href="#22-第二斧精度对齐"></a> 2.2 第二斧：精度对齐</h3>
+<p>迁移后第一件事不是跑全量训练，而是<strong>对齐验证</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 同一输入、同一初始化，分别在 CUDA 与 NPU 前向，对比输出</span></span><br><span class="line">torch.manual_seed(<span class="number">42</span>)</span><br><span class="line">x = torch.randn(<span class="number">2</span>, <span class="number">8</span>, <span class="number">64</span>)</span><br><span class="line"></span><br><span class="line">out_cuda = model(x.to(<span class="string">&quot;cuda&quot;</span>)).detach().cpu()</span><br><span class="line">out_npu  = model(x.to(<span class="string">&quot;npu&quot;</span>)).detach().cpu()</span><br><span class="line"></span><br><span class="line">err = (out_cuda - out_npu).<span class="built_in">abs</span>().<span class="built_in">max</span>().item()</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;前向误差: <span class="subst">&#123;err:<span class="number">.2</span>e&#125;</span>&quot;</span>)</span><br><span class="line"><span class="comment"># FP32 下应 &lt; 1e-4；混合精度下放宽到 1e-2 量级并关注趋势</span></span><br></pre></td></tr></table></figure>
+<p><strong>逐层对齐</strong>（误差大时）：在关键层后插钩子，逐层比较，定位第一个发散的层。</p>
+<h3 id="23-第三斧性能调优"><a class="markdownIt-Anchor" href="#23-第三斧性能调优"></a> 2.3 第三斧：性能调优</h3>
+<ol>
+<li><strong>开混合精度</strong>（BF16/FP16）：昇腾对 BF16 支持好；</li>
+<li><strong>打开融合算子</strong>：torch_npu 提供的融合接口；</li>
+<li><strong>检查 fallback</strong>：确认没有算子掉到 CPU；</li>
+<li><strong>用 msprof 看</strong>：NPU 利用率、算子耗时分布。</li>
+</ol>
+<hr />
+<h2 id="3-精度问题排查交付核心技能"><a class="markdownIt-Anchor" href="#3-精度问题排查交付核心技能"></a> 3. 精度问题排查（交付核心技能）</h2>
+<h3 id="31-排查决策树"><a class="markdownIt-Anchor" href="#31-排查决策树"></a> 3.1 排查决策树</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">精度不对齐</span><br><span class="line">├─ 是数值差异还是功能错误？</span><br><span class="line">│   ├─ 功能错误（结果完全错）→ 算子不支持/行为差异 → 查算子映射表</span><br><span class="line">│   └─ 数值微差 → 正常浮点差异，放宽阈值</span><br><span class="line">├─ 差异随训练放大？</span><br><span class="line">│   ├─ 是 → 某算子精度不足 → 逐层定位 + 该算子开高精度模式</span><br><span class="line">│   └─ 否 → 可接受</span><br><span class="line">└─ 只在混合精度下出现？</span><br><span class="line">    └─ 检查溢出/下溢 → 换 BF16（范围更大）或开 loss scaling</span><br></pre></td></tr></table></figure>
+<h3 id="32-bf16-vs-fp16-在昇腾上"><a class="markdownIt-Anchor" href="#32-bf16-vs-fp16-在昇腾上"></a> 3.2 BF16 vs FP16 在昇腾上</h3>
+<ul>
+<li><strong>BF16</strong>：指数位多、范围大、不易溢出，昇腾推荐，训练更稳；</li>
+<li><strong>FP16</strong>：尾数位多、精度高但范围小，易上下溢，需 loss scaling。</li>
+</ul>
+<p><strong>经验</strong>：昇腾训练优先 BF16。</p>
+<h3 id="33-检测-fallback"><a class="markdownIt-Anchor" href="#33-检测-fallback"></a> 3.3 检测 fallback</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># torch_npu 提供的分析手段（以实际版本接口为准）：</span></span><br><span class="line"><span class="comment"># 1. 环境变量开启算子日志，观察哪些算子未在 NPU 执行</span></span><br><span class="line"><span class="comment"># 2. msprof 抓 trace，看是否有 CPU 算子夹杂</span></span><br><span class="line"><span class="comment"># 3. torch_npu 的算子支持查询接口（如有）</span></span><br></pre></td></tr></table></figure>
+<p>发现 fallback 算子 → 换等价实现 / 用支持的算子替代 / （必要时）写自定义算子。</p>
+<hr />
+<h2 id="4-实战迁移一次-lora-微调交付"><a class="markdownIt-Anchor" href="#4-实战迁移一次-lora-微调交付"></a> 4. 实战：迁移一次 LoRA 微调（交付）</h2>
+<h3 id="41-流程"><a class="markdownIt-Anchor" href="#41-流程"></a> 4.1 流程</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 云上 910B 实例，确认环境</span></span><br><span class="line">python -c <span class="string">&quot;import torch, torch_npu; print(torch.npu.is_available())&quot;</span>   <span class="comment"># True</span></span><br><span class="line">npu-smi info</span><br></pre></td></tr></table></figure>
+<h3 id="42-迁移你的微调脚本"><a class="markdownIt-Anchor" href="#42-迁移你的微调脚本"></a> 4.2 迁移你的微调脚本</h3>
+<p>拿你用过的微调脚本（如 Qwen2.5 LoRA），按三板斧改造：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch_npu</span><br><span class="line"><span class="comment"># device 改为 npu；混合精度用 BF16</span></span><br><span class="line"><span class="comment"># 其余训练循环基本不动</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 训练时用 msprof 观察</span></span><br></pre></td></tr></table></figure>
+<h3 id="43-对比记录"><a class="markdownIt-Anchor" href="#43-对比记录"></a> 4.3 对比记录</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">| 指标 | CUDA (GPU) | NPU (910B) |</span><br><span class="line">| 单步耗时 | | |</span><br><span class="line">| 样本吞吐 | | |</span><br><span class="line">| 最终 loss | | |</span><br><span class="line">| loss 曲线趋势 | 一致? | |</span><br></pre></td></tr></table></figure>
+<p><strong>关键验证</strong>：两边 loss 曲线趋势一致、最终精度相当——证明迁移正确（绝对值因浮点差异可微差）。</p>
+<h3 id="44-踩坑清单交付-3-条"><a class="markdownIt-Anchor" href="#44-踩坑清单交付-3-条"></a> 4.4 踩坑清单（交付 ≥3 条）</h3>
+<p>按四类记录：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">环境类：如版本不匹配 → 解法</span><br><span class="line">算子类：如某算子 fallback → 解法</span><br><span class="line">精度类：如混合精度溢出 → 换 BF16</span><br><span class="line">性能类：如数据加载成瓶颈 → 调 num_workers/预取</span><br></pre></td></tr></table></figure>
+<hr />
+<h2 id="5-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#5-工程权衡与失效模式"></a> 5. 工程权衡与失效模式</h2>
+<h3 id="51-权衡"><a class="markdownIt-Anchor" href="#51-权衡"></a> 5.1 权衡</h3>
+<ul>
+<li><strong>BF16 vs FP16</strong>：BF16 稳、FP16 精，昇腾优先 BF16；</li>
+<li><strong>兼容写法</strong>：写环境无关的 device 选择，代码两边都能跑；</li>
+<li><strong>融合算子</strong>：提速但绑定昇腾，权衡可移植性。</li>
+</ul>
+<h3 id="52-失效模式"><a class="markdownIt-Anchor" href="#52-失效模式"></a> 5.2 失效模式</h3>
+<ol>
+<li><strong>隐蔽 fallback</strong>：某算子掉 CPU，训练极慢。诊断：算子日志/trace；修复：换支持算子。</li>
+<li><strong>混合精度溢出</strong>：FP16 下 loss 变 NaN。修复：换 BF16、开 loss scaling。</li>
+<li><strong>数据加载瓶颈</strong>：NPU 算得快但数据喂不上。修复：加 <code>num_workers</code>、预取、提前处理数据。</li>
+<li><strong>版本不匹配</strong>：torch 与 torch_npu 版本错。修复：查配套版本表。</li>
+</ol>
+<hr />
+<h2 id="6-延伸思考题含解析"><a class="markdownIt-Anchor" href="#6-延伸思考题含解析"></a> 6. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：CUDA 代码搬到昇腾，核心改哪几处？<br />
+<strong>A</strong>：导入 <code>torch_npu</code> 注册设备；<code>.cuda()</code>/device 改 <code>npu</code>（最好写环境无关）；CUDA 特有的混合精度、同步、计时 API 换昇腾对应物。训练循环逻辑基本不动。</p>
+<p><strong>Q2</strong>：什么是算子 fallback？为什么危险？<br />
+<strong>A</strong>：昇腾无某算子实现时，torch_npu 把它放到 CPU 算再搬回。危险在隐蔽——代码照常跑，但 CPU 慢几十倍且夹杂大量数据搬运，整体性能骤降而不易察觉。</p>
+<p><strong>Q3</strong>：昇腾训练为什么优先 BF16 而不是 FP16？<br />
+<strong>A</strong>：BF16 指数位多、动态范围大、不易上下溢，训练更稳；FP16 范围小，混合精度下易溢出需 loss scaling。昇腾对 BF16 支持好，故优先。</p>
+<p><strong>Q4</strong>：迁移后怎么验证&quot;对了&quot;？<br />
+<strong>A</strong>：① 同输入前向输出误差在阈值内；② 训练 loss 曲线趋势与 GPU 一致、最终精度相当。数值可有浮点微差，但趋势必须一致。</p>
+<p><strong>Q5</strong>：数据加载成了瓶颈，怎么判断和解决？<br />
+<strong>A</strong>：判断：msprof/利用率显示 NPU 空闲等待。解决：加 <code>num_workers</code>、开预取、把预处理离线化、用更快的存储。别让昂贵的 NPU 等数据。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 云上 910B 确认环境（<code>torch.npu.is_available()</code>、<code>npu-smi</code>）。</li>
+<li>[ ] 迁移一个 LoRA 微调脚本，用环境无关的 device 写法。</li>
+<li>[ ] 前向误差对齐验证 + 训练 loss 趋势对比。</li>
+<li>[ ] 检查无隐蔽 fallback（算子日志/trace）。</li>
+<li>[ ] 记录踩坑清单 ≥3 条（环境/算子/精度/性能分类）。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%8E%A8%E7%90%86%E4%BC%98%E5%8C%96/" rel="tag"># 推理优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-7-%E7%94%9F%E4%BA%A7%E7%BA%A7%E6%8E%A8%E7%90%86%E6%9C%8D%E5%8A%A1%E4%B8%8E%E8%87%AA%E5%8A%A8%E6%89%A9%E7%BC%A9-README/" rel="prev" title="README">
+                  <i class="fa fa-angle-left"></i> README
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-6-%E6%98%87%E8%85%BE%20CANN%20%E4%B8%8E%E7%AE%97%E5%AD%90%E5%BC%80%E5%8F%91-README/" rel="next" title="README">
+                  README <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">632k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">38:17</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>
