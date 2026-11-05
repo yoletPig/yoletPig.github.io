@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的三个问题 1. 怎么用 PyTorch Profiler &#x2F; Nsight Systems 区分 Compute-Bound 与 Memory-Bound？ 2. AWQ、GPTQ、FP8、SmoothQuant 的机理差异与…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第5周-Profiling与量化加速">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC5%E5%91%A8-Profiling%E4%B8%8E%E9%87%8F%E5%8C%96%E5%8A%A0%E9%80%9F/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的三个问题 1. 怎么用 PyTorch Profiler &#x2F; Nsight Systems 区分 Compute-Bound 与 Memory-Bound？ 2. AWQ、GPTQ、FP8、SmoothQuant 的机理差异与…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T04:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T02:04:19.050Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC5%E5%91%A8-Profiling%E4%B8%8E%E9%87%8F%E5%8C%96%E5%8A%A0%E9%80%9F/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC5%E5%91%A8-Profiling%E4%B8%8E%E9%87%8F%E5%8C%96%E5%8A%A0%E9%80%9F/","path":"2026/09/03/VLM & VLA-8-大模型与多模态训练系统及推理工程-第5周-Profiling与量化加速/","title":"第5周-Profiling与量化加速"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第5周-Profiling与量化加速 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-5-%E5%91%A8%E6%95%99%E7%A8%8B%E6%80%A7%E8%83%BD%E8%AF%8A%E6%96%AD-profiling-%E4%B8%8E%E9%87%8F%E5%8C%96%E5%86%85%E6%A0%B8%E5%8A%A0%E9%80%9F"><span class="nav-number">1.</span> <span class="nav-text"> 第 5 周教程：性能诊断 Profiling 与量化&#x2F;内核加速</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E7%93%B6%E9%A2%88%E5%88%A4%E5%AE%9A%E7%9A%84%E7%AC%AC%E4%B8%80%E6%80%A7%E5%88%A4%E6%8D%AE"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：瓶颈判定的第一性判据</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-roofline%E4%B8%80%E4%B8%AA%E7%AE%97%E5%AD%90%E5%88%B0%E5%BA%95%E5%8D%A1%E5%9C%A8%E5%93%AA"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 Roofline：一个算子到底卡在哪</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-profiler-%E7%9A%84%E4%B8%A4%E4%B8%AA%E5%B1%82%E6%AC%A1"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 Profiler 的两个层次</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E9%87%8F%E5%8C%96%E6%8A%80%E6%9C%AF%E7%BB%99%E6%9D%83%E9%87%8D%E4%B8%8E%E6%BF%80%E6%B4%BB%E5%87%8F%E5%AD%97%E8%8A%82"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 量化技术：给权重与激活&quot;减字节&quot;</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E4%B8%89%E6%9D%A1%E6%8A%80%E6%9C%AF%E8%B7%AF%E7%BA%BF%E7%9A%84%E6%9C%BA%E7%90%86%E4%B8%8E%E9%80%89%E5%9E%8B"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 三条技术路线的机理与选型</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E9%87%8F%E5%8C%96%E6%94%B6%E7%9B%8A%E7%9A%84%E6%AD%A3%E7%A1%AE%E8%A7%A3%E8%AF%BB%E6%A1%86%E6%9E%B6"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 量化收益的正确解读框架</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-pytorch-profiler-%E6%8A%93-trace-top-kernels"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 PyTorch Profiler 抓 Trace + Top Kernels</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-awq-%E9%87%8F%E5%8C%96%E5%89%8D%E5%90%8E%E5%AF%B9%E6%AF%94"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 AWQ 量化前后对比</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-%E4%B8%A4%E9%A1%B5%E7%BA%B8%E8%AF%8A%E6%96%AD%E6%8A%A5%E5%91%8A%E6%A8%A1%E6%9D%BF"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 两页纸诊断报告模板</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E8%AF%8A%E6%96%AD%E6%B5%81%E7%A8%8B%E5%86%B3%E7%AD%96%E6%A0%91"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 诊断流程决策树</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E4%B8%89%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 三个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士已毕业，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">193</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC5%E5%91%A8-Profiling%E4%B8%8E%E9%87%8F%E5%8C%96%E5%8A%A0%E9%80%9F/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士已毕业，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第5周-Profiling与量化加速 | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的三个问题 1. 怎么用 PyTorch Profiler &#x2F; Nsight Systems 区分 Compute-Bound 与 Memory-Bound？ 2. AWQ、GPTQ、FP8、SmoothQuant 的机理差异与…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第5周-Profiling与量化加速
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 12:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T12:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-05 10:04:19" itemprop="dateModified" datetime="2026-11-05T10:04:19+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Stage 8-大模型与多模态训练系统及推理工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>11 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的三个问题 1. 怎么用 PyTorch Profiler / Nsight Systems 区分 Compute-Bound 与 Memory-Bound？ 2. AWQ、GPTQ、FP8、SmoothQuant 的机理差异与…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-5-周教程性能诊断-profiling-与量化内核加速"><a class="markdownIt-Anchor" href="#第-5-周教程性能诊断-profiling-与量化内核加速"></a> 第 5 周教程：性能诊断 Profiling 与量化/内核加速</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>怎么用 PyTorch Profiler / Nsight Systems 区分 Compute-Bound 与 Memory-Bound？</li>
+<li>AWQ、GPTQ、FP8、SmoothQuant 的机理差异与选型依据是什么？</li>
+<li>一份合格的&quot;系统性能诊断与优化报告&quot;长什么样？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 5 周。交付物：PyTorch Profiler 抓取 VLM 推理 Trace（Chrome <code>chrome://tracing</code> 打开），定位 Top 3 CUDA Kernels；开启 AWQ/FP8 量化，报告前后吞吐与显存缩减比，产出 2 页纸诊断报告。</p>
+<p><strong>本篇是全阶段的方法论收束</strong>：第 1-4 周的所有技术（ZeRO/FA/PagedAttention/Radix）本质上都是&quot;对某个已知瓶颈的对症药&quot;——本篇教你<strong>在没有先验答案时，如何自己找到瓶颈</strong>。</p>
+<hr />
+<h2 id="1-第一性原理瓶颈判定的第一性判据"><a class="markdownIt-Anchor" href="#1-第一性原理瓶颈判定的第一性判据"></a> 1. 第一性原理：瓶颈判定的第一性判据</h2>
+<h3 id="11-roofline一个算子到底卡在哪"><a class="markdownIt-Anchor" href="#11-roofline一个算子到底卡在哪"></a> 1.1 Roofline：一个算子到底卡在哪</h3>
+<p>任一 GPU 算子的两个属性：</p>
+<ul>
+<li><strong>算术强度</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>I</mi><mo>=</mo><mfrac><mtext>FLOPs</mtext><mtext>显存读写字节数</mtext></mfrac></mrow><annotation encoding="application/x-tex">I = \frac{\text{FLOPs}}{\text{显存读写字节数}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.217331em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.872331em;"><span style="top:-2.6550000000000002em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">显存读写字节数</span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">FLOPs</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span>（每字节带宽支撑多少计算）；</li>
+<li>硬件的两个峰值：计算峰值 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mtext>compute</mtext></msub></mrow><annotation encoding="application/x-tex">P_{\text{compute}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.28055599999999997em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">compute</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span>（如 A100 bf16 ≈ 312 TFLOPS）与带宽峰值 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mrow><mi>b</mi><mi>w</mi></mrow></msub></mrow><annotation encoding="application/x-tex">P_{bw}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="mord mathnormal mtight" style="margin-right:0.02691em;">w</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>（如 A100 ≈ 2TB/s）。<strong>脊点</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>I</mi><mo>∗</mo></msup><mo>=</mo><msub><mi>P</mi><mtext>compute</mtext></msub><mi mathvariant="normal">/</mi><msub><mi>P</mi><mrow><mi>b</mi><mi>w</mi></mrow></msub></mrow><annotation encoding="application/x-tex">I^* = P_{\text{compute}} / P_{bw}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.688696em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.688696em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∗</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.036108em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.28055599999999997em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">compute</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mord">/</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="mord mathnormal mtight" style="margin-right:0.02691em;">w</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>（A100 bf16 ≈ 156 FLOP/Byte）。</li>
+</ul>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>可达性能</mtext><mo>=</mo><mi>min</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>P</mi><mtext>compute</mtext></msub><mo separator="true">,</mo><mtext> </mtext><mi>I</mi><mo>×</mo><msub><mi>P</mi><mrow><mi>b</mi><mi>w</mi></mrow></msub><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\text{可达性能} = \min(P_{\text{compute}},\ I \times P_{bw})
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">可达性能</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.036108em;vertical-align:-0.286108em;"></span><span class="mop">min</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.28055599999999997em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">compute</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">b</span><span class="mord mathnormal mtight" style="margin-right:0.02691em;">w</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span></span></p>
+<ul>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>I</mi><mo>&lt;</mo><msup><mi>I</mi><mo>∗</mo></msup></mrow><annotation encoding="application/x-tex">I &lt; I^*</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72243em;vertical-align:-0.0391em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.688696em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.688696em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∗</span></span></span></span></span></span></span></span></span></span></span> → <strong>Memory-Bound</strong>（带宽受限）：性能由 HBM 带宽决定，加算力无用；</li>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>I</mi><mo>&gt;</mo><msup><mi>I</mi><mo>∗</mo></msup></mrow><annotation encoding="application/x-tex">I &gt; I^*</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72243em;vertical-align:-0.0391em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.688696em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.688696em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∗</span></span></span></span></span></span></span></span></span></span></span> → <strong>Compute-Bound</strong>（算力受限）：性能由张量核决定，加带宽无用。</li>
+</ul>
+<p><strong>记住几个典型算子的归类</strong>（这是 Profiler 读数时的&quot;地图&quot;）：</p>
+<table>
+<thead>
+<tr>
+<th>算子</th>
+<th>算术强度</th>
+<th>归类</th>
+<th>对症药</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>大 GEMM（大 batch 矩阵乘）</td>
+<td>高（数百）</td>
+<td>Compute-Bound</td>
+<td>张量核、精度（FP8）、tile 效率</td>
+</tr>
+<tr>
+<td><strong>Decode 单 Token GEMV</strong></td>
+<td><strong>≈ 2（每权重只乘一次）</strong></td>
+<td><strong>强 Memory-Bound</strong></td>
+<td><strong>batch 摊薄（continuous batching）、量化降权重字节</strong></td>
+</tr>
+<tr>
+<td>传统 softmax/attention 中间量</td>
+<td>低</td>
+<td>Memory-Bound</td>
+<td>FlashAttention（第 2 周）</td>
+</tr>
+<tr>
+<td>Element-wise/ Layernorm</td>
+<td>极低</td>
+<td>Memory-Bound</td>
+<td>算子融合（fused kernel）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>为什么 decode 量化收益巨大而 prefill 收益小</strong>：decode 的 GEMV 强度 ≈ 2，远低于脊点——时间 ≈ 权重字节数 ÷ 带宽，权重砍一半（INT4）时间近乎减半；prefill 的大 GEMM 是 compute-bound，权重字节数不是瓶颈，INT4 收益主要在显存而非速度。<strong>这条判据直接决定第 3 节量化收益的解读。</strong></p>
+<h3 id="12-profiler-的两个层次"><a class="markdownIt-Anchor" href="#12-profiler-的两个层次"></a> 1.2 Profiler 的两个层次</h3>
+<ul>
+<li><strong>PyTorch Profiler</strong>：算子级时间线（CPU op + CUDA kernel），导出 Chrome Trace（<code>chrome://tracing</code> 可视化），适合&quot;哪个 kernel 最耗时&quot;的定位——本周 MVP 的工具；</li>
+<li><strong>NVIDIA Nsight Systems（Nsys）</strong>：更底层——kernel 执行、显存拷贝、NCCL 通信、CPU-GPU 空隙全时间线，适合&quot;GPU 利用率为什么低&quot;（gap 在哪：同步等待？数据搬运？）。</li>
+</ul>
+<p>判读流程：先 Profiler 找 Top Kernels → 判断它们该不该耗时这么长（对照 1.1 的地图）→ 再用 Nsys 看 kernel 之间的空隙（空闲 = 调度/同步/数据问题，而非算子问题）。</p>
+<hr />
+<h2 id="2-量化技术给权重与激活减字节"><a class="markdownIt-Anchor" href="#2-量化技术给权重与激活减字节"></a> 2. 量化技术：给权重与激活&quot;减字节&quot;</h2>
+<h3 id="21-三条技术路线的机理与选型"><a class="markdownIt-Anchor" href="#21-三条技术路线的机理与选型"></a> 2.1 三条技术路线的机理与选型</h3>
+<table>
+<thead>
+<tr>
+<th>路线</th>
+<th>代表</th>
+<th>量化对象</th>
+<th>精度损失</th>
+<th>速度收益来源</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Weight-Only</strong></td>
+<td><strong>AWQ</strong>、GPTQ</td>
+<td>权重 → INT4/INT8</td>
+<td>极小（AWQ 有激活感知保护）</td>
+<td>decode（memory-bound GEMV 的字节数减半/四分之一）</td>
+<td><strong>单请求低 batch 推理（主流默认）</strong></td>
+</tr>
+<tr>
+<td><strong>Weight+Activation</strong></td>
+<td>FP8 (W8A8)、SmoothQuant (INT8)</td>
+<td>权重+激活 → FP8/INT8</td>
+<td>小（FP8）/ 中（INT8 需校准）</td>
+<td>prefill 大 GEMM 的张量核翻倍（H100 FP8）</td>
+<td>高 batch 服务、Hopper 硬件</td>
+</tr>
+<tr>
+<td><strong>KV Cache 量化</strong></td>
+<td>FP8 KV Cache</td>
+<td>缓存</td>
+<td>小</td>
+<td>KV 显存减半 → 并发容量翻倍（第 3 周账本直接受益）</td>
+<td>长上下文高并发</td>
+</tr>
+</tbody>
+</table>
+<p>机理要点：</p>
+<ul>
+<li><strong>AWQ</strong>（<em>AWQ: Activation-aware Weight Quantization</em>, MLSys 2024）：观察&quot;少数关键权重通道对应激活的大值&quot;，量化时对这些通道做缩放保护——<strong>按激活分布加权保护权重</strong>，4-bit 下精度损失远小于朴素 RTN；</li>
+<li><strong>GPTQ</strong>（<em>GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers</em>, ICLR 2023）：基于二阶信息（Hessian 近似）逐层最小化量化误差，逐列更新补偿；</li>
+<li><strong>FP8（W8A8）</strong>：E4M3/E5M2 浮点格式（Stage 2 第 4 周位分配分析的推理版），硬件原生支持（H100/H200），prefill 大 GEMM 直接翻倍吞吐；</li>
+<li><strong>SmoothQuant</strong>：把激活的离群值&quot;平滑&quot;迁移到权重上——对每通道缩放因子 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi></mrow><annotation encoding="application/x-tex">s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">s</span></span></span></span> 做数学等价变换 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>X</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo>=</mo><mi>X</mi><mi mathvariant="normal">/</mi><mi>s</mi><mo separator="true">,</mo><mtext> </mtext><msup><mi>W</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo>=</mo><mi>W</mi><mo>⋅</mo><mi>s</mi></mrow><annotation encoding="application/x-tex">X&#x27; = X/s,\ W&#x27; = W \cdot s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.751892em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.751892em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.001892em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="mord">/</span><span class="mord mathnormal">s</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.751892em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">s</span></span></span></span>（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>X</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><msup><mi>W</mi><mo mathvariant="normal" lspace="0em" rspace="0em">′</mo></msup><mo>=</mo><mi>X</mi><mi>W</mi></mrow><annotation encoding="application/x-tex">X&#x27;W&#x27; = XW</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.751892em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.751892em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.751892em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">′</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">X</span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span></span> 结果不变），使激活落入 INT8 可表示范围、权重侧放大补偿。</li>
+</ul>
+<p>选型决策路径：<strong>单请求/低并发、显存是痛 → AWQ-INT4（KV 不量化）；高并发服务、Hopper 卡 → FP8 W8A8 + FP8 KV；长上下文并发 → FP8 KV Cache；消费卡部署大模型 → AWQ/GPTQ-INT4</strong>。</p>
+<h3 id="22-量化收益的正确解读框架"><a class="markdownIt-Anchor" href="#22-量化收益的正确解读框架"></a> 2.2 量化收益的正确解读框架</h3>
+<p>用第 1 周的账本语言预判收益，再用实测验证：</p>
+<ul>
+<li><strong>显存</strong>：权重字节按比例降（INT4 ≈ 1/4 of bf16）——账本硬收益，实测必然兑现；</li>
+<li><strong>decode 吞吐</strong>：memory-bound 下近似随权重字节比提升（INT4 理论 2~3 倍，实测打折）；</li>
+<li><strong>prefill 吞吐</strong>：weight-only 量化几乎无收益（compute-bound）——<strong>没有 prefill 提升却报&quot;整体快 4 倍&quot;的报告可以合上了</strong>；</li>
+<li><strong>精度</strong>：必须跑基准回归（AWQ 论文报告 4-bit 下常见基准的精度损失很小（约 1pt 量级），但你的领域任务要自己测——Stage 3 评测纪律的应用）。</li>
+</ul>
+<hr />
+<h2 id="3-实现与验证"><a class="markdownIt-Anchor" href="#3-实现与验证"></a> 3. 实现与验证</h2>
+<h3 id="31-pytorch-profiler-抓-trace-top-kernels"><a class="markdownIt-Anchor" href="#31-pytorch-profiler-抓-trace-top-kernels"></a> 3.1 PyTorch Profiler 抓 Trace + Top Kernels</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">VLM 推理 Profiling: 抓 Chrome Trace + 打印 Top CUDA Kernels。</span></span><br><span class="line"><span class="string">运行方式: python stage8_week5_profile.py --out trace.json</span></span><br><span class="line"><span class="string">依赖: torch, transformers, pillow</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> argparse</span><br><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">from</span> torch.profiler <span class="keyword">import</span> profile, ProfilerActivity</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    ap = argparse.ArgumentParser()</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--model&quot;</span>, default=<span class="string">&quot;Qwen/Qwen2-VL-2B-Instruct&quot;</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--out&quot;</span>, default=<span class="string">&quot;trace.json&quot;</span>)</span><br><span class="line">    args = ap.parse_args()</span><br><span class="line">    <span class="keyword">from</span> transformers <span class="keyword">import</span> AutoModelForVision2Seq, AutoProcessor</span><br><span class="line">    <span class="keyword">from</span> PIL <span class="keyword">import</span> Image</span><br><span class="line"></span><br><span class="line">    model = AutoModelForVision2Seq.from_pretrained(</span><br><span class="line">        args.model, torch_dtype=torch.bfloat16).cuda().<span class="built_in">eval</span>()</span><br><span class="line">    processor = AutoProcessor.from_pretrained(args.model)</span><br><span class="line">    img = Image.new(<span class="string">&quot;RGB&quot;</span>, (<span class="number">448</span>, <span class="number">448</span>))</span><br><span class="line">    msgs = [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: [</span><br><span class="line">        &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;image&quot;</span>&#125;, &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;text&quot;</span>, <span class="string">&quot;text&quot;</span>: <span class="string">&quot;详细描述图片。&quot;</span>&#125;]&#125;]</span><br><span class="line">    prompt = processor.apply_chat_template(msgs, tokenize=<span class="literal">False</span>, add_generation_prompt=<span class="literal">True</span>)</span><br><span class="line">    inputs = processor(text=[prompt], images=[img], return_tensors=<span class="string">&quot;pt&quot;</span>).to(<span class="string">&quot;cuda&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># 预热 (排除编译/缓存噪声)</span></span><br><span class="line">    <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">2</span>):</span><br><span class="line">        <span class="keyword">with</span> torch.no_grad():</span><br><span class="line">            model.generate(**inputs, max_new_tokens=<span class="number">64</span>)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">with</span> profile(activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],</span><br><span class="line">                 record_shapes=<span class="literal">False</span>) <span class="keyword">as</span> prof:</span><br><span class="line">        <span class="keyword">with</span> torch.no_grad():</span><br><span class="line">            model.generate(**inputs, max_new_tokens=<span class="number">128</span>)</span><br><span class="line"></span><br><span class="line">    prof.export_chrome_trace(args.out)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;Trace 已导出: <span class="subst">&#123;args.out&#125;</span>  (Chrome 打开 chrome://tracing 拖入查看)&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># Top CUDA Kernels (按 CUDA 时间排序)</span></span><br><span class="line">    <span class="built_in">print</span>(prof.key_averages().table(</span><br><span class="line">        sort_by=<span class="string">&quot;cuda_time_total&quot;</span>, row_limit=<span class="number">8</span>,</span><br><span class="line">        max_name_column_width=<span class="number">60</span>))</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    main()</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出形态</strong>（Top kernels 表，Llama/Qwen 系典型构成）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">Trace 已导出: trace.json</span><br><span class="line">---------------------------------  -------  -------</span><br><span class="line">Name                               CUDA %   Calls</span><br><span class="line">---------------------------------  -------  -------</span><br><span class="line">gemm/gemm_variant_kernel (矩阵乘)    61.2%    3,842</span><br><span class="line">flash::flash_fwd_kernel              18.7%      512</span><br><span class="line">vectorized_elementwise (逐元素)       6.3%    9,107</span><br><span class="line">rms_norm_kernel                       3.1%      512</span><br><span class="line">... (采样/softmax/拷贝等)             10.7%</span><br><span class="line">---------------------------------  -------  -------</span><br></pre></td></tr></table></figure>
+<p><strong>判读训练</strong>：GEMM（含 decode 的 GEMV）占 60%+ 正常（decode 每步 2 次大 GEMV × 每层，累计最多）；flash kernel 是注意力；elementwise 占比 &gt;10% 时是<strong>算子融合的机会</strong>（fused kernel / torch.compile）；拷贝类 kernel（<code>Memcpy DtoH</code> 等）占比高说明有 CPU-GPU 数据搬运问题。Chrome tracing 里还要看<strong>kernel 之间的 gap</strong>——大量空隙说明是调度/同步瓶颈而非算子瓶颈（此时换更快的 kernel 无用，要看 Nsys 找空隙来源）。</p>
+<h3 id="32-awq-量化前后对比"><a class="markdownIt-Anchor" href="#32-awq-量化前后对比"></a> 3.2 AWQ 量化前后对比</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;AWQ 量化前后: 显存与吞吐对比 (vLLM 加载两种精度)&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">from</span> vllm <span class="keyword">import</span> LLM, SamplingParams</span><br><span class="line"><span class="keyword">import</span> time, torch</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">bench</span>(<span class="params">llm, n=<span class="number">32</span></span>):</span><br><span class="line">    sp = SamplingParams(max_tokens=<span class="number">256</span>, temperature=<span class="number">0</span>)</span><br><span class="line">    prompts = [<span class="string">f&quot;请详细解释原理 <span class="subst">&#123;i&#125;</span>。&quot;</span> <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n)]</span><br><span class="line">    t0 = time.perf_counter()</span><br><span class="line">    llm.generate(prompts, sp)</span><br><span class="line">    dt = time.perf_counter() - t0</span><br><span class="line">    mem = torch.cuda.max_memory_allocated() / <span class="number">1024</span>**<span class="number">3</span></span><br><span class="line">    <span class="keyword">return</span> dt / n, mem</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    torch.cuda.reset_peak_memory_stats()</span><br><span class="line">    llm_bf16 = LLM(model=<span class="string">&quot;Qwen/Qwen2.5-7B-Instruct&quot;</span>,</span><br><span class="line">                   gpu_memory_utilization=<span class="number">0.85</span>, max_model_len=<span class="number">4096</span>)</span><br><span class="line">    t_bf16, m_bf16 = bench(llm_bf16)</span><br><span class="line">    <span class="keyword">del</span> llm_bf16; torch.cuda.empty_cache(); torch.cuda.reset_peak_memory_stats()</span><br><span class="line"></span><br><span class="line">    llm_awq = LLM(model=<span class="string">&quot;Qwen/Qwen2.5-7B-Instruct-AWQ&quot;</span>,</span><br><span class="line">                  quantization=<span class="string">&quot;awq&quot;</span>, gpu_memory_utilization=<span class="number">0.85</span>, max_model_len=<span class="number">4096</span>)</span><br><span class="line">    t_awq, m_awq = bench(llm_awq)</span><br><span class="line"></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;bf16 : <span class="subst">&#123;t_bf16*<span class="number">1000</span>:<span class="number">.0</span>f&#125;</span> ms/req, 峰值 <span class="subst">&#123;m_bf16:<span class="number">.1</span>f&#125;</span> GB&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;AWQ-4: <span class="subst">&#123;t_awq*<span class="number">1000</span>:<span class="number">.0</span>f&#125;</span> ms/req, 峰值 <span class="subst">&#123;m_awq:<span class="number">.1</span>f&#125;</span> GB&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;吞吐比 <span class="subst">&#123;t_bf16/t_awq:<span class="number">.2</span>f&#125;</span>x, 显存比 <span class="subst">&#123;m_bf16/m_awq:<span class="number">.2</span>f&#125;</span>x&quot;</span>)</span><br><span class="line">    <span class="comment"># 精度回归 (别省): 用同 prompt 集对比两模型的答案一致性/基准分</span></span><br></pre></td></tr></table></figure>
+<p><strong>预期形态</strong>（7B、A100、批量 32，以实测为准）：显存约 <strong>3.5~4×缩减</strong>（5.5GB vs 15GB 量级权重）；吞吐提升 <strong>1.5~2.5×</strong>（decode memory-bound 的收益，prefill 部分摊薄）；精度回归必须做（领域 50 题 + 通用基准抽样，Stage 3 协议）。</p>
+<h3 id="33-两页纸诊断报告模板"><a class="markdownIt-Anchor" href="#33-两页纸诊断报告模板"></a> 3.3 两页纸诊断报告模板</h3>
+<figure class="highlight markdown"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="section"># VLM 推理性能诊断与优化报告</span></span><br><span class="line">环境: A100-80G / vLLM <span class="language-xml"><span class="tag">&lt;<span class="name">ver</span>&gt;</span></span> / torch <span class="language-xml"><span class="tag">&lt;<span class="name">ver</span>&gt;</span></span> / 模型 7B bf16 / 负载: 448px 图 + 50~500 Token 出</span><br><span class="line"></span><br><span class="line"><span class="section">## 1. 瓶颈定位 (证据)</span></span><br><span class="line">Profiler Top3: GEMM 61% (decode GEMV, memory-bound) / flash 19% / elementwise 6%。</span><br><span class="line">Nsys: decode 段 GPU util 高但 SM 占用低 -&gt; memory-bound 确认; kernel 间隙 &lt;3% (无调度问题)。</span><br><span class="line">结论: 瓶颈在 decode 权重带宽, 而非调度/注意力。</span><br><span class="line"></span><br><span class="line"><span class="section">## 2. 干预与收益 (对照实验, 同负载同指标)</span></span><br><span class="line">| 措施 | 显存峰值 | QPS | ITL p50 | 备注 |</span><br><span class="line">|---|---|---|---|---|</span><br><span class="line">| 基线 bf16 | 48.2 GB | 3.1 | 28ms | — |</span><br><span class="line">| AWQ-INT4 | 14.9 GB | 5.8 | 17ms | 通用基准掉 0.8pt (可接受) |</span><br><span class="line">| 基线+FP8 KV | 33.5 GB | 4.9 | 25ms | 长上下文并发容量 x1.8 |</span><br><span class="line">| AWQ + FP8 KV | 11.2 GB | 7.4 | 14ms | 组合拳 |</span><br><span class="line"></span><br><span class="line"><span class="section">## 3. 残留问题与下一步</span></span><br><span class="line"><span class="bullet">-</span> elementwise 6%: 尝试 torch.compile 融合 (预估 -3% 耗时);</span><br><span class="line"><span class="bullet">-</span> VLM 视觉编码在 TTFT 占 38%: 待测图像分辨率降级的影响;</span><br><span class="line"><span class="bullet">-</span> 未做: FP8 W8A8 (硬件不支持 FP8, 需 Hopper)。</span><br><span class="line"></span><br><span class="line"><span class="section">## 4. 复现</span></span><br><span class="line">脚本/参数/种子/数据集 hash 附后; 所有对比同环境同日完成。</span><br></pre></td></tr></table></figure>
+<p>报告纪律：<strong>每个结论有 Trace/实测证据；每个数字有对照组；残留问题诚实列出</strong>——这份模板在第 5 周交付，也是 Stage 9/10 系统工作的通用格式。</p>
+<hr />
+<h2 id="4-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#4-工程权衡与失效模式"></a> 4. 工程权衡与失效模式</h2>
+<h3 id="41-诊断流程决策树"><a class="markdownIt-Anchor" href="#41-诊断流程决策树"></a> 4.1 诊断流程决策树</h3>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">性能不达标</span><br><span class="line">├─ GPU util 低? → 是: 调度/数据问题 (Nsys 找 gap: CPU 预处理? 同步? 通信?)</span><br><span class="line">└─ util 高但慢 → 看 kernel 构成</span><br><span class="line">    ├─ GEMM 占主导 → decode? → memory-bound → 量化/batch 摊薄</span><br><span class="line">    │                → prefill? → compute-bound → FP8/更优 tile/并行</span><br><span class="line">    ├─ attention 占主导 → FA 是否开启/版本; 序列是否过长</span><br><span class="line">    ├─ elementwise/拷贝高 → 算子融合/减少搬运</span><br><span class="line">    └─ 大量小 kernel + gap → CPU 瓶颈 → 编译/融合/异步化</span><br></pre></td></tr></table></figure>
+<h3 id="42-三个代表性失效模式"><a class="markdownIt-Anchor" href="#42-三个代表性失效模式"></a> 4.2 三个代表性失效模式</h3>
+<p><strong>失效 1：量化在&quot;错误的负载&quot;上测收益</strong></p>
+<ul>
+<li><strong>症状</strong>：AWQ 标称 2~3×提速，实测只有 1.1×，得出&quot;量化无用&quot;。</li>
+<li><strong>根因</strong>：测试负载是长 prompt 短输出——prefill 主导且 compute-bound，量化（memory-bound 药方）打错了靶子。</li>
+<li><strong>定位</strong>：把负载拆成 TTFT（prefill）与 decode 时间分别对比——收益应在 decode 段。</li>
+<li><strong>修复</strong>：按负载形态选方案（长输入场景 FP8 W8A8/张量并行的 prefill 优化更对口）。</li>
+</ul>
+<p><strong>失效 2：Profiler 数据被预热与采样噪声污染</strong></p>
+<ul>
+<li><strong>症状</strong>：两次 Profile 的 Top kernel 排序不一致。</li>
+<li><strong>根因</strong>：未预热（首步含 CUDA context/kernel JIT）；CUDA 采样率（<code>with_stack</code>/activities 配置）引入开销改变了时间分布。</li>
+<li><strong>定位</strong>：对比预热前后；调 <code>schedule</code>（wait/warmup/active 三段）只取稳态窗口。</li>
+<li><strong>修复</strong>：预热 ≥2 步；多轮取中位数；Profiler 开销本身计入报告声明。</li>
+</ul>
+<p><strong>失效 3：量化后不做精度回归——省了显存赔了业务</strong></p>
+<ul>
+<li><strong>症状</strong>：INT4 部署后，长尾查询（生僻实体/复杂指令）错误率上升，通用基准几乎无差。</li>
+<li><strong>根因</strong>：通用 benchmark 平均掉的精度损失，在长尾/领域分布上放大（Stage 3 &quot;画像而非总分&quot;的量化版）。</li>
+<li><strong>定位</strong>：领域 held-out 集 + 量化前后逐题 diff，找出恶化集中的题型。</li>
+<li><strong>修复</strong>：领域数据校准（AWQ 的校准集换成领域样本）；恶化集中的请求路由到高精度模型（混合部署）。</li>
+</ul>
+<hr />
+<h2 id="5-延伸思考题"><a class="markdownIt-Anchor" href="#5-延伸思考题"></a> 5. 延伸思考题</h2>
+<ol>
+<li><strong>Roofline 实战</strong>：用 1.1 的公式算&quot;7B decode GEMV（batch=1）&quot;与&quot;prefill GEMM（batch=32 prefill 2k Token）“的算术强度，标到 A100 的 Roofline 图上；再算 batch=64 的 decode——解释为什么 continuous batching 把 decode 从&quot;强 memory-bound&quot;拉向&quot;接近 compute-bound”，以及这条曲线的尽头在哪（batch 大到算力饱和后，继续加并发的边际收益趋零，转而被 KV 显存限制——接第 3 周 PagedAttention 的价值）。</li>
+<li><strong>量化与 RL 的交叉</strong>：Stage 7 的 GRPO 训练里 rollout 占一半以上算力——rollout 引擎用 AWQ 量化模型采样，对 RL 训练的正确性有什么风险？（提示：采样分布与训练分布的引擎级 mismatch——第 2 周失效 2 的&quot;数值等价不等于逐位相同&quot;在 RL 语境被放大；verl 社区的 vexact（零失配 rollout）项目正是针对此，已核实存在。）</li>
+<li><strong>写一份你自己的报告</strong>：取本周任意一个干预（FA2/量化/chunked prefill/前缀缓存），按 3.3 模板在你环境里完成完整闭环——本阶段所有教程的最终检验，就是你能不能生产一份&quot;有对照组、有证据链、有残留问题&quot;的诚实报告。</li>
+</ol>
+<hr />
+<p><em>下一篇：阶段八自测验收与复盘</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC4%E5%91%A8-SGLang%E4%B8%8EPrefixCaching/" rel="prev" title="第4周-SGLang与PrefixCaching">
+                  <i class="fa fa-angle-left"></i> 第4周-SGLang与PrefixCaching
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E9%98%B6%E6%AE%B5%E5%85%AB%E8%87%AA%E6%B5%8B%E9%AA%8C%E6%94%B6%E4%B8%8E%E5%A4%8D%E7%9B%98/" rel="next" title="阶段八自测验收与复盘">
+                  阶段八自测验收与复盘 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">611k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">37:04</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

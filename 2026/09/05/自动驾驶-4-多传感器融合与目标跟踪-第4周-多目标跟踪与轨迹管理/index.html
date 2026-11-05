@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的四个问题 1. tracking-by-detection 的&#39;检测→关联→滤波→轨迹管理&#39;四步流水线，每步的职责边界在哪？ 2. 一条轨迹的生死由谁决定？tentative&#x2F;confirmed&#x2F;deleted 状态机怎么和漏…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第4周-多目标跟踪与轨迹管理">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/05/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-4-%E5%A4%9A%E4%BC%A0%E6%84%9F%E5%99%A8%E8%9E%8D%E5%90%88%E4%B8%8E%E7%9B%AE%E6%A0%87%E8%B7%9F%E8%B8%AA-%E7%AC%AC4%E5%91%A8-%E5%A4%9A%E7%9B%AE%E6%A0%87%E8%B7%9F%E8%B8%AA%E4%B8%8E%E8%BD%A8%E8%BF%B9%E7%AE%A1%E7%90%86/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的四个问题 1. tracking-by-detection 的&#39;检测→关联→滤波→轨迹管理&#39;四步流水线，每步的职责边界在哪？ 2. 一条轨迹的生死由谁决定？tentative&#x2F;confirmed&#x2F;deleted 状态机怎么和漏…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-04T21:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T02:04:19.126Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="自动驾驶">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/05/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-4-%E5%A4%9A%E4%BC%A0%E6%84%9F%E5%99%A8%E8%9E%8D%E5%90%88%E4%B8%8E%E7%9B%AE%E6%A0%87%E8%B7%9F%E8%B8%AA-%E7%AC%AC4%E5%91%A8-%E5%A4%9A%E7%9B%AE%E6%A0%87%E8%B7%9F%E8%B8%AA%E4%B8%8E%E8%BD%A8%E8%BF%B9%E7%AE%A1%E7%90%86/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/05/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-4-%E5%A4%9A%E4%BC%A0%E6%84%9F%E5%99%A8%E8%9E%8D%E5%90%88%E4%B8%8E%E7%9B%AE%E6%A0%87%E8%B7%9F%E8%B8%AA-%E7%AC%AC4%E5%91%A8-%E5%A4%9A%E7%9B%AE%E6%A0%87%E8%B7%9F%E8%B8%AA%E4%B8%8E%E8%BD%A8%E8%BF%B9%E7%AE%A1%E7%90%86/","path":"2026/09/05/自动驾驶-4-多传感器融合与目标跟踪-第4周-多目标跟踪与轨迹管理/","title":"第4周-多目标跟踪与轨迹管理"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第4周-多目标跟踪与轨迹管理 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-4-%E5%91%A8%E6%95%99%E7%A8%8B%E5%A4%9A%E7%9B%AE%E6%A0%87%E8%B7%9F%E8%B8%AA%E4%B8%8E%E8%BD%A8%E8%BF%B9%E7%AE%A1%E7%90%86%E6%8B%BC%E5%87%BA%E5%AE%8C%E6%95%B4-mini-mot"><span class="nav-number">1.</span> <span class="nav-text"> 第 4 周教程：多目标跟踪与轨迹管理——拼出完整 mini-MOT</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-tracking-by-detection%E8%8C%83%E5%BC%8F%E5%85%A8%E6%B5%81%E7%A8%8B"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. tracking-by-detection：范式全流程</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-track-%E7%8A%B6%E6%80%81%E6%9C%BA%E6%9D%82%E6%B3%A2%E7%9A%84%E7%AC%AC%E4%B8%80%E9%81%93%E9%97%B8%E9%97%A8"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. track 状态机：杂波的第一道闸门</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E4%B8%89%E6%80%81%E8%AE%BE%E8%AE%A1"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 三态设计</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E6%A0%B7%E8%AE%BE%E8%AE%A1"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 为什么这样设计</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-mot-%E6%8C%87%E6%A0%87%E6%80%8E%E4%B9%88%E9%87%8F%E5%8C%96%E8%B7%9F%E5%BE%97%E5%A5%BD"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. MOT 指标：怎么量化&quot;跟得好&quot;</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-motamulti-object-tracking-accuracy"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 MOTA（Multi-Object Tracking Accuracy）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-motpmulti-object-tracking-precision"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 MOTP（Multi-Object Tracking Precision）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-idf1identity-f1-score"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 IDF1（Identity F1 Score）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%8F%AF%E8%BF%90%E8%A1%8C%E5%AE%9E%E9%AA%8Cmini-motexp5"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 可运行实验：mini-MOT（exp5）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-sort-%E4%B8%8E-deepsort%E4%B8%A4%E5%8F%A5%E8%AF%9D%E4%B8%8E%E4%B8%80%E6%9D%A1%E6%BC%94%E8%BF%9B%E7%BA%BF"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. SORT 与 DeepSORT：两句话与一条演进线</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E8%BD%A8%E8%BF%B9%E8%BE%93%E5%87%BA%E6%80%8E%E4%B9%88%E5%96%82%E7%BB%99%E4%B8%8B%E6%B8%B8"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 轨迹输出怎么喂给下游</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.7.</span> <span class="nav-text"> 7. 工程权衡与失效模式</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#8-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.8.</span> <span class="nav-text"> 8. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.9.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士已毕业，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">193</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/05/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-4-%E5%A4%9A%E4%BC%A0%E6%84%9F%E5%99%A8%E8%9E%8D%E5%90%88%E4%B8%8E%E7%9B%AE%E6%A0%87%E8%B7%9F%E8%B8%AA-%E7%AC%AC4%E5%91%A8-%E5%A4%9A%E7%9B%AE%E6%A0%87%E8%B7%9F%E8%B8%AA%E4%B8%8E%E8%BD%A8%E8%BF%B9%E7%AE%A1%E7%90%86/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士已毕业，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第4周-多目标跟踪与轨迹管理 | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的四个问题 1. tracking-by-detection 的&#39;检测→关联→滤波→轨迹管理&#39;四步流水线，每步的职责边界在哪？ 2. 一条轨迹的生死由谁决定？tentative&#x2F;confirmed&#x2F;deleted 状态机怎么和漏…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第4周-多目标跟踪与轨迹管理
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-05 05:30:00" itemprop="dateCreated datePublished" datetime="2026-09-05T05:30:00+08:00">2026-09-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-05 10:04:19" itemprop="dateModified" datetime="2026-11-05T10:04:19+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6/" itemprop="url" rel="index"><span itemprop="name">自动驾驶</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6/Stage-4-%E5%A4%9A%E4%BC%A0%E6%84%9F%E5%99%A8%E8%9E%8D%E5%90%88%E4%B8%8E%E7%9B%AE%E6%A0%87%E8%B7%9F%E8%B8%AA/" itemprop="url" rel="index"><span itemprop="name">Stage 4-多传感器融合与目标跟踪</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.7k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>17 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的四个问题 1. tracking-by-detection 的'检测→关联→滤波→轨迹管理'四步流水线，每步的职责边界在哪？ 2. 一条轨迹的生死由谁决定？tentative/confirmed/deleted 状态机怎么和漏…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-4-周教程多目标跟踪与轨迹管理拼出完整-mini-mot"><a class="markdownIt-Anchor" href="#第-4-周教程多目标跟踪与轨迹管理拼出完整-mini-mot"></a> 第 4 周教程：多目标跟踪与轨迹管理——拼出完整 mini-MOT</h1>
+<blockquote>
+<p><strong>本周要回答的四个问题</strong></p>
+<ol>
+<li>tracking-by-detection 的&quot;检测→关联→滤波→轨迹管理&quot;四步流水线，每步的职责边界在哪？</li>
+<li>一条轨迹的生死由谁决定？tentative/confirmed/deleted 状态机怎么和漏检、杂波配合？</li>
+<li>MOTA、MOTP、IDF1 到底在数什么？为什么 MOTA 可以是负数？</li>
+<li>前 3 周的零件（KF、门控、匈牙利）拼起来能跑吗？跑完输出什么、喂给谁？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 4 周。交付物：numpy 实现的 mini-MOT（<code>exp5_mini_mot.py</code>），对&quot;3 目标交叉 + 10% 漏检 + 均匀杂波&quot;场景输出轨迹 ID 与 MOTA/MOTP/IDSW。</p>
+<hr />
+<h2 id="1-tracking-by-detection范式全流程"><a class="markdownIt-Anchor" href="#1-tracking-by-detection范式全流程"></a> 1. tracking-by-detection：范式全流程</h2>
+<p>现代多目标跟踪（Multiple Object Tracking, MOT）的主流范式是 <strong>tracking-by-detection</strong>：不做&quot;从像素里找目标再连线&quot;的传统跟踪，而是<strong>每一帧都用检测器独立检测，然后把跨帧的检测&quot;缝&quot;成轨迹</strong>。检测器（Stage 2）负责&quot;这一帧有什么&quot;，跟踪器只负责&quot;哪帧的哪个和哪帧的哪个是同一个&quot;。</p>
+<p>每帧流水线四步，职责边界清晰：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">检测 (detections + scores)</span><br><span class="line">  ↓  ① 关联前置：所有轨迹 KF 预测到当前帧（第 2 周）</span><br><span class="line">  ↓  ② 关联：门控 + 匈牙利，检测配轨迹（第 3 周）</span><br><span class="line">  ↓  ③ 滤波更新：配上的检测修正轨迹状态</span><br><span class="line">  ↓  ④ 轨迹管理：未配上的检测/轨迹进入生死裁决</span><br><span class="line">输出 (confirmed tracks: id, pos, vel, 类别, 置信度)</span><br></pre></td></tr></table></figure>
+<p>为什么要&quot;先预测再关联&quot;（① 在 ② 前）？因为关联的代价矩阵用的是<strong>预测位置</strong>：KF 把每条轨迹外推到本帧时刻（顺带解决多传感器的时延差——外推到统一时间戳），再用预测点去和检测算距离。预测把第 2 周的&quot;跟得住&quot;变成了第 3 周&quot;分得清&quot;的前提。</p>
+<hr />
+<h2 id="2-track-状态机杂波的第一道闸门"><a class="markdownIt-Anchor" href="#2-track-状态机杂波的第一道闸门"></a> 2. track 状态机：杂波的第一道闸门</h2>
+<h3 id="21-三态设计"><a class="markdownIt-Anchor" href="#21-三态设计"></a> 2.1 三态设计</h3>
+<table>
+<thead>
+<tr>
+<th>状态</th>
+<th>含义</th>
+<th>转入条件</th>
+<th>转出条件</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>tentative（候选）</strong></td>
+<td>疑似新目标，还不对外输出</td>
+<td>有未匹配检测认领</td>
+<td>累计命中 ≥ min_hits → confirmed；连续丢失 → deleted</td>
+</tr>
+<tr>
+<td><strong>confirmed（确认）</strong></td>
+<td>可信轨迹，对外输出</td>
+<td>hits ≥ min_hits（典型 3）</td>
+<td>连续丢失 &gt; max_age → deleted</td>
+</tr>
+<tr>
+<td><strong>deleted（删除）</strong></td>
+<td>释放 ID 与内存</td>
+<td>—</td>
+<td>不可恢复（新目标 = 新 ID）</td>
+</tr>
+</tbody>
+</table>
+<p>状态流转一图流：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">  未匹配检测</span><br><span class="line">      │ 新建</span><br><span class="line">      ▼</span><br><span class="line">┌───────────┐  hits &gt;= min_hits   ┌───────────┐  misses &gt; max_age</span><br><span class="line">│ tentative │ ──────────────────► │ confirmed │ ─────────────────►</span><br><span class="line">└───────────┘                     └───────────┘                   ┌─────────┐</span><br><span class="line">      │ misses &gt; max_age（教学版与 confirmed 共用；            │ deleted │</span><br><span class="line">      └── 量产常给 tentative 更短的超时，如 1~2 帧） ◄──────────┘（misses 归零则续命）</span><br></pre></td></tr></table></figure>
+<h3 id="22-为什么这样设计"><a class="markdownIt-Anchor" href="#22-为什么这样设计"></a> 2.2 为什么这样设计</h3>
+<ul>
+<li><strong>tentative 挡杂波</strong>：真实检测器每帧都有几十个误检，若每个都直接建 confirmed 轨迹，轨迹池瞬间爆炸。杂波是空间随机、时间不持续的——&quot;连续 3 帧出现在可预测位置&quot;对杂波是极小概率事件（本周实验会量化：197 个 tentative 只有 3 个真目标转正；而不做防护时会有 7 条杂波轨迹幸存成 confirmed）。</li>
+<li><strong>max_age 挡漏检</strong>：目标被树荫/车辆遮挡 0.5 s，检测消失但目标还在。KF 纯预测滑行（速度照推、协方差按 Q 膨胀），门控顺带放宽（椭圆大了，马氏距离反而更容易通过），检测一恢复就续上——<strong>同一 ID 存活</strong>。没有 max_age 的跟踪器，一次遮挡 = 一次 ID 重生。</li>
+<li><strong>与 NMS 的配合</strong>：检测端 NMS（非极大值抑制，Stage 2）可能把紧邻的两个目标压成一个框（双目标合并漏检），track 会经历&quot;1 条轨迹接 1 个检测 → 突然 2 个检测&quot;的时刻——状态机允许把多余检测开成新 tentative，避免误并入旧轨迹。反过来检测分数低的目标被 NMS 后端滤掉造成漏检，由 max_age 兜底。</li>
+</ul>
+<hr />
+<h2 id="3-mot-指标怎么量化跟得好"><a class="markdownIt-Anchor" href="#3-mot-指标怎么量化跟得好"></a> 3. MOT 指标：怎么量化&quot;跟得好&quot;</h2>
+<p>多目标跟踪评测的标准指标族来自 <strong>CLEAR MOT</strong>（Bernardin &amp; Stiefelhagen, 2008），加上身份保持的 <strong>IDF1</strong>（Ristani et al., ECCV 2016）。逐个看：</p>
+<h3 id="31-motamulti-object-tracking-accuracy"><a class="markdownIt-Anchor" href="#31-motamulti-object-tracking-accuracy"></a> 3.1 MOTA（Multi-Object Tracking Accuracy）</h3>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>M</mi><mi>O</mi><mi>T</mi><mi>A</mi><mo>=</mo><mn>1</mn><mo>−</mo><mfrac><mrow><mi>F</mi><mi>N</mi><mo>+</mo><mi>F</mi><mi>P</mi><mo>+</mo><mi>I</mi><mi>D</mi><mi>S</mi><mi>W</mi></mrow><mrow><munder><mo>∑</mo><mi>t</mi></munder><msub><mi>g</mi><mi>t</mi></msub></mrow></mfrac></mrow><annotation encoding="application/x-tex">MOTA = 1 - \frac{FN + FP + IDSW}{\sum_t g_t}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.10903em;">M</span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="mord mathnormal">A</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:2.3460400000000003em;vertical-align:-0.9857100000000001em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.36033em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:-0.0000050000000000050004em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1308459999999999em;"><span style="top:-2.40029em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.29971000000000003em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2805559999999999em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="mord mathnormal" style="margin-right:0.02778em;">D</span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9857100000000001em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p><strong>这个公式在干什么</strong>：数三种错误占真值总量的比例，一次扣完。逐符号拆解：</p>
+<table>
+<thead>
+<tr>
+<th>符号</th>
+<th>物理含义</th>
+<th>大白话</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi><mi>N</mi></mrow><annotation encoding="application/x-tex">FN</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span></span></span></span>（false negative）</td>
+<td>漏检：真值目标没有对应输出</td>
+<td>该报没报</td>
+</tr>
+<tr>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi><mi>P</mi></mrow><annotation encoding="application/x-tex">FP</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span>（false positive）</td>
+<td>误报：输出没有对应真值</td>
+<td>不该报乱报</td>
+</tr>
+<tr>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>I</mi><mi>D</mi><mi>S</mi><mi>W</mi></mrow><annotation encoding="application/x-tex">IDSW</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="mord mathnormal" style="margin-right:0.02778em;">D</span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span></span></td>
+<td>身份切换次数：同一真值目标先后被两条不同轨迹认领</td>
+<td>认错人</td>
+</tr>
+<tr>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mo>∑</mo><mi>t</mi></msub><msub><mi>g</mi><mi>t</mi></msub></mrow><annotation encoding="application/x-tex">\sum_t g_t</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.0497100000000001em;vertical-align:-0.29971000000000003em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:-0.0000050000000000050004em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.1308459999999999em;"><span style="top:-2.40029em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.29971000000000003em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">g</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2805559999999999em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td>全部帧的真值目标总数</td>
+<td>分母，错误率的基准</td>
+</tr>
+</tbody>
+</table>
+<p><strong>为什么可以是负数</strong>：输出离谱地多（FP 巨大）时，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>F</mi><mi>N</mi><mo>+</mo><mi>F</mi><mi>P</mi><mo>+</mo><mi>I</mi><mi>D</mi><mi>S</mi><mi>W</mi></mrow><annotation encoding="application/x-tex">FN+FP+IDSW</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="mord mathnormal" style="margin-right:0.10903em;">N</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">F</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="mord mathnormal" style="margin-right:0.02778em;">D</span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span></span> 可以超过分母，MOTA &lt; 0——指标用线性惩罚明确告诉你&quot;宁可少报不可乱报&quot;。MOTA 主要惩罚检测质量与身份切换，<strong>不衡量位置准不准</strong>——那是 MOTP 的事。</p>
+<h3 id="32-motpmulti-object-tracking-precision"><a class="markdownIt-Anchor" href="#32-motpmulti-object-tracking-precision"></a> 3.2 MOTP（Multi-Object Tracking Precision）</h3>
+<p><strong>所有匹配对（真值目标 ↔ 输出轨迹）的平均位置误差</strong>（2D 用 IoU 阈值下匹配框的重叠度，3D/点目标用平均距离）。MOTA 高、MOTP 低 = “目标都找对了但框得歪”。注意它衡量的是<strong>已配对目标的定位精度</strong>，与 MOTA 互补。</p>
+<h3 id="33-idf1identity-f1-score"><a class="markdownIt-Anchor" href="#33-idf1identity-f1-score"></a> 3.3 IDF1（Identity F1 Score）</h3>
+<p><strong>基于身份保持的匹配</strong>：把&quot;整条真值轨迹&quot;与&quot;整条预测轨迹&quot;做全局二部匹配（而非逐帧匹配），统计&quot;身份正确识别的检测数 ÷ (真值检测数 + 预测检测数)&quot;。一句话：<strong>IDF1 高 = 一条轨迹从头到尾认的是同一个人/车</strong>。MOTA 高但 IDF1 低 = “每帧都报到了，但一会儿叫 A 一会儿叫 B”——这正是第 1 周说的 ID 漂移，也是路侧 V2X 最怕的指标组合。</p>
+<blockquote>
+<p>指标工程实现对照 <code>py-motmetrics</code>（其结果与 MOTChallenge 基准对齐）；本周 mini-MOT 按同一口径实现 MOTA/MOTP/IDSW（IDF1 需要轨迹级全局匹配，作为思考题）。更新的 <strong>HOTA</strong>（Higher Order Tracking Accuracy, Luiten et al., IJCV 2022）把&quot;检测&quot;与&quot;关联&quot;解耦成两个可分别打分的乘法子项，正在成为新基准——概念上记住&quot;MOTA 偏检测、IDF1 偏身份、HOTA 两者都管&quot;即可。</p>
+</blockquote>
+<hr />
+<h2 id="4-可运行实验mini-motexp5"><a class="markdownIt-Anchor" href="#4-可运行实验mini-motexp5"></a> 4. 可运行实验：mini-MOT（exp5）</h2>
+<p><strong>场景</strong>：10 秒 @10 Hz，3 个目标——T0 向右、T1 向下（与 T0 空间交叉）、T2 斜线穿过同一区域；每帧 90% 检出、位置噪声 0.5 m、平均 2 个均匀分布杂波。<strong>跟踪器</strong>：CV 模型 KF + 马氏门控（99%，9.21）+ <code>linear_sum_assignment</code> + 三态状态机（min_hits=3，max_age=10）。脚本约 170 行，核心部分节选如下（完整见 <code>实验脚本/exp5_mini_mot.py</code>）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># exp5_mini_mot.py —— KF + 匈牙利 + 轨迹状态机的 mini-MOT（节选核心）</span></span><br><span class="line"><span class="comment"># 用法：python3 exp5_mini_mot.py on|off   （on=年轻轨迹欧氏门控，默认）</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Track</span>:</span><br><span class="line">    _<span class="built_in">next</span> = <span class="number">1</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, z</span>):</span><br><span class="line">        <span class="variable language_">self</span>.<span class="built_in">id</span> = Track._<span class="built_in">next</span>; Track._<span class="built_in">next</span> += <span class="number">1</span></span><br><span class="line">        <span class="variable language_">self</span>.x = np.array([z[<span class="number">0</span>], z[<span class="number">1</span>], <span class="number">0.0</span>, <span class="number">0.0</span>])       <span class="comment"># [x, y, vx, vy]</span></span><br><span class="line">        <span class="variable language_">self</span>.P = np.diag([SIG_Z**<span class="number">2</span>, SIG_Z**<span class="number">2</span>, <span class="number">25.0</span>, <span class="number">25.0</span>])</span><br><span class="line">        <span class="variable language_">self</span>.hits, <span class="variable language_">self</span>.misses = <span class="number">1</span>, <span class="number">0</span></span><br><span class="line">        <span class="variable language_">self</span>.confirmed = <span class="literal">False</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">predict</span>(<span class="params">self</span>):                                   <span class="comment"># CV 预测（第 2 周）</span></span><br><span class="line">        <span class="variable language_">self</span>.x = F @ <span class="variable language_">self</span>.x</span><br><span class="line">        <span class="variable language_">self</span>.P = F @ <span class="variable language_">self</span>.P @ F.T + Q</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">update</span>(<span class="params">self, z</span>):                                 <span class="comment"># KF 更新 + 计数</span></span><br><span class="line">        y = z - H @ <span class="variable language_">self</span>.x</span><br><span class="line">        S = H @ <span class="variable language_">self</span>.P @ H.T + R</span><br><span class="line">        K = <span class="variable language_">self</span>.P @ H.T @ np.linalg.inv(S)</span><br><span class="line">        <span class="variable language_">self</span>.x = <span class="variable language_">self</span>.x + K @ y</span><br><span class="line">        <span class="variable language_">self</span>.P = (np.eye(<span class="number">4</span>) - K @ H) @ <span class="variable language_">self</span>.P</span><br><span class="line">        <span class="variable language_">self</span>.hits += <span class="number">1</span>; <span class="variable language_">self</span>.misses = <span class="number">0</span></span><br><span class="line">        <span class="keyword">if</span> <span class="variable language_">self</span>.hits &gt;= MIN_HITS: <span class="variable language_">self</span>.confirmed = <span class="literal">True</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">mahalanobis2</span>(<span class="params">self, z</span>):                           <span class="comment"># 门控距离（第 3 周）</span></span><br><span class="line">        S = H @ <span class="variable language_">self</span>.P @ H.T + R</span><br><span class="line">        d = z - H @ <span class="variable language_">self</span>.x</span><br><span class="line">        <span class="keyword">return</span> d @ np.linalg.inv(S) @ d</span><br><span class="line"></span><br><span class="line">tracks, output = [], []                  <span class="comment"># output: (frame, track_id, pos)</span></span><br><span class="line"><span class="keyword">for</span> k <span class="keyword">in</span> <span class="built_in">range</span>(N):</span><br><span class="line">    <span class="keyword">for</span> tr <span class="keyword">in</span> tracks: tr.predict()</span><br><span class="line">    <span class="comment"># ---- 关联：马氏门控 + 匈牙利 ----</span></span><br><span class="line">    cost = np.full((<span class="built_in">len</span>(tracks), <span class="built_in">len</span>(dets_by_frame[k])), <span class="number">1e6</span>)</span><br><span class="line">    <span class="keyword">for</span> i, tr <span class="keyword">in</span> <span class="built_in">enumerate</span>(tracks):</span><br><span class="line">        <span class="keyword">for</span> j, z <span class="keyword">in</span> <span class="built_in">enumerate</span>(dets_by_frame[k]):</span><br><span class="line">            d2 = tr.mahalanobis2(z)</span><br><span class="line">            <span class="keyword">if</span> d2 &lt;= GATE:</span><br><span class="line">                <span class="keyword">if</span> (USE_YOUNG_GATE <span class="keyword">and</span> tr.hits &lt; MIN_HITS</span><br><span class="line">                        <span class="keyword">and</span> np.linalg.norm(z - tr.x[:<span class="number">2</span>]) &gt; YOUNG_GATE_M):</span><br><span class="line">                    <span class="keyword">continue</span>   <span class="comment"># 年轻轨迹只信 3m 内观测，防&quot;速度乱飞、门控罩全场&quot;</span></span><br><span class="line">                cost[i, j] = d2</span><br><span class="line">    ri, ci = linear_sum_assignment(cost)</span><br><span class="line">    matched_t, matched_d = <span class="built_in">set</span>(), <span class="built_in">set</span>()</span><br><span class="line">    <span class="keyword">for</span> i, j <span class="keyword">in</span> <span class="built_in">zip</span>(ri, ci):</span><br><span class="line">        <span class="keyword">if</span> cost[i, j] &lt; <span class="number">1e6</span>:</span><br><span class="line">            tracks[i].update(dets_by_frame[k][j])</span><br><span class="line">            matched_t.add(i); matched_d.add(j)</span><br><span class="line">    <span class="comment"># ---- 未匹配轨迹 miss 计数 / 未匹配检测建 tentative ----</span></span><br><span class="line">    alive = []</span><br><span class="line">    <span class="keyword">for</span> i, tr <span class="keyword">in</span> <span class="built_in">enumerate</span>(tracks):</span><br><span class="line">        <span class="keyword">if</span> i <span class="keyword">not</span> <span class="keyword">in</span> matched_t: tr.misses += <span class="number">1</span></span><br><span class="line">        <span class="keyword">if</span> tr.misses &lt;= MAX_AGE: alive.append(tr)</span><br><span class="line">    <span class="keyword">for</span> j, z <span class="keyword">in</span> <span class="built_in">enumerate</span>(dets_by_frame[k]):</span><br><span class="line">        <span class="keyword">if</span> j <span class="keyword">not</span> <span class="keyword">in</span> matched_d: alive.append(Track(z))</span><br><span class="line">    tracks = alive</span><br><span class="line">    <span class="keyword">for</span> tr <span class="keyword">in</span> tracks:</span><br><span class="line">        <span class="keyword">if</span> tr.confirmed: output.append((k, tr.<span class="built_in">id</span>, tr.x[:<span class="number">2</span>].copy()))</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 评估：逐帧把 confirmed 输出与真值做 2m 门限匹配，数 FN/FP/IDSW ----</span></span><br><span class="line">MOTA = <span class="number">1</span> - (FN + FP + IDSW) / total_gt</span><br><span class="line">MOTP = np.mean(dists)    <span class="comment"># 匹配对平均位置误差</span></span><br></pre></td></tr></table></figure>
+<p>评估部分的完整逻辑（脚本后半，节选）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># exp5_mini_mot.py 评估节选 —— MOTA/MOTP/IDSW 的逐帧统计</span></span><br><span class="line">EVAL_GATE = <span class="number">2.0</span></span><br><span class="line">gt2track = &#123;i: <span class="literal">None</span> <span class="keyword">for</span> i <span class="keyword">in</span> gt_state&#125;    <span class="comment"># GT 身份 -&gt; 上一次匹配的 track id</span></span><br><span class="line">FN = FP = IDSW = <span class="number">0</span>; dists = []</span><br><span class="line"><span class="keyword">for</span> k <span class="keyword">in</span> <span class="built_in">range</span>(N):</span><br><span class="line">    hyp = [(tid, pos) <span class="keyword">for</span> (f, tid, pos) <span class="keyword">in</span> output <span class="keyword">if</span> f == k]     <span class="comment"># 本帧输出</span></span><br><span class="line">    gts = [(i, gt_pos(k, i)) <span class="keyword">for</span> i <span class="keyword">in</span> gt_state]                  <span class="comment"># 本帧真值</span></span><br><span class="line">    cost = np.full((<span class="built_in">len</span>(gts), <span class="built_in">len</span>(hyp)), <span class="number">1e6</span>)</span><br><span class="line">    <span class="keyword">for</span> a, (gi, gp) <span class="keyword">in</span> <span class="built_in">enumerate</span>(gts):</span><br><span class="line">        <span class="keyword">for</span> b, (tid, hp) <span class="keyword">in</span> <span class="built_in">enumerate</span>(hyp):</span><br><span class="line">            d = np.linalg.norm(gp - hp)</span><br><span class="line">            <span class="keyword">if</span> d &lt;= EVAL_GATE: cost[a, b] = d                    <span class="comment"># 2m 内才可配</span></span><br><span class="line">    ri, ci = linear_sum_assignment(cost)</span><br><span class="line">    matched_g, matched_h = <span class="built_in">set</span>(), <span class="built_in">set</span>()</span><br><span class="line">    <span class="keyword">for</span> a, b <span class="keyword">in</span> <span class="built_in">zip</span>(ri, ci):</span><br><span class="line">        <span class="keyword">if</span> cost[a, b] &lt; <span class="number">1e6</span>:</span><br><span class="line">            gi, tid = gts[a][<span class="number">0</span>], hyp[b][<span class="number">0</span>]</span><br><span class="line">            dists.append(cost[a, b])                             <span class="comment"># 供 MOTP</span></span><br><span class="line">            matched_g.add(a); matched_h.add(b)</span><br><span class="line">            <span class="keyword">if</span> gt2track[gi] <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span> <span class="keyword">and</span> gt2track[gi] != tid:</span><br><span class="line">                IDSW += <span class="number">1</span>                                        <span class="comment"># 身份换手</span></span><br><span class="line">            gt2track[gi] = tid</span><br><span class="line">    FN += <span class="built_in">len</span>(gts) - <span class="built_in">len</span>(matched_g)      <span class="comment"># 真值没被任何 confirmed 覆盖</span></span><br><span class="line">    FP += <span class="built_in">len</span>(hyp) - <span class="built_in">len</span>(matched_h)      <span class="comment"># confirmed 没对应任何真值</span></span><br><span class="line">total_gt = N * <span class="built_in">len</span>(gt_state)</span><br></pre></td></tr></table></figure>
+<p>注意评估口径的三个决定（对不上开源结果时先查这里）：输出<strong>只计 confirmed</strong>（tentative 不算 FP 也不算 FN）；真值-输出匹配用 2 m 门限的匈牙利（与 CLEAR MOT 的逐帧匹配同思路）；IDSW 按&quot;同一真值身份先后绑定的轨迹 ID 变化&quot;计。口径不同，同一份轨迹能差出十几个百分点——先对齐口径再谈调参。</p>
+<p><strong>预期输出一（<code>python3 exp5_mini_mot.py on</code>，默认，有年轻轨迹门控）</strong>（固定种子实测）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">==== mini-MOT 运行结果 ====</span><br><span class="line">轨迹池累计创建 Track 数 = 197（含杂波产生的短命 tentative）</span><br><span class="line">成为 confirmed 并有输出的 Track 数 = 3</span><br><span class="line">  Track 1: 输出   98 帧,  判定 = 真目标 GT0（全程最近距离 0.07 m）</span><br><span class="line">  Track 2: 输出   97 帧,  判定 = 真目标 GT2（全程最近距离 0.02 m）</span><br><span class="line">  Track 6: 输出   96 帧,  判定 = 真目标 GT1（全程最近距离 0.00 m）</span><br><span class="line"></span><br><span class="line">FN = 9, FP = 0, IDSW = 0, GT 总帧数 = 300</span><br><span class="line">MOTA = 0.9700</span><br><span class="line">MOTP = 0.298 m（匹配对平均位置误差）</span><br></pre></td></tr></table></figure>
+<p>逐行读这个结果：</p>
+<ul>
+<li><strong>197 个 tentative → 3 个 confirmed</strong>：约 190 个杂波 tentative 全部死在状态机门口（连续 3 帧可预测命中对随机杂波是极小概率）。漏斗比 65:1，这就是 tentative 机制的价值。</li>
+<li><strong>3 条轨迹 ↔ 3 个真目标一一对应</strong>，包括交叉的 GT0/GT1——KF 预测把速度信息算进了马氏距离，交叉瞬间两条轨迹的预测点相距 10 m，各自认领自己的检测，<strong>IDSW = 0</strong>。</li>
+<li><strong>FN = 9</strong>：每条轨迹出生的前 2~3 帧还是 tentative、不对外输出（3 条 × 约 3 帧），这是确认机制的固有代价——<strong>用 3 帧延迟买 FP=0</strong>。</li>
+<li><strong>MOTP = 0.298 m</strong>：小于检测噪声 σ=0.5 m——KF 的平滑让输出位置比单帧检测更准（信息融合的又一次胜利）。</li>
+</ul>
+<p><strong>预期输出二（<code>python3 exp5_mini_mot.py off</code>，去掉年轻轨迹门控）</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">==== mini-MOT 运行结果 ====</span><br><span class="line">轨迹池累计创建 Track 数 = 139（含杂波产生的短命 tentative）</span><br><span class="line">成为 confirmed 并有输出的 Track 数 = 10</span><br><span class="line">  Track 1: 输出   98 帧,  判定 = 真目标 GT0（全程最近距离 0.07 m）</span><br><span class="line">  Track 2: 输出   97 帧,  判定 = 真目标 GT2（全程最近距离 0.02 m）</span><br><span class="line">  Track 6: 输出   96 帧,  判定 = 真目标 GT1（全程最近距离 0.00 m）</span><br><span class="line">  Track 38: 输出   11 帧,  判定 = 杂波/虚假轨迹</span><br><span class="line">  Track 49: 输出   11 帧,  判定 = 杂波/虚假轨迹</span><br><span class="line">  Track 52: 输出   11 帧,  判定 = 杂波/虚假轨迹</span><br><span class="line">  Track 79: 输出   11 帧,  判定 = 杂波/虚假轨迹</span><br><span class="line">  Track 80: 输出   11 帧,  判定 = 杂波/虚假轨迹</span><br><span class="line">  Track 109: 输出   11 帧,  判定 = 杂波/虚假轨迹</span><br><span class="line">  Track 126: 输出    2 帧,  判定 = 杂波/虚假轨迹</span><br><span class="line"></span><br><span class="line">FN = 9, FP = 68, IDSW = 0, GT 总帧数 = 300</span><br><span class="line">MOTA = 0.7433</span><br><span class="line">MOTP = 0.295 m（匹配对平均位置误差）</span><br></pre></td></tr></table></figure>
+<p>MOTA 从 <strong>0.97 掉到 0.74</strong>，只关了一条规则。失效机理值得逐帧想一遍：杂波 tentative 的初值速度是 0、速度方差很大（25）→ 一旦第二帧误吸到 3 m 外的另一个杂波，速度估计瞬间&quot;飞&quot;出一个大值，协方差爆炸 → 门控罩住大半个场景 → 此后每帧都能吸到杂波 → hits 凑满 3 转正 → 一条&quot;凭空出生、以诡异速度漂移&quot;的 confirmed 轨迹向下游输出 11 帧。<strong>年轻轨迹的不确定度爆炸是虚假轨迹的头号生产线</strong>；修法就是那条&quot;转正前只信 3 m 内观测&quot;的欧氏门控（或等价地：年轻轨迹限速先验、冻结速度更新直到 hits≥2）。真实系统里还有第二道防线——外观特征，见下节。</p>
+<hr />
+<h2 id="5-sort-与-deepsort两句话与一条演进线"><a class="markdownIt-Anchor" href="#5-sort-与-deepsort两句话与一条演进线"></a> 5. SORT 与 DeepSORT：两句话与一条演进线</h2>
+<ul>
+<li><strong>SORT</strong>（Simple Online and Realtime Tracking；Bewley et al., arXiv:1602.00763）：本周 mini-MOT 的&quot;官方同款&quot;——强检测器 + KF（状态为框位置尺寸及速度）+ 匈牙利 IoU 匹配，2D MOT 上 260+ Hz，凭这套极简组合就逼近当年的复杂方法。它证明了：<strong>tracking-by-detection 时代，检测质量比跟踪算法的精巧更值钱</strong>。</li>
+<li><strong>DeepSORT</strong>（Wojke et al., arXiv:1703.07402）：在 SORT 上加一条<strong>外观关联</strong>——用一个带 ReID（re-identification，重识别）损失的 CNN 从检测框里提出外观向量，级联匹配时&quot;外观近 + 运动近&quot;才算同一目标。专治几何关联治不了的病：遮挡后重现的目标 ID 不换、交叉行人的身份不错乱。</li>
+</ul>
+<p>演进线到今天：SORT → DeepSORT（+外观）→ ByteTrack（ECCV 2022，低分检测框二轮关联，不用外观就上台阶）→ 跟踪与检测联合的端到端方案。但骨架全是本周这四步。</p>
+<hr />
+<h2 id="6-轨迹输出怎么喂给下游"><a class="markdownIt-Anchor" href="#6-轨迹输出怎么喂给下游"></a> 6. 轨迹输出怎么喂给下游</h2>
+<p>mini-MOT 的 <code>output</code> 列表（frame, track_id, pos）在真实系统里长成这样：</p>
+<table>
+<thead>
+<tr>
+<th>下游</th>
+<th>拿什么</th>
+<th>拿去干什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>预测补帧</strong></td>
+<td>confirmed 轨迹的 KF 状态</td>
+<td>检测 10 Hz、规控 100 Hz：中间的帧由 KF 纯预测补齐，下游看到平滑连续的目标流（这就是第 1 周时延对齐的续集：输出也统一到下游时间戳）</td>
+</tr>
+<tr>
+<td><strong>历史平滑</strong></td>
+<td>滑动窗口内的轨迹历史</td>
+<td>反推目标意图（变道、刹车）、剔除检测毛刺；输出给 V2X 的轨迹要再做一段历史平滑，避免广播的位置跳变</td>
+</tr>
+<tr>
+<td><strong>V2X 广播</strong></td>
+<td>TrackID + 状态 + 类别</td>
+<td>车端拿 TrackID 对应自己看到的目标——<strong>ID 漂移 = 车端全部对不上</strong>（第 1 周难点五的闭环）</td>
+</tr>
+<tr>
+<td><strong>路侧事件检测</strong></td>
+<td>轨迹级统计</td>
+<td>逆行、违停、行人闯入都是&quot;轨迹级&quot;模式，不是单帧检测能判断的</td>
+</tr>
+</tbody>
+</table>
+<p><strong>一条工程铁律</strong>：对下游输出的轨迹，宁可滞后几帧输出&quot;确认过的平滑状态&quot;，不要输出&quot;最新但抖动&quot;的状态——下游（尤其规划）对位置突变的容忍度远低于对延迟的容忍度。这也是 confirmed 态才对外输出、tentative 不输出的原因。</p>
+<hr />
+<h2 id="7-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#7-工程权衡与失效模式"></a> 7. 工程权衡与失效模式</h2>
+<ol>
+<li><strong>min_hits 太大</strong>：轨迹出生延迟长，短命目标（窜出的行人）全程没有输出。<strong>症状</strong>：FN 集中在目标出生帧；<strong>修复</strong>：min_hits 降为 2，或对高置信检测（score &gt; 0.9）出生即 confirmed。</li>
+<li><strong>max_age 太大</strong>：杂波轨迹在死亡前多活几十帧（FP 上升），两条并行旧轨迹在目标重现时抢 ID。<strong>症状</strong>：FP 与 IDSW 同时涨；<strong>修复</strong>：max_age 与场景遮挡时长匹配（路侧开阔场景 5 帧够，城区 10~30 帧）。</li>
+<li><strong>共线目标误并</strong>：前后同车道两车距离近、速度接近，检测合并/交替，轨迹&quot;吞并&quot;了另一个目标。<strong>症状</strong>：一条轨迹尺寸/速度中途跳变；<strong>修复</strong>：轨迹尺寸一致性校验 + 外观特征。</li>
+<li><strong>评估口径不对齐</strong>：自己算的 MOTA 与 <code>py-motmetrics</code> 对不上，通常是匹配阈值（IoU 0.5 或距离门限）、confirmed 才计入输出、distractor 处理三处口径差异。<strong>修复</strong>：对照 <code>py-motmetrics</code> 的 CLEAR MOT 实现逐项核对。</li>
+</ol>
+<hr />
+<h2 id="8-延伸思考题含解析"><a class="markdownIt-Anchor" href="#8-延伸思考题含解析"></a> 8. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：为什么 MOTA 的分母是&quot;真值总数&quot;而不是&quot;输出总数&quot;？<br />
+<strong>A</strong>：MOTA 是&quot;错误率&quot;口径：三类错误都相对&quot;世界上实际发生了多少&quot;来计。若分母是输出数，多输出反而摊薄错误率，会鼓励 FP——与指标的设计意图相反。</p>
+<p><strong>Q2</strong>：一个跟踪器 MOTA 0.9、IDF1 0.6，说明什么？<br />
+<strong>A</strong>：检测与定位基本到位（每帧都报对了），但身份保持差——轨迹频繁断裂重生或交叉互换。优先查关联（门控/代价）与遮挡处理（max_age/外观），而不是检测。</p>
+<p><strong>Q3</strong>：本周实验里 IDSW = 0，什么条件下它会变成非零？<br />
+<strong>A</strong>：让两目标交叉时刻更贴近（预测点距离小于门控半径）或加大检测噪声，交叉瞬间马氏距离矩阵出现&quot;互换更优&quot;的格局，全局指派就会换手。可以亲手改 <code>gt_state</code> 验证——这也是面试题&quot;什么参数会影响 ID switch&quot;的实证答案。</p>
+<p><strong>Q4</strong>：tentative 期间 KF 也在预测和更新，这与 confirmed 后有什么不同待遇？<br />
+<strong>A</strong>：状态更新一样，但 (a) 不对外输出；(b) 门控更紧（本实验的 3 m 欧氏门控）；© 没有宽限红利——本教学版给 tentative 与 confirmed 相同的 max_age，但量产系统通常让 tentative 连丢 1~2 帧即删（confirmed 才享受 max_age 宽限），本实验里杂波 tentative 是被&quot;再吸不到就死&quot;的统计规律自然淘汰的。差别共同保证&quot;杂波进不来、真目标不冤死&quot;。</p>
+<p><strong>Q5</strong>：为什么预测补帧用 KF 预测而不是&quot;上帧位置直接外发&quot;？<br />
+<strong>A</strong>：直接外发是零阶保持（目标看着一顿一顿），且丢掉了速度信息；KF 预测带速度与加速度趋势，且协方差告知下游&quot;这个预测有多可信&quot;，下游可按不确定度调整代价地图膨胀。</p>
+<p><strong>Q6</strong>：为什么评估时&quot;tentative 不算 FP&quot;是合理口径？<br />
+<strong>A</strong>：tentative 未对外输出、下游根本看不到；把它算 FP 会惩罚&quot;该有的确认机制&quot;本身，导致调参方向错误（为了压 FP 把 min_hits 调大，反而伤短命目标）。口径必须与&quot;下游真实收到什么&quot;对齐——评估口径是系统接口的一部分。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 跑通 <code>exp5_mini_mot.py</code>（on 与 off 两种模式），确认输出与文中一致。</li>
+<li>[ ] 完成&quot;改 <code>gt_state</code> 制造一次 IDSW&quot;的动手验证，观察交叉时刻的代价矩阵。</li>
+<li>[ ] 给跟踪器加一条自己的规则（最大速度先验 / 方向约束），量化它对 FP/IDSW 的影响（学习计划 MVP）。</li>
+<li>[ ] 用 <code>pip install --user motmetrics</code> 把自己输出的轨迹算一遍 MOTA，与本实现对照（口径核对练习）。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6/" rel="tag"># 自动驾驶</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/05/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-4-%E5%A4%9A%E4%BC%A0%E6%84%9F%E5%99%A8%E8%9E%8D%E5%90%88%E4%B8%8E%E7%9B%AE%E6%A0%87%E8%B7%9F%E8%B8%AA-%E7%AC%AC3%E5%91%A8-%E6%95%B0%E6%8D%AE%E5%85%B3%E8%81%94%E4%B8%8E%E5%8C%88%E7%89%99%E5%88%A9%E7%AE%97%E6%B3%95/" rel="prev" title="第3周-数据关联与匈牙利算法">
+                  <i class="fa fa-angle-left"></i> 第3周-数据关联与匈牙利算法
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/05/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-5-BEV%E6%84%9F%E7%9F%A5-%E7%A8%A0%E5%AF%86%E4%B8%8E%E7%A8%80%E7%96%8F-README/" rel="next" title="README">
+                  README <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">611k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">37:04</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

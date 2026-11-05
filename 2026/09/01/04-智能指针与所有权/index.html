@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本篇回答的问题 - new&#x2F;delete 手动管理内存为什么不够用？C++ 的答案&#39;所有权&#39;是什么？ - std::uniqueptr 和 std::sharedptr 各管什么，开销在哪里？ - std::weakptr 到底弱在哪？循…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="04-智能指针与所有权">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/01/04-%E6%99%BA%E8%83%BD%E6%8C%87%E9%92%88%E4%B8%8E%E6%89%80%E6%9C%89%E6%9D%83/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本篇回答的问题 - new&#x2F;delete 手动管理内存为什么不够用？C++ 的答案&#39;所有权&#39;是什么？ - std::uniqueptr 和 std::sharedptr 各管什么，开销在哪里？ - std::weakptr 到底弱在哪？循…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-01T02:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T02:04:18.950Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="C++">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/01/04-%E6%99%BA%E8%83%BD%E6%8C%87%E9%92%88%E4%B8%8E%E6%89%80%E6%9C%89%E6%9D%83/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/01/04-%E6%99%BA%E8%83%BD%E6%8C%87%E9%92%88%E4%B8%8E%E6%89%80%E6%9C%89%E6%9D%83/","path":"2026/09/01/04-智能指针与所有权/","title":"04-智能指针与所有权"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>04-智能指针与所有权 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#04-%E6%99%BA%E8%83%BD%E6%8C%87%E9%92%88%E4%B8%8E%E6%89%80%E6%9C%89%E6%9D%83"><span class="nav-number">1.</span> <span class="nav-text"> 04-智能指针与所有权</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%B8%BA%E4%BB%80%E4%B9%88-raii-%E9%9C%80%E8%A6%81%E6%A0%87%E5%87%86%E5%8C%96%E7%9A%84%E6%8C%87%E9%92%88"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 为什么 RAII 需要标准化的指针</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-stdunique_ptr%E7%8B%AC%E5%8D%A0%E6%89%80%E6%9C%89%E6%9D%83"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. std::unique_ptr：独占所有权</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E5%85%88%E5%AD%A6%E5%AE%83"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 为什么先学它</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%80%8E%E4%B9%88%E5%86%99"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 怎么写</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8F%AF%E8%BF%90%E8%A1%8C%E7%A4%BA%E4%BE%8B%E9%9F%B3%E9%A2%91%E5%9D%97%E5%9C%A8%E5%87%BD%E6%95%B0%E9%97%B4%E8%BD%AC%E7%A7%BB"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 可运行示例：音频块在函数间转移</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-stdshared_ptr%E5%85%B1%E4%BA%AB%E6%89%80%E6%9C%89%E6%9D%83"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. std::shared_ptr：共享所有权</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E5%AE%83"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 为什么需要它</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%8E%A7%E5%88%B6%E5%9D%97%E4%B8%8E%E5%BC%80%E9%94%80%E5%BF%85%E9%A1%BB%E5%BF%83%E9%87%8C%E6%9C%89%E6%95%B0"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 控制块与开销（必须心里有数）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BA%BF%E7%A8%8B%E5%AE%89%E5%85%A8%E6%80%A7%E5%87%86%E7%A1%AE%E8%A1%A8%E8%BF%B0%E9%9D%A2%E8%AF%95%E9%AB%98%E9%A2%91"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 线程安全性（准确表述，面试高频）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8F%AF%E8%BF%90%E8%A1%8C%E7%A4%BA%E4%BE%8B"><span class="nav-number">1.3.4.</span> <span class="nav-text"> 可运行示例</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-stdweak_ptr%E6%89%93%E7%A0%B4%E5%BE%AA%E7%8E%AF%E5%BC%95%E7%94%A8"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. std::weak_ptr：打破循环引用</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%B3%84%E6%BC%8F%E7%8E%B0%E5%9C%BA"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 泄漏现场</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#weak_ptr-%E4%BF%AE%E5%A4%8D%E7%89%88"><span class="nav-number">1.4.2.</span> <span class="nav-text"> weak_ptr 修复版</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E6%89%80%E6%9C%89%E6%9D%83%E8%AE%BE%E8%AE%A1%E7%BB%8F%E9%AA%8C%E6%B3%95%E5%88%99"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 所有权设计经验法则</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%B8%B8%E8%A7%81%E5%9D%91"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 常见坑</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%B0%8F%E7%BB%93"><span class="nav-number">1.7.</span> <span class="nav-text"> 7. 小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%87%AA%E6%B5%8B%E9%A2%98"><span class="nav-number">1.8.</span> <span class="nav-text"> 自测题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士已毕业，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">193</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/01/04-%E6%99%BA%E8%83%BD%E6%8C%87%E9%92%88%E4%B8%8E%E6%89%80%E6%9C%89%E6%9D%83/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士已毕业，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="04-智能指针与所有权 | Yoleen的博客">
+      <meta itemprop="description" content=" 本篇回答的问题 - new&#x2F;delete 手动管理内存为什么不够用？C++ 的答案&#39;所有权&#39;是什么？ - std::uniqueptr 和 std::sharedptr 各管什么，开销在哪里？ - std::weakptr 到底弱在哪？循…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          04-智能指针与所有权
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-01 10:00:00" itemprop="dateCreated datePublished" datetime="2026-09-01T10:00:00+08:00">2026-09-01</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-05 10:04:18" itemprop="dateModified" datetime="2026-11-05T10:04:18+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/C/" itemprop="url" rel="index"><span itemprop="name">C++</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>14 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本篇回答的问题 - new/delete 手动管理内存为什么不够用？C++ 的答案'所有权'是什么？ - std::uniqueptr 和 std::sharedptr 各管什么，开销在哪里？ - std::weakptr 到底弱在哪？循…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="04-智能指针与所有权"><a class="markdownIt-Anchor" href="#04-智能指针与所有权"></a> 04-智能指针与所有权</h1>
+<blockquote>
+<p><strong>本篇回答的问题</strong></p>
+<ul>
+<li><code>new</code>/<code>delete</code> 手动管理内存为什么不够用？C++ 的答案&quot;所有权&quot;是什么？</li>
+<li><code>std::unique_ptr</code> 和 <code>std::shared_ptr</code> 各管什么，开销在哪里？</li>
+<li><code>std::weak_ptr</code> 到底弱在哪？循环引用泄漏长什么样、怎么修？</li>
+<li>拿到一段语音代码，怎么判断一个指针该用哪种智能指针？</li>
+</ul>
+</blockquote>
+<p>前置：03-内存模型与RAII（RAII：资源在构造时获取、在析构时释放）。</p>
+<h2 id="1-为什么-raii-需要标准化的指针"><a class="markdownIt-Anchor" href="#1-为什么-raii-需要标准化的指针"></a> 1. 为什么 RAII 需要标准化的指针</h2>
+<p>03 篇说过：把资源包进一个类的析构函数里，就永远不会忘记释放。那么问题来了——</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">void</span> <span class="title">process</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">float</span>* data = <span class="keyword">new</span> <span class="type">float</span>[<span class="number">48000</span>];  <span class="comment">// 想用 RAII，谁来调用 delete[]？</span></span><br><span class="line">    <span class="comment">// ... 中间任何一处 return / throw 都会跳过 delete[]</span></span><br><span class="line">    <span class="keyword">delete</span>[] data;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>裸指针自己不是 RAII：它没有析构函数。你必须<strong>手工</strong>记住在哪里释放，而函数一旦有多个出口、或者异常会向上传播，手工释放必然出错。</p>
+<p>解决思路很直接：<strong>造一个很小的类，里面只有一个指针，析构函数负责释放</strong>。这就是智能指针。C++ 标准库提供了两种性格截然不同的：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><code>unique_ptr</code></th>
+<th><code>shared_ptr</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>所有权</td>
+<td>独占，同一时刻只有一个主人</td>
+<td>共享，计数归零才释放</td>
+</tr>
+<tr>
+<td>可拷贝</td>
+<td>否（只能移动）</td>
+<td>是</td>
+</tr>
+<tr>
+<td>额外开销</td>
+<td>零（不比裸指针大）</td>
+<td>一个控制块 + 原子计数</td>
+</tr>
+<tr>
+<td>心智模型</td>
+<td>“这块资源是我的”</td>
+<td>“这块资源我们共用”</td>
+</tr>
+</tbody>
+</table>
+<h2 id="2-stdunique_ptr独占所有权"><a class="markdownIt-Anchor" href="#2-stdunique_ptr独占所有权"></a> 2. <code>std::unique_ptr</code>：独占所有权</h2>
+<h3 id="为什么先学它"><a class="markdownIt-Anchor" href="#为什么先学它"></a> 为什么先学它</h3>
+<p>语音引擎里大多数资源天然是<strong>独占</strong>的：一条音频管道上一个环节处理完的 <code>AudioBlock</code>，要么归下一个环节，要么销毁，不存在&quot;两个环节同时拥有&quot;的合法状态。这类场景用 <code>unique_ptr</code>，让编译器替你执行&quot;只能有一个主人&quot;的规矩。</p>
+<h3 id="怎么写"><a class="markdownIt-Anchor" href="#怎么写"></a> 怎么写</h3>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;memory&gt;</span></span></span><br><span class="line"><span class="keyword">auto</span> block = std::<span class="built_in">make_unique</span>&lt;AudioBlock&gt;(<span class="number">48000</span>, <span class="number">1024</span>);  <span class="comment">// 永远别写 new AudioBlock(...)</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li><strong>创建用 <code>std::make_unique</code></strong>（C++14 起）：一行完成分配 + 构造，且不会把裸指针短暂暴露出来。</li>
+<li><strong>所有权转移用 <code>std::move</code></strong>：<code>unique_ptr</code> 禁止拷贝，把&quot;转移所有权&quot;变成一个显式的、在代码里看得见的动作。</li>
+<li><strong>按值传入 <code>unique_ptr</code> 参数 = 声明&quot;我要接管它&quot;</strong>；按引用或传裸指针/引用 = “我只借用”。</li>
+</ul>
+<h3 id="可运行示例音频块在函数间转移"><a class="markdownIt-Anchor" href="#可运行示例音频块在函数间转移"></a> 可运行示例：音频块在函数间转移</h3>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;memory&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;utility&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;vector&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 一个音频数据块：这里用两个成员代表&quot;真实音频数据&quot;，先不碰裸指针</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">AudioBlock</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="built_in">AudioBlock</span>(<span class="type">int</span> sample_rate, <span class="type">int</span> frames)</span><br><span class="line">        : <span class="built_in">sample_rate_</span>(sample_rate), <span class="built_in">frames_</span>(frames) &#123;</span><br><span class="line">        std::cout &lt;&lt; <span class="string">&quot;  AudioBlock 构造: &quot;</span> &lt;&lt; frames_ &lt;&lt; <span class="string">&quot; 帧\n&quot;</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">AudioBlock</span>() &#123; std::cout &lt;&lt; <span class="string">&quot;  AudioBlock 析构: &quot;</span> &lt;&lt; frames_ &lt;&lt; <span class="string">&quot; 帧\n&quot;</span>; &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="type">int</span> <span class="title">sample_rate</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> sample_rate_; &#125;</span><br><span class="line">    <span class="function"><span class="type">int</span> <span class="title">frames</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> frames_; &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    <span class="type">int</span> sample_rate_;</span><br><span class="line">    <span class="type">int</span> frames_;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 接收方&quot;接管&quot;所有权：参数按值传 unique_ptr，签名就写明了&quot;我要拿走它&quot;</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">consume</span><span class="params">(std::unique_ptr&lt;AudioBlock&gt; block)</span> </span>&#123;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;  处理 &quot;</span> &lt;&lt; block-&gt;<span class="built_in">frames</span>() &lt;&lt; <span class="string">&quot; 帧 @ &quot;</span></span><br><span class="line">              &lt;&lt; block-&gt;<span class="built_in">sample_rate</span>() &lt;&lt; <span class="string">&quot; Hz\n&quot;</span>;</span><br><span class="line">&#125;  <span class="comment">// block 离开作用域，AudioBlock 自动释放</span></span><br><span class="line"></span><br><span class="line"><span class="function">std::unique_ptr&lt;AudioBlock&gt; <span class="title">produce</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 局部 unique_ptr 返回时自动&quot;上浮&quot;为移动，不需要写 std::move</span></span><br><span class="line">    <span class="keyword">return</span> std::<span class="built_in">make_unique</span>&lt;AudioBlock&gt;(<span class="number">48000</span>, <span class="number">1024</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">auto</span> block = std::<span class="built_in">make_unique</span>&lt;AudioBlock&gt;(<span class="number">48000</span>, <span class="number">1024</span>);</span><br><span class="line">    <span class="comment">// auto b2 = block;          // 编译错误：unique_ptr 不可拷贝，所有权不能复制</span></span><br><span class="line">    <span class="built_in">consume</span>(std::<span class="built_in">move</span>(block));   <span class="comment">// 转移所有权出去</span></span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;  转移后 block 是否为空: &quot;</span> &lt;&lt; std::boolalpha</span><br><span class="line">              &lt;&lt; (block == <span class="literal">nullptr</span>) &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">auto</span> from_factory = <span class="built_in">produce</span>();</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;  工厂产物: &quot;</span> &lt;&lt; from_factory-&gt;<span class="built_in">frames</span>() &lt;&lt; <span class="string">&quot; 帧\n&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// unique_ptr 可以放进容器：音频块队列天然是&quot;独占&quot;语义</span></span><br><span class="line">    std::vector&lt;std::unique_ptr&lt;AudioBlock&gt;&gt; queue;</span><br><span class="line">    queue.<span class="built_in">push_back</span>(std::<span class="built_in">make_unique</span>&lt;AudioBlock&gt;(<span class="number">16000</span>, <span class="number">256</span>));</span><br><span class="line">    queue.<span class="built_in">push_back</span>(<span class="built_in">produce</span>());</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;  队列长度: &quot;</span> &lt;&lt; queue.<span class="built_in">size</span>() &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;  <span class="comment">// 队列析构 -&gt; 所有块自动释放，全程没有出现 new/delete</span></span><br></pre></td></tr></table></figure>
+<p>预期输出（注意每个对象恰好构造一次、析构一次）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">AudioBlock 构造: 1024 帧</span><br><span class="line">处理 1024 帧 @ 48000 Hz</span><br><span class="line">AudioBlock 析构: 1024 帧</span><br><span class="line">转移后 block 是否为空: true</span><br><span class="line">AudioBlock 构造: 1024 帧</span><br><span class="line">工厂产物: 1024 帧</span><br><span class="line">AudioBlock 构造: 256 帧</span><br><span class="line">AudioBlock 构造: 1024 帧</span><br><span class="line">队列长度: 2</span><br><span class="line">AudioBlock 析构: 256 帧</span><br><span class="line">AudioBlock 析构: 1024 帧</span><br><span class="line">AudioBlock 析构: 1024 帧</span><br></pre></td></tr></table></figure>
+<p>三个要点：</p>
+<ol>
+<li><strong>零开销不是口号</strong>：默认删除器下，<code>sizeof(std::unique_ptr&lt;T&gt;) == sizeof(T*)</code>，解引用也不再额外间接——它就是&quot;会自动析构的裸指针&quot;，所以语音热路径上随便用。</li>
+<li><strong>返回值不用 <code>std::move</code></strong>：<code>produce()</code> 里的返回是隐式移动，写了 <code>std::move(return xxx)</code> 反而会禁用编译器的返回值优化。</li>
+<li><strong>自定义删除器一句话</strong>：<code>std::unique_ptr&lt;FILE, decltype(&amp;fclose)&gt; f(fp, &amp;fclose);</code>——把&quot;怎么释放&quot;作为第二个模板参数（或构造参数）传进去即可，管理 C 接口资源（音频设备句柄、<code>FILE*</code>）时用。<code>shared_ptr</code> 版本运行一下看看：</li>
+</ol>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdio&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;memory&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// 管理 C 接口资源（比如音频设备句柄）时，告诉 shared_ptr &quot;怎么关&quot;</span></span><br><span class="line">    <span class="function">std::shared_ptr&lt;std::FILE&gt; <span class="title">file</span><span class="params">(</span></span></span><br><span class="line"><span class="params"><span class="function">        std::fopen(<span class="string">&quot;/tmp/cpp_verify_456/demo_out.txt&quot;</span>, <span class="string">&quot;w&quot;</span>),</span></span></span><br><span class="line"><span class="params"><span class="function">        [](std::FILE* f) &#123;  <span class="comment">// 自定义删除器：析构时自动调用</span></span></span></span><br><span class="line"><span class="params"><span class="function">            <span class="keyword">if</span> (f != <span class="literal">nullptr</span>) std::fclose(f);</span></span></span><br><span class="line"><span class="params"><span class="function">            std::cout &lt;&lt; <span class="string">&quot;  自定义删除器：文件已关闭\n&quot;</span>;</span></span></span><br><span class="line"><span class="params"><span class="function">        &#125;)</span></span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (file) &#123; std::<span class="built_in">fputs</span>(<span class="string">&quot;hello from shared_ptr\n&quot;</span>, file.<span class="built_in">get</span>()); &#125;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;  main 即将结束\n&quot;</span>;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;  <span class="comment">// 离开作用域时自动调用上面的 lambda，不需要手写 fclose</span></span><br></pre></td></tr></table></figure>
+<p>预期输出（关闭动作发生在 <code>main</code> 之后、程序退出之前）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">main 即将结束</span><br><span class="line">自定义删除器：文件已关闭</span><br></pre></td></tr></table></figure>
+<h2 id="3-stdshared_ptr共享所有权"><a class="markdownIt-Anchor" href="#3-stdshared_ptr共享所有权"></a> 3. <code>std::shared_ptr</code>：共享所有权</h2>
+<h3 id="为什么需要它"><a class="markdownIt-Anchor" href="#为什么需要它"></a> 为什么需要它</h3>
+<p>有些资源确实要共享：ASR 模型的权重加载要几秒，十几个推理任务应该共用同一份，而不是各自加载。<strong>“最后一个用完的人负责释放”</strong>——这正是引用计数的语义。</p>
+<h3 id="控制块与开销必须心里有数"><a class="markdownIt-Anchor" href="#控制块与开销必须心里有数"></a> 控制块与开销（必须心里有数）</h3>
+<p><code>shared_ptr</code> 比裸指针多两个东西，合称<strong>控制块</strong>：</p>
+<ul>
+<li><strong>强引用计数</strong>：有多少个 <code>shared_ptr</code> 共享这个对象；</li>
+<li><strong>弱引用计数</strong>：有多少个 <code>weak_ptr</code> 在观察（下一节）。</li>
+</ul>
+<p>每次拷贝/析构 <code>shared_ptr</code> 都要对计数做<strong>原子操作</strong>（加减 + 内存屏障）。所以：</p>
+<ul>
+<li>拷贝不是免费的，在极热的循环里按 <code>const&amp;</code> 传 <code>shared_ptr</code>；</li>
+<li><code>make_shared&lt;T&gt;(...)</code> 把对象和控制块放进<strong>同一次分配</strong>，比 <code>shared_ptr&lt;T&gt;(new T(...))</code> 少一次分配、对缓存也更友好，<strong>永远优先用它</strong>。</li>
+</ul>
+<h3 id="线程安全性准确表述面试高频"><a class="markdownIt-Anchor" href="#线程安全性准确表述面试高频"></a> 线程安全性（准确表述，面试高频）</h3>
+<ul>
+<li><strong>引用计数本身是原子的</strong>：多个线程同时拷贝/析构<strong>各自持有的</strong> <code>shared_ptr</code> 副本，计数不会乱，对象不会提前释放也不会泄漏。</li>
+<li><strong>同一个 <code>shared_ptr</code> 对象不是线程安全的</strong>：两个线程同时读写<strong>同一个</strong> <code>shared_ptr</code> 变量（一个赋新值、一个拷贝）是数据竞争，需要加锁或用 <code>std::atomic&lt;std::shared_ptr&lt;T&gt;&gt;</code>（C++20）。</li>
+<li><strong>被管理的对象完全不受保护</strong>：<code>shared_ptr&lt;ModelWeights&gt;</code> 只保证&quot;权重在你用的时候活着&quot;，两个线程同时读权重没问题，但一读一写照样要自己加锁。</li>
+</ul>
+<p>一句话：<strong>shared_ptr 保护&quot;这个对象还存在吗&quot;，不保护&quot;这个对象的内容&quot;</strong>。</p>
+<h3 id="可运行示例"><a class="markdownIt-Anchor" href="#可运行示例"></a> 可运行示例</h3>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;memory&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;utility&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 模型权重：加载昂贵，多个推理任务想共享同一份</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">ModelWeights</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">ModelWeights</span><span class="params">(std::string name)</span> : name_(std::move(name)) &#123;</span></span><br><span class="line">        std::cout &lt;&lt; <span class="string">&quot;  加载模型权重: &quot;</span> &lt;&lt; name_ &lt;&lt; <span class="string">&quot;（昂贵的 I/O 只发生这一次）\n&quot;</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">ModelWeights</span>() &#123; std::cout &lt;&lt; <span class="string">&quot;  释放模型权重: &quot;</span> &lt;&lt; name_ &lt;&lt; <span class="string">&#x27;\n&#x27;</span>; &#125;</span><br><span class="line">    <span class="function"><span class="type">const</span> std::string&amp; <span class="title">name</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> name_; &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    std::string name_;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 只&quot;借用&quot;权重参与推理：按 const 引用传 shared_ptr，引用计数不变</span></span><br><span class="line"><span class="comment">// （注意参数类型要与实参一致，若写成 shared_ptr&lt;const ModelWeights&gt; 会临时 +1，见&quot;常见坑&quot;）</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">infer</span><span class="params">(<span class="type">const</span> std::shared_ptr&lt;ModelWeights&gt;&amp; weights)</span> </span>&#123;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;  推理任务借用权重: &quot;</span> &lt;&lt; weights-&gt;<span class="built_in">name</span>()</span><br><span class="line">              &lt;&lt; <span class="string">&quot;，当前引用计数 = &quot;</span> &lt;&lt; weights.<span class="built_in">use_count</span>() &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">auto</span> shared = std::<span class="built_in">make_shared</span>&lt;ModelWeights&gt;(<span class="string">&quot;whisper-tiny&quot;</span>);</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;  创建后 use_count = &quot;</span> &lt;&lt; shared.<span class="built_in">use_count</span>() &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line"></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">auto</span> reader = shared;  <span class="comment">// 拷贝 shared_ptr：计数 +1，权重本身没有复制</span></span><br><span class="line">        std::cout &lt;&lt; <span class="string">&quot;  拷贝一份后 use_count = &quot;</span> &lt;&lt; shared.<span class="built_in">use_count</span>() &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line">        <span class="built_in">infer</span>(shared);</span><br><span class="line">    &#125;  <span class="comment">// reader 析构：计数 -1，权重仍然活着</span></span><br><span class="line"></span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;  离开作用域后 use_count = &quot;</span> &lt;&lt; shared.<span class="built_in">use_count</span>() &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;  主流程继续使用权重: &quot;</span> &lt;&lt; shared-&gt;<span class="built_in">name</span>() &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;  <span class="comment">// 最后一个 shared_ptr 析构，权重才真正释放</span></span><br></pre></td></tr></table></figure>
+<p>预期输出：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">加载模型权重: whisper-tiny（昂贵的 I/O 只发生这一次）</span><br><span class="line">创建后 use_count = 1</span><br><span class="line">拷贝一份后 use_count = 2</span><br><span class="line">推理任务借用权重: whisper-tiny，当前引用计数 = 2</span><br><span class="line">离开作用域后 use_count = 1</span><br><span class="line">主流程继续使用权重: whisper-tiny</span><br><span class="line">释放模型权重: whisper-tiny</span><br></pre></td></tr></table></figure>
+<p><code>use_count</code> 随拷贝 +1、随析构 -1，归零时权重才析构——这就是&quot;最后一个走的人关灯&quot;。</p>
+<h2 id="4-stdweak_ptr打破循环引用"><a class="markdownIt-Anchor" href="#4-stdweak_ptr打破循环引用"></a> 4. <code>std::weak_ptr</code>：打破循环引用</h2>
+<h3 id="泄漏现场"><a class="markdownIt-Anchor" href="#泄漏现场"></a> 泄漏现场</h3>
+<p>引用计数有个著名盲区：<strong>两个对象用 <code>shared_ptr</code> 互相指着，计数就永远到不了 0</strong>。下面这个例子真的会泄漏（本节两个示例都编译运行验证过，泄漏版还用 AddressSanitizer 确认了 <code>160 byte(s) leaked in 2 allocation(s)</code>）：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;memory&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;utility&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 声学场景树：parent 与 child 互相指向，且都用 shared_ptr</span></span><br><span class="line"><span class="comment">// 运行后你会发现：看不到任何析构输出 —— 两个结点互相扣留，内存泄漏了</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Node</span> &#123;</span><br><span class="line">    std::string name;</span><br><span class="line">    std::shared_ptr&lt;Node&gt; parent;  <span class="comment">// 指向父结点</span></span><br><span class="line">    std::shared_ptr&lt;Node&gt; child;   <span class="comment">// 指向子结点</span></span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">Node</span><span class="params">(std::string n)</span> : name(std::move(n)) &#123;</span></span><br><span class="line">        std::cout &lt;&lt; <span class="string">&quot;  构造 &quot;</span> &lt;&lt; name &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">Node</span>() &#123; std::cout &lt;&lt; <span class="string">&quot;  析构 &quot;</span> &lt;&lt; name &lt;&lt; <span class="string">&#x27;\n&#x27;</span>; &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// 作用域结束后深调用一层，冲刷栈上陈旧指针，LeakSanitizer 才能确认&quot;不可达&quot;（见正文）</span></span><br><span class="line">__attribute__((noinline)) <span class="function"><span class="type">void</span> <span class="title">scrub</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">volatile</span> <span class="type">int</span> buf[<span class="number">512</span>];</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">volatile</span> <span class="type">int</span>&amp; x : buf) &#123;</span><br><span class="line">        x = <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">run</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">auto</span> parent = std::<span class="built_in">make_shared</span>&lt;Node&gt;(<span class="string">&quot;parent&quot;</span>);</span><br><span class="line">    <span class="keyword">auto</span> child = std::<span class="built_in">make_shared</span>&lt;Node&gt;(<span class="string">&quot;child&quot;</span>);</span><br><span class="line">    parent-&gt;child = child;   <span class="comment">// child 的引用计数变为 2</span></span><br><span class="line">    child-&gt;parent = parent;  <span class="comment">// parent 的引用计数变为 2</span></span><br><span class="line">&#125;  <span class="comment">// 局部变量 parent/child 析构：计数各自减回 1，但永远到不了 0</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;进入作用域\n&quot;</span>;</span><br><span class="line">    <span class="built_in">run</span>();</span><br><span class="line">    <span class="built_in">scrub</span>();</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;main 结束 —— 注意：上面没有出现任何析构输出，泄漏了\n&quot;</span>;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>预期输出——<strong>没有任何&quot;析构&quot;字样</strong>，这就是泄漏的直接证据：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">进入作用域</span><br><span class="line">  构造 parent</span><br><span class="line">  构造 child</span><br><span class="line">main 结束 —— 注意：上面没有出现任何析构输出，泄漏了</span><br></pre></td></tr></table></figure>
+<p>用 <code>g++ -std=c++17 -fsanitize=address -g</code> 编译运行，LeakSanitizer 通常会报告 <code>160 byte(s) leaked in 2 allocation(s)</code>（本例为此特意加了冲刷栈的 <code>scrub()</code>）。如果你的环境没报，也不矛盾——栈上残留的陈旧指针可能让对象&quot;看似仍可达&quot;而漏报；<strong>该跑的析构没跑，才是泄漏的铁证</strong>。</p>
+<h3 id="weak_ptr-修复版"><a class="markdownIt-Anchor" href="#weak_ptr-修复版"></a> <code>weak_ptr</code> 修复版</h3>
+<p>修复原则只有一句话：<strong>所有权方向用 <code>shared_ptr</code>，回指方向用 <code>weak_ptr</code></strong>。<code>weak_ptr</code> 观察对象但不增加计数，用之前通过 <code>lock()</code> 尝试&quot;升级&quot;成 <code>shared_ptr</code>：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;memory&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;utility&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 与泄漏版唯一的区别：回指方向（child -&gt; parent）改用 weak_ptr</span></span><br><span class="line"><span class="comment">// 规则：&quot;拥有&quot;用 shared_ptr，&quot;知道对方在哪&quot;用 weak_ptr</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Node</span> &#123;</span><br><span class="line">    std::string name;</span><br><span class="line">    std::weak_ptr&lt;Node&gt; parent;    <span class="comment">// 弱引用：不增加引用计数</span></span><br><span class="line">    std::shared_ptr&lt;Node&gt; child;   <span class="comment">// 强引用：拥有子结点</span></span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">Node</span><span class="params">(std::string n)</span> : name(std::move(n)) &#123;</span></span><br><span class="line">        std::cout &lt;&lt; <span class="string">&quot;  构造 &quot;</span> &lt;&lt; name &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    ~<span class="built_in">Node</span>() &#123; std::cout &lt;&lt; <span class="string">&quot;  析构 &quot;</span> &lt;&lt; name &lt;&lt; <span class="string">&#x27;\n&#x27;</span>; &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;进入作用域\n&quot;</span>;</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="keyword">auto</span> parent = std::<span class="built_in">make_shared</span>&lt;Node&gt;(<span class="string">&quot;parent&quot;</span>);</span><br><span class="line">        <span class="keyword">auto</span> child = std::<span class="built_in">make_shared</span>&lt;Node&gt;(<span class="string">&quot;child&quot;</span>);</span><br><span class="line">        parent-&gt;child = child;   <span class="comment">// child 计数 = 2</span></span><br><span class="line">        child-&gt;parent = parent;  <span class="comment">// parent 计数不变（weak 不计数）</span></span><br><span class="line">        std::cout &lt;&lt; <span class="string">&quot;离开作用域\n&quot;</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;main 结束 —— 两个结点都正常析构了\n&quot;</span>;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>预期输出——两个析构都出现了：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">进入作用域</span><br><span class="line">  构造 parent</span><br><span class="line">  构造 child</span><br><span class="line">离开作用域</span><br><span class="line">  析构 parent</span><br><span class="line">  析构 child</span><br><span class="line">main 结束 —— 两个结点都正常析构了</span><br></pre></td></tr></table></figure>
+<p><code>lock()</code> 的用法：<code>if (auto p = child-&gt;parent.lock()) { /* p 是临时 shared_ptr，安全使用 */ }</code>——对象可能已被销毁，<code>lock()</code> 返回空指针，绝不会出现悬空访问。语音系统里&quot;推理任务 → 模型权重&quot;的回指、&quot;回调注册者 → 引擎&quot;的引用，都是 <code>weak_ptr</code> 的典型位置。</p>
+<h2 id="5-所有权设计经验法则"><a class="markdownIt-Anchor" href="#5-所有权设计经验法则"></a> 5. 所有权设计经验法则</h2>
+<ol>
+<li><strong>默认 <code>unique_ptr</code>，有理由才升级 <code>shared_ptr</code></strong>。<code>unique_ptr</code> 可以隐式转换成 <code>shared_ptr</code>（反过来不行），先独占后共享的路是通的。</li>
+<li><strong>判断问题只有一个：“这个资源要不要多个主人？”</strong> 不需要，就 <code>unique_ptr</code>。语义上&quot;转移&quot;（音频块沿管道流动）是 <code>unique_ptr</code> + <code>std::move</code>。</li>
+<li><strong>接口签名泄露所有权设计</strong>：
+<ul>
+<li><code>void sink(std::unique_ptr&lt;T&gt; p)</code> —— 接管；</li>
+<li><code>T* borrow(...)</code> / <code>const T&amp; borrow(...)</code> —— 只借用，不拥有；</li>
+<li><code>void share(std::shared_ptr&lt;T&gt; p)</code> —— 分享一份所有权（按值才计数）。</li>
+</ul>
+</li>
+<li><strong>函数内部临时计算用 <code>std::vector</code>/值语义即可</strong>，不必事事上智能指针。</li>
+<li><strong>看到 <code>shared_ptr</code> 要问一句&quot;这真的需要共享吗&quot;</strong>——很多代码库里一半的 <code>shared_ptr</code> 其实只是作者不敢用 <code>unique_ptr</code>；管理 C 接口句柄（如 <code>pa_simple*</code>、<code>FILE*</code>）时给智能指针配自定义删除器，让 RAII 覆盖非内存资源。</li>
+</ol>
+<h2 id="6-常见坑"><a class="markdownIt-Anchor" href="#6-常见坑"></a> 6. 常见坑</h2>
+<ul>
+<li><strong><code>shared_ptr</code> 参数类型不完全一致会偷偷计数</strong>：本篇示例里 <code>infer</code> 若声明为 <code>const std::shared_ptr&lt;const ModelWeights&gt;&amp;</code>，传入 <code>shared_ptr&lt;ModelWeights&gt;</code> 会因隐式转换生成一个临时 <code>shared_ptr</code>，<code>use_count</code> 凭空 +1（实测如此）。要么类型写一致，要么直接按值传。</li>
+<li><strong>循环引用不报错、不崩溃，只是安静泄漏</strong>：ASan 的 LeakSanitizer 通常能报出来，但它依赖&quot;对象不可达&quot;判定——栈上残留指针可能让对象&quot;看起来仍可达&quot;而漏报（本篇泄漏示例因此加了一个冲刷栈的 <code>scrub()</code>）。最可靠的证据永远是：<strong>析构函数该跑没跑</strong>。</li>
+<li><strong><code>use_count()</code> 在多线程下只是近似值</strong>：别的线程可能随时增减计数，它适合调试和日志，不适合做业务判断。</li>
+<li><strong><code>make_shared</code> 的一个副作用</strong>：对象和控制块同一块内存，只要有 <code>weak_ptr</code> 活着，整块内存都不能还——大对象 + 长命 <code>weak_ptr</code> 场景要留意。</li>
+<li><strong><code>get()</code> 拿到的裸指针交给别人管理就等于双份所有权</strong>：两个主人各自 delete，必然 double-free；<code>shared_ptr&lt;T&gt; a(raw); shared_ptr&lt;T&gt; b(raw);</code> 同理会造出两个独立控制块，双重释放。</li>
+</ul>
+<h2 id="7-小结"><a class="markdownIt-Anchor" href="#7-小结"></a> 7. 小结</h2>
+<ul>
+<li>RAII 的&quot;自动释放&quot;需要载体，智能指针就是标准化的载体：<code>unique_ptr</code> 独占且零开销，<code>shared_ptr</code> 共享但带控制块与原子计数。</li>
+<li><code>unique_ptr</code> 表达&quot;转移&quot;，<code>shared_ptr</code> 表达&quot;共用&quot;，<code>weak_ptr</code> 表达&quot;知道但不拥有&quot;，接口签名应当如实反映这三者。</li>
+<li><code>shared_ptr</code> 只保证对象存活期，不保护对象内容；引用计数原子，同一个 <code>shared_ptr</code> 变量仍需同步。</li>
+<li>循环引用是 <code>shared_ptr</code> 的结构性盲区：所有权单向，回指用 <code>weak_ptr</code>。</li>
+</ul>
+<h2 id="自测题"><a class="markdownIt-Anchor" href="#自测题"></a> 自测题</h2>
+<ol>
+<li>
+<p>为什么 <code>unique_ptr</code> 不能拷贝却可以放进 <code>std::vector</code> 并 <code>push_back</code>？</p>
+<details><summary>答案</summary>
+`push_back` 接收的是右值（临时对象或 `std::move` 的结果），走的是**移动**而非拷贝；容器元素的所有权转移是移动语义，不违反"独占"。直接写 `v.push_back(ptr)`（`ptr` 是左值）才会编译报错，需要 `std::move(ptr)`。
+</details>
+</li>
+<li>
+<p><code>shared_ptr</code> 的引用计数是原子的，那两个线程同时写&quot;同一个 <code>shared_ptr</code> 变量&quot;安全吗？</p>
+<details><summary>答案</summary>
+不安全。原子性保护的是计数，不保护 `shared_ptr` 变量本身：一个线程赋值、另一个线程同时拷贝它属于数据竞争（未定义行为）。各线程只操作自己持有的副本则完全安全。
+</details>
+</li>
+<li>
+<p>下面的代码泄漏吗？为什么？<br />
+<code>auto w = std::make_shared&lt;int&gt;(42); std::weak_ptr&lt;int&gt; obs = w; w.reset();</code></p>
+<details><summary>答案</summary>
+不泄漏。`weak_ptr` 不维持强计数，`w.reset()` 后强计数归零，`int` 的析构函数立即运行、对象宣告死亡，`obs.expired()` 变为 `true`；但注意 `make_shared` 把对象和控制块放在同一块内存里，这块内存要等 `obs` 也析构、弱计数归零后才真正归还。
+</details>
+</li>
+<li>
+<p>音频处理管道中，&quot;采集线程产出的 <code>AudioBlock</code> 交给识别线程，处理完销毁&quot;应该用哪种指针？接口签名怎么写？</p>
+<details><summary>答案</summary>
+`std::unique_ptr<AudioBlock>`，队列用 `std::vector<std::unique_ptr<AudioBlock>>`（或加锁的队列），投递接口 `void enqueue(std::unique_ptr<AudioBlock> block)`——按值传参表明接管所有权。任何时候不需要两个环节同时"拥有"同一块数据。
+</details>
+</li>
+<li>
+<p>练习（动手）：把本篇的 <code>shared_ptr</code> 自定义删除器示例改写成 <code>unique_ptr</code> 版本（提示：<code>std::unique_ptr&lt;std::FILE, decltype(&amp;std::fclose)&gt;</code>），编译运行验证。</p>
+</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/C/" rel="tag"># C++</a>
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/01/03-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E4%B8%8ERAII/" rel="prev" title="03-内存模型与RAII">
+                  <i class="fa fa-angle-left"></i> 03-内存模型与RAII
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/01/05-%E7%B1%BB%E8%AE%BE%E8%AE%A1%E4%B8%8E%E8%B5%84%E6%BA%90%E7%AE%A1%E7%90%86/" rel="next" title="05-类设计与资源管理">
+                  05-类设计与资源管理 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">611k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">37:04</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

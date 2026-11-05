@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的三个问题 1. 30 分钟干声数据如何变成一份可微调的训练集？录音规范、转写、对齐、过滤各有什么坑？ 2. CosyVoice SFT &#x2F; GPT-SoVITS 微调 &#x2F; F5-TTS LoRA 三条微调路线怎么选？">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第6-8周-TTS微调实战与推理服务化">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-5-%E8%AF%AD%E9%9F%B3%E7%94%9F%E6%88%90%E4%B8%8E%E9%9B%B6%E6%A0%B7%E6%9C%AC%E5%85%8B%E9%9A%86-%E7%AC%AC6-8%E5%91%A8-TTS%E5%BE%AE%E8%B0%83%E5%AE%9E%E6%88%98%E4%B8%8E%E6%8E%A8%E7%90%86%E6%9C%8D%E5%8A%A1%E5%8C%96/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的三个问题 1. 30 分钟干声数据如何变成一份可微调的训练集？录音规范、转写、对齐、过滤各有什么坑？ 2. CosyVoice SFT &#x2F; GPT-SoVITS 微调 &#x2F; F5-TTS LoRA 三条微调路线怎么选？">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-01T22:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T02:04:18.990Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="语音">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-5-%E8%AF%AD%E9%9F%B3%E7%94%9F%E6%88%90%E4%B8%8E%E9%9B%B6%E6%A0%B7%E6%9C%AC%E5%85%8B%E9%9A%86-%E7%AC%AC6-8%E5%91%A8-TTS%E5%BE%AE%E8%B0%83%E5%AE%9E%E6%88%98%E4%B8%8E%E6%8E%A8%E7%90%86%E6%9C%8D%E5%8A%A1%E5%8C%96/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-5-%E8%AF%AD%E9%9F%B3%E7%94%9F%E6%88%90%E4%B8%8E%E9%9B%B6%E6%A0%B7%E6%9C%AC%E5%85%8B%E9%9A%86-%E7%AC%AC6-8%E5%91%A8-TTS%E5%BE%AE%E8%B0%83%E5%AE%9E%E6%88%98%E4%B8%8E%E6%8E%A8%E7%90%86%E6%9C%8D%E5%8A%A1%E5%8C%96/","path":"2026/09/02/语音方向-5-语音生成与零样本克隆-第6-8周-TTS微调实战与推理服务化/","title":"第6-8周-TTS微调实战与推理服务化"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第6-8周-TTS微调实战与推理服务化 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-6-8-%E5%91%A8%E6%95%99%E7%A8%8Btts-%E5%BE%AE%E8%B0%83%E5%AE%9E%E6%88%98%E4%B8%8E%E6%8E%A8%E7%90%86%E6%9C%8D%E5%8A%A1%E5%8C%96"><span class="nav-number">1.</span> <span class="nav-text"> 第 6-8 周教程：TTS 微调实战与推理服务化</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B%E5%BD%95%E9%9F%B3-%E8%AE%AD%E7%BB%83%E9%9B%86"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 数据工程：录音 → 训练集</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E5%BD%95%E9%9F%B3%E8%A7%84%E8%8C%83%E5%86%B3%E5%AE%9A%E4%B8%8A%E9%99%90"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 录音规范（决定上限）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E6%95%B0%E6%8D%AE%E6%9E%84%E9%80%A0%E6%B5%81%E6%B0%B4%E7%BA%BF"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 数据构造流水线</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-%E6%95%B0%E6%8D%AE%E9%87%8F%E4%B8%8E%E7%9B%AE%E6%A0%87%E7%9A%84%E5%85%B3%E7%B3%BB"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 数据量与目标的关系</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E4%B8%89%E6%9D%A1%E5%BE%AE%E8%B0%83%E8%B7%AF%E7%BA%BF"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 三条微调路线</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-gpt-sovits-%E5%BE%AE%E8%B0%83%E6%9C%80%E4%BD%8E%E6%88%90%E6%9C%AC"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 GPT-SoVITS 微调（最低成本）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-cosyvoice-sft%E5%B7%A5%E4%B8%9A%E7%BA%A7%E8%B4%B4%E5%90%88"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 CosyVoice SFT（工业级贴合）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-f5-tts-lora%E8%BD%BB%E9%87%8F"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 F5-TTS LoRA（轻量）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#24-%E9%80%89%E5%9E%8B%E5%BB%BA%E8%AE%AE"><span class="nav-number">1.2.4.</span> <span class="nav-text"> 2.4 选型建议</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%BE%AE%E8%B0%83%E5%AE%9E%E6%88%98%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 微调实战（交付核心）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E6%89%A7%E8%A1%8C%E4%B8%80%E6%AC%A1%E5%BE%AE%E8%B0%83"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 执行一次微调</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E7%9B%B2%E8%AF%84%E5%BE%AE%E8%B0%83%E5%89%8D%E5%90%8E%E7%9A%84%E7%9B%B8%E4%BC%BC%E5%BA%A6"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 盲评：微调前后的相似度</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-%E5%8F%AF%E6%87%82%E5%BA%A6%E5%90%88%E6%88%90%E8%AF%AD%E9%9F%B3%E5%96%82-asr-%E6%B5%8B-cerwer"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 可懂度：合成语音喂 ASR 测 CER&#x2F;WER</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E6%8E%A8%E7%90%86%E6%9C%8D%E5%8A%A1%E5%8C%96%E4%BA%A4%E4%BB%98"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 推理服务化（交付）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-fastapi-%E6%B5%81%E5%BC%8F%E6%9C%8D%E5%8A%A1"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 FastAPI 流式服务</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E5%B9%B6%E5%8F%91%E5%8E%8B%E6%B5%8B"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 并发压测</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#51-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.5.1.</span> <span class="nav-text"> 5.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#52-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.5.2.</span> <span class="nav-text"> 5.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.7.</span> <span class="nav-text"> 本周交付清单</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#stage-5-%E6%80%BB%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> Stage 5 总结</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士已毕业，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">193</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-5-%E8%AF%AD%E9%9F%B3%E7%94%9F%E6%88%90%E4%B8%8E%E9%9B%B6%E6%A0%B7%E6%9C%AC%E5%85%8B%E9%9A%86-%E7%AC%AC6-8%E5%91%A8-TTS%E5%BE%AE%E8%B0%83%E5%AE%9E%E6%88%98%E4%B8%8E%E6%8E%A8%E7%90%86%E6%9C%8D%E5%8A%A1%E5%8C%96/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士已毕业，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第6-8周-TTS微调实战与推理服务化 | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的三个问题 1. 30 分钟干声数据如何变成一份可微调的训练集？录音规范、转写、对齐、过滤各有什么坑？ 2. CosyVoice SFT &#x2F; GPT-SoVITS 微调 &#x2F; F5-TTS LoRA 三条微调路线怎么选？">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第6-8周-TTS微调实战与推理服务化
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 06:00:00" itemprop="dateCreated datePublished" datetime="2026-09-02T06:00:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-05 10:04:18" itemprop="dateModified" datetime="2026-11-05T10:04:18+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91/" itemprop="url" rel="index"><span itemprop="name">语音方向</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91/Stage-5-%E8%AF%AD%E9%9F%B3%E7%94%9F%E6%88%90%E4%B8%8E%E9%9B%B6%E6%A0%B7%E6%9C%AC%E5%85%8B%E9%9A%86/" itemprop="url" rel="index"><span itemprop="name">Stage 5-语音生成与零样本克隆</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.1k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>11 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的三个问题 1. 30 分钟干声数据如何变成一份可微调的训练集？录音规范、转写、对齐、过滤各有什么坑？ 2. CosyVoice SFT / GPT-SoVITS 微调 / F5-TTS LoRA 三条微调路线怎么选？</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-6-8-周教程tts-微调实战与推理服务化"><a class="markdownIt-Anchor" href="#第-6-8-周教程tts-微调实战与推理服务化"></a> 第 6-8 周教程：TTS 微调实战与推理服务化</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>30 分钟干声数据如何变成一份可微调的训练集？录音规范、转写、对齐、过滤各有什么坑？</li>
+<li>CosyVoice SFT / GPT-SoVITS 微调 / F5-TTS LoRA 三条微调路线怎么选？</li>
+<li>流式 TTS 服务如何压测？并发 10 路时 RTF 与延迟怎么变？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 6-8 周。交付物：① 录制/准备 ≥30 分钟干声，完成一次 TTS 微调；② 盲评微调前后的说话人相似度 + 合成语音喂 ASR 测可懂度（WER/CER）；③ FastAPI 流式服务 + 并发压测。</p>
+<hr />
+<h2 id="1-数据工程录音-训练集"><a class="markdownIt-Anchor" href="#1-数据工程录音-训练集"></a> 1. 数据工程：录音 → 训练集</h2>
+<h3 id="11-录音规范决定上限"><a class="markdownIt-Anchor" href="#11-录音规范决定上限"></a> 1.1 录音规范（决定上限）</h3>
+<ul>
+<li><strong>48 kHz 干声</strong>：无混响、无背景音乐、无噪声；</li>
+<li><strong>安静环境 + 电容麦</strong>：信噪比 &gt; 40 dB；</li>
+<li><strong>内容多样</strong>：覆盖陈述、疑问、感叹、数字、中英混读；</li>
+<li><strong>30 分钟起步</strong>：SFT 级贴合需要 30 分钟到几小时；少样本（GPT-SoVITS）1-5 分钟即可。</li>
+</ul>
+<h3 id="12-数据构造流水线"><a class="markdownIt-Anchor" href="#12-数据构造流水线"></a> 1.2 数据构造流水线</h3>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>干声</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>切句</mtext></mpadded></mover><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>ASR 转写</mtext></mpadded></mover><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>强制对齐</mtext></mpadded></mover><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>质量过滤</mtext></mpadded></mover><mtext>训练集</mtext></mrow><annotation encoding="application/x-tex">\text{干声} \xrightarrow{\text{切句}} \xrightarrow{\text{ASR 转写}} \xrightarrow{\text{强制对齐}} \xrightarrow{\text{质量过滤}} \text{训练集}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">干声</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">切句</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">ASR </span><span class="mord cjk_fallback mtight">转写</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">强制对齐</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">质量过滤</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">训练集</span></span></span></span></span></span></p>
+<ol>
+<li><strong>切句</strong>：按静音/标点切成 3-15 秒片段（太短无韵律、太长难对齐）；</li>
+<li><strong>ASR 转写</strong>：用你 Stage 2 的 SenseVoice 给音频打标签（技能复用！）；</li>
+<li><strong>强制对齐（MFA）</strong>：Montreal Forced Aligner 给出音素级时间戳，供需要时长标签的模型用；</li>
+<li><strong>质量过滤</strong>：去掉转写置信度低、时长异常、能量异常的样本。</li>
+</ol>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 用 SenseVoice 自动转写（复用 Stage 2）——教学骨架，glob/duration 等按你的 Stage 2 工具补齐</span></span><br><span class="line"><span class="keyword">import</span> glob</span><br><span class="line"><span class="keyword">import</span> soundfile <span class="keyword">as</span> sf</span><br><span class="line"><span class="keyword">from</span> funasr <span class="keyword">import</span> AutoModel</span><br><span class="line"></span><br><span class="line">asr = AutoModel(model=<span class="string">&quot;iic/SenseVoiceSmall&quot;</span>)   <span class="comment"># ModelScope 上的 SenseVoiceSmall</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">clean_label</span>(<span class="params">text: <span class="built_in">str</span></span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">    <span class="comment"># SenseVoice 输出形如 &lt;|zh|&gt;&lt;|NEUTRAL|&gt;&lt;|Speech|&gt;文本</span></span><br><span class="line">    <span class="keyword">for</span> tag <span class="keyword">in</span> (<span class="string">&quot;&lt;|zh|&gt;&quot;</span>, <span class="string">&quot;&lt;|en|&gt;&quot;</span>, <span class="string">&quot;&lt;|yue|&gt;&quot;</span>, <span class="string">&quot;&lt;|ja|&gt;&quot;</span>, <span class="string">&quot;&lt;|ko|&gt;&quot;</span>,</span><br><span class="line">                <span class="string">&quot;&lt;|NEUTRAL|&gt;&quot;</span>, <span class="string">&quot;&lt;|Speech|&gt;&quot;</span>, <span class="string">&quot;&lt;|BGM|&gt;&quot;</span>, <span class="string">&quot;&lt;|Noise|&gt;&quot;</span>, <span class="string">&quot;&lt;|Emb|&gt;&quot;</span>):</span><br><span class="line">        text = text.replace(tag, <span class="string">&quot;&quot;</span>)</span><br><span class="line">    <span class="keyword">return</span> text.strip()</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">transcribe_corpus</span>(<span class="params">wav_dir</span>):</span><br><span class="line">    samples = []</span><br><span class="line">    <span class="keyword">for</span> wav_path <span class="keyword">in</span> <span class="built_in">sorted</span>(glob.glob(<span class="string">f&quot;<span class="subst">&#123;wav_dir&#125;</span>/*.wav&quot;</span>)):</span><br><span class="line">        x, sr = sf.read(wav_path, dtype=<span class="string">&quot;float32&quot;</span>)</span><br><span class="line">        res = asr.generate(<span class="built_in">input</span>=wav_path)</span><br><span class="line">        text = clean_label(res[<span class="number">0</span>][<span class="string">&quot;text&quot;</span>])    <span class="comment"># 去掉 &lt;|zh|&gt; 等特殊标签</span></span><br><span class="line">        dur = <span class="built_in">len</span>(x) / sr</span><br><span class="line">        <span class="keyword">if</span> <span class="number">0.5</span> &lt; dur &lt; <span class="number">15</span> <span class="keyword">and</span> <span class="built_in">len</span>(text) &gt; <span class="number">2</span>:</span><br><span class="line">            samples.append(&#123;<span class="string">&quot;audio&quot;</span>: wav_path, <span class="string">&quot;text&quot;</span>: text&#125;)</span><br><span class="line">    <span class="keyword">return</span> samples</span><br></pre></td></tr></table></figure>
+<p><strong>关键</strong>：转写标签必须<strong>人工抽查</strong>——ASR 错误会直接教坏 TTS。</p>
+<h3 id="13-数据量与目标的关系"><a class="markdownIt-Anchor" href="#13-数据量与目标的关系"></a> 1.3 数据量与目标的关系</h3>
+<table>
+<thead>
+<tr>
+<th>数据量</th>
+<th>可达效果</th>
+<th>适用路线</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>5 秒 - 1 分钟</td>
+<td>零样本/少样本克隆（音色接近）</td>
+<td>GPT-SoVITS 零样本、CosyVoice 零样本</td>
+</tr>
+<tr>
+<td>5 - 30 分钟</td>
+<td>少样本微调（高贴合）</td>
+<td>GPT-SoVITS 微调、F5-TTS LoRA（F5 建议十几分钟以上）</td>
+</tr>
+<tr>
+<td>30 分钟 - 数小时</td>
+<td>SFT（专业级贴合）</td>
+<td>CosyVoice SFT</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2-三条微调路线"><a class="markdownIt-Anchor" href="#2-三条微调路线"></a> 2. 三条微调路线</h2>
+<h3 id="21-gpt-sovits-微调最低成本"><a class="markdownIt-Anchor" href="#21-gpt-sovits-微调最低成本"></a> 2.1 GPT-SoVITS 微调（最低成本）</h3>
+<p>GPT-SoVITS 的微调是 <strong>WebUI 驱动</strong>的（<code>python webui.py</code> 启动，或 Windows 整合包双击 <code>go-webui.bat</code>），没有&quot;一条命令微调&quot;的官方 CLI：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># WebUI 流程（都在 &quot;1-GPT-SoVITS-TTS&quot; 页签里完成）：</span></span><br><span class="line"><span class="comment"># 1A 训练集格式化工具：上传音频 -&gt; 切片 -&gt; （可选 UVR5 降噪）-&gt; ASR 转写 -&gt; 人工校对转写</span></span><br><span class="line"><span class="comment"># 1B 微调 SoVITS 模块（音色），1C 微调 GPT 模块（韵律）——两个模块分别训练</span></span><br><span class="line"><span class="comment"># 1D 推理：填参考音频 + 目标文本即可试听</span></span><br></pre></td></tr></table></figure>
+<p><strong>优点</strong>：上手最快、工具链全（切片/降噪/ASR/校对/训练/推理一站化）、低配 GPU 可跑。<br />
+<strong>缺点</strong>：工业化程度低，流式/服务化需自己包（训练产物是 SoVITS 的 <code>.pth</code> 与 GPT 的 <code>.ckpt</code> 两份权重，要用推理脚本自行封装）。</p>
+<h3 id="22-cosyvoice-sft工业级贴合"><a class="markdownIt-Anchor" href="#22-cosyvoice-sft工业级贴合"></a> 2.2 CosyVoice SFT（工业级贴合）</h3>
+<p>CosyVoice 仓库（<code>CosyVoice-300M-SFT</code> 系）提供训练示例脚本（<code>examples/libritts/cosyvoice/run.sh</code>），把 (音频, 转写) 对格式化后微调出专属音色模型，用 <code>inference_sft</code> 调用：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 数据格式：(音频路径, 转写) 对，数据量小时级起步更稳</span></span><br><span class="line"><span class="comment"># 训练流程见仓库 examples/ 目录（基于 run.sh，内部是数据准备 + LLM/flow 分阶段训练）</span></span><br><span class="line"><span class="comment"># 训练后得到专属音色模型，支持流式推理</span></span><br></pre></td></tr></table></figure>
+<p><strong>优点</strong>：工业级、原生流式、贴合度高。<br />
+<strong>缺点</strong>：需要更大数据量与 GPU、训练链路比 WebUI 复杂。</p>
+<h3 id="23-f5-tts-lora轻量"><a class="markdownIt-Anchor" href="#23-f5-tts-lora轻量"></a> 2.3 F5-TTS LoRA（轻量）</h3>
+<p>F5-TTS 官方支持对 DiT 骨干做 <strong>LoRA</strong> 微调（<code>pip install f5-tts</code> 提供 <code>f5-tts_finetune-cli</code> 与 <code>f5-tts_finetune-gradio</code> 两个入口）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># pip install f5-tts 后，官方提供 4 个命令行入口：</span></span><br><span class="line"><span class="comment">#   f5-tts_infer-cli / f5-tts_infer-gradio      推理</span></span><br><span class="line"><span class="comment">#   f5-tts_finetune-cli / f5-tts_finetune-gradio 微调（CLI 或 Gradio 界面）</span></span><br><span class="line"><span class="comment"># 数据格式：(音频, 转写) 对</span></span><br><span class="line"><span class="comment"># 社区经验：十几分钟音频起步能看到效果，约 1 小时较稳，几小时更好</span></span><br><span class="line"><span class="comment"># LoRA 只训低秩增量，显存占用低于全参微调</span></span><br></pre></td></tr></table></figure>
+<p><strong>优点</strong>：轻量、保留底模通用能力、可插拔。<br />
+<strong>缺点</strong>：无原生流式、服务化需自建。</p>
+<h3 id="24-选型建议"><a class="markdownIt-Anchor" href="#24-选型建议"></a> 2.4 选型建议</h3>
+<ul>
+<li><strong>快速出可用音色</strong> → GPT-SoVITS；</li>
+<li><strong>工业级 + 流式产品</strong> → CosyVoice SFT；</li>
+<li><strong>轻量 + 想学 LoRA</strong> → F5-TTS。</li>
+</ul>
+<hr />
+<h2 id="3-微调实战交付核心"><a class="markdownIt-Anchor" href="#3-微调实战交付核心"></a> 3. 微调实战（交付核心）</h2>
+<h3 id="31-执行一次微调"><a class="markdownIt-Anchor" href="#31-执行一次微调"></a> 3.1 执行一次微调</h3>
+<p>以 GPT-SoVITS 为例（最低门槛）。注意：<strong>GPT-SoVITS 没有 <code>webui.py finetune</code> 这类子命令</strong>——所有数据处理与训练都在 WebUI 页签里点击完成：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1. 下载预训练模型（HuggingFace: lj1995/GPT-SoVITS）放到 GPT_SoVITS/pretrained_models</span></span><br><span class="line"><span class="comment"># 2. 启动 WebUI</span></span><br><span class="line">python webui.py</span><br><span class="line"></span><br><span class="line"><span class="comment"># 3. 在 WebUI 中依次完成：</span></span><br><span class="line"><span class="comment">#    1-A 数据格式化（切片 -&gt; ASR 转写 -&gt; 人工校对 -&gt; 生成 .list 训练清单）</span></span><br><span class="line"><span class="comment">#    1-B SoVITS 微调（填 .list 路径，点开始训练）</span></span><br><span class="line"><span class="comment">#    1-C GPT 微调（同上）</span></span><br><span class="line"><span class="comment">#    1-D 推理页签加载微调后的两个权重试听</span></span><br></pre></td></tr></table></figure>
+<p>（WebUI 版本迭代较快，具体页签布局以仓库最新文档为准；训练产物是 SoVITS 的 <code>*.pth</code> 与 GPT 的 <code>*.ckpt</code> 两份微调权重。）</p>
+<h3 id="32-盲评微调前后的相似度"><a class="markdownIt-Anchor" href="#32-盲评微调前后的相似度"></a> 3.2 盲评：微调前后的相似度</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 用同一段目标文本，分别用 微调前（零样本）与 微调后 合成</span></span><br><span class="line"><span class="comment"># 盲评维度：说话人相似度、自然度、咬字准确度</span></span><br><span class="line"><span class="comment"># 组织 3 人盲评打分（1-5）</span></span><br></pre></td></tr></table></figure>
+<h3 id="33-可懂度合成语音喂-asr-测-cerwer"><a class="markdownIt-Anchor" href="#33-可懂度合成语音喂-asr-测-cerwer"></a> 3.3 可懂度：合成语音喂 ASR 测 CER/WER</h3>
+<p><strong>客观指标</strong>：把合成的语音再用 ASR 识别，看识别率——衡量&quot;咬字是否清晰&quot;。<strong>中文文本要用 CER（Character Error Rate，字错误率）而不是 WER</strong>——中文没有空格分词，按&quot;字&quot;算才合理；<code>jiwer</code> 两者都有：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> jiwer <span class="keyword">import</span> cer   <span class="comment"># 英文场景用 from jiwer import wer</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">normalize</span>(<span class="params">t</span>):        <span class="comment"># 教学骨架：去标点、繁简统一、数字归一化</span></span><br><span class="line">    <span class="keyword">return</span> t</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">intelligibility</span>(<span class="params">tts_model, asr_model, texts</span>):</span><br><span class="line">    errors = []</span><br><span class="line">    <span class="keyword">for</span> text <span class="keyword">in</span> texts:</span><br><span class="line">        wav = tts_model.synthesize(text)</span><br><span class="line">        hyp = asr_model.transcribe(wav)</span><br><span class="line">        errors.append(cer(normalize(text), normalize(hyp)))</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">sum</span>(errors) / <span class="built_in">len</span>(errors)</span><br><span class="line"></span><br><span class="line">cer_before = intelligibility(zero_shot_model, asr, test_texts)</span><br><span class="line">cer_after = intelligibility(finetuned_model, asr, test_texts)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;可懂度 CER: 微调前 <span class="subst">&#123;cer_before:<span class="number">.2</span>%&#125;</span> -&gt; 微调后 <span class="subst">&#123;cer_after:<span class="number">.2</span>%&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>预期</strong>：微调后相似度主观分上升，可懂度（CER）持平或略降（咬字更清晰）。<strong>两个指标都要报</strong>——相似度升但可懂度崩 = 失败。</p>
+<hr />
+<h2 id="4-推理服务化交付"><a class="markdownIt-Anchor" href="#4-推理服务化交付"></a> 4. 推理服务化（交付）</h2>
+<h3 id="41-fastapi-流式服务"><a class="markdownIt-Anchor" href="#41-fastapi-流式服务"></a> 4.1 FastAPI 流式服务</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> io</span><br><span class="line"><span class="keyword">import</span> wave</span><br><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"><span class="keyword">from</span> fastapi <span class="keyword">import</span> FastAPI</span><br><span class="line"><span class="keyword">from</span> fastapi.responses <span class="keyword">import</span> StreamingResponse</span><br><span class="line"></span><br><span class="line">app = FastAPI()</span><br><span class="line">SR = <span class="number">24000</span>   <span class="comment"># 与模型输出采样率一致（CosyVoice2 为 24 kHz）</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">wav_header</span>(<span class="params">n_samples: <span class="built_in">int</span></span>) -&gt; <span class="built_in">bytes</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;生成 WAV 文件头（决定总样本数，让播放器知道时长）。&quot;&quot;&quot;</span></span><br><span class="line">    buf = io.BytesIO()</span><br><span class="line">    <span class="keyword">with</span> wave.<span class="built_in">open</span>(buf, <span class="string">&quot;wb&quot;</span>) <span class="keyword">as</span> w:</span><br><span class="line">        w.setnchannels(<span class="number">1</span>)</span><br><span class="line">        w.setsampwidth(<span class="number">2</span>)             <span class="comment"># int16</span></span><br><span class="line">        w.setframerate(SR)</span><br><span class="line">        w.writeframes(<span class="string">b&quot;\x00\x00&quot;</span> * n_samples)   <span class="comment"># 只为写出合法头部</span></span><br><span class="line">    <span class="keyword">return</span> buf.getvalue()</span><br><span class="line"></span><br><span class="line"><span class="meta">@app.post(<span class="params"><span class="string">&quot;/tts&quot;</span></span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">tts</span>(<span class="params">text: <span class="built_in">str</span>, stream: <span class="built_in">bool</span> = <span class="literal">True</span></span>):</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">not</span> stream:</span><br><span class="line">        wav = tts_model.synthesize(text)</span><br><span class="line">        <span class="keyword">return</span> StreamingResponse(io.BytesIO(encode_wav(wav)),</span><br><span class="line">                                 media_type=<span class="string">&quot;audio/wav&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">generate</span>():</span><br><span class="line">        <span class="comment"># WAV 头部只发一次（先于音频数据），后面全部是裸 PCM：</span></span><br><span class="line">        header_sent = <span class="literal">False</span></span><br><span class="line">        <span class="keyword">for</span> chunk <span class="keyword">in</span> tts_model.synthesize_stream(text):   <span class="comment"># 每块为 float32 波形</span></span><br><span class="line">            pcm = (np.clip(chunk, -<span class="number">1</span>, <span class="number">1</span>) * <span class="number">32767</span>).astype(np.int16).tobytes()</span><br><span class="line">            <span class="keyword">if</span> <span class="keyword">not</span> header_sent:</span><br><span class="line">                <span class="keyword">yield</span> wav_header(estimate_total_samples(text))  <span class="comment"># 教学骨架：estimate_total_samples 按语速估算字数×每字时长补齐</span></span><br><span class="line">                header_sent = <span class="literal">True</span></span><br><span class="line">            <span class="keyword">yield</span> pcm</span><br><span class="line">    <span class="keyword">return</span> StreamingResponse(generate(), media_type=<span class="string">&quot;audio/wav&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>（非流式分支里的 <code>encode_wav</code> 同为教学骨架：用上面 <code>wave</code> 模块把完整波形写入 <code>BytesIO</code> 即可。）</p>
+<p><strong>这段代码的两个真坑</strong>（比&quot;会不会写&quot;更重要）：</p>
+<ol>
+<li><strong>WAV 不是为流式设计的容器</strong>：它的头部写死了&quot;总样本数&quot;。把多个&quot;完整 wav chunk&quot;直接拼接给客户端，得到的是<strong>非法文件</strong>——只有第一个头生效。上面代码的对策是&quot;头只发一次、后面发裸 PCM&quot;，但总样本数是估的（<strong>简化做法</strong>，多数播放器能容忍）；<strong>工程做法</strong>是换成真正为流式设计的容器（Ogg/Opus、WebM/Opus，浏览器 <code>&lt;audio&gt;</code> 原生支持）。</li>
+<li><strong>同步端点阻塞</strong>：<code>def tts</code> 里的模型推理是阻塞计算，FastAPI 会在线程池里跑同步生成器——demo 够用，并发一高就顶不住；生产上应把推理拆到独立进程/服务（如 vLLM 风格的推理服务），网关只做转发。</li>
+</ol>
+<p><strong>流式的关键</strong>：用 <code>StreamingResponse</code> 边生成边下发，客户端首包延迟低——这正是你结课助手（Stage 7）需要的&quot;边想边说&quot;。</p>
+<h3 id="42-并发压测"><a class="markdownIt-Anchor" href="#42-并发压测"></a> 4.2 并发压测</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 用 locust 或 ab 压测并发 10 路</span></span><br><span class="line"><span class="comment"># 指标：吞吐（句/秒）、首包延迟、完整延迟、RTF</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> asyncio, aiohttp, time</span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">one_request</span>(<span class="params">session, text</span>):</span><br><span class="line">    t0 = time.time()</span><br><span class="line">    first = <span class="literal">None</span></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">with</span> session.post(URL, params=&#123;<span class="string">&quot;text&quot;</span>: text, <span class="string">&quot;stream&quot;</span>: <span class="literal">True</span>&#125;) <span class="keyword">as</span> r:</span><br><span class="line">        <span class="keyword">async</span> <span class="keyword">for</span> chunk <span class="keyword">in</span> r.content.iter_any():</span><br><span class="line">            <span class="keyword">if</span> first <span class="keyword">is</span> <span class="literal">None</span>:</span><br><span class="line">                first = time.time() - t0</span><br><span class="line">    total = time.time() - t0</span><br><span class="line">    <span class="keyword">return</span> first, total</span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">bench</span>(<span class="params">concurrency=<span class="number">10</span></span>):</span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">with</span> aiohttp.ClientSession() <span class="keyword">as</span> session:</span><br><span class="line">        tasks = [one_request(session, <span class="string">&quot;测试文本&quot;</span>) <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(concurrency)]</span><br><span class="line">        results = <span class="keyword">await</span> asyncio.gather(*tasks)</span><br><span class="line">    firsts = [r[<span class="number">0</span>] <span class="keyword">for</span> r <span class="keyword">in</span> results <span class="keyword">if</span> r[<span class="number">0</span>]]</span><br><span class="line">    totals = [r[<span class="number">1</span>] <span class="keyword">for</span> r <span class="keyword">in</span> results]</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;并发 <span class="subst">&#123;concurrency&#125;</span>: 首包延迟均值 <span class="subst">&#123;<span class="built_in">sum</span>(firsts)/<span class="built_in">len</span>(firsts)*<span class="number">1000</span>:<span class="number">.0</span>f&#125;</span> ms&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;           完整延迟均值 <span class="subst">&#123;<span class="built_in">sum</span>(totals)/<span class="built_in">len</span>(totals):<span class="number">.2</span>f&#125;</span> s&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>观察点</strong>：并发上升时，单卡显存与算力被分摊，<strong>首包延迟与 RTF 都会上升</strong>。记录&quot;并发 1/4/10&quot;三档数据，画出延迟-并发曲线——这是容量规划的依据（联动性能优化方向）。</p>
+<hr />
+<h2 id="5-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#5-工程权衡与失效模式"></a> 5. 工程权衡与失效模式</h2>
+<h3 id="51-权衡"><a class="markdownIt-Anchor" href="#51-权衡"></a> 5.1 权衡</h3>
+<ul>
+<li><strong>数据量</strong>：多 → 贴合好但成本高；少 → 快但不够像。按产品需求定档；</li>
+<li><strong>过拟合</strong>：微调过头会丢失底模的鲁棒性（韵律变差、只会说训练集风格）；</li>
+<li><strong>流式缓冲</strong>：缓冲小延迟低但易卡顿；缓冲大反之。</li>
+</ul>
+<h3 id="52-失效模式"><a class="markdownIt-Anchor" href="#52-失效模式"></a> 5.2 失效模式</h3>
+<ol>
+<li><strong>标签错误教坏模型</strong>：ASR 转写错 → 模型学会错误发音。修复：人工抽查标签。</li>
+<li><strong>过拟合</strong>：训练集外文本韵律崩。修复：早停、控制步数、混通用数据。</li>
+<li><strong>录音质量差</strong>：底噪/混响被学进去。修复：录音规范 + 前端降噪。</li>
+<li><strong>服务并发崩</strong>：单卡扛不住多路并发。修复：多副本、队列、扩容（联动性能优化）。</li>
+</ol>
+<hr />
+<h2 id="6-延伸思考题含解析"><a class="markdownIt-Anchor" href="#6-延伸思考题含解析"></a> 6. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：为什么 TTS 数据要&quot;强制对齐&quot;？<br />
+<strong>A</strong>：需要时长/音素级标签的模型（如某些声学模型）要知道每个音素的起止时间。MFA 强制对齐给出这个标注，让模型学到&quot;什么音素多长&quot;。纯 flow/LM 路线对此依赖较小。</p>
+<p><strong>Q2</strong>：微调后相似度升但可懂度崩，问题出在哪？<br />
+<strong>A</strong>：可能是过拟合（咬字糊）、录音质量问题、或标签错误。需用可懂度（WER）指标守住底线——相似度与可懂度必须同时达标。</p>
+<p><strong>Q3</strong>：流式服务为什么要边生成边下发？<br />
+<strong>A</strong>：整句生成完再下发，首包延迟 = 整句时长，用户等太久。流式边生成边播，首包延迟只取决于第一个 chunk，体验大幅提升。</p>
+<p><strong>Q4</strong>：并发压测时延迟为什么会上升？<br />
+<strong>A</strong>：单卡算力/显存被多路请求分摊，每路分到的计算变少，生成变慢。这是容量规划的核心——需要多卡/多副本水平扩展。</p>
+<p><strong>Q5</strong>：你怎么防止微调过拟合？<br />
+<strong>A</strong>：早停、控制训练步数、混入通用数据、用验证集监控韵律指标、数据量足够（别用太少数据训太多步）。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 录制/准备 ≥30 分钟干声，完成 切句→转写→对齐→过滤 流水线。</li>
+<li>[ ] 完成一次微调（GPT-SoVITS / CosyVoice SFT / F5-TTS LoRA 任选）。</li>
+<li>[ ] 盲评微调前后相似度 + 可懂度（WER）双指标。</li>
+<li>[ ] FastAPI 流式服务 + 并发 1/4/10 压测，画延迟-并发曲线。</li>
+</ul>
+<h2 id="stage-5-总结"><a class="markdownIt-Anchor" href="#stage-5-总结"></a> Stage 5 总结</h2>
+<p>完成本阶段，你已能：</p>
+<ol>
+<li><strong>原理</strong>：声码器三代、RVQ 离散化、VALL-E、flow matching、FSQ 语义 token；</li>
+<li><strong>拆解</strong>：CosyVoice 2 / F5-TTS / GPT-SoVITS 三条路线的架构与权衡；</li>
+<li><strong>实战</strong>：零样本克隆、TTS 微调、流式服务压测。</li>
+</ol>
+<p>对照学习计划自测清单核验后，进入 <strong>Stage 6：语音大模型与 Omni 多模态</strong>——把你已有的 VLM 知识与本阶段的语音能力焊在一起。</p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%AF%AD%E9%9F%B3/" rel="tag"># 语音</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-5-%E8%AF%AD%E9%9F%B3%E7%94%9F%E6%88%90%E4%B8%8E%E9%9B%B6%E6%A0%B7%E6%9C%AC%E5%85%8B%E9%9A%86-%E7%AC%AC5%E5%91%A8-F5-TTS%E4%B8%8EGPT-SoVITS%E5%AF%B9%E6%AF%94%E6%8B%86%E8%A7%A3/" rel="prev" title="第5周-F5-TTS与GPT-SoVITS对比拆解">
+                  <i class="fa fa-angle-left"></i> 第5周-F5-TTS与GPT-SoVITS对比拆解
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-6-%E8%AF%AD%E9%9F%B3%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%20Omni%20%E5%A4%9A%E6%A8%A1%E6%80%81-README/" rel="next" title="README">
+                  README <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">611k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">37:04</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

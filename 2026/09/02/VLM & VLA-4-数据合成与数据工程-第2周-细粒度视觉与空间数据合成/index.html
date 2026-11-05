@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的三个问题 1. Grounding DINO 与 SAM 的分工是什么？&#39;开放词表检测 + 无监督分割&#39;为什么能组成自动标注流水线？ 2. 检测框坐标如何变成符合模型训练规范的归一化坐标与空间关系 QA？ 3. 从 2D 到 …">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第2周-细粒度视觉与空间数据合成">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC2%E5%91%A8-%E7%BB%86%E7%B2%92%E5%BA%A6%E8%A7%86%E8%A7%89%E4%B8%8E%E7%A9%BA%E9%97%B4%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的三个问题 1. Grounding DINO 与 SAM 的分工是什么？&#39;开放词表检测 + 无监督分割&#39;为什么能组成自动标注流水线？ 2. 检测框坐标如何变成符合模型训练规范的归一化坐标与空间关系 QA？ 3. 从 2D 到 …">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T14:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T02:04:19.026Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC2%E5%91%A8-%E7%BB%86%E7%B2%92%E5%BA%A6%E8%A7%86%E8%A7%89%E4%B8%8E%E7%A9%BA%E9%97%B4%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC2%E5%91%A8-%E7%BB%86%E7%B2%92%E5%BA%A6%E8%A7%86%E8%A7%89%E4%B8%8E%E7%A9%BA%E9%97%B4%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90/","path":"2026/09/02/VLM & VLA-4-数据合成与数据工程-第2周-细粒度视觉与空间数据合成/","title":"第2周-细粒度视觉与空间数据合成"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第2周-细粒度视觉与空间数据合成 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-2-%E5%91%A8%E6%95%99%E7%A8%8B%E7%BB%86%E7%B2%92%E5%BA%A6%E8%A7%86%E8%A7%89-%E7%A9%BA%E9%97%B4%E4%B8%8E%E6%84%9F%E7%9F%A5%E6%95%B0%E6%8D%AE%E8%87%AA%E5%8A%A8%E5%8C%96%E5%90%88%E6%88%90"><span class="nav-number">1.</span> <span class="nav-text"> 第 2 周教程：细粒度视觉、空间与感知数据自动化合成</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E7%A8%8B%E5%BA%8F%E5%8C%96%E5%B7%A5%E5%85%B7%E4%B8%BA%E4%BD%95%E4%BC%98%E4%BA%8E%E6%95%99%E5%B8%88%E6%A8%A1%E5%9E%8B"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：程序化工具为何优于教师模型</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E6%A0%B9%E6%9C%AC%E7%9F%9B%E7%9B%BE%E8%AF%AD%E8%A8%80%E6%A8%A1%E5%9E%8B%E7%BB%99%E4%B8%8D%E4%BA%86%E6%95%B0%E5%AD%97%E7%BA%A7%E7%9C%9F%E5%80%BC"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 根本矛盾：语言模型给不了&quot;数字级真值&quot;</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E5%9D%90%E6%A0%87%E8%A7%84%E8%8C%83%E7%9A%84%E5%B7%A5%E7%A8%8B%E5%86%B3%E7%AD%96"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 坐标规范的工程决策</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-%E4%BB%8E%E5%87%A0%E4%BD%95%E5%88%B0%E8%AF%AD%E8%A8%80%E7%A9%BA%E9%97%B4%E5%85%B3%E7%B3%BB%E7%9A%84%E5%8F%AF%E8%AE%A1%E7%AE%97%E5%AE%9A%E4%B9%89"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 从几何到语言：空间关系的可计算定义</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E4%B8%8E%E6%95%B0%E6%8D%AE%E6%B5%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 系统架构与数据流</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-grounded-sam-%E8%87%AA%E5%8A%A8%E6%A0%87%E6%B3%A8%E6%B5%81%E6%B0%B4%E7%BA%BF"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 Grounded-SAM 自动标注流水线</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E4%B8%89%E7%B1%BB%E6%A8%A1%E6%9D%BF%E7%9A%84%E6%95%B0%E6%8D%AE%E6%A0%B7%E4%BE%8B"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 三类模板的数据样例</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-3d-%E5%A4%9A%E8%A7%86%E8%A7%92%E6%95%B0%E6%8D%AE%E7%9A%84%E6%9E%84%E5%BB%BA%E9%80%BB%E8%BE%91%E6%A6%82%E5%BF%B5%E5%B1%82"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 3D &#x2F; 多视角数据的构建逻辑（概念层）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E6%9C%AC%E5%91%A8-mvp%E8%87%AA%E5%8A%A8%E6%A0%87%E6%B3%A8-qa-%E7%94%9F%E6%88%90%E8%84%9A%E6%9C%AC"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 本周 MVP：自动标注 + QA 生成脚本</span></a></li></ol></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士已毕业，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">193</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC2%E5%91%A8-%E7%BB%86%E7%B2%92%E5%BA%A6%E8%A7%86%E8%A7%89%E4%B8%8E%E7%A9%BA%E9%97%B4%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士已毕业，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第2周-细粒度视觉与空间数据合成 | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的三个问题 1. Grounding DINO 与 SAM 的分工是什么？&#39;开放词表检测 + 无监督分割&#39;为什么能组成自动标注流水线？ 2. 检测框坐标如何变成符合模型训练规范的归一化坐标与空间关系 QA？ 3. 从 2D 到 …">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第2周-细粒度视觉与空间数据合成
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 22:00:00" itemprop="dateCreated datePublished" datetime="2026-09-02T22:00:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-05 10:04:19" itemprop="dateModified" datetime="2026-11-05T10:04:19+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Stage 4-数据合成与数据工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.3k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的三个问题 1. Grounding DINO 与 SAM 的分工是什么？'开放词表检测 + 无监督分割'为什么能组成自动标注流水线？ 2. 检测框坐标如何变成符合模型训练规范的归一化坐标与空间关系 QA？ 3. 从 2D 到 …</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-2-周教程细粒度视觉-空间与感知数据自动化合成"><a class="markdownIt-Anchor" href="#第-2-周教程细粒度视觉-空间与感知数据自动化合成"></a> 第 2 周教程：细粒度视觉、空间与感知数据自动化合成</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>Grounding DINO 与 SAM 的分工是什么？&quot;开放词表检测 + 无监督分割&quot;为什么能组成自动标注流水线？</li>
+<li>检测框坐标如何变成符合模型训练规范的归一化坐标与空间关系 QA？</li>
+<li>从 2D 到 3D/Pose 的数据拼接，几何量到自然语言 prompt 的映射逻辑是什么？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 2 周。交付物：自动标注脚本，输入 50 张普通场景图，用 Grounded-SAM 提取核心物体 BBox，生成 200 条含归一化坐标与空间方向逻辑的 Grounding/Spatial Reasoning 训练数据。</p>
+<p>这是三条合成产线中<strong>唯一能产出物理级精确真值</strong>的一条——教师模型会幻觉，但检测器的坐标不会&quot;大概觉得&quot;。Stage 3 诊断出的定位/空间短板，主要靠这条线补。</p>
+<hr />
+<h2 id="1-第一性原理程序化工具为何优于教师模型"><a class="markdownIt-Anchor" href="#1-第一性原理程序化工具为何优于教师模型"></a> 1. 第一性原理：程序化工具为何优于教师模型</h2>
+<h3 id="11-根本矛盾语言模型给不了数字级真值"><a class="markdownIt-Anchor" href="#11-根本矛盾语言模型给不了数字级真值"></a> 1.1 根本矛盾：语言模型给不了&quot;数字级真值&quot;</h3>
+<p>Stage 1 讲过 VLM 的空间编码先天薄弱；Stage 3 证实了教师 VLM 在空间任务上同样不可靠（Adversarial POPE 的脆性）。而 Grounding 数据需要的真值是<strong>精确数字</strong>（框坐标），让任何 LLM/VLM&quot;说出&quot;坐标都是在赌它的内在回归头——可控性与可验证性都差。</p>
+<p>解法是把任务分解给两个各司其职的专家模型：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><munder><munder><mtext>Grounding DINO</mtext><mo stretchy="true">⏟</mo></munder><mrow><mtext>语言</mtext><mo>→</mo><mtext>框 (开放词表检测)</mtext></mrow></munder><mo>+</mo><munder><munder><mtext>SAM</mtext><mo stretchy="true">⏟</mo></munder><mrow><mtext>框/点</mtext><mo>→</mo><mtext>精确 Mask (类无关分割)</mtext></mrow></munder><mo>⇒</mo><mtext>自动化标注</mtext></mrow><annotation encoding="application/x-tex">\underbrace{\text{Grounding DINO}}_{\text{语言} \to \text{框 (开放词表检测)}} + \underbrace{\text{SAM}}_{\text{框/点} \to \text{精确 Mask (类无关分割)}} \Rightarrow \text{自动化标注}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:2.43688em;vertical-align:-1.74244em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.69444em;"><span style="top:-1.43256em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">语言</span></span><span class="mrel mtight">→</span><span class="mord text mtight"><span class="mord cjk_fallback mtight">框</span><span class="mord mtight"> (</span><span class="mord cjk_fallback mtight">开放词表检测</span><span class="mord mtight">)</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6944399999999998em;"><span class="svg-align" style="top:-2.15756em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord">Grounding DINO</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8424400000000001em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.74244em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:2.23133em;vertical-align:-1.548em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6833299999999998em;"><span style="top:-1.627em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">框</span><span class="mord mtight">/</span><span class="mord cjk_fallback mtight">点</span></span><span class="mrel mtight">→</span><span class="mord text mtight"><span class="mord cjk_fallback mtight">精确</span><span class="mord mtight"> Mask (</span><span class="mord cjk_fallback mtight">类无关分割</span><span class="mord mtight">)</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.68333em;"><span class="svg-align" style="top:-2.352em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord">SAM</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.648em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.548em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⇒</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">自动化标注</span></span></span></span></span></span></p>
+<ul>
+<li><strong>Grounding DINO</strong>（<em>Grounding DINO: Marrying DINO with Grounded Pre-Training for Open-Set Object Detection</em>）：把文本编码（BERT）与图像特征做跨模态融合，输出<strong>任意文本短语</strong>对应的检测框——不需要预定义类别表（这是&quot;开放词表&quot;的含义，传统检测器如 YOLO 只认训练时见过的类别）。</li>
+<li><strong>SAM</strong>（Segment Anything）：类无关的提示式分割，输入框/点提示即输出高质量 Mask。它&quot;不懂语义&quot;但&quot;描边极准&quot;。</li>
+</ul>
+<p><strong>互补的关键在误差结构</strong>：DINO 的框位置有像素级误差，SAM 的 Mask 边缘极准但需要语义提示——Grounded-SAM 把 DINO 的框喂给 SAM 取 Mask，语义来自 DINO、精度来自 SAM。<strong>这种&quot;语义头 + 几何头&quot;的组合，误差可独立校验</strong>（框对不对看 DINO 置信度与人工抽检，Mask 精度由 SAM 的架构保证），而教师 VLM 的输出误差不可分解、不可校验。这就是自动标注流水线的第一性优势。</p>
+<h3 id="12-坐标规范的工程决策"><a class="markdownIt-Anchor" href="#12-坐标规范的工程决策"></a> 1.2 坐标规范的工程决策</h3>
+<p>原始检测框是像素坐标 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><msub><mi>x</mi><mn>1</mn></msub><mo separator="true">,</mo><msub><mi>y</mi><mn>1</mn></msub><mo separator="true">,</mo><msub><mi>x</mi><mn>2</mn></msub><mo separator="true">,</mo><msub><mi>y</mi><mn>2</mn></msub><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[x_1, y_1, x_2, y_2]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span></span></span></span>（左上、右下）。训练数据需要归一化——<strong>归一化基准必须与目标模型的推理约定完全一致</strong>（Stage 3 失效 3 的教训）：</p>
+<table>
+<thead>
+<tr>
+<th>约定</th>
+<th>公式</th>
+<th>采用者</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0~1000 整数（相对坐标）</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">⌊</mo><mn>1000</mn><mo>⋅</mo><mi>x</mi><mi mathvariant="normal">/</mi><mi>W</mi><mo stretchy="false">⌋</mo></mrow><annotation encoding="application/x-tex">\lfloor 1000 \cdot x / W \rfloor</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">⌊</span><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span><span class="mord">0</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">x</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="mclose">⌋</span></span></span></span></td>
+<td>Qwen2-VL（官方 grounding 约定，输出也按此解读）；Qwen3-VL 回归此制</td>
+</tr>
+<tr>
+<td>绝对像素坐标</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi></mrow><annotation encoding="application/x-tex">x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">x</span></span></span></span>（原图/缩放后图的像素值）</td>
+<td>Qwen2.5-VL（改用输入图实际尺寸的绝对坐标，<code>bbox_2d: [x1,y1,x2,y2]</code>）</td>
+</tr>
+<tr>
+<td>0~1 浮点</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>x</mi><mi mathvariant="normal">/</mi><mi>W</mi></mrow><annotation encoding="application/x-tex">x / W</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">x</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span></span></td>
+<td>部分学术模型</td>
+</tr>
+<tr>
+<td>0~100 浮点</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>100</mn><mo>⋅</mo><mi>x</mi><mi mathvariant="normal">/</mi><mi>W</mi></mrow><annotation encoding="application/x-tex">100 \cdot x / W</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">x</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span></span></td>
+<td>部分历史实现</td>
+</tr>
+</tbody>
+</table>
+<p>注意代际差异：Qwen2-VL 系是 0~1000 归一化，<strong>Qwen2.5-VL 切换为绝对像素坐标</strong>（相对模型实际读入的缩放后图像，若自己又 resize 需回缩放），选错约定会让定位数据全部失效。学习计划写的 <code>[ymin, xmin, ymax, xmax]</code> 顺序提醒我们另一件事：<strong>分量顺序也是约定的一部分</strong>。Qwen2-VL/2.5-VL 实际使用 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><msub><mi>x</mi><mn>1</mn></msub><mo separator="true">,</mo><msub><mi>y</mi><mn>1</mn></msub><mo separator="true">,</mo><msub><mi>x</mi><mn>2</mn></msub><mo separator="true">,</mo><msub><mi>y</mi><mn>2</mn></msub><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[x_1, y_1, x_2, y_2]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span></span></span></span> 顺序。铁律：<strong>以目标模型的官方文档/数据样例为准，配一条静态校验断言</strong>（Stage 3 第 3 周 3.1 的正则校验器直接复用），整条管线全局唯一约定。</p>
+<h3 id="13-从几何到语言空间关系的可计算定义"><a class="markdownIt-Anchor" href="#13-从几何到语言空间关系的可计算定义"></a> 1.3 从几何到语言：空间关系的可计算定义</h3>
+<p>把两个检测框变成&quot;空间关系 QA&quot;，需要把&quot;左/右/上/下&quot;变成<strong>可计算的几何谓词</strong>。以水平关系为例（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi></mrow><annotation encoding="application/x-tex">a</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">a</span></span></span></span>, <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi></mrow><annotation encoding="application/x-tex">b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">b</span></span></span></span> 为框中心）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>left</mtext><mo stretchy="false">(</mo><mi>a</mi><mo separator="true">,</mo><mi>b</mi><mo stretchy="false">)</mo><mtext>  </mtext><mo>⟺</mo><mtext>  </mtext><mo stretchy="false">(</mo><msubsup><mi>x</mi><mi>a</mi><mrow><mi>c</mi><mi>e</mi><mi>n</mi><mi>t</mi><mi>e</mi><mi>r</mi></mrow></msubsup><mo>&lt;</mo><msubsup><mi>x</mi><mi>b</mi><mrow><mi>c</mi><mi>e</mi><mi>n</mi><mi>t</mi><mi>e</mi><mi>r</mi></mrow></msubsup><mo stretchy="false">)</mo><mo>∧</mo><mrow><mo fence="true">(</mo><mi mathvariant="normal">∣</mi><msubsup><mi>y</mi><mi>a</mi><mrow><mi>c</mi><mi>e</mi><mi>n</mi><mi>t</mi><mi>e</mi><mi>r</mi></mrow></msubsup><mo>−</mo><msubsup><mi>y</mi><mi>b</mi><mrow><mi>c</mi><mi>e</mi><mi>n</mi><mi>t</mi><mi>e</mi><mi>r</mi></mrow></msubsup><mi mathvariant="normal">∣</mi><mo>&lt;</mo><mi>α</mi><mo>⋅</mo><mi>min</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mi>h</mi><mi>a</mi></msub><mo separator="true">,</mo><msub><mi>h</mi><mi>b</mi></msub><mo stretchy="false">)</mo><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">\text{left}(a, b) \iff (x_a^{center} &lt; x_b^{center}) \wedge \left(|y_a^{center} - y_b^{center}| &lt; \alpha \cdot \min(h_a, h_b)\right)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">left</span></span><span class="mopen">(</span><span class="mord mathnormal">a</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">b</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⟺</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.093556em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8435559999999999em;"><span style="top:-2.4530000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">a</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight" style="margin-right:0.02778em;">r</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.093556em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8435559999999999em;"><span style="top:-2.4530000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight" style="margin-right:0.02778em;">r</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">∧</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.20001em;vertical-align:-0.35001em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">(</span></span><span class="mord">∣</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8435559999999999em;"><span style="top:-2.4530000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">a</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight" style="margin-right:0.02778em;">r</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8435559999999999em;"><span style="top:-2.4530000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">c</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight">t</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight" style="margin-right:0.02778em;">r</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mord">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mop">min</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">a</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">b</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">)</span></span></span></span></span></span></span></p>
+<p><strong>这个公式在干什么</strong>：把人类语言里的&quot;在左边&quot;翻译成两个几何条件——① <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>a</mi></mrow><annotation encoding="application/x-tex">a</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">a</span></span></span></span> 的中心 x 严格小于 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>b</mi></mrow><annotation encoding="application/x-tex">b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">b</span></span></span></span> 的（主条件）；② 两者中心的纵向偏差小于 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mo>×</mo></mrow><annotation encoding="application/x-tex">\alpha \times</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.66666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mord">×</span></span></span></span>（两框高度的较小者）（护栏条件，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi></mrow><annotation encoding="application/x-tex">\alpha</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span></span></span></span> 经验值 0.5~1.0）。两个条件同时成立才允许生成&quot;a 在 b 左边&quot;的 QA，否则跳过。</p>
+<p>第二个条件是<strong>抗角度歧义带</strong>：两物体一高一低时（对角线摆放），纯 x 比较会说&quot;左&quot;，但人类感知会犹豫。引入 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi></mrow><annotation encoding="application/x-tex">\alpha</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span></span></span></span> 限定&quot;只在纵向偏差不悬殊时才断言水平关系&quot;，否则生成&quot;左上方&quot;这类复合关系或干脆跳过——<strong>宁可少生成，不生成真值含糊的数据</strong>。这是空间合成最重要的纪律，因为模型无法从自相矛盾的标注中学到一致的方位概念。</p>
+<p>垂直关系对称（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>y</mi></mrow><annotation encoding="application/x-tex">y</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span></span></span></span> 比较为&quot;上&quot;，注意图像坐标系 y 轴向下）。相对尺寸关系（“大的那个”）用面积比较，同样设显著性阈值（面积比 &gt;1.5 才断言&quot;更大&quot;）。</p>
+<hr />
+<h2 id="2-系统架构与数据流"><a class="markdownIt-Anchor" href="#2-系统架构与数据流"></a> 2. 系统架构与数据流</h2>
+<h3 id="21-grounded-sam-自动标注流水线"><a class="markdownIt-Anchor" href="#21-grounded-sam-自动标注流水线"></a> 2.1 Grounded-SAM 自动标注流水线</h3>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">输入: 图片目录 + 感兴趣短语表 (或自动类别)</span><br><span class="line">  │</span><br><span class="line">  ▼</span><br><span class="line">┌─ Grounding DINO ────────────────────────────┐</span><br><span class="line">│ 文本短语 + 图片 → 检测框 [x1,y1,x2,y2] + 置信度 │</span><br><span class="line">│ 过滤: score &lt; 0.35 丢弃                       │</span><br><span class="line">└─────────────────────────────────────────────┘</span><br><span class="line">  ▼</span><br><span class="line">┌─ SAM ───────────────────────────────────────┐</span><br><span class="line">│ 框提示 → Mask (取面积最大连通域, 去碎片)        │</span><br><span class="line">└─────────────────────────────────────────────┘</span><br><span class="line">  ▼</span><br><span class="line">┌─ QA 组装器 (程序化, 无 LLM 依赖) ─────────────┐</span><br><span class="line">│ ① 坐标归一化 (0~1000) + 面积/中心计算          │</span><br><span class="line">│ ② 两两框配对 → 几何谓词判定 (带抗歧义带)        │</span><br><span class="line">│ ③ 模板填充: 定位类 / 空间关系类 / 计数类        │</span><br><span class="line">│ ④ 每条数据附 provenance (来源框ID/分数)        │</span><br><span class="line">└─────────────────────────────────────────────┘</span><br><span class="line">  ▼</span><br><span class="line">输出: JSONL 训练数据 (每图 2~6 条, 配对去重后)</span><br></pre></td></tr></table></figure>
+<p>QA 组装器刻意<strong>不用 LLM</strong>：模板化生成保证措辞可控（不会引入教师幻觉），几何真值保证答案精确。LLM 的用武之地在&quot;多样化问法改写&quot;——但那是第 1 周管线的职责，且改写只动 question 不动 answer（<strong>答案永远由几何计算产生，这是本条线的红线</strong>）。</p>
+<h3 id="22-三类模板的数据样例"><a class="markdownIt-Anchor" href="#22-三类模板的数据样例"></a> 2.2 三类模板的数据样例</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">&#123;&quot;image&quot;: &quot;img_007.jpg&quot;, &quot;dim&quot;: &quot;grounding&quot;,</span><br><span class="line"> &quot;question&quot;: &quot;请定位图中的杯子，输出其位置坐标。&quot;,</span><br><span class="line"> &quot;answer&quot;: &quot;[312,487,456,701]&quot;, &quot;provenance&quot;: &#123;&quot;detector&quot;: &quot;grounding_dino&quot;, &quot;score&quot;: 0.72&#125;&#125;</span><br><span class="line">&#123;&quot;image&quot;: &quot;img_007.jpg&quot;, &quot;dim&quot;: &quot;spatial&quot;,</span><br><span class="line"> &quot;question&quot;: &quot;杯子和笔记本电脑哪个在图的左边？以相机视角回答。&quot;,</span><br><span class="line"> &quot;answer&quot;: &quot;笔记本电脑&quot;, &quot;provenance&quot;: &#123;&quot;pair&quot;: [&quot;cup#0&quot;, &quot;laptop#1&quot;], &quot;predicate&quot;: &quot;left_of&quot;&#125;&#125;</span><br><span class="line">&#123;&quot;image&quot;: &quot;img_007.jpg&quot;, &quot;dim&quot;: &quot;counting&quot;,</span><br><span class="line"> &quot;question&quot;: &quot;图中共有几个杯子？&quot;, &quot;answer&quot;: &quot;2&quot;,</span><br><span class="line"> &quot;provenance&quot;: &#123;&quot;n_instances&quot;: 2, &quot;min_score&quot;: 0.45&#125;&#125;</span><br></pre></td></tr></table></figure>
+<p><code>provenance</code> 字段记录每条数据的真值来源与置信度——第 4 周过滤与后续坏例回溯全靠它。</p>
+<h3 id="23-3d-多视角数据的构建逻辑概念层"><a class="markdownIt-Anchor" href="#23-3d-多视角数据的构建逻辑概念层"></a> 2.3 3D / 多视角数据的构建逻辑（概念层）</h3>
+<p>学习计划要求的 3D/Pose/相机参数拼接，核心是<strong>几何量 → 自然语言的映射表</strong>设计：</p>
+<table>
+<thead>
+<tr>
+<th>几何量</th>
+<th>来源</th>
+<th>语言映射示例</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>相机内参/外参</td>
+<td>标定文件或 SfM 重建</td>
+<td>“相机距桌面约 0.8 米，俯视角约 30°”（量化分桶后模板化）</td>
+</tr>
+<tr>
+<td>物体 3D 框 / 6D Pose</td>
+<td>RGB-D 传感器 / 位姿估计模型</td>
+<td>“马克杯在桌面左前方，杯口朝向右上方”</td>
+</tr>
+<tr>
+<td>深度图</td>
+<td>深度相机 / 单目估计</td>
+<td>“离相机最近的物体是键盘（约 0.6m）”</td>
+</tr>
+<tr>
+<td>ERP 全景</td>
+<td>全景相机</td>
+<td>“正北方向是门，右侧（东）是窗户”</td>
+</tr>
+</tbody>
+</table>
+<p>工程要点：<strong>连续几何量必须先分桶再进语言</strong>——&quot;俯视角 27.3°&quot;这种数字对模型是噪声，&quot;俯视/平视/仰视&quot;三桶才是可学习的离散监督。映射表本身要版本化：换个分桶方案，全量数据要能重新生成（provenance 记录映射表版本）。</p>
+<hr />
+<h2 id="3-实现与验证"><a class="markdownIt-Anchor" href="#3-实现与验证"></a> 3. 实现与验证</h2>
+<h3 id="31-本周-mvp自动标注-qa-生成脚本"><a class="markdownIt-Anchor" href="#31-本周-mvp自动标注-qa-生成脚本"></a> 3.1 本周 MVP：自动标注 + QA 生成脚本</h3>
+<p>几何部分（谓词、归一化、模板）<strong>零依赖可运行</strong>（含单测，离线跑通实测产出 251 条）；检测部分给出 Grounding DINO 的接入代码，离线演示用伪检测器。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">Grounded-SAM 自动标注 -&gt; Grounding/Spatial QA 数据生成。</span></span><br><span class="line"><span class="string">运行方式:</span></span><br><span class="line"><span class="string">  真实: python stage4_week2_spatial.py --images ./imgs/ --out spatial.jsonl --use_dino</span></span><br><span class="line"><span class="string">  离线: python stage4_week2_spatial.py --out spatial.jsonl   (伪检测器验证流程)</span></span><br><span class="line"><span class="string">依赖: (真实模式) torch, transformers, supervision 或 Grounded-SAM 官方仓库</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> argparse</span><br><span class="line"><span class="keyword">import</span> itertools</span><br><span class="line"><span class="keyword">import</span> json</span><br><span class="line"><span class="keyword">import</span> random</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 几何核心 (零依赖, 可单测) ----------</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">normalize_box</span>(<span class="params">box, w, h, base=<span class="number">1000</span></span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;像素坐标 -&gt; [x1,y1,x2,y2] 归一化整数 (Qwen2-VL 约定)&quot;&quot;&quot;</span></span><br><span class="line">    x1, y1, x2, y2 = box</span><br><span class="line">    <span class="keyword">return</span> [<span class="built_in">round</span>(base * x1 / w), <span class="built_in">round</span>(base * y1 / h),</span><br><span class="line">            <span class="built_in">round</span>(base * x2 / w), <span class="built_in">round</span>(base * y2 / h)]</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">center</span>(<span class="params">b</span>):</span><br><span class="line">    <span class="keyword">return</span> ((b[<span class="number">0</span>] + b[<span class="number">2</span>]) / <span class="number">2</span>, (b[<span class="number">1</span>] + b[<span class="number">3</span>]) / <span class="number">2</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">horizontal_rel</span>(<span class="params">a, b, alpha=<span class="number">0.8</span></span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;a 相对 b 的水平关系; alpha 为抗歧义带系数。返回 &#x27;left&#x27;/&#x27;right&#x27;/None&quot;&quot;&quot;</span></span><br><span class="line">    (cax, cay), (cbx, cby) = center(a), center(b)</span><br><span class="line">    band = alpha * <span class="built_in">min</span>(a[<span class="number">3</span>] - a[<span class="number">1</span>], b[<span class="number">3</span>] - b[<span class="number">1</span>])</span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">abs</span>(cay - cby) &gt; band:</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">None</span>                      <span class="comment"># 纵向偏差过大, 不作水平断言</span></span><br><span class="line">    <span class="keyword">return</span> <span class="string">&quot;left&quot;</span> <span class="keyword">if</span> cax &lt; cbx <span class="keyword">else</span> <span class="string">&quot;right&quot;</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">vertical_rel</span>(<span class="params">a, b, alpha=<span class="number">0.8</span></span>):</span><br><span class="line">    (cax, cay), (cbx, cby) = center(a), center(b)</span><br><span class="line">    band = alpha * <span class="built_in">min</span>(a[<span class="number">2</span>] - a[<span class="number">0</span>], b[<span class="number">2</span>] - b[<span class="number">0</span>])</span><br><span class="line">    <span class="keyword">if</span> <span class="built_in">abs</span>(cax - cbx) &gt; band:</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">None</span></span><br><span class="line">    <span class="keyword">return</span> <span class="string">&quot;above&quot;</span> <span class="keyword">if</span> cay &lt; cby <span class="keyword">else</span> <span class="string">&quot;below&quot;</span>   <span class="comment"># 图像坐标系 y 向下</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">bigger</span>(<span class="params">a, b, ratio=<span class="number">1.5</span></span>):</span><br><span class="line">    area_a = (a[<span class="number">2</span>] - a[<span class="number">0</span>]) * (a[<span class="number">3</span>] - a[<span class="number">1</span>])</span><br><span class="line">    area_b = (b[<span class="number">2</span>] - b[<span class="number">0</span>]) * (b[<span class="number">3</span>] - b[<span class="number">1</span>])</span><br><span class="line">    <span class="keyword">if</span> area_a &gt; ratio * area_b:</span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot;a&quot;</span></span><br><span class="line">    <span class="keyword">if</span> area_b &gt; ratio * area_a:</span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot;b&quot;</span></span><br><span class="line">    <span class="keyword">return</span> <span class="literal">None</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- QA 组装器 ----------</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">build_qas</span>(<span class="params">img_name, w, h, dets, rng</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;dets: [&#123;&#x27;label&#x27;,&#x27;box_px&#x27;,&#x27;score&#x27;&#125;] -&gt; QA 列表&quot;&quot;&quot;</span></span><br><span class="line">    qas = []</span><br><span class="line">    objs = [&#123;<span class="string">&quot;label&quot;</span>: d[<span class="string">&quot;label&quot;</span>],</span><br><span class="line">             <span class="string">&quot;box&quot;</span>: normalize_box(d[<span class="string">&quot;box_px&quot;</span>], w, h),</span><br><span class="line">             <span class="string">&quot;center&quot;</span>: center(normalize_box(d[<span class="string">&quot;box_px&quot;</span>], w, h))&#125; <span class="keyword">for</span> d <span class="keyword">in</span> dets]</span><br><span class="line">    <span class="comment"># ① 定位类: 每个物体一条</span></span><br><span class="line">    <span class="keyword">for</span> o <span class="keyword">in</span> objs:</span><br><span class="line">        qas.append(&#123;<span class="string">&quot;image&quot;</span>: img_name, <span class="string">&quot;dim&quot;</span>: <span class="string">&quot;grounding&quot;</span>,</span><br><span class="line">                    <span class="string">&quot;question&quot;</span>: <span class="string">f&quot;请定位图中的<span class="subst">&#123;o[<span class="string">&#x27;label&#x27;</span>]&#125;</span>，输出其位置坐标。&quot;</span>,</span><br><span class="line">                    <span class="string">&quot;answer&quot;</span>: <span class="built_in">str</span>(o[<span class="string">&quot;box&quot;</span>]),</span><br><span class="line">                    <span class="string">&quot;provenance&quot;</span>: &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;gt_box&quot;</span>&#125;&#125;)</span><br><span class="line">    <span class="comment"># ② 空间关系类: 两两配对, 只保留谓词成立 (含抗歧义带) 的对</span></span><br><span class="line">    <span class="keyword">for</span> a, b <span class="keyword">in</span> itertools.combinations(objs, <span class="number">2</span>):</span><br><span class="line">        hrel = horizontal_rel(a[<span class="string">&quot;box&quot;</span>], b[<span class="string">&quot;box&quot;</span>])</span><br><span class="line">        vrel = vertical_rel(a[<span class="string">&quot;box&quot;</span>], b[<span class="string">&quot;box&quot;</span>])</span><br><span class="line">        <span class="keyword">if</span> hrel == <span class="string">&quot;left&quot;</span>:</span><br><span class="line">            q, ans = <span class="string">f&quot;<span class="subst">&#123;a[<span class="string">&#x27;label&#x27;</span>]&#125;</span>和<span class="subst">&#123;b[<span class="string">&#x27;label&#x27;</span>]&#125;</span>哪个在图的左边？以相机视角回答。&quot;</span>, a[<span class="string">&quot;label&quot;</span>]</span><br><span class="line">        <span class="keyword">elif</span> hrel == <span class="string">&quot;right&quot;</span>:</span><br><span class="line">            q, ans = <span class="string">f&quot;<span class="subst">&#123;a[<span class="string">&#x27;label&#x27;</span>]&#125;</span>和<span class="subst">&#123;b[<span class="string">&#x27;label&#x27;</span>]&#125;</span>哪个在图的左边？以相机视角回答。&quot;</span>, b[<span class="string">&quot;label&quot;</span>]</span><br><span class="line">        <span class="keyword">elif</span> vrel == <span class="string">&quot;above&quot;</span>:</span><br><span class="line">            q, ans = <span class="string">f&quot;<span class="subst">&#123;a[<span class="string">&#x27;label&#x27;</span>]&#125;</span>和<span class="subst">&#123;b[<span class="string">&#x27;label&#x27;</span>]&#125;</span>哪个在图的上方？&quot;</span>, a[<span class="string">&quot;label&quot;</span>]</span><br><span class="line">        <span class="keyword">elif</span> vrel == <span class="string">&quot;below&quot;</span>:</span><br><span class="line">            q, ans = <span class="string">f&quot;<span class="subst">&#123;a[<span class="string">&#x27;label&#x27;</span>]&#125;</span>和<span class="subst">&#123;b[<span class="string">&#x27;label&#x27;</span>]&#125;</span>哪个在图的上方？&quot;</span>, b[<span class="string">&quot;label&quot;</span>]</span><br><span class="line">        <span class="keyword">else</span>:</span><br><span class="line">            <span class="keyword">continue</span>                     <span class="comment"># 对角摆放: 跳过, 宁缺毋滥</span></span><br><span class="line">        qas.append(&#123;<span class="string">&quot;image&quot;</span>: img_name, <span class="string">&quot;dim&quot;</span>: <span class="string">&quot;spatial&quot;</span>, <span class="string">&quot;question&quot;</span>: q,</span><br><span class="line">                    <span class="string">&quot;answer&quot;</span>: ans, <span class="string">&quot;provenance&quot;</span>: &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;predicate&quot;</span>&#125;&#125;)</span><br><span class="line">        bg = bigger(a[<span class="string">&quot;box&quot;</span>], b[<span class="string">&quot;box&quot;</span>])</span><br><span class="line">        <span class="keyword">if</span> bg:</span><br><span class="line">            big = a[<span class="string">&quot;label&quot;</span>] <span class="keyword">if</span> bg == <span class="string">&quot;a&quot;</span> <span class="keyword">else</span> b[<span class="string">&quot;label&quot;</span>]</span><br><span class="line">            qas.append(&#123;<span class="string">&quot;image&quot;</span>: img_name, <span class="string">&quot;dim&quot;</span>: <span class="string">&quot;spatial&quot;</span>,</span><br><span class="line">                        <span class="string">&quot;question&quot;</span>: <span class="string">f&quot;<span class="subst">&#123;a[<span class="string">&#x27;label&#x27;</span>]&#125;</span>和<span class="subst">&#123;b[<span class="string">&#x27;label&#x27;</span>]&#125;</span>哪个更大？&quot;</span>,</span><br><span class="line">                        <span class="string">&quot;answer&quot;</span>: big, <span class="string">&quot;provenance&quot;</span>: &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;predicate&quot;</span>&#125;&#125;)</span><br><span class="line">    <span class="comment"># ③ 计数类: 每个出现 ≥2 次的标签一条</span></span><br><span class="line">    <span class="keyword">from</span> collections <span class="keyword">import</span> Counter</span><br><span class="line">    <span class="keyword">for</span> label, n <span class="keyword">in</span> Counter(d[<span class="string">&quot;label&quot;</span>] <span class="keyword">for</span> d <span class="keyword">in</span> dets).items():</span><br><span class="line">        <span class="keyword">if</span> n &gt;= <span class="number">2</span>:</span><br><span class="line">            qas.append(&#123;<span class="string">&quot;image&quot;</span>: img_name, <span class="string">&quot;dim&quot;</span>: <span class="string">&quot;counting&quot;</span>,</span><br><span class="line">                        <span class="string">&quot;question&quot;</span>: <span class="string">f&quot;图中共有几个<span class="subst">&#123;label&#125;</span>？&quot;</span>, <span class="string">&quot;answer&quot;</span>: <span class="built_in">str</span>(n),</span><br><span class="line">                        <span class="string">&quot;provenance&quot;</span>: &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;gt_count&quot;</span>&#125;&#125;)</span><br><span class="line">    rng.shuffle(qas)</span><br><span class="line">    <span class="keyword">return</span> qas</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">detect_with_grounding_dino</span>(<span class="params">image_path, phrases, device=<span class="string">&quot;cuda&quot;</span></span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;真实检测入口 (Grounding DINO, HuggingFace 加载方式)&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">from</span> transformers <span class="keyword">import</span> AutoProcessor, AutoModelForZeroShotObjectDetection</span><br><span class="line">    <span class="keyword">from</span> PIL <span class="keyword">import</span> Image</span><br><span class="line">    proc = AutoProcessor.from_pretrained(<span class="string">&quot;IDEA-Research/grounding-dino-tiny&quot;</span>)</span><br><span class="line">    model = AutoModelForZeroShotObjectDetection.from_pretrained(</span><br><span class="line">        <span class="string">&quot;IDEA-Research/grounding-dino-tiny&quot;</span>).to(device)</span><br><span class="line">    image = Image.<span class="built_in">open</span>(image_path).convert(<span class="string">&quot;RGB&quot;</span>)</span><br><span class="line">    text = <span class="string">&quot; . &quot;</span>.join(phrases) + <span class="string">&quot; .&quot;</span>          <span class="comment"># DINO 要求 &quot;. &quot; 分隔的小写短语</span></span><br><span class="line">    inputs = proc(images=image, text=text, return_tensors=<span class="string">&quot;pt&quot;</span>).to(device)</span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">__import__</span>(<span class="string">&quot;torch&quot;</span>).no_grad():</span><br><span class="line">        outputs = model(**inputs)</span><br><span class="line">    <span class="comment"># transformers &gt;= 4.50 参数名为 threshold; 旧版叫 box_threshold (报错时改名即可)</span></span><br><span class="line">    results = proc.post_process_grounded_object_detection(</span><br><span class="line">        outputs, input_ids=inputs[<span class="string">&quot;input_ids&quot;</span>], threshold=<span class="number">0.35</span>,</span><br><span class="line">        text_threshold=<span class="number">0.30</span>, target_sizes=[image.size[::-<span class="number">1</span>]])[<span class="number">0</span>]</span><br><span class="line">    <span class="keyword">return</span> [&#123;<span class="string">&quot;label&quot;</span>: lbl.lower().strip(<span class="string">&quot; .&quot;</span>),</span><br><span class="line">             <span class="string">&quot;box_px&quot;</span>: [<span class="built_in">round</span>(v, <span class="number">1</span>) <span class="keyword">for</span> v <span class="keyword">in</span> box.tolist()], <span class="string">&quot;score&quot;</span>: s&#125;</span><br><span class="line">            <span class="keyword">for</span> box, lbl, s <span class="keyword">in</span> <span class="built_in">zip</span>(results[<span class="string">&quot;boxes&quot;</span>],</span><br><span class="line">                                   results[<span class="string">&quot;text_labels&quot;</span>], results[<span class="string">&quot;scores&quot;</span>])]</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">fake_detect</span>(<span class="params">img_name, rng</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;离线伪检测器: 确定性输出桌面物品 (默认场景含 3 个物体, 保证空间配对有产出)&quot;&quot;&quot;</span></span><br><span class="line">    scenes = &#123;<span class="string">&quot;img_000.jpg&quot;</span>: [(<span class="string">&quot;cup&quot;</span>, <span class="number">200</span>, <span class="number">300</span>, <span class="number">260</span>, <span class="number">380</span>, <span class="number">.8</span>), (<span class="string">&quot;laptop&quot;</span>, <span class="number">500</span>, <span class="number">250</span>, <span class="number">900</span>, <span class="number">550</span>, <span class="number">.9</span>),</span><br><span class="line">                              (<span class="string">&quot;cup&quot;</span>, <span class="number">300</span>, <span class="number">320</span>, <span class="number">350</span>, <span class="number">390</span>, <span class="number">.7</span>)],</span><br><span class="line">              <span class="string">&quot;img_001.jpg&quot;</span>: [(<span class="string">&quot;book&quot;</span>, <span class="number">100</span>, <span class="number">400</span>, <span class="number">260</span>, <span class="number">480</span>, <span class="number">.75</span>), (<span class="string">&quot;book&quot;</span>, <span class="number">500</span>, <span class="number">410</span>, <span class="number">640</span>, <span class="number">490</span>, <span class="number">.68</span>)],</span><br><span class="line">              <span class="string">&quot;img_002.jpg&quot;</span>: [(<span class="string">&quot;plant&quot;</span>, <span class="number">700</span>, <span class="number">100</span>, <span class="number">900</span>, <span class="number">420</span>, <span class="number">.85</span>), (<span class="string">&quot;laptop&quot;</span>, <span class="number">150</span>, <span class="number">300</span>, <span class="number">500</span>, <span class="number">560</span>, <span class="number">.88</span>)]&#125;</span><br><span class="line">    default = [(<span class="string">&quot;cup&quot;</span>, <span class="number">100</span>, <span class="number">200</span>, <span class="number">180</span>, <span class="number">300</span>, <span class="number">.6</span>), (<span class="string">&quot;book&quot;</span>, <span class="number">400</span>, <span class="number">380</span>, <span class="number">560</span>, <span class="number">460</span>, <span class="number">.65</span>),</span><br><span class="line">               (<span class="string">&quot;laptop&quot;</span>, <span class="number">600</span>, <span class="number">150</span>, <span class="number">950</span>, <span class="number">400</span>, <span class="number">.7</span>)]</span><br><span class="line">    <span class="keyword">return</span> [&#123;<span class="string">&quot;label&quot;</span>: l, <span class="string">&quot;box_px&quot;</span>: [x1, y1, x2, y2], <span class="string">&quot;score&quot;</span>: s&#125;</span><br><span class="line">            <span class="keyword">for</span> l, x1, y1, x2, y2, s <span class="keyword">in</span> scenes.get(img_name, default)]</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">_test_geometry</span>():</span><br><span class="line">    <span class="string">&quot;&quot;&quot;几何谓词单测: 验证关键行为&quot;&quot;&quot;</span></span><br><span class="line">    A = [<span class="number">100</span>, <span class="number">100</span>, <span class="number">200</span>, <span class="number">200</span>]; B = [<span class="number">500</span>, <span class="number">120</span>, <span class="number">600</span>, <span class="number">220</span>]     <span class="comment"># A 在 B 左, 纵向接近</span></span><br><span class="line">    <span class="keyword">assert</span> horizontal_rel(A, B) == <span class="string">&quot;left&quot;</span> <span class="keyword">and</span> horizontal_rel(B, A) == <span class="string">&quot;right&quot;</span></span><br><span class="line">    C = [<span class="number">400</span>, <span class="number">100</span>, <span class="number">500</span>, <span class="number">200</span>]                                  <span class="comment"># 与 B 纵向重叠, 中心在 B 左侧</span></span><br><span class="line">    <span class="keyword">assert</span> horizontal_rel(C, B) == <span class="string">&quot;left&quot;</span></span><br><span class="line">    D = [<span class="number">500</span>, <span class="number">800</span>, <span class="number">600</span>, <span class="number">900</span>]                                  <span class="comment"># 在 B 正下方远处</span></span><br><span class="line">    <span class="keyword">assert</span> vertical_rel(D, B) == <span class="string">&quot;below&quot;</span> <span class="keyword">and</span> horizontal_rel(D, B) <span class="keyword">is</span> <span class="literal">None</span></span><br><span class="line">    E = [<span class="number">100</span>, <span class="number">100</span>, <span class="number">105</span>, <span class="number">105</span>]                                  <span class="comment"># 面积比悬殊</span></span><br><span class="line">    <span class="keyword">assert</span> bigger(E, A) == <span class="string">&quot;b&quot;</span> <span class="keyword">and</span> bigger(A, A) <span class="keyword">is</span> <span class="literal">None</span></span><br><span class="line">    <span class="keyword">assert</span> normalize_box([<span class="number">0</span>, <span class="number">0</span>, <span class="number">500</span>, <span class="number">375</span>], <span class="number">500</span>, <span class="number">375</span>) == [<span class="number">0</span>, <span class="number">0</span>, <span class="number">1000</span>, <span class="number">1000</span>]</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;✅ 几何谓词/归一化单测通过&quot;</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    _test_geometry()                          <span class="comment"># 先过单测再跑全量</span></span><br><span class="line">    ap = argparse.ArgumentParser()</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--images&quot;</span>, default=<span class="string">&quot;imgs&quot;</span>); ap.add_argument(<span class="string">&quot;--out&quot;</span>, default=<span class="string">&quot;spatial.jsonl&quot;</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--use_dino&quot;</span>, action=<span class="string">&quot;store_true&quot;</span>)</span><br><span class="line">    args = ap.parse_args()</span><br><span class="line">    rng = random.Random(<span class="number">0</span>)</span><br><span class="line"></span><br><span class="line">    all_qas = []</span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">50</span>):                       <span class="comment"># 50 张图</span></span><br><span class="line">        name = <span class="string">f&quot;img_<span class="subst">&#123;i:03d&#125;</span>.jpg&quot;</span></span><br><span class="line">        dets = (detect_with_grounding_dino(<span class="string">f&quot;<span class="subst">&#123;args.images&#125;</span>/<span class="subst">&#123;name&#125;</span>&quot;</span>,</span><br><span class="line">                [<span class="string">&quot;cup&quot;</span>, <span class="string">&quot;laptop&quot;</span>, <span class="string">&quot;book&quot;</span>, <span class="string">&quot;plant&quot;</span>, <span class="string">&quot;bottle&quot;</span>]) <span class="keyword">if</span> args.use_dino</span><br><span class="line">                <span class="keyword">else</span> fake_detect(name, rng))</span><br><span class="line">        all_qas.extend(build_qas(name, <span class="number">1000</span>, <span class="number">750</span>, dets, rng))</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 断言: 真值自洽性 ----</span></span><br><span class="line">    <span class="keyword">for</span> qa <span class="keyword">in</span> all_qas:</span><br><span class="line">        <span class="keyword">if</span> qa[<span class="string">&quot;dim&quot;</span>] == <span class="string">&quot;grounding&quot;</span>:</span><br><span class="line">            b = json.loads(qa[<span class="string">&quot;answer&quot;</span>])      <span class="comment"># 切勿用 eval 解析不可信数据</span></span><br><span class="line">            <span class="keyword">assert</span> <span class="number">0</span> &lt;= b[<span class="number">0</span>] &lt; b[<span class="number">2</span>] &lt;= <span class="number">1000</span> <span class="keyword">and</span> <span class="number">0</span> &lt;= b[<span class="number">1</span>] &lt; b[<span class="number">3</span>] &lt;= <span class="number">1000</span>, \</span><br><span class="line">                <span class="string">f&quot;非法归一化框: <span class="subst">&#123;b&#125;</span>&quot;</span></span><br><span class="line">        <span class="keyword">if</span> qa[<span class="string">&quot;dim&quot;</span>] == <span class="string">&quot;counting&quot;</span>:</span><br><span class="line">            <span class="keyword">assert</span> <span class="built_in">int</span>(qa[<span class="string">&quot;answer&quot;</span>]) &gt;= <span class="number">2</span></span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">len</span>(all_qas) &gt;= <span class="number">200</span>, <span class="string">f&quot;产出不足: <span class="subst">&#123;<span class="built_in">len</span>(all_qas)&#125;</span>&quot;</span></span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(args.out, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        f.writelines(json.dumps(q, ensure_ascii=<span class="literal">False</span>) + <span class="string">&quot;\n&quot;</span> <span class="keyword">for</span> q <span class="keyword">in</span> all_qas)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;产出 <span class="subst">&#123;<span class="built_in">len</span>(all_qas)&#125;</span> 条 -&gt; <span class="subst">&#123;args.out&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC1%E5%91%A8-%E5%90%88%E6%88%90%E6%95%B0%E6%8D%AE%E8%8C%83%E5%BC%8F%E4%B8%8ESelf-Instruct/" rel="prev" title="第1周-合成数据范式与Self-Instruct">
+                  <i class="fa fa-angle-left"></i> 第1周-合成数据范式与Self-Instruct
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC3%E5%91%A8-Agent%E8%BD%A8%E8%BF%B9%E4%B8%8E%E6%89%A7%E8%A1%8C%E9%AA%8C%E8%AF%81%E5%90%88%E6%88%90/" rel="next" title="第3周-Agent轨迹与执行验证合成">
+                  第3周-Agent轨迹与执行验证合成 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">611k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">37:04</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

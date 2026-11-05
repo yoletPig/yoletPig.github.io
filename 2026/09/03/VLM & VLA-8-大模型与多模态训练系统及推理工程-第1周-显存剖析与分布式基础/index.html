@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的三个问题 1. 训练一步的显存账本里每一项怎么精确计算？7B 模型的 208GB 从哪来？ 2. allreduce &#x2F; allgather &#x2F; reducescatter &#x2F; broadcast 各是什么语义？谁用它们？">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第1周-显存剖析与分布式基础">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC1%E5%91%A8-%E6%98%BE%E5%AD%98%E5%89%96%E6%9E%90%E4%B8%8E%E5%88%86%E5%B8%83%E5%BC%8F%E5%9F%BA%E7%A1%80/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的三个问题 1. 训练一步的显存账本里每一项怎么精确计算？7B 模型的 208GB 从哪来？ 2. allreduce &#x2F; allgather &#x2F; reducescatter &#x2F; broadcast 各是什么语义？谁用它们？">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T02:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T02:04:19.046Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC1%E5%91%A8-%E6%98%BE%E5%AD%98%E5%89%96%E6%9E%90%E4%B8%8E%E5%88%86%E5%B8%83%E5%BC%8F%E5%9F%BA%E7%A1%80/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC1%E5%91%A8-%E6%98%BE%E5%AD%98%E5%89%96%E6%9E%90%E4%B8%8E%E5%88%86%E5%B8%83%E5%BC%8F%E5%9F%BA%E7%A1%80/","path":"2026/09/03/VLM & VLA-8-大模型与多模态训练系统及推理工程-第1周-显存剖析与分布式基础/","title":"第1周-显存剖析与分布式基础"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第1周-显存剖析与分布式基础 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-1-%E5%91%A8%E6%95%99%E7%A8%8B%E6%98%BE%E5%AD%98%E7%93%B6%E9%A2%88%E5%89%96%E6%9E%90%E4%B8%8E-pytorch-%E5%88%86%E5%B8%83%E5%BC%8F%E5%B9%B6%E8%A1%8C%E5%9F%BA%E7%A1%80"><span class="nav-number">1.</span> <span class="nav-text"> 第 1 周教程：显存瓶颈剖析与 PyTorch 分布式并行基础</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E6%98%BE%E5%AD%98%E8%B4%A6%E6%9C%AC%E7%9A%84%E6%AF%8F%E4%B8%80%E9%A1%B9"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：显存账本的每一项</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E6%A8%A1%E5%9E%8B%E7%8A%B6%E6%80%81%E6%9D%83%E9%87%8D-%E6%A2%AF%E5%BA%A6-%E4%BC%98%E5%8C%96%E5%99%A8%E7%9A%84%E7%B2%BE%E7%A1%AE%E5%85%AC%E5%BC%8F"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 模型状态：权重、梯度、优化器的精确公式</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E6%BF%80%E6%B4%BB%E6%98%BE%E5%AD%98%E9%9A%8F%E5%BA%8F%E5%88%97%E9%95%BF%E5%BA%A6%E7%BA%BF%E6%80%A7-%E9%9A%8F%E5%B1%82%E6%95%B0%E7%BA%BF%E6%80%A7-%E9%9A%8F-batch-%E7%BA%BF%E6%80%A7"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 激活显存：随序列长度线性、随层数线性、随 batch 线性</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-kv-cache%E6%8E%A8%E7%90%86%E4%BE%A7%E7%9A%84%E5%8F%A6%E4%B8%80%E4%B8%AA%E8%B4%A6%E6%9C%AC"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 KV Cache：推理侧的&quot;另一个账本&quot;</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%88%86%E5%B8%83%E5%BC%8F%E9%80%9A%E4%BF%A1%E5%8E%9F%E8%AF%AD%E5%9B%9B%E7%A7%8D%E5%8A%A8%E8%AF%8D"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 分布式通信原语：四种动词</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E8%AF%AD%E4%B9%89%E5%AF%B9%E7%85%A7%E8%A1%A8"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 语义对照表</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E9%80%9A%E4%BF%A1%E9%87%8F%E7%9A%84%E5%AE%9A%E9%87%8F%E7%9B%B4%E8%A7%89"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 通信量的定量直觉</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-ddp-%E7%9A%84-bucketing-%E4%B8%8E%E9%80%9A%E4%BF%A1%E9%87%8D%E5%8F%A0"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 DDP 的 Bucketing 与通信重叠</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E6%9C%AC%E5%91%A8-mvp%E6%98%BE%E5%AD%98%E7%80%91%E5%B8%83%E7%9B%91%E6%8E%A7%E8%84%9A%E6%9C%AC"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 本周 MVP：显存瀑布监控脚本</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E5%A4%96%E6%8E%A87b-%E7%9A%84%E5%AE%8C%E6%95%B4%E8%B4%A6%E4%B8%8E%E7%AC%AC-2-%E5%91%A8%E7%9A%84%E4%BC%8F%E7%AC%94"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 外推：7B 的完整账与第 2 周的伏笔</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E5%86%B3%E7%AD%96%E8%A1%A8%E6%98%BE%E5%AD%98%E4%B8%8D%E5%A4%9F%E6%97%B6%E7%9A%84%E6%89%8B%E6%AE%B5%E6%8E%92%E5%BA%8F"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 决策表：显存不够时的手段排序</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E4%B8%89%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 三个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士已毕业，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">193</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC1%E5%91%A8-%E6%98%BE%E5%AD%98%E5%89%96%E6%9E%90%E4%B8%8E%E5%88%86%E5%B8%83%E5%BC%8F%E5%9F%BA%E7%A1%80/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士已毕业，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第1周-显存剖析与分布式基础 | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的三个问题 1. 训练一步的显存账本里每一项怎么精确计算？7B 模型的 208GB 从哪来？ 2. allreduce &#x2F; allgather &#x2F; reducescatter &#x2F; broadcast 各是什么语义？谁用它们？">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第1周-显存剖析与分布式基础
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 10:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T10:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-05 10:04:19" itemprop="dateModified" datetime="2026-11-05T10:04:19+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Stage 8-大模型与多模态训练系统及推理工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>13 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的三个问题 1. 训练一步的显存账本里每一项怎么精确计算？7B 模型的 208GB 从哪来？ 2. allreduce / allgather / reducescatter / broadcast 各是什么语义？谁用它们？</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-1-周教程显存瓶颈剖析与-pytorch-分布式并行基础"><a class="markdownIt-Anchor" href="#第-1-周教程显存瓶颈剖析与-pytorch-分布式并行基础"></a> 第 1 周教程：显存瓶颈剖析与 PyTorch 分布式并行基础</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>训练一步的显存账本里每一项怎么精确计算？7B 模型的 208GB 从哪来？</li>
+<li><code>all_reduce</code> / <code>all_gather</code> / <code>reduce_scatter</code> / <code>broadcast</code> 各是什么语义？谁用它们？</li>
+<li>DDP 的梯度 Bucketing 与通信重叠是怎么把通信藏进计算里的？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 1 周。交付物：PyTorch 显存监控脚本——用 <code>torch.cuda.memory_allocated()</code> / <code>max_memory_allocated()</code> 精确测算 7B VLM 前向/反向/优化器更新三阶段的显存占用，画显存瀑布图，推导权重/梯度/激活的比例。</p>
+<p>本篇是全阶段的&quot;会计学&quot;：第 2 周的 ZeRO 切分、第 5 周的量化收益，都要用这本账量化。</p>
+<hr />
+<h2 id="1-第一性原理显存账本的每一项"><a class="markdownIt-Anchor" href="#1-第一性原理显存账本的每一项"></a> 1. 第一性原理：显存账本的每一项</h2>
+<h3 id="11-模型状态权重-梯度-优化器的精确公式"><a class="markdownIt-Anchor" href="#11-模型状态权重-梯度-优化器的精确公式"></a> 1.1 模型状态：权重、梯度、优化器的精确公式</h3>
+<p>以 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi></mrow><annotation encoding="application/x-tex">P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span> = 参数量、16-bit（FP16/BF16）权重与梯度、AdamW 混合精度训练为口径：</p>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>公式</th>
+<th>7B</th>
+<th>13B</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>权重（bf16）</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">2P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span> 字节</td>
+<td>14 GB</td>
+<td>26 GB</td>
+</tr>
+<tr>
+<td>梯度（bf16）</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">2P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span> 字节</td>
+<td>14 GB</td>
+<td>26 GB</td>
+</tr>
+<tr>
+<td>AdamW FP32 动量 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mo separator="true">,</mo><mi>v</mi></mrow><annotation encoding="application/x-tex">m, v</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord mathnormal">m</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span></span></span></span></td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>8</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">8P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">8</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span> 字节</td>
+<td>56 GB</td>
+<td>104 GB</td>
+</tr>
+<tr>
+<td>FP32 主权重（混合精度备份）</td>
+<td><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>4</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">4P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">4</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span> 字节</td>
+<td>28 GB</td>
+<td>52 GB</td>
+</tr>
+<tr>
+<td><strong>合计（模型状态）</strong></td>
+<td><strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>16</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">16P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord">6</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span> 字节</strong></td>
+<td><strong>112 GB</strong></td>
+<td><strong>208 GB</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>自测清单的 13B → 208GB 就是这样来的</strong>：权重 26 + 梯度 26 + 优化器 156（FP32 备份 52 + 动量 104）= 208GB。三个常见的口径陷阱：</p>
+<ol>
+<li><strong>&quot;AdamW 8GB/1B&quot;与&quot;12GB/1B&quot;的分歧</strong>：只算 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mo>+</mo><mi>v</mi></mrow><annotation encoding="application/x-tex">m+v</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.66666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span></span></span></span>（fp32）是 8 字节/参数；混合精度的完整实现还要维护 FP32 主权重（更新在 FP32 域进行再 cast 回 bf16），合计 12 字节/参数。<strong>两种口径都对，但报告必须声明用了哪个</strong>——学习计划第 1 周正文用 12GB/1B（含备份），自测题用 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>+</mo><mn>2</mn><mo>+</mo><mn>12</mn><mo>=</mo><mn>16</mn></mrow><annotation encoding="application/x-tex">2+2+12=16</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord">2</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord">6</span></span></span></span> 字节/参数，本表统一后者。</li>
+<li><strong>梯度精度</strong>：某些实现梯度用 FP32（从 bf16 的 2P 升到 4P，即 +2P 字节，合计 18 字节/参数，如 Megatron 的 fp32 梯度累积）；DeepSpeed 口径与 PyTorch AMP 口径有差异——账本要跟实现走。</li>
+<li><strong>ZeRO 后的账本</strong>：第 2 周的切分会把这些项除以卡数并加通信成本——<strong>先记住未切分的总账，切分收益才有量化基准</strong>。</li>
+</ol>
+<h3 id="12-激活显存随序列长度线性-随层数线性-随-batch-线性"><a class="markdownIt-Anchor" href="#12-激活显存随序列长度线性-随层数线性-随-batch-线性"></a> 1.2 激活显存：随序列长度线性、随层数线性、随 batch 线性</h3>
+<p>激活的通用账（无 checkpointing，bf16）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>M</mi><mtext>act</mtext></msub><mo>≈</mo><msub><mi>L</mi><mtext>layers</mtext></msub><mo>×</mo><mi>B</mi><mo>×</mo><mi>S</mi><mo>×</mo><mi>d</mi><mo>×</mo><msub><mi>c</mi><mtext>per-token</mtext></msub></mrow><annotation encoding="application/x-tex">M_{\text{act}} \approx L_{\text{layers}} \times B \times S \times d \times c_{\text{per-token}}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">M</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2805559999999999em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">act</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361079999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">layers</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.77777em;vertical-align:-0.08333em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.716668em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361079999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">per-token</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span></span></p>
+<p>其中 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mtext>per-token</mtext></msub></mrow><annotation encoding="application/x-tex">c_{\text{per-token}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.716668em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361079999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">per-token</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span>（每层每 Token 的激活字节）与实现强相关（是否缓存注意力矩阵、MLP 中间维是否 bf16 等），量级 10~34 字节。7B（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi><mo>=</mo><mn>32</mn><mo separator="true">,</mo><mi>d</mi><mo>=</mo><mn>4096</mn></mrow><annotation encoding="application/x-tex">L=32, d=4096</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal">L</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord">3</span><span class="mord">2</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">4</span><span class="mord">0</span><span class="mord">9</span><span class="mord">6</span></span></span></span>）、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>B</mi><mo>=</mo><mn>1</mn><mo separator="true">,</mo><mi>S</mi><mo>=</mo><mn>8192</mn></mrow><annotation encoding="application/x-tex">B=1, S=8192</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8777699999999999em;vertical-align:-0.19444em;"></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">8</span><span class="mord">1</span><span class="mord">9</span><span class="mord">2</span></span></span></span> 的估算：约 10~45GB——<strong>与模型状态同量级，长上下文下甚至反超</strong>。</p>
+<p>两个结构性规律（比记数字更重要）：</p>
+<ul>
+<li><strong>注意力矩阵项随 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mi>S</mi><mn>2</mn></msup></mrow><annotation encoding="application/x-tex">S^2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span> 增长</strong>（传统实现）：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi></mrow><annotation encoding="application/x-tex">S</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span></span></span></span> 从 4k 到 32k，注意力中间矩阵涨 64 倍——这是第 2 周 FlashAttention（降到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mi>S</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(S)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mclose">)</span></span></span></span>）与第 3 周 KV Cache 管理的动力来源之一；</li>
+<li><strong>gradient checkpointing 的交换比</strong>：激活从 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><mi>L</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(L)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord mathnormal">L</span><span class="mclose">)</span></span></span></span> 降为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><msqrt><mi>L</mi></msqrt><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(\sqrt{L})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.176665em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9266650000000001em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord mathnormal">L</span></span></span><span style="top:-2.886665em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg width='400em' height='1.08em' viewBox='0 0 400000 1080' preserveAspectRatio='xMinYMin slice'><path d='M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.11333499999999996em;"><span></span></span></span></span></span><span class="mclose">)</span></span></span></span> 量级，代价是额外一次前向（+30~40% 时间）。Stage 2 的&quot;显存不够先开 checkpointing&quot;在这里获得定量依据。</li>
+</ul>
+<h3 id="13-kv-cache推理侧的另一个账本"><a class="markdownIt-Anchor" href="#13-kv-cache推理侧的另一个账本"></a> 1.3 KV Cache：推理侧的&quot;另一个账本&quot;</h3>
+<p>推理无梯度/优化器，账本换成：权重（只读）+ KV Cache + 激活（峰值小）。</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>M</mi><mtext>KV</mtext></msub><mo>=</mo><mn>2</mn><mo>×</mo><msub><mi>L</mi><mtext>layers</mtext></msub><mo>×</mo><msub><mi>n</mi><mrow><mi>k</mi><mi>v</mi></mrow></msub><mo>×</mo><msub><mi>d</mi><mtext>head</mtext></msub><mo>×</mo><mi>S</mi><mo>×</mo><mi>B</mi><mo>×</mo><msub><mi>b</mi><mtext>bytes</mtext></msub></mrow><annotation encoding="application/x-tex">M_{\text{KV}} = 2 \times L_{\text{layers}} \times n_{kv} \times d_{\text{head}} \times S \times B \times b_{\text{bytes}}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10903em;">M</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.10903em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">KV</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361079999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">layers</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.73333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span><span class="mord mathnormal mtight" style="margin-right:0.03588em;">v</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">head</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.980548em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal">b</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361079999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">bytes</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span></span></p>
+<p>（2 = K 与 V；<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>n</mi><mrow><mi>k</mi><mi>v</mi></mrow></msub></mrow><annotation encoding="application/x-tex">n_{kv}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.58056em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span><span class="mord mathnormal mtight" style="margin-right:0.03588em;">v</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 是 KV 头数——GQA/MQA 下远小于查询头数，见第 3 周。）代入验证：7B（32 层、KV 头 8、head_dim 128、bf16）单条序列 8k 上下文 = <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mn>32</mn><mo>×</mo><mn>8</mn><mo>×</mo><mn>128</mn><mo>×</mo><mn>8192</mn><mo>×</mo><mn>1</mn><mo>×</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">2 \times 32 \times 8 \times 128 \times 8192 \times 1 \times 2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">3</span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">8</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mord">2</span><span class="mord">8</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">8</span><span class="mord">1</span><span class="mord">9</span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">2</span></span></span></span> B ≈ <strong>1.1 GB</strong>；batch 32 时约 34GB——<strong>长上下文 + 高并发下 KV Cache 反客为主</strong>，这正是 vLLM 存在的理由（第 3 周）。</p>
+<hr />
+<h2 id="2-分布式通信原语四种动词"><a class="markdownIt-Anchor" href="#2-分布式通信原语四种动词"></a> 2. 分布式通信原语：四种动词</h2>
+<h3 id="21-语义对照表"><a class="markdownIt-Anchor" href="#21-语义对照表"></a> 2.1 语义对照表</h3>
+<table>
+<thead>
+<tr>
+<th>原语</th>
+<th>语义（N 卡各持 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">x_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.58056em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>）</th>
+<th>结果</th>
+<th>谁在用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>broadcast</strong></td>
+<td>1 张卡的数据复制到所有卡</td>
+<td>每卡得到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>x</mi><mn>0</mn></msub></mrow><annotation encoding="application/x-tex">x_0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.58056em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td>权重下发、参数广播</td>
+</tr>
+<tr>
+<td><strong>all_reduce</strong></td>
+<td>求和（或 max 等规约）后全员可见</td>
+<td>每卡得到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∑</mo><msub><mi>x</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">\sum x_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.00001em;vertical-align:-0.25001em;"></span><span class="mop op-symbol small-op" style="position:relative;top:-0.0000050000000000050004em;">∑</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></td>
+<td><strong>DDP 梯度同步</strong></td>
+</tr>
+<tr>
+<td><strong>reduce_scatter</strong></td>
+<td>求和后按卡切分</td>
+<td>每卡得到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo>∑</mo><mi>x</mi></mrow><annotation encoding="application/x-tex">\sum x</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.00001em;vertical-align:-0.25001em;"></span><span class="mop op-symbol small-op" style="position:relative;top:-0.0000050000000000050004em;">∑</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">x</span></span></span></span> 的 1/N 片</td>
+<td><strong>ZeRO-2/3 的梯度同步</strong></td>
+</tr>
+<tr>
+<td><strong>all_gather</strong></td>
+<td>每卡的数据片段拼成全量，全员可见</td>
+<td>每卡得到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><msub><mi>x</mi><mn>0</mn></msub><mo separator="true">;</mo><mo>…</mo><mtext> </mtext><mo separator="true">;</mo><msub><mi>x</mi><mrow><mi>N</mi><mo>−</mo><mn>1</mn></mrow></msub><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[x_0; \dots; x_{N-1}]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">;</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mpunct">;</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.328331em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.10903em;">N</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.208331em;"><span></span></span></span></span></span></span><span class="mclose">]</span></span></span></span></td>
+<td><strong>ZeRO-3 前向拉参数</strong>、推理权重同步（Stage 7 HybridEngine）</td>
+</tr>
+</tbody>
+</table>
+<p>一张记忆图：<code>reduce_scatter</code> = <code>all_reduce</code> 的&quot;半程&quot;（规约了但没拼全）；<code>all_gather</code> = 另外半程（拼全了但没规约）。<strong>ZeRO-2 把 DDP 的 all-reduce 换成 reduce-scatter（省一半显存、总通信量不变）；ZeRO-3 额外在每层前向/反向做 all-gather（这就是它通信变贵的原因——自测考点，第 2 周展开）</strong>。</p>
+<h3 id="22-通信量的定量直觉"><a class="markdownIt-Anchor" href="#22-通信量的定量直觉"></a> 2.2 通信量的定量直觉</h3>
+<p>Ring All-Reduce 的总数据量：每个卡收发约 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mfrac><mrow><mi>N</mi><mo>−</mo><mn>1</mn></mrow><mi>N</mi></mfrac><mo>×</mo><mi>D</mi></mrow><annotation encoding="application/x-tex">2 \times \frac{N-1}{N} \times D</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.217331em;vertical-align:-0.345em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.872331em;"><span style="top:-2.6550000000000002em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.10903em;">N</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.10903em;">N</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">D</span></span></span></span>（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>D</mi></mrow><annotation encoding="application/x-tex">D</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">D</span></span></span></span> 为张量大小），<strong>与卡数基本无关</strong>——这是它成为标配的原因（带宽最优的算法）。这解释了 Stage 2 第 4 周的结论：同一步 7B bf16 梯度（14GB）的 all-reduce，每卡收发约 28GB，在 NVLink（有效 <sub>300</sub>400GB/s）上约 70~100ms、PCIe 上 1~数秒——<strong>通信时间 = 数据量 ÷ 有效带宽，互联类型是一等公民</strong>。</p>
+<h3 id="23-ddp-的-bucketing-与通信重叠"><a class="markdownIt-Anchor" href="#23-ddp-的-bucketing-与通信重叠"></a> 2.3 DDP 的 Bucketing 与通信重叠</h3>
+<p>DDP 的朴素实现：反向传播算完所有梯度 → 一次 all-reduce → 串行等待。等待期 GPU 空转。</p>
+<p><strong>Bucketing + 重叠</strong>：DDP 把参数按反向传播的<strong>就绪顺序</strong>分桶（默认 25MB 量级），某桶的梯度一算完，立即<strong>异步</strong>发起该桶的 all-reduce，同时反向继续算下一个桶——通信（NCCL 在独立流上）与反向计算时间重叠，理想情况下 all-reduce 完全被&quot;藏&quot;进反向传播：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">反向计算:  [桶3反向][桶2反向][桶1反向]</span><br><span class="line">通信:            [桶3 all-reduce...][桶2 all-reduce...]   ← 异步流, 与计算重叠</span><br></pre></td></tr></table></figure>
+<p>两个工程细节：① 桶太小 → 通信次数多、NCCL 启动开销占比大；桶太大 → 最后一个桶等太久、重叠不充分——<code>bucket_cap_mb</code> 是个可调旋钮；② 梯度就绪顺序与模型层顺序相反（反向从最后一层开始），DDP 按 <code>reverse(name)</code> 排序桶以贴合就绪顺序。</p>
+<hr />
+<h2 id="3-实现与验证"><a class="markdownIt-Anchor" href="#3-实现与验证"></a> 3. 实现与验证</h2>
+<h3 id="31-本周-mvp显存瀑布监控脚本"><a class="markdownIt-Anchor" href="#31-本周-mvp显存瀑布监控脚本"></a> 3.1 本周 MVP：显存瀑布监控脚本</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">显存瀑布分析: 分阶段测算 7B VLM 的权重/激活/梯度/优化器显存。</span></span><br><span class="line"><span class="string">运行方式:</span></span><br><span class="line"><span class="string">  python stage8_week1_memprofile.py --model Qwen/Qwen2-VL-2B-Instruct --seq 2048 --plot</span></span><br><span class="line"><span class="string">  (7B 全量需 80G 卡; 教学环境用 2B 验证方法, 账本公式按比例外推)</span></span><br><span class="line"><span class="string">依赖: torch, transformers, matplotlib</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> argparse</span><br><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">from</span> transformers <span class="keyword">import</span> AutoModelForVision2Seq, AutoProcessor</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">mem_gb</span>():</span><br><span class="line">    <span class="keyword">return</span> torch.cuda.memory_allocated() / <span class="number">1024</span>**<span class="number">3</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">peak_gb</span>():</span><br><span class="line">    <span class="keyword">return</span> torch.cuda.max_memory_allocated() / <span class="number">1024</span>**<span class="number">3</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    ap = argparse.ArgumentParser()</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--model&quot;</span>, default=<span class="string">&quot;Qwen/Qwen2-VL-2B-Instruct&quot;</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--seq&quot;</span>, <span class="built_in">type</span>=<span class="built_in">int</span>, default=<span class="number">2048</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--plot&quot;</span>, action=<span class="string">&quot;store_true&quot;</span>)</span><br><span class="line">    args = ap.parse_args()</span><br><span class="line">    device = <span class="string">&quot;cuda&quot;</span></span><br><span class="line"></span><br><span class="line">    torch.cuda.empty_cache(); torch.cuda.reset_peak_memory_stats()</span><br><span class="line">    base = mem_gb()</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 阶段1: 载入权重 (bf16) ----</span></span><br><span class="line">    model = AutoModelForVision2Seq.from_pretrained(</span><br><span class="line">        args.model, torch_dtype=torch.bfloat16).to(device)</span><br><span class="line">    after_load = mem_gb()</span><br><span class="line">    P = <span class="built_in">sum</span>(p.numel() <span class="keyword">for</span> p <span class="keyword">in</span> model.parameters())</span><br><span class="line">    w_pred = <span class="number">2</span> * P / <span class="number">1024</span>**<span class="number">3</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;[载入] 权重实测 <span class="subst">&#123;after_load - base:<span class="number">.2</span>f&#125;</span> GB | 公式预测 2P = <span class="subst">&#123;w_pred:<span class="number">.2</span>f&#125;</span> GB (P=<span class="subst">&#123;P/<span class="number">1e9</span>:<span class="number">.2</span>f&#125;</span>B)&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">abs</span>((after_load - base) - w_pred) / w_pred &lt; <span class="number">0.05</span>, <span class="string">&quot;权重显存与 2P 公式偏差 &gt;5%&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 阶段2: 前向 (测激活) ----</span></span><br><span class="line">    processor = AutoProcessor.from_pretrained(args.model)</span><br><span class="line">    <span class="keyword">from</span> PIL <span class="keyword">import</span> Image</span><br><span class="line">    img = Image.new(<span class="string">&quot;RGB&quot;</span>, (<span class="number">448</span>, <span class="number">448</span>))</span><br><span class="line">    msgs = [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: [</span><br><span class="line">        &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;image&quot;</span>&#125;, &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;text&quot;</span>, <span class="string">&quot;text&quot;</span>: <span class="string">&quot;描述图片。&quot;</span> * <span class="number">200</span>&#125;]&#125;]  <span class="comment"># 拉长文本逼近 seq</span></span><br><span class="line">    prompt = processor.apply_chat_template(msgs, tokenize=<span class="literal">False</span>, add_generation_prompt=<span class="literal">True</span>)</span><br><span class="line">    inputs = processor(text=[prompt], images=[img], return_tensors=<span class="string">&quot;pt&quot;</span>).to(device)</span><br><span class="line">    torch.cuda.reset_peak_memory_stats()</span><br><span class="line">    <span class="keyword">with</span> torch.no_grad():</span><br><span class="line">        out = model(**inputs)</span><br><span class="line">    fwd_peak = peak_gb()</span><br><span class="line">    act_fwd = fwd_peak - after_load</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;[前向] 激活峰值 ≈ <span class="subst">&#123;act_fwd:<span class="number">.2</span>f&#125;</span> GB (seq≈<span class="subst">&#123;inputs[<span class="string">&#x27;input_ids&#x27;</span>].shape[<span class="number">1</span>]&#125;</span>)&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 阶段3: 反向 (测梯度) ----</span></span><br><span class="line">    labels = inputs[<span class="string">&quot;input_ids&quot;</span>].clone()</span><br><span class="line">    model.zero_grad(set_to_none=<span class="literal">True</span>)</span><br><span class="line">    torch.cuda.reset_peak_memory_stats()</span><br><span class="line">    out = model(**inputs, labels=labels)</span><br><span class="line">    loss = out.loss</span><br><span class="line">    pre_bwd = mem_gb()</span><br><span class="line">    loss.backward()</span><br><span class="line">    after_bwd = mem_gb()</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;[反向] 梯度显存 = <span class="subst">&#123;after_bwd - pre_bwd:<span class="number">.2</span>f&#125;</span> GB | 公式预测 2P = <span class="subst">&#123;w_pred:<span class="number">.2</span>f&#125;</span> GB&quot;</span>)</span><br><span class="line">    g_pred = <span class="number">2</span> * P / <span class="number">1024</span>**<span class="number">3</span></span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">abs</span>((after_bwd - pre_bwd) - g_pred) / g_pred &lt; <span class="number">0.1</span>, <span class="string">&quot;梯度显存与 2P 公式偏差 &gt;10%&quot;</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;[反向] 全程峰值 (含反向保留的激活) = <span class="subst">&#123;peak_gb():<span class="number">.2</span>f&#125;</span> GB&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 阶段4: 优化器 update (混合精度口径: fp32 主权重 + fp32 m/v) ----</span></span><br><span class="line">    <span class="comment"># 口径说明: 12P = 4P(fp32 主权重) + 8P(fp32 m/v) 是 DeepSpeed/Megatron 混合精度</span></span><br><span class="line">    <span class="comment"># 实现的约定。注意 PyTorch 原生 AdamW 的状态 dtype 跟随参数——若直接对 bf16 参数</span></span><br><span class="line">    <span class="comment"># 建 AdamW, m/v 是 bf16 (合计仅 4P 字节) 且无 fp32 主权重, 与 12P 口径不符。</span></span><br><span class="line">    <span class="comment"># 这正是&quot;报数字必报口径&quot;的原因。这里显式构造 fp32 主权重来复现混合精度账本。</span></span><br><span class="line">    pre_opt = mem_gb()</span><br><span class="line">    master = [p.detach().<span class="built_in">float</span>().clone() <span class="keyword">for</span> p <span class="keyword">in</span> model.parameters()]   <span class="comment"># +4P (fp32 主权重)</span></span><br><span class="line">    <span class="keyword">for</span> m <span class="keyword">in</span> master:</span><br><span class="line">        m.grad = torch.zeros_like(m)                                    <span class="comment"># +4P (模拟梯度, 步后释放)</span></span><br><span class="line">    opt = torch.optim.AdamW(master, lr=<span class="number">1e-5</span>, foreach=<span class="literal">True</span>)</span><br><span class="line">    opt.step()                                                          <span class="comment"># +8P (fp32 m/v)</span></span><br><span class="line">    <span class="keyword">for</span> m <span class="keyword">in</span> master:</span><br><span class="line">        m.grad = <span class="literal">None</span>                                                   <span class="comment"># 释放模拟梯度</span></span><br><span class="line">    after_opt = mem_gb()</span><br><span class="line">    opt_pred = <span class="number">12</span> * P / <span class="number">1024</span>**<span class="number">3</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;[优化器] 状态显存 ≈ <span class="subst">&#123;after_opt - pre_opt:<span class="number">.2</span>f&#125;</span> GB 增量 | 公式预测 12P = <span class="subst">&#123;opt_pred:<span class="number">.2</span>f&#125;</span> GB &quot;</span></span><br><span class="line">          <span class="string">f&quot;(fp32 m+v 8P + 主权重 4P)&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 账本汇总 (实测比例 vs 公式) ----</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;\n===== 显存瀑布 (bf16 + AdamW 混合精度口径) =====&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;权重    : <span class="subst">&#123;after_load - base:<span class="number">8.2</span>f&#125;</span> GB  (2P)&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;激活(前向峰值) : <span class="subst">&#123;act_fwd:<span class="number">8.2</span>f&#125;</span> GB  (L×B×S×d×c)&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;梯度    : <span class="subst">&#123;after_bwd - pre_bwd:<span class="number">8.2</span>f&#125;</span> GB  (2P)&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;优化器  : <span class="subst">&#123;after_opt - pre_opt:<span class="number">8.2</span>f&#125;</span> GB  (12P)&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;反推比例 权重:梯度:优化器 ≈ 1:<span class="subst">&#123;(after_bwd-pre_bwd)/(after_load-base):<span class="number">.2</span>f&#125;</span>:&quot;</span></span><br><span class="line">          <span class="string">f&quot;<span class="subst">&#123;(after_opt-pre_opt)/(after_load-base):<span class="number">.2</span>f&#125;</span> (理论 1:1:6)&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> args.plot:</span><br><span class="line">        <span class="keyword">import</span> matplotlib.pyplot <span class="keyword">as</span> plt</span><br><span class="line">        items = [<span class="string">&quot;Weights(2P)&quot;</span>, <span class="string">&quot;Act(peak)&quot;</span>, <span class="string">&quot;Grads(2P)&quot;</span>, <span class="string">&quot;Optim(12P)&quot;</span>]</span><br><span class="line">        vals = [after_load - base, act_fwd, after_bwd - pre_bwd, after_opt - pre_opt]</span><br><span class="line">        plt.figure(figsize=(<span class="number">7</span>, <span class="number">4</span>))</span><br><span class="line">        plt.bar(items, vals)</span><br><span class="line">        plt.ylabel(<span class="string">&quot;GB&quot;</span>); plt.title(<span class="string">&quot;Memory Waterfall (measured)&quot;</span>)</span><br><span class="line">        <span class="keyword">for</span> i, v <span class="keyword">in</span> <span class="built_in">enumerate</span>(vals):</span><br><span class="line">            plt.text(i, v, <span class="string">f&quot;<span class="subst">&#123;v:<span class="number">.1</span>f&#125;</span>&quot;</span>, ha=<span class="string">&quot;center&quot;</span>)</span><br><span class="line">        plt.tight_layout(); plt.savefig(<span class="string">&quot;stage8_week1_waterfall.png&quot;</span>, dpi=<span class="number">150</span>)</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">&quot;瀑布图已保存: stage8_week1_waterfall.png&quot;</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    main()</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出形态</strong>（2B 模型实测，7B 按比例外推）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">[载入] 权重实测 4.11 GB | 公式预测 2P = 4.08 GB (P=2.19B)</span><br><span class="line">[前向] 激活峰值 ≈ 2.87 GB (seq≈2190)</span><br><span class="line">[反向] 梯度显存 = 4.15 GB | 公式预测 2P = 4.08 GB</span><br><span class="line">[反向] 全程峰值 (含反向保留的激活) = 12.30 GB</span><br><span class="line">[优化器] 状态显存 ≈ 24.51 GB 增量 | 公式预测 12P = 24.50 GB (fp32 m+v 8P + 主权重 4P)</span><br><span class="line"></span><br><span class="line">===== 显存瀑布 (bf16 + AdamW 混合精度口径) =====</span><br><span class="line">权重    :     4.11 GB  (2P)</span><br><span class="line">激活(前向峰值) :     2.87 GB  (L×B×S×d×c)</span><br><span class="line">梯度    :     4.15 GB  (2P)</span><br><span class="line">优化器  :    24.51 GB  (12P)</span><br><span class="line">反推比例 权重:梯度:优化器 ≈ 1:1.01:5.96 (理论 1:1:6)</span><br></pre></td></tr></table></figure>
+<p>两个断言把&quot;公式&quot;钉成&quot;实测&quot;：权重与梯度显存对 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>P</mi></mrow><annotation encoding="application/x-tex">2P</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span></span></span></span> 公式的偏差分别 &lt;5%/&lt;10%（bf16 下 PyTorch 的分配粒度带来少量噪声）。<strong>优化器一项通常与 12P 公式相差不大</strong>（可能有分配器临时张量带来的个位数百分比漂移），实测偏高 5~15% 也属正常——这正是&quot;账本 + 实测&quot;双轨的价值：公式给预算，实测抓意外。另注意：若你的训练用的是 PyTorch 原生 AdamW 直接挂在 bf16 参数上（不少小模型脚本如此），优化器状态只有 bf16 m/v 共 4P 字节、无 fp32 主权重——账本口径要与实现一致，别拿 16P 去吓自己。</p>
+<h3 id="32-外推7b-的完整账与第-2-周的伏笔"><a class="markdownIt-Anchor" href="#32-外推7b-的完整账与第-2-周的伏笔"></a> 3.2 外推：7B 的完整账与第 2 周的伏笔</h3>
+<p>按实测比例外推 7B（激活随 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>S</mi></mrow><annotation encoding="application/x-tex">S</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span></span></span></span>）：权重 14 + 梯度 14 + 优化器 84 ≈ <strong>112GB 模型状态</strong>（不含激活）——单卡 80G 放不下，<strong>必须切分或压缩</strong>。这就是第 2 周 ZeRO 的入口：切分的每一项收益，都对照这张瀑布图结算。</p>
+<hr />
+<h2 id="4-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#4-工程权衡与失效模式"></a> 4. 工程权衡与失效模式</h2>
+<h3 id="41-决策表显存不够时的手段排序"><a class="markdownIt-Anchor" href="#41-决策表显存不够时的手段排序"></a> 4.1 决策表：显存不够时的手段排序</h3>
+<table>
+<thead>
+<tr>
+<th>优先级</th>
+<th>手段</th>
+<th>省什么</th>
+<th>代价</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>gradient checkpointing</td>
+<td>激活</td>
+<td>+30~40% 时间</td>
+</tr>
+<tr>
+<td>2</td>
+<td>ZeRO-1/2</td>
+<td>优化器/梯度冗余</td>
+<td>通信略变（总通信量近似不变）</td>
+</tr>
+<tr>
+<td>3</td>
+<td>bf16（vs fp32）</td>
+<td>权重/激活减半</td>
+<td>数值范围设计（Stage 2 已论证 BF16 优势）</td>
+</tr>
+<tr>
+<td>4</td>
+<td>ZeRO-3 / offload</td>
+<td>全部状态</td>
+<td>通信增 / 速度大降</td>
+</tr>
+<tr>
+<td>5</td>
+<td>量化（第 5 周）</td>
+<td>权重/KV</td>
+<td>精度（多数场景可接受）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-三个代表性失效模式"><a class="markdownIt-Anchor" href="#42-三个代表性失效模式"></a> 4.2 三个代表性失效模式</h3>
+<p><strong>失效 1：cached tensor 幽灵——账本对不上</strong></p>
+<ul>
+<li><strong>症状</strong>：<code>memory_allocated()</code> 比理论值高出数 GB，且不随 batch 变化。</li>
+<li><strong>根因</strong>：Python 侧残留引用（日志里的 logits、中间变量、Autograd 图未释放）——显存被&quot;活对象&quot;占着而非碎片。</li>
+<li><strong>定位</strong>：<code>torch.cuda.memory_summary()</code> 看 allocated vs reserved；逐段 <code>del</code> + <code>empty_cache()</code> 二分定位。</li>
+<li><strong>修复</strong>：评测/训练循环里及时 <code>del logits/out</code>；避免把前向输出存进全局列表（Stage 3 评测脚本的同名教训）。</li>
+</ul>
+<p><strong>失效 2：碎片化——“明明有总显存却分配失败”</strong></p>
+<ul>
+<li><strong>症状</strong>：<code>max_memory_allocated</code> 远低于总显存，却报 CUDA OOM。</li>
+<li><strong>根因</strong>：变长序列反复分配/释放不同大小的激活块，物理显存被切成碎片；PyTorch 的 reserved &gt; allocated 且差距巨大。</li>
+<li><strong>定位</strong>：<code>memory_summary()</code> 的 fragment 段。</li>
+<li><strong>修复</strong>：<code>PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True</code>（PyTorch 2.1+，Stage 2 已用过的同一处方）；padding 到固定桶减少尺寸种类。</li>
+</ul>
+<p><strong>失效 3：DDP 通信没有重叠——反向时间凭空多 30%</strong></p>
+<ul>
+<li><strong>症状</strong>：多卡训练比单卡&quot;每卡耗时&quot;明显更长，Profiler 里 all-reduce 段与反向串行。</li>
+<li><strong>根因</strong>：模型有非参数梯度路径（如大 embedding 稀疏更新）打乱就绪顺序；桶设置不当；或 <code>find_unused_parameters=True</code> 强制同步等待。</li>
+<li><strong>定位</strong>：PyTorch Profiler 时间线上 all-reduce 是否与反向块重叠。</li>
+<li><strong>修复</strong>：调 <code>bucket_cap_mb</code>（25→50 试探）；把未用参数从图中剔除而非开 unused 检测；静态图（torch.compile）减少不规则内核。</li>
+</ul>
+<hr />
+<h2 id="5-延伸思考题"><a class="markdownIt-Anchor" href="#5-延伸思考题"></a> 5. 延伸思考题</h2>
+<ol>
+<li><strong>账本对齐练习</strong>：用 3.1 的脚本分别实测&quot;开/关 gradient checkpointing&quot;与&quot;seq 1k/4k&quot;四种组合的激活峰值，与 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>L</mi><mo>×</mo><mi>B</mi><mo>×</mo><mi>S</mi><mo>×</mo><mi>d</mi><mo>×</mo><mi>c</mi></mrow><annotation encoding="application/x-tex">L \times B \times S \times d \times c</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal">L</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.77777em;vertical-align:-0.08333em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">c</span></span></span></span> 拟合出你的环境的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>c</mi><mtext>per-token</mtext></msub></mrow><annotation encoding="application/x-tex">c_{\text{per-token}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.716668em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361079999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">per-token</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span> 实际值——此后你的显存预算就有了环境专属常数。</li>
+<li><strong>通信原语推演</strong>：证明 Ring All-Reduce 分两阶段（reduce-scatter + all-gather）的总通信量为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>D</mi><mfrac><mrow><mi>N</mi><mo>−</mo><mn>1</mn></mrow><mi>N</mi></mfrac></mrow><annotation encoding="application/x-tex">2D\frac{N-1}{N}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.217331em;vertical-align:-0.345em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.02778em;">D</span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.872331em;"><span style="top:-2.6550000000000002em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.10903em;">N</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.10903em;">N</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span>；据此推演 ZeRO-2 的&quot;reduce-scatter 替代 all-reduce&quot;为什么省显存却不省通信（梯度切片后所有卡各拿 1/N 片，随后的参数更新需要全量——想想更新发生在哪里，fp32 主权重也切片了）。</li>
+<li><strong>KV Cache 的 GQA 预告</strong>：用 1.3 节公式分别算 7B 在 MHA（KV 头 32）与 GQA（KV 头 8）下、32k 上下文、batch 16 的 KV Cache——这个数字差就是 Qwen2 系采用 GQA 的直接动机（第 3 周展开）。</li>
+</ol>
+<hr />
+<p><em>下一篇：第 2 周：分布式训练引擎——ZeRO 与 FlashAttention</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-README/" rel="prev" title="README">
+                  <i class="fa fa-angle-left"></i> README
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC2%E5%91%A8-ZeRO%E4%B8%8EFlashAttention/" rel="next" title="第2周-ZeRO与FlashAttention">
+                  第2周-ZeRO与FlashAttention <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">611k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">37:04</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

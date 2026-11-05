@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的三个问题 1. asyncio + vLLM&#x2F;SGLang 的高并发架构怎么组织？每分钟上百条产出的瓶颈在哪一侧？ 2. Prefix Caching 省的是什么开销？什么样的 prompt 结构能吃到这份红利？">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第5-6周-高吞吐Pipeline与闭环验证">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC5-6%E5%91%A8-%E9%AB%98%E5%90%9E%E5%90%90Pipeline%E4%B8%8E%E9%97%AD%E7%8E%AF%E9%AA%8C%E8%AF%81/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的三个问题 1. asyncio + vLLM&#x2F;SGLang 的高并发架构怎么组织？每分钟上百条产出的瓶颈在哪一侧？ 2. Prefix Caching 省的是什么开销？什么样的 prompt 结构能吃到这份红利？">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T15:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-05T02:04:19.030Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC5-6%E5%91%A8-%E9%AB%98%E5%90%9E%E5%90%90Pipeline%E4%B8%8E%E9%97%AD%E7%8E%AF%E9%AA%8C%E8%AF%81/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC5-6%E5%91%A8-%E9%AB%98%E5%90%9E%E5%90%90Pipeline%E4%B8%8E%E9%97%AD%E7%8E%AF%E9%AA%8C%E8%AF%81/","path":"2026/09/02/VLM & VLA-4-数据合成与数据工程-第5-6周-高吞吐Pipeline与闭环验证/","title":"第5-6周-高吞吐Pipeline与闭环验证"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第5-6周-高吞吐Pipeline与闭环验证 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-5-6-%E5%91%A8%E6%95%99%E7%A8%8B%E9%AB%98%E5%90%9E%E5%90%90%E5%90%88%E6%88%90-pipeline-%E5%B7%A5%E7%A8%8B%E5%8C%96%E4%B8%8E%E9%97%AD%E7%8E%AF%E9%AA%8C%E8%AF%81"><span class="nav-number">1.</span> <span class="nav-text"> 第 5-6 周教程：高吞吐合成 Pipeline 工程化与闭环验证</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E7%94%9F%E6%88%90%E5%90%9E%E5%90%90%E7%9A%84%E8%B4%A6%E6%9C%AC"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：生成吞吐的账本</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E6%A0%B9%E6%9C%AC%E7%9F%9B%E7%9B%BE%E4%B8%B2%E8%A1%8C-api-%E8%B0%83%E7%94%A8%E7%9A%84%E7%AD%89%E5%BE%85%E6%97%B6%E9%97%B4-vs-gpu-%E7%9A%84%E6%89%B9%E5%A4%84%E7%90%86%E8%83%BD%E5%8A%9B"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 根本矛盾：串行 API 调用的等待时间 vs GPU 的批处理能力</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E4%B8%A4%E7%BA%A7%E5%B9%B6%E5%8F%91%E7%9A%84%E8%81%8C%E8%B4%A3%E5%88%92%E5%88%86"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 两级并发的职责划分</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-prefix-caching%E7%9C%81%E7%9A%84%E6%98%AF-prefill"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 Prefix Caching：省的是 Prefill</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#14-%E7%AB%AF%E5%88%B0%E7%AB%AF%E6%95%B0%E6%8D%AE%E6%B5%81"><span class="nav-number">1.1.4.</span> <span class="nav-text"> 1.4 端到端数据流</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E9%AB%98%E5%B9%B6%E5%8F%91%E5%90%88%E6%88%90%E5%BC%95%E6%93%8Easyncio-%E5%AE%A2%E6%88%B7%E7%AB%AF%E9%AA%A8%E6%9E%B6"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 高并发合成引擎（asyncio 客户端骨架）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E4%BA%A4%E4%BB%98-hf-dataset-%E6%A0%BC%E5%BC%8F"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 交付 HF Dataset 格式</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-%E9%97%AD%E7%8E%AF%E9%AA%8C%E8%AF%81%E5%90%88%E6%88%90%E6%95%B0%E6%8D%AE%E5%88%B0%E5%BA%95%E6%9C%89%E6%B2%A1%E6%9C%89%E7%94%A8"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 闭环验证：合成数据到底有没有用</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E5%86%B3%E7%AD%96%E8%A1%A8%E7%94%9F%E6%88%90%E5%BC%95%E6%93%8E%E5%8F%82%E6%95%B0"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 决策表：生成引擎参数</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%B8%89%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 三个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/cute_cat.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">双一流计算机硕士已毕业，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">193</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">36</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">6</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC5-6%E5%91%A8-%E9%AB%98%E5%90%9E%E5%90%90Pipeline%E4%B8%8E%E9%97%AD%E7%8E%AF%E9%AA%8C%E8%AF%81/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/cute_cat.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="双一流计算机硕士已毕业，主要编程语言为 Java、Go、Python，记录和分享自己的学习内容">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第5-6周-高吞吐Pipeline与闭环验证 | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的三个问题 1. asyncio + vLLM&#x2F;SGLang 的高并发架构怎么组织？每分钟上百条产出的瓶颈在哪一侧？ 2. Prefix Caching 省的是什么开销？什么样的 prompt 结构能吃到这份红利？">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第5-6周-高吞吐Pipeline与闭环验证
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 23:30:00" itemprop="dateCreated datePublished" datetime="2026-09-02T23:30:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-05 10:04:19" itemprop="dateModified" datetime="2026-11-05T10:04:19+08:00">2026-11-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Stage 4-数据合成与数据工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.3k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的三个问题 1. asyncio + vLLM/SGLang 的高并发架构怎么组织？每分钟上百条产出的瓶颈在哪一侧？ 2. Prefix Caching 省的是什么开销？什么样的 prompt 结构能吃到这份红利？</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-5-6-周教程高吞吐合成-pipeline-工程化与闭环验证"><a class="markdownIt-Anchor" href="#第-5-6-周教程高吞吐合成-pipeline-工程化与闭环验证"></a> 第 5-6 周教程：高吞吐合成 Pipeline 工程化与闭环验证</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>asyncio + vLLM/SGLang 的高并发架构怎么组织？每分钟上百条产出的瓶颈在哪一侧？</li>
+<li>Prefix Caching 省的是什么开销？什么样的 prompt 结构能吃到这份红利？</li>
+<li>&quot;合成 → 微调 → 验证&quot;的闭环怎么设计才能证明合成数据有效？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 5-6 周。交付物：① asyncio + vLLM/SGLang 高并发流水线（每分钟上百条）；② 3,000 条高质量、已去重、可验证的多模态/Agent SFT 数据集（HF Dataset 格式）；③ Baseline 模型训练与评测得分对比。</p>
+<p>本篇属于<strong>系统与基础设施</strong>主题（高吞吐生成引擎），分析重点是吞吐、并发调度与 I/O 复用，方法论直接复用 Stage 2 第 4 周的训练工程框架——生成与训练是同一台 GPU 在两个时间片上的两种负载。</p>
+<hr />
+<h2 id="1-第一性原理生成吞吐的账本"><a class="markdownIt-Anchor" href="#1-第一性原理生成吞吐的账本"></a> 1. 第一性原理：生成吞吐的账本</h2>
+<h3 id="11-根本矛盾串行-api-调用的等待时间-vs-gpu-的批处理能力"><a class="markdownIt-Anchor" href="#11-根本矛盾串行-api-调用的等待时间-vs-gpu-的批处理能力"></a> 1.1 根本矛盾：串行 API 调用的等待时间 vs GPU 的批处理能力</h3>
+<p>一条合成数据的产出时间拆解（教师 VLM 生成一条含 CoT 的 QA）：</p>
+<ul>
+<li><strong>Prefill</strong>：处理 prompt（含图片 Token）的一次前向，计算密集；</li>
+<li><strong>Decode</strong>：逐 Token 生成答案（几百 Token），<strong>访存受限</strong>（每步都要读全部权重）；</li>
+<li><strong>串行调用的空窗</strong>：单请求 decode 时 GPU 利用率只有个位数百分比——权重读取的带宽被浪费在&quot;一次只推进一个 Token&quot;上。</li>
+</ul>
+<p>串行 100 条 ≈ 100 × (prefill + decode) ≈ 数十分钟到小时级。而 decode 的访存受限特性决定了：<strong>一个 batch 推进 64 个 Token 与推进 1 个 Token 的耗时几乎相同</strong>（权重读取是大头）。把并发打满，吞吐可提升 1~2 个数量级——这就是&quot;每分钟上百条&quot;的物理来源。</p>
+<h3 id="12-两级并发的职责划分"><a class="markdownIt-Anchor" href="#12-两级并发的职责划分"></a> 1.2 两级并发的职责划分</h3>
+<p>高吞吐流水线是<strong>客户端并发 × 服务端 batching</strong>的乘积：</p>
+<table>
+<thead>
+<tr>
+<th>层</th>
+<th>职责</th>
+<th>关键参数</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>服务端</strong>（vLLM/SGLang）</td>
+<td>continuous batching、KV Cache 管理、Prefix Caching</td>
+<td><code>max_num_seqs</code>（并发序列数上限）、<code>gpu_memory_utilization</code></td>
+</tr>
+<tr>
+<td><strong>客户端</strong>（asyncio）</td>
+<td>发起并发请求、限速、重试、结果落盘</td>
+<td>并发信号量（≈ 服务端 <code>max_num_seqs</code>）、指数退避</td>
+</tr>
+</tbody>
+</table>
+<p>常见误区是只调一边：客户端开 1000 并发但服务端 <code>max_num_seqs=8</code>，请求在服务端排队，客户端并发是假象；反之服务端能容 64 并发而客户端只发 4 个请求，GPU 喂不饱。<strong>经验起点：客户端并发 = 服务端 max_num_seqs = 单卡 32~64（7B 教师、图片输入）</strong>，然后按 GPU 利用率微调。</p>
+<p>vLLM 启动参考（教师模型服务）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 7B 教师模型, 单卡 A100 40G (vLLM &gt;= 0.7 推荐 `vllm serve`; 旧版等价命令为</span></span><br><span class="line"><span class="comment"># python -m vllm.entrypoints.openai.api_server)</span></span><br><span class="line">vllm serve Qwen/Qwen2.5-VL-7B-Instruct \</span><br><span class="line">  --max-model-len 8192 \</span><br><span class="line">  --max-num-seqs 48 \</span><br><span class="line">  --gpu-memory-utilization 0.90 \</span><br><span class="line">  --enable-prefix-caching          <span class="comment"># 打开前缀缓存 (见 1.3); 注意 vLLM &gt;= 0.9 (V1 引擎) 已默认开启</span></span><br></pre></td></tr></table></figure>
+<p>SGLang 的差异化优势：<strong>RadixAttention 前缀树缓存</strong>（自动发现并复用任意公共前缀的 KV Cache，无需手动声明），且官方基准中在多轮/结构化生成场景吞吐常优于 vLLM（不同版本互有胜负，选型以自己的负载实测为准）。</p>
+<h3 id="13-prefix-caching省的是-prefill"><a class="markdownIt-Anchor" href="#13-prefix-caching省的是-prefill"></a> 1.3 Prefix Caching：省的是 Prefill</h3>
+<p>合成流水线的 prompt 结构高度模板化：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">[系统提示: 你是多模态数据合成专家…约 800 Token (所有请求相同)]</span><br><span class="line">[演化算子说明: …约 300 Token (同类请求相同)]</span><br><span class="line">[图片 Token: …约 600 Token (每图不同)]</span><br><span class="line">[种子描述与具体要求: …约 200 Token (每条不同)]</span><br></pre></td></tr></table></figure>
+<p>前两段在数千条请求间<strong>完全一致</strong>。无缓存时每条请求都要重复 prefill 这 ~1100 Token；开启 Prefix Caching 后，相同前缀的 KV Cache 被复用，prefill 只需计算新增部分。<strong>收益 = 公共前缀占比</strong>：本例 prefill 计算量降约 60%；对&quot;系统提示极长 + 输出较短&quot;的合成任务（如分类打分），收益更极端。工程纪律：<strong>把不变的内容放在 prompt 最前面，把每条不同的内容放最后</strong>——前缀匹配是从头开始的逐段比较，中间插一个不同 Token 就断了后续复用。</p>
+<p>（进阶：SGLang 的 RadixAttention 还能复用&quot;图片 Token 相同&quot;的情况——同一张种子图生成多条数据时，把该图的 Token 段也放进公共前缀。）</p>
+<h3 id="14-端到端数据流"><a class="markdownIt-Anchor" href="#14-端到端数据流"></a> 1.4 端到端数据流</h3>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">种子图/种子任务池</span><br><span class="line">   ▼</span><br><span class="line">asyncio 生产者 (构造 prompt, 公共前缀前置)</span><br><span class="line">   ▼  Semaphore(48) 限并发</span><br><span class="line">OpenAI 协议 client (异步) ──► vLLM/SGLang 服务 (continuous batching + prefix cache)</span><br><span class="line">   ▼  流式回收</span><br><span class="line">结果校验闸 (schema/长度/一致性, 第4周闸1/2 前置到这里)</span><br><span class="line">   ▼</span><br><span class="line">暂存 JSONL (逐条 append, 崩溃不丢)</span><br><span class="line">   ▼</span><br><span class="line">第 4 周清洗五闸 ──► HF Dataset ──► Stage 2 SFT ──► Stage 3 评测对比</span><br></pre></td></tr></table></figure>
+<p>两条可靠性纪律：<strong>逐条落盘</strong>（断点续跑：启动时读已有文件按去重键跳过）与<strong>限速退避</strong>（<code>asyncio.Semaphore</code> 控并发 + 429/超时指数退避重试）。</p>
+<hr />
+<h2 id="2-实现与验证"><a class="markdownIt-Anchor" href="#2-实现与验证"></a> 2. 实现与验证</h2>
+<h3 id="21-高并发合成引擎asyncio-客户端骨架"><a class="markdownIt-Anchor" href="#21-高并发合成引擎asyncio-客户端骨架"></a> 2.1 高并发合成引擎（asyncio 客户端骨架）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">asyncio 高并发多模态合成客户端 (对接 vLLM/SGLang 的 OpenAI 协议服务)。</span></span><br><span class="line"><span class="string">运行方式: python stage4_week5_pipeline.py --images ./seed_images/ --out raw.jsonl \</span></span><br><span class="line"><span class="string">           --api-base http://localhost:8000/v1 --model Qwen2.5-VL-7B-Instruct \</span></span><br><span class="line"><span class="string">           --concurrency 48 --target 3000</span></span><br><span class="line"><span class="string">依赖: openai, aiofiles(可选)</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> argparse</span><br><span class="line"><span class="keyword">import</span> asyncio</span><br><span class="line"><span class="keyword">import</span> hashlib</span><br><span class="line"><span class="keyword">import</span> json</span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"></span><br><span class="line">PREFIX = (<span class="string">&quot;你是多模态数据合成专家。基于图片生成含 CoT 的高质量问答数据。&quot;</span></span><br><span class="line">          <span class="string">&quot;严格输出 JSON: &#123;\&quot;question\&quot;:..., \&quot;answer\&quot;:..., \&quot;evolution\&quot;:...&#125;。&quot;</span></span><br><span class="line">          <span class="string">&quot;回答需包含 观察-&gt;推断-&gt;结论 三段结构。&quot;</span>)          <span class="comment"># ~公共前缀, 越靠前越好</span></span><br><span class="line"></span><br><span class="line">OPS = [<span class="string">&quot;补充细粒度细节并三步推理&quot;</span>, <span class="string">&quot;构造两步计数问题并作答&quot;</span>,</span><br><span class="line">       <span class="string">&quot;分析两物体空间关系&quot;</span>, <span class="string">&quot;跨域改写为巡检视角&quot;</span>, <span class="string">&quot;转化为结构化 JSON 描述&quot;</span>]</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">make_prompt</span>(<span class="params">op: <span class="built_in">str</span>, seed_desc: <span class="built_in">str</span></span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;公共前缀在前, 每条变化在后 (吃到 prefix cache 的关键)&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">return</span> <span class="string">f&quot;<span class="subst">&#123;PREFIX&#125;</span>\n演化算子: <span class="subst">&#123;op&#125;</span>\n种子描述: <span class="subst">&#123;seed_desc&#125;</span>&quot;</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">synth_one</span>(<span class="params">client, sem, model, image_b64, op, out_f, lock, stats, retry=<span class="number">3</span></span>):</span><br><span class="line">    key = hashlib.md5(<span class="string">f&quot;<span class="subst">&#123;image_b64[:<span class="number">32</span>]&#125;</span><span class="subst">&#123;op&#125;</span>&quot;</span>.encode()).hexdigest()</span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">with</span> sem:                                   <span class="comment"># 并发闸门</span></span><br><span class="line">        payload = &#123;<span class="string">&quot;model&quot;</span>: model, <span class="string">&quot;temperature&quot;</span>: <span class="number">0.9</span>,</span><br><span class="line">                   <span class="string">&quot;messages&quot;</span>: [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: [</span><br><span class="line">                       &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;image_url&quot;</span>,</span><br><span class="line">                        <span class="string">&quot;image_url&quot;</span>: &#123;<span class="string">&quot;url&quot;</span>: <span class="string">f&quot;data:image/jpeg;base64,<span class="subst">&#123;image_b64&#125;</span>&quot;</span>&#125;&#125;,</span><br><span class="line">                       &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;text&quot;</span>, <span class="string">&quot;text&quot;</span>: make_prompt(op, <span class="string">&quot;种子描述&quot;</span>)&#125;]&#125;]&#125;</span><br><span class="line">        <span class="keyword">for</span> attempt <span class="keyword">in</span> <span class="built_in">range</span>(retry):</span><br><span class="line">            <span class="keyword">try</span>:</span><br><span class="line">                rsp = <span class="keyword">await</span> client.chat.completions.create(**payload)</span><br><span class="line">                text = rsp.choices[<span class="number">0</span>].message.content</span><br><span class="line">                rec = json.loads(text[text.index(<span class="string">&quot;&#123;&quot;</span>): text.rindex(<span class="string">&quot;&#125;&quot;</span>) + <span class="number">1</span>])</span><br><span class="line">                <span class="keyword">if</span> <span class="keyword">not</span> <span class="built_in">all</span>(rec.get(k) <span class="keyword">for</span> k <span class="keyword">in</span> (<span class="string">&quot;question&quot;</span>, <span class="string">&quot;answer&quot;</span>)):</span><br><span class="line">                    <span class="keyword">raise</span> ValueError(<span class="string">&quot;schema&quot;</span>)</span><br><span class="line">                rec.update(&#123;<span class="string">&quot;op&quot;</span>: op, <span class="string">&quot;key&quot;</span>: key&#125;)</span><br><span class="line">                <span class="keyword">async</span> <span class="keyword">with</span> lock:</span><br><span class="line">                    out_f.write(json.dumps(rec, ensure_ascii=<span class="literal">False</span>) + <span class="string">&quot;\n&quot;</span>)</span><br><span class="line">                    stats[<span class="string">&quot;ok&quot;</span>] += <span class="number">1</span></span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line">            <span class="keyword">except</span> Exception <span class="keyword">as</span> e:</span><br><span class="line">                <span class="keyword">if</span> attempt == retry - <span class="number">1</span>:</span><br><span class="line">                    <span class="keyword">async</span> <span class="keyword">with</span> lock:</span><br><span class="line">                        stats[<span class="string">&quot;fail&quot;</span>] += <span class="number">1</span></span><br><span class="line">                <span class="keyword">else</span>:</span><br><span class="line">                    <span class="keyword">await</span> asyncio.sleep(<span class="number">2</span> ** attempt)   <span class="comment"># 指数退避</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">run</span>(<span class="params">args</span>):</span><br><span class="line">    <span class="keyword">import</span> base64</span><br><span class="line">    <span class="keyword">from</span> pathlib <span class="keyword">import</span> Path</span><br><span class="line">    <span class="keyword">from</span> openai <span class="keyword">import</span> AsyncOpenAI</span><br><span class="line">    client = AsyncOpenAI(base_url=args.api_base, api_key=<span class="string">&quot;EMPTY&quot;</span>, timeout=<span class="number">120</span>)</span><br><span class="line">    sem = asyncio.Semaphore(args.concurrency)</span><br><span class="line">    lock = asyncio.Lock()</span><br><span class="line">    stats = &#123;<span class="string">&quot;ok&quot;</span>: <span class="number">0</span>, <span class="string">&quot;fail&quot;</span>: <span class="number">0</span>&#125;</span><br><span class="line">    out_f = <span class="built_in">open</span>(args.out, <span class="string">&quot;a&quot;</span>, encoding=<span class="string">&quot;utf-8&quot;</span>)</span><br><span class="line"></span><br><span class="line">    images = [base64.b64encode(<span class="built_in">open</span>(p, <span class="string">&quot;rb&quot;</span>).read()).decode()</span><br><span class="line">              <span class="keyword">for</span> p <span class="keyword">in</span> <span class="built_in">sorted</span>(Path(args.images).glob(<span class="string">&quot;*.jpg&quot;</span>))][: <span class="number">30</span>]</span><br><span class="line">    jobs = [(img, op) <span class="keyword">for</span> img <span class="keyword">in</span> images <span class="keyword">for</span> op <span class="keyword">in</span> OPS]     <span class="comment"># 30 图 × 5 算子 = 150 组合</span></span><br><span class="line">    <span class="comment"># (扩到 3000 条见 2.1 末尾的组合扩展说明; --target 供外层扩量循环读取)</span></span><br><span class="line">    t0 = time.time()</span><br><span class="line">    <span class="keyword">await</span> asyncio.gather(*[synth_one(client, sem, args.model, img, op,</span><br><span class="line">                                     out_f, lock, stats) <span class="keyword">for</span> img, op <span class="keyword">in</span> jobs])</span><br><span class="line">    out_f.close()</span><br><span class="line">    dt = time.time() - t0</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;完成: ok=<span class="subst">&#123;stats[<span class="string">&#x27;ok&#x27;</span>]&#125;</span> fail=<span class="subst">&#123;stats[<span class="string">&#x27;fail&#x27;</span>]&#125;</span> &quot;</span></span><br><span class="line">          <span class="string">f&quot;吞吐=<span class="subst">&#123;stats[<span class="string">&#x27;ok&#x27;</span>] / dt * <span class="number">60</span>:<span class="number">.0</span>f&#125;</span> 条/分钟 (并发=<span class="subst">&#123;args.concurrency&#125;</span>)&quot;</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    ap = argparse.ArgumentParser()</span><br><span class="line">    ap.set_defaults(images=<span class="string">&quot;seed_images&quot;</span>, out=<span class="string">&quot;raw.jsonl&quot;</span>, concurrency=<span class="number">48</span>,</span><br><span class="line">                    target=<span class="number">3000</span>, model=<span class="string">&quot;Qwen2.5-VL-7B-Instruct&quot;</span>,</span><br><span class="line">                    api_base=<span class="string">&quot;http://localhost:8000/v1&quot;</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--images&quot;</span>); ap.add_argument(<span class="string">&quot;--out&quot;</span>); ap.add_argument(<span class="string">&quot;--concurrency&quot;</span>, <span class="built_in">type</span>=<span class="built_in">int</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--target&quot;</span>, <span class="built_in">type</span>=<span class="built_in">int</span>); ap.add_argument(<span class="string">&quot;--model&quot;</span>); ap.add_argument(<span class="string">&quot;--api-base&quot;</span>)</span><br><span class="line">    asyncio.run(run(ap.parse_args()))</span><br></pre></td></tr></table></figure>
+<p><strong>性能验收口径</strong>（学习计划要求&quot;每分钟上百条&quot;）：7B 教师、单卡 A100、输出约 300 Token/条时，48 并发下吞吐的合理量级是 100~300 条/分钟（<strong>务必以自己环境实测为准</strong>）。若实测远低于此，按 Stage 2 第 4 周 3.3 节的决策树排查——生成场景的瓶颈几乎都在&quot;客户端并发没打满&quot;或&quot;输出长度失控&quot;。</p>
+<p><strong>扩到 3000 条</strong>：30 图 × 5 算子只有 150 组合，需要组合扩展：多轮演化（对已生成数据再施加算子）+ 第 2/3 周的空间/轨迹数据混合，凑足目标量后进清洗五闸，最终按质量分截取 3000 条。</p>
+<h3 id="22-交付-hf-dataset-格式"><a class="markdownIt-Anchor" href="#22-交付-hf-dataset-格式"></a> 2.2 交付 HF Dataset 格式</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;把清洗后的 JSONL 转为 HF Dataset 并保存/推送&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">from</span> datasets <span class="keyword">import</span> Dataset, Features, Value, Image <span class="keyword">as</span> HFImage</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">to_hf_dataset</span>(<span class="params">clean_jsonl: <span class="built_in">str</span>, images_dir: <span class="built_in">str</span></span>) -&gt; Dataset:</span><br><span class="line">    rows = [json.loads(l) <span class="keyword">for</span> l <span class="keyword">in</span> <span class="built_in">open</span>(clean_jsonl)]</span><br><span class="line">    ds = Dataset.from_dict(&#123;</span><br><span class="line">        <span class="string">&quot;image&quot;</span>: [<span class="string">f&quot;<span class="subst">&#123;images_dir&#125;</span>/<span class="subst">&#123;r[<span class="string">&#x27;image&#x27;</span>]&#125;</span>&quot;</span> <span class="keyword">for</span> r <span class="keyword">in</span> rows],</span><br><span class="line">        <span class="string">&quot;question&quot;</span>: [r[<span class="string">&quot;question&quot;</span>] <span class="keyword">for</span> r <span class="keyword">in</span> rows],</span><br><span class="line">        <span class="string">&quot;answer&quot;</span>: [r[<span class="string">&quot;answer&quot;</span>] <span class="keyword">for</span> r <span class="keyword">in</span> rows],</span><br><span class="line">        <span class="string">&quot;quality&quot;</span>: [r.get(<span class="string">&quot;quality&quot;</span>, <span class="number">0</span>) <span class="keyword">for</span> r <span class="keyword">in</span> rows],</span><br><span class="line">    &#125;, features=Features(&#123;</span><br><span class="line">        <span class="string">&quot;image&quot;</span>: HFImage(), <span class="string">&quot;question&quot;</span>: Value(<span class="string">&quot;string&quot;</span>),</span><br><span class="line">        <span class="string">&quot;answer&quot;</span>: Value(<span class="string">&quot;string&quot;</span>), <span class="string">&quot;quality&quot;</span>: Value(<span class="string">&quot;float32&quot;</span>)&#125;))</span><br><span class="line">    <span class="keyword">return</span> ds</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    ds = to_hf_dataset(<span class="string">&quot;clean.jsonl&quot;</span>, <span class="string">&quot;./seed_images&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">len</span>(ds) &gt;= <span class="number">3000</span>, <span class="string">f&quot;交付量不足: <span class="subst">&#123;<span class="built_in">len</span>(ds)&#125;</span>&quot;</span></span><br><span class="line">    ds.save_to_disk(<span class="string">&quot;sft_3000_final&quot;</span>)            <span class="comment"># ds.push_to_hub(&quot;you/dsname&quot;)</span></span><br><span class="line">    <span class="built_in">print</span>(ds)</span><br></pre></td></tr></table></figure>
+<h3 id="23-闭环验证合成数据到底有没有用"><a class="markdownIt-Anchor" href="#23-闭环验证合成数据到底有没有用"></a> 2.3 闭环验证：合成数据到底有没有用</h3>
+<p><strong>实验设计</strong>（这是 MVP 第 3 项的核心，也是自测&quot;工程交付&quot;的实验部分）：</p>
+<table>
+<thead>
+<tr>
+<th>组</th>
+<th>训练数据</th>
+<th>目的</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baseline</td>
+<td>仅公开基础数据（如 LLaVA 指令集等量抽样）</td>
+<td>参照系</td>
+</tr>
+<tr>
+<td>+Synthetic</td>
+<td>同量公开数据 + 3000 合成数据</td>
+<td>合成数据增益</td>
+</tr>
+</tbody>
+</table>
+<p><strong>控制变量纪律</strong>（Stage 3 第 3 周方法论复用）：两组的底座、超参、epoch、种子完全一致；唯一变量是数据；评测用 Stage 3 的固定协议（POPE/MME/自建 mini-Bench，锁定框架版本与提取器）。</p>
+<p><strong>判读框架</strong>：</p>
+<ul>
+<li>预期增益方向与 Stage 3 归因报告对齐：合成数据按归因规格定点合成（空间线补定位短板、CoT 线补推理），则对应维度应显著提升，而 MME 总分可能仅小幅变化——<strong>定点提升 &gt; 全面上浮</strong>是合成数据有效性的健康信号；</li>
+<li>若全维度无差异：查合成数据的实际入训量（可能被清洗筛掉了大半）、以及与公开数据的同质度（语义去重后两池重叠高则无增量信息）；</li>
+<li>若部分维度下降：查合成数据占比是否过高引发分布倾斜（Stage 2 第 3 周的配比问题），回补通用数据。</li>
+</ul>
+<p><strong>报告模板一行摘要</strong>：<code>底座/数据量/训练配置 + [Baseline vs +Synthetic 在各维度得分] + 归因报告链接</code>——能被复现的增益才叫增益。</p>
+<hr />
+<h2 id="3-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#3-工程权衡与失效模式"></a> 3. 工程权衡与失效模式</h2>
+<h3 id="31-决策表生成引擎参数"><a class="markdownIt-Anchor" href="#31-决策表生成引擎参数"></a> 3.1 决策表：生成引擎参数</h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>起点</th>
+<th>调整方向</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>客户端并发 = max_num_seqs</td>
+<td>48（7B 单卡）</td>
+<td>GPU util &lt;80% 加并发；出现排队延迟（TPOT 上升）减并发</td>
+</tr>
+<tr>
+<td>temperature</td>
+<td>0.9</td>
+<td>多样性任务高；事实抽取类降到 0.2</td>
+</tr>
+<tr>
+<td>max_tokens</td>
+<td>400~600</td>
+<td>合成 CoT 常见长度 + 30% 余量；失控输出是吞吐杀手</td>
+</tr>
+<tr>
+<td>重试</td>
+<td>3 次指数退避</td>
+<td>配合限速（429）识别；重试预算烧完即记录失败不阻塞全局</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-三个代表性失效模式"><a class="markdownIt-Anchor" href="#32-三个代表性失效模式"></a> 3.2 三个代表性失效模式</h3>
+<p><strong>失效 1：输出长度失控，吞吐暴跌</strong></p>
+<ul>
+<li><strong>症状</strong>：并发正常但吞吐从 200 条/分钟掉到 30 条/分钟。</li>
+<li><strong>根因</strong>：某些演化算子诱发教师&quot;无限展开&quot;（如&quot;详细分析&quot;没有上限约束），decode 步数 10 倍膨胀——decode 是吞吐的倒数项。</li>
+<li><strong>定位</strong>：日志统计输出 Token 分布的 P99；抽查超长样本内容。</li>
+<li><strong>修复</strong>：<code>max_tokens</code> 硬上限 + prompt 明确字数约束 + 对超长样本截断重写；把&quot;输出长度&quot;加入闸 1 校验。</li>
+</ul>
+<p><strong>失效 2：Prefix Cache 命中率极低，优化白做</strong></p>
+<ul>
+<li><strong>症状</strong>：开了 <code>--enable-prefix-caching</code> 但 prefill 耗时不降。</li>
+<li><strong>根因</strong>：prompt 里把日期戳/随机 ID 放在了开头（每条都不同，前缀在第一段就断）；或图片 Token 段被放在系统提示之前。</li>
+<li><strong>定位</strong>：vLLM 日志有 prefix cache 命中统计（或用 SGLang 的 radix cache 指标）；命中率 &lt;30% 即结构错误。</li>
+<li><strong>修复</strong>：重排 prompt——“全局不变 → 任务类不变 → 图片 → 逐条变化”，严格从通用到特异。</li>
+</ul>
+<p><strong>失效 3：闭环对比&quot;无效&quot;——两组数据根本不同质</strong></p>
+<ul>
+<li><strong>症状</strong>：+Synthetic 组反而更差，得出&quot;合成数据无用&quot;的结论。</li>
+<li><strong>根因</strong>：两组训练总量不同（加合成数据时总量变了，epoch 效应混淆）；或合成数据的分布与公开数据严重错位（第 1 周失效 3），加入即偏移。</li>
+<li><strong>定位</strong>：核对两组的总 Token 数与步数是否一致；对合成池与公开池做 CLIP 语义分布对比（第 4 周工具）。</li>
+<li><strong>修复</strong>：等总量重配（Baseline 组补抽样）；合成池按业务分布再配额；或退一步先做&quot;少量合成数据 + 低占比混合&quot;的消融梯度。</li>
+</ul>
+<hr />
+<h2 id="4-延伸思考题"><a class="markdownIt-Anchor" href="#4-延伸思考题"></a> 4. 延伸思考题</h2>
+<ol>
+<li><strong>吞吐建模</strong>：设教师 7B、输出 300 Token、单卡 decode 单序列约 30ms/Token、连续 batching 下每步 60ms 推进 48 序列。估算理论吞吐（条/分钟），再乘一个 0.4~0.6 的工程折扣解释你实测值的差距来源（prefill、调度、失败重试、长度方差）。</li>
+<li><strong>成本-质量前沿</strong>：闭源 API（高质量、$X/千条）vs 本地 7B（质量 85 分、边际成本趋零）vs 本地 72B（质量 95 分、需要多卡）。给定&quot;1 周内交付 3 万条、质量分均值 ≥4/5&quot;的约束，设计三层混合策略并写出每层的量与验收闸。</li>
+<li><strong>前瞻 Stage 5</strong>：本阶段的清洗闸是基于&quot;样本级&quot;质量的；Stage 5（数据质量评价与高效筛选）会把视角升级到&quot;数据集级分布&quot;（与目标任务分布的匹配度、information density）。思考：一个样本 5 分但整个数据集分布偏斜的场景，样本级闸为什么无能为力？（提示：回到 Stage 3 的&quot;配比&quot;与&quot;分布画笔&quot;——样本级满分数据堆成一个偏斜分布，仍然训出偏科模型。）</li>
+</ol>
+<hr />
+<p><em>下一篇：阶段四自测验收与复盘</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC4%E5%91%A8-%E6%95%B0%E6%8D%AE%E6%B8%85%E6%B4%97%E8%AF%AD%E4%B9%89%E5%8E%BB%E9%87%8D%E4%B8%8E%E8%BF%87%E6%BB%A4/" rel="prev" title="第4周-数据清洗语义去重与过滤">
+                  <i class="fa fa-angle-left"></i> 第4周-数据清洗语义去重与过滤
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E9%98%B6%E6%AE%B5%E5%9B%9B%E8%87%AA%E6%B5%8B%E9%AA%8C%E6%94%B6%E4%B8%8E%E5%A4%8D%E7%9B%98/" rel="next" title="阶段四自测验收与复盘">
+                  阶段四自测验收与复盘 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">611k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">37:04</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>
