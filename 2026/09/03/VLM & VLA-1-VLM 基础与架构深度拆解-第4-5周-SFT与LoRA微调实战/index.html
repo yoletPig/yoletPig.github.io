@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的三个问题 1. LoRA 为什么能用 0.1% 的参数达到接近全量微调的效果？数学上发生了什么？ 2. VLM 的 SFT 数据格式长什么样？Loss 是在所有 Token 上算的吗？ 3. 如何用 LLaMA-Factory…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第4-5周-SFT与LoRA微调实战">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-1-VLM%20%E5%9F%BA%E7%A1%80%E4%B8%8E%E6%9E%B6%E6%9E%84%E6%B7%B1%E5%BA%A6%E6%8B%86%E8%A7%A3-%E7%AC%AC4-5%E5%91%A8-SFT%E4%B8%8ELoRA%E5%BE%AE%E8%B0%83%E5%AE%9E%E6%88%98/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的三个问题 1. LoRA 为什么能用 0.1% 的参数达到接近全量微调的效果？数学上发生了什么？ 2. VLM 的 SFT 数据格式长什么样？Loss 是在所有 Token 上算的吗？ 3. 如何用 LLaMA-Factory…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T07:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-07T16:05:40.295Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-1-VLM%20%E5%9F%BA%E7%A1%80%E4%B8%8E%E6%9E%B6%E6%9E%84%E6%B7%B1%E5%BA%A6%E6%8B%86%E8%A7%A3-%E7%AC%AC4-5%E5%91%A8-SFT%E4%B8%8ELoRA%E5%BE%AE%E8%B0%83%E5%AE%9E%E6%88%98/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-1-VLM%20%E5%9F%BA%E7%A1%80%E4%B8%8E%E6%9E%B6%E6%9E%84%E6%B7%B1%E5%BA%A6%E6%8B%86%E8%A7%A3-%E7%AC%AC4-5%E5%91%A8-SFT%E4%B8%8ELoRA%E5%BE%AE%E8%B0%83%E5%AE%9E%E6%88%98/","path":"2026/09/03/VLM & VLA-1-VLM 基础与架构深度拆解-第4-5周-SFT与LoRA微调实战/","title":"第4-5周-SFT与LoRA微调实战"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第4-5周-SFT与LoRA微调实战 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-4-5-%E5%91%A8%E6%95%99%E7%A8%8Bsft-%E6%9C%BA%E5%88%B6%E4%B8%8E-lora-%E5%BE%AE%E8%B0%83%E5%AE%9E%E6%88%98"><span class="nav-number">1.</span> <span class="nav-text"> 第 4-5 周教程：SFT 机制与 LoRA 微调实战</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86lora-%E7%9A%84%E4%BD%8E%E7%A7%A9%E5%81%87%E8%AE%BE"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：LoRA 的低秩假设</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E6%A0%B9%E6%9C%AC%E7%9F%9B%E7%9B%BE"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 根本矛盾</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-lora-%E7%9A%84%E6%95%B0%E5%AD%A6%E5%BD%A2%E5%BC%8F"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 LoRA 的数学形式</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-%E4%B8%BA%E4%BB%80%E4%B9%88%E4%BD%8E%E7%A7%A9%E6%98%AF%E5%90%88%E7%90%86%E7%9A%84%E5%81%87%E8%AE%BE"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 为什么&quot;低秩&quot;是合理的假设</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#14-%E6%98%BE%E5%AD%98%E6%A0%B8%E7%AE%97%E4%B8%BA%E4%BB%80%E4%B9%88-qlora-%E8%83%BD%E4%B8%8A%E5%8D%95%E5%8D%A1"><span class="nav-number">1.1.4.</span> <span class="nav-text"> 1.4 显存核算（为什么 QLoRA 能上单卡）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-vlm-sft-%E7%9A%84%E6%9C%BA%E5%88%B6%E7%BB%86%E8%8A%82"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. VLM SFT 的机制细节</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E6%95%B0%E6%8D%AE%E6%A0%BC%E5%BC%8F%E5%A4%9A%E8%BD%AE%E5%AF%B9%E8%AF%9D-%E8%A7%86%E8%A7%89%E5%8D%A0%E4%BD%8D"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 数据格式：多轮对话 + 视觉占位</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-loss-mask%E5%8F%AA%E5%AF%B9%E5%9B%9E%E7%AD%94%E9%83%A8%E5%88%86%E8%AE%A1%E7%AE%97%E6%8D%9F%E5%A4%B1"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 Loss Mask：只对回答部分计算损失</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-%E8%AE%AD%E7%BB%83%E5%93%AA%E4%BA%9B%E6%A8%A1%E5%9D%97vlm-%E7%9A%84%E5%86%BB%E7%BB%93%E7%AD%96%E7%95%A5"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 训练哪些模块：VLM 的冻结策略</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%9E%E6%88%98llama-factory-%E5%AE%8C%E6%88%90-qwen2-vl-2b-lora-%E5%BE%AE%E8%B0%83"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 实战：LLaMA-Factory 完成 Qwen2-VL-2B LoRA 微调</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E7%8E%AF%E5%A2%83%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%87%86%E5%A4%87"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 环境与数据准备</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E8%AE%AD%E7%BB%83%E9%85%8D%E7%BD%AE%E5%8D%95%E5%8D%A1-24gb-%E6%98%BE%E5%AD%98%E5%8F%82%E8%80%83"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 训练配置（单卡 24GB 显存参考）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-%E8%AE%AD%E7%BB%83%E8%B6%85%E5%8F%82%E7%9A%84%E7%AC%AC%E4%B8%80%E6%80%A7%E8%A7%A3%E9%87%8A"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 训练超参的第一性解释</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#34-%E6%8E%A8%E7%90%86%E9%AA%8C%E8%AF%81%E4%B8%8E%E5%89%8D%E5%90%8E%E5%AF%B9%E6%AF%94"><span class="nav-number">1.3.4.</span> <span class="nav-text"> 3.4 推理验证与前后对比</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#35-%E8%AE%AD%E7%BB%83%E8%BF%87%E7%A8%8B%E6%9C%80%E5%B0%8F%E9%AA%8C%E8%AF%81%E8%84%9A%E6%9C%AC"><span class="nav-number">1.3.5.</span> <span class="nav-text"> 3.5 训练过程最小验证脚本</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E8%B6%85%E5%8F%82%E6%9D%83%E8%A1%A1%E9%80%9F%E6%9F%A5"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 超参权衡速查</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E5%9B%9B%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 四个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">257</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">41</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">13</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-1-VLM%20%E5%9F%BA%E7%A1%80%E4%B8%8E%E6%9E%B6%E6%9E%84%E6%B7%B1%E5%BA%A6%E6%8B%86%E8%A7%A3-%E7%AC%AC4-5%E5%91%A8-SFT%E4%B8%8ELoRA%E5%BE%AE%E8%B0%83%E5%AE%9E%E6%88%98/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第4-5周-SFT与LoRA微调实战 | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的三个问题 1. LoRA 为什么能用 0.1% 的参数达到接近全量微调的效果？数学上发生了什么？ 2. VLM 的 SFT 数据格式长什么样？Loss 是在所有 Token 上算的吗？ 3. 如何用 LLaMA-Factory…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第4-5周-SFT与LoRA微调实战
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 15:00:00" itemprop="dateCreated datePublished" datetime="2026-09-03T15:00:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-08 00:05:40" itemprop="dateModified" datetime="2026-11-08T00:05:40+08:00">2026-11-08</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-1-VLM-%E5%9F%BA%E7%A1%80%E4%B8%8E%E6%9E%B6%E6%9E%84%E6%B7%B1%E5%BA%A6%E6%8B%86%E8%A7%A3/" itemprop="url" rel="index"><span itemprop="name">Stage 1-VLM 基础与架构深度拆解</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.7k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>14 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的三个问题 1. LoRA 为什么能用 0.1% 的参数达到接近全量微调的效果？数学上发生了什么？ 2. VLM 的 SFT 数据格式长什么样？Loss 是在所有 Token 上算的吗？ 3. 如何用 LLaMA-Factory…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-4-5-周教程sft-机制与-lora-微调实战"><a class="markdownIt-Anchor" href="#第-4-5-周教程sft-机制与-lora-微调实战"></a> 第 4-5 周教程：SFT 机制与 LoRA 微调实战</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>LoRA 为什么能用 0.1% 的参数达到接近全量微调的效果？数学上发生了什么？</li>
+<li>VLM 的 SFT 数据格式长什么样？Loss 是在所有 Token 上算的吗？</li>
+<li>如何用 LLaMA-Factory 在单卡上完成一次 Qwen2-VL 的 LoRA 微调并验证效果？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 4-5 周。交付物：200~500 条多模态数据集 + LLaMA-Factory 完成一次 LoRA/QLoRA 微调 + WandB Loss 曲线 + 微调前后推理对比。</p>
+<hr />
+<h2 id="1-第一性原理lora-的低秩假设"><a class="markdownIt-Anchor" href="#1-第一性原理lora-的低秩假设"></a> 1. 第一性原理：LoRA 的低秩假设</h2>
+<h3 id="11-根本矛盾"><a class="markdownIt-Anchor" href="#11-根本矛盾"></a> 1.1 根本矛盾</h3>
+<p>全量微调一个 7B VLM 需要：权重 14GB（fp16）+ 梯度 14GB + Adam 优化器状态 56GB（fp32 的动量与二阶矩）≈ <strong>84GB 起步</strong>，再加激活值，单张消费级显卡完全不可能。适配器方案的动机：<strong>微调带来的权重变化量 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>W</mi></mrow><annotation encoding="application/x-tex">\Delta W</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span></span> 的&quot;本征维度&quot;远低于 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>W</mi></mrow><annotation encoding="application/x-tex">W</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span></span> 本身</strong>——任务适配不需要移动所有方向的权重，只需要在少数几个&quot;任务子空间&quot;里调整。</p>
+<h3 id="12-lora-的数学形式"><a class="markdownIt-Anchor" href="#12-lora-的数学形式"></a> 1.2 LoRA 的数学形式</h3>
+<p>对预训练权重 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">W</mi><mn>0</mn></msub><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mrow><mi>d</mi><mo>×</mo><mi>k</mi></mrow></msup></mrow><annotation encoding="application/x-tex">\mathbf{W}_0 \in \mathbb{R}^{d \times k}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83611em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">W</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8491079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord"><span class="mord mathbb">R</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8491079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mbin mtight">×</span><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span></span></span></span></span></span></span></span>，LoRA 不直接更新 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">W</mi><mn>0</mn></msub></mrow><annotation encoding="application/x-tex">\mathbf{W}_0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83611em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">W</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，而是学一个<strong>低秩分解</strong>的增量：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="bold">W</mi><mo>=</mo><msub><mi mathvariant="bold">W</mi><mn>0</mn></msub><mo>+</mo><mi mathvariant="normal">Δ</mi><mi mathvariant="bold">W</mi><mo>=</mo><msub><mi mathvariant="bold">W</mi><mn>0</mn></msub><mo>+</mo><mfrac><mi>α</mi><mi>r</mi></mfrac><mi mathvariant="bold">B</mi><mi mathvariant="bold">A</mi><mo separator="true">,</mo><mspace width="1em"/><mi mathvariant="bold">A</mi><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mrow><mi>r</mi><mo>×</mo><mi>k</mi></mrow></msup><mo separator="true">,</mo><mtext> </mtext><mi mathvariant="bold">B</mi><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mrow><mi>d</mi><mo>×</mo><mi>r</mi></mrow></msup><mo separator="true">,</mo><mtext> </mtext><mi>r</mi><mo>≪</mo><mi>min</mi><mo>⁡</mo><mo stretchy="false">(</mo><mi>d</mi><mo separator="true">,</mo><mi>k</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathbf{W} = \mathbf{W}_0 + \Delta \mathbf{W} = \mathbf{W}_0 + \frac{\alpha}{r} \mathbf{B}\mathbf{A}, \quad \mathbf{A} \in \mathbb{R}^{r \times k},\ \mathbf{B} \in \mathbb{R}^{d \times r},\ r \ll \min(d, k)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68611em;vertical-align:0em;"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">W</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.83611em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">W</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.68611em;vertical-align:0em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">W</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.83611em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">W</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.7935600000000003em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.10756em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em;">α</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord"><span class="mord mathbf">B</span></span><span class="mord"><span class="mord mathbf">A</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathbf">A</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.093548em;vertical-align:-0.19444em;"></span><span class="mord"><span class="mord"><span class="mord mathbb">R</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991079999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.02778em;">r</span><span class="mbin mtight">×</span><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span></span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathbf">B</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.093548em;vertical-align:-0.19444em;"></span><span class="mord"><span class="mord"><span class="mord mathbb">R</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991079999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="mbin mtight">×</span><span class="mord mathnormal mtight" style="margin-right:0.02778em;">r</span></span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≪</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">min</span><span class="mopen">(</span><span class="mord mathnormal">d</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mclose">)</span></span></span></span></span></p>
+<p>前向传播变为：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="bold">h</mi><mo>=</mo><msub><mi mathvariant="bold">W</mi><mn>0</mn></msub><mi mathvariant="bold">x</mi><mo>+</mo><mfrac><mi>α</mi><mi>r</mi></mfrac><mi mathvariant="bold">B</mi><mo stretchy="false">(</mo><mi mathvariant="bold">A</mi><mi mathvariant="bold">x</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\mathbf{h} = \mathbf{W}_0 \mathbf{x} + \frac{\alpha}{r} \mathbf{B}(\mathbf{A}\mathbf{x})
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord"><span class="mord mathbf">h</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.83611em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">W</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathbf">x</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.7935600000000003em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.10756em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.0037em;">α</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mord"><span class="mord mathbf">B</span></span><span class="mopen">(</span><span class="mord"><span class="mord mathbf">A</span></span><span class="mord"><span class="mord mathbf">x</span></span><span class="mclose">)</span></span></span></span></span></p>
+<p>关键设计点：</p>
+<ul>
+<li><strong><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">A</mi></mrow><annotation encoding="application/x-tex">\mathbf{A}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68611em;vertical-align:0em;"></span><span class="mord"><span class="mord mathbf">A</span></span></span></span></span> 用高斯初始化，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">B</mi></mrow><annotation encoding="application/x-tex">\mathbf{B}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68611em;vertical-align:0em;"></span><span class="mord"><span class="mord mathbf">B</span></span></span></span></span> 初始化为零</strong> → 训练起点 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>W</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\Delta W = 0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">0</span></span></span></span>，模型行为与预训练完全一致，不会一上来就破坏预训练能力。</li>
+<li><strong>缩放因子 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi><mi mathvariant="normal">/</mi><mi>r</mi></mrow><annotation encoding="application/x-tex">\alpha/r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span></span></strong>：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>α</mi></mrow><annotation encoding="application/x-tex">\alpha</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.0037em;">α</span></span></span></span> 固定（常取 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mi>r</mi></mrow><annotation encoding="application/x-tex">2r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span></span>），调 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi></mrow><annotation encoding="application/x-tex">r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span></span> 时学习率尺度保持稳定。</li>
+<li><strong>梯度只流向 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">A</mi><mo separator="true">,</mo><mi mathvariant="bold">B</mi></mrow><annotation encoding="application/x-tex">\mathbf{A}, \mathbf{B}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8805499999999999em;vertical-align:-0.19444em;"></span><span class="mord"><span class="mord mathbf">A</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathbf">B</span></span></span></span></span></strong>，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi mathvariant="bold">W</mi><mn>0</mn></msub></mrow><annotation encoding="application/x-tex">\mathbf{W}_0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83611em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">W</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 冻结。可训练参数量从 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>×</mo><mi>k</mi></mrow><annotation encoding="application/x-tex">d \times k</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.77777em;vertical-align:-0.08333em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span></span></span></span> 降为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>×</mo><mo stretchy="false">(</mo><mi>d</mi><mo>+</mo><mi>k</mi><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">r \times (d + k)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.66666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mclose">)</span></span></span></span>。以 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>=</mo><mn>8</mn></mrow><annotation encoding="application/x-tex">r=8</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">8</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>=</mo><mi>k</mi><mo>=</mo><mn>4096</mn></mrow><annotation encoding="application/x-tex">d=k=4096</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03148em;">k</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">4</span><span class="mord">0</span><span class="mord">9</span><span class="mord">6</span></span></span></span> 为例：从 16.7M 降到 65K，约 <strong>0.4%</strong>。</li>
+</ul>
+<h3 id="13-为什么低秩是合理的假设"><a class="markdownIt-Anchor" href="#13-为什么低秩是合理的假设"></a> 1.3 为什么&quot;低秩&quot;是合理的假设</h3>
+<p>LoRA 论文（<em>LoRA: Low-Rank Adaptation of Large Language Models</em>）给出的证据：对微调前后的权重差 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>W</mi></mrow><annotation encoding="application/x-tex">\Delta W</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span></span> 做奇异值分解，其奇异值谱高度集中——前几个奇异方向承载了绝大部分变化。不同任务学到的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><mi>W</mi></mrow><annotation encoding="application/x-tex">\Delta W</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">Δ</span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span></span></span></span> 的 top 奇异向量高度重叠，说明<strong>任务适配共享一个低维子空间</strong>。<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>=</mo><mn>8</mn></mrow><annotation encoding="application/x-tex">r = 8</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">8</span></span></span></span> 或 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>=</mo><mn>16</mn></mrow><annotation encoding="application/x-tex">r = 16</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord">6</span></span></span></span> 时，LoRA 在多数任务上能与全量微调打平；<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi></mrow><annotation encoding="application/x-tex">r</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span></span></span></span> 过大反而过拟合。</p>
+<p>经验规则：指令跟随类任务 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>=</mo><mn>8</mn><mo lspace="0em" rspace="0em">∼</mo><mn>16</mn></mrow><annotation encoding="application/x-tex">r=8{\sim}16</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">8</span><span class="mord"><span class="mrel">∼</span></span><span class="mord">1</span><span class="mord">6</span></span></span></span> 足够；领域风格迁移（如让它学会输出特定 JSON schema）<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>=</mo><mn>32</mn></mrow><annotation encoding="application/x-tex">r=32</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">3</span><span class="mord">2</span></span></span></span> 起步；涉及大量新知识注入时 LoRA 本身就不是好选择（应考虑继续预训练或 RAG）。</p>
+<h3 id="14-显存核算为什么-qlora-能上单卡"><a class="markdownIt-Anchor" href="#14-显存核算为什么-qlora-能上单卡"></a> 1.4 显存核算（为什么 QLoRA 能上单卡）</h3>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>权重</th>
+<th>梯度</th>
+<th>优化器</th>
+<th>7B 模型合计（不含激活）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>全量微调（AdamW）</td>
+<td>fp16 14GB</td>
+<td>fp16 14GB</td>
+<td>fp32 56GB</td>
+<td>≈ 84GB</td>
+</tr>
+<tr>
+<td>LoRA（冻结底座）</td>
+<td>fp16 14GB</td>
+<td>仅适配器 &lt;0.1GB</td>
+<td>仅适配器 &lt;0.3GB</td>
+<td>≈ 14.5GB</td>
+</tr>
+<tr>
+<td>QLoRA</td>
+<td><strong>4-bit NF4 ≈ 3.5GB</strong></td>
+<td>仅适配器</td>
+<td>仅适配器</td>
+<td><strong>≈ 4GB</strong></td>
+</tr>
+</tbody>
+</table>
+<p>QLoRA（<em>QLoRA: Efficient Finetuning of Quantized LLMs</em>）的三件套：4-bit NormalFloat（NF4）量化底座权重、双重量化（量化常数本身再量化）、分页优化器。计算仍在 bf16 下进行（4-bit 存储与 bf16 计算解耦），因此精度损失可控——QLoRA 论文显示在多数评测上与 16-bit LoRA 打平。</p>
+<hr />
+<h2 id="2-vlm-sft-的机制细节"><a class="markdownIt-Anchor" href="#2-vlm-sft-的机制细节"></a> 2. VLM SFT 的机制细节</h2>
+<h3 id="21-数据格式多轮对话-视觉占位"><a class="markdownIt-Anchor" href="#21-数据格式多轮对话-视觉占位"></a> 2.1 数据格式：多轮对话 + 视觉占位</h3>
+<p>LLaMA-Factory 的 <code>sharegpt</code> 多模态格式示例（<code>dataset_info.json</code> 注册后使用）：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;conversations&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;from&quot;</span><span class="punctuation">:</span> <span class="string">&quot;human&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;value&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&lt;image&gt;这张图里的动物是什么品种？&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;from&quot;</span><span class="punctuation">:</span> <span class="string">&quot;gpt&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;value&quot;</span><span class="punctuation">:</span> <span class="string">&quot;这是一只橘色的美国短毛猫，特征是银灰色虎斑纹。&quot;</span><span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;images&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;images/cat_001.jpg&quot;</span><span class="punctuation">]</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<p>要点：</p>
+<ul>
+<li><code>&lt;image&gt;</code> 占位符与 <code>images</code> 字段按顺序一一对应（多图时写多个 <code>&lt;image&gt;</code>）；</li>
+<li>图像路径相对数据集根目录；</li>
+<li><code>from: human/gpt</code> 定义轮次，系统提示可另配。</li>
+</ul>
+<h3 id="22-loss-mask只对回答部分计算损失"><a class="markdownIt-Anchor" href="#22-loss-mask只对回答部分计算损失"></a> 2.2 Loss Mask：只对回答部分计算损失</h3>
+<p>SFT 的核心机制：<strong>把整条对话拼成一个序列，但只在 assistant 回答的 Token 上计算交叉熵</strong>，用户输入与图片 Token 的 label 置为 -100（PyTorch <code>CrossEntropyLoss</code> 的 ignore_index）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">序列:    [系统提示] [用户问题] [图片 Token ×576] [回答 Token] [EOS]</span><br><span class="line">label:   -100      -100      -100               [回答 Token] [EOS]</span><br><span class="line">                                            ↑ 只有这里算 loss</span><br></pre></td></tr></table></figure>
+<p>为什么要 mask？若对用户问题也算 loss，模型会浪费容量去学&quot;如何复述问题&quot;，且用户输入风格各异会引入噪声。视觉 Token 数量大（576+），若不 mask 会严重稀释有效梯度信号。</p>
+<p>数据集构造时按样本长度分组打包（group by length）可减少 padding 浪费；<code>cutoff_len</code> 要预留视觉 Token 的空间（如文本只占 1024 但图片占 576，<code>cutoff_len</code> 至少要 2048）。</p>
+<h3 id="23-训练哪些模块vlm-的冻结策略"><a class="markdownIt-Anchor" href="#23-训练哪些模块vlm-的冻结策略"></a> 2.3 训练哪些模块：VLM 的冻结策略</h3>
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>训练部分</th>
+<th>显存</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>全冻结 + 只训 Projector</td>
+<td>Projector（约 20M）</td>
+<td>极低</td>
+<td>对齐预训练阶段</td>
+</tr>
+<tr>
+<td>LoRA on LLM + 冻结视觉塔</td>
+<td>Projector + LLM 的 LoRA</td>
+<td>低（单卡 24GB 可跑 7B QLoRA）</td>
+<td><strong>SFT 标准做法，本周实战采用</strong></td>
+</tr>
+<tr>
+<td>视觉塔也开 LoRA</td>
+<td>上者 + ViT LoRA</td>
+<td>中</td>
+<td>视觉域差异大时（如医疗影像）</td>
+</tr>
+<tr>
+<td>全量微调</td>
+<td>全部</td>
+<td>极高（多机）</td>
+<td>大规模 SFT</td>
+</tr>
+</tbody>
+</table>
+<p><strong>为什么默认冻结视觉塔</strong>（对应第 6 周自测题）：视觉塔参数量大（CLIP-L 约 300M），开训练会显著增加显存与优化器状态；更重要的是，SFT 数据量小（几百到几万条），更新视觉塔会<strong>破坏其在大规模预训练中习得的通用视觉表征</strong>，导致灾难性遗忘——模型在训练任务上过拟合、在泛化任务上变差。而 LoRA 的低秩更新只作用于语言侧的任务适配，视觉表征保持稳定。</p>
+<hr />
+<h2 id="3-实战llama-factory-完成-qwen2-vl-2b-lora-微调"><a class="markdownIt-Anchor" href="#3-实战llama-factory-完成-qwen2-vl-2b-lora-微调"></a> 3. 实战：LLaMA-Factory 完成 Qwen2-VL-2B LoRA 微调</h2>
+<h3 id="31-环境与数据准备"><a class="markdownIt-Anchor" href="#31-环境与数据准备"></a> 3.1 环境与数据准备</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 依赖（建议 Python 3.10+，CUDA 12.x）</span></span><br><span class="line">git <span class="built_in">clone</span> --depth 1 https://github.com/hiyouga/LLaMA-Factory.git</span><br><span class="line"><span class="built_in">cd</span> LLaMA-Factory</span><br><span class="line">pip install -e <span class="string">&quot;.[torch,metrics]&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 数据集：准备 200~500 条 &quot;图片+问答&quot; 样本</span></span><br><span class="line"><span class="comment"># 目录结构:</span></span><br><span class="line"><span class="comment">#   data/my_vqa/</span></span><br><span class="line"><span class="comment">#     ├── images/*.jpg</span></span><br><span class="line"><span class="comment">#     └── train.json</span></span><br></pre></td></tr></table></figure>
+<p><code>data/my_vqa/train.json</code> 格式（对应 2.1 节）：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">[</span></span><br><span class="line">  <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;conversations&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span><br><span class="line">      <span class="punctuation">&#123;</span><span class="attr">&quot;from&quot;</span><span class="punctuation">:</span> <span class="string">&quot;human&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;value&quot;</span><span class="punctuation">:</span> <span class="string">&quot;&lt;image&gt;用一句话描述这张图。&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">      <span class="punctuation">&#123;</span><span class="attr">&quot;from&quot;</span><span class="punctuation">:</span> <span class="string">&quot;gpt&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;value&quot;</span><span class="punctuation">:</span> <span class="string">&quot;一只金毛犬在草地上追飞盘。&quot;</span><span class="punctuation">&#125;</span></span><br><span class="line">    <span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;images&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span><span class="string">&quot;images/0001.jpg&quot;</span><span class="punctuation">]</span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">]</span></span><br></pre></td></tr></table></figure>
+<p>在 <code>data/dataset_info.json</code> 注册：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;my_vqa&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span></span><br><span class="line">    <span class="attr">&quot;file_name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;my_vqa/train.json&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;formatting&quot;</span><span class="punctuation">:</span> <span class="string">&quot;sharegpt&quot;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="attr">&quot;columns&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;messages&quot;</span><span class="punctuation">:</span> <span class="string">&quot;conversations&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;images&quot;</span><span class="punctuation">:</span> <span class="string">&quot;images&quot;</span><span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<p><strong>数据质量优先于数量</strong>：500 条风格一致、答案规范的样本，效果远好于 5000 条杂乱样本。答案长度分布要均衡（全是短句会导致模型只会短句）。</p>
+<h3 id="32-训练配置单卡-24gb-显存参考"><a class="markdownIt-Anchor" href="#32-训练配置单卡-24gb-显存参考"></a> 3.2 训练配置（单卡 24GB 显存参考）</h3>
+<p><code>qwen2vl_lora_sft.yaml</code>：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">### 模型</span></span><br><span class="line"><span class="attr">model_name_or_path:</span> <span class="string">Qwen/Qwen2-VL-2B-Instruct</span></span><br><span class="line"><span class="attr">trust_remote_code:</span> <span class="literal">true</span></span><br><span class="line"></span><br><span class="line"><span class="comment">### 方法</span></span><br><span class="line"><span class="attr">stage:</span> <span class="string">sft</span></span><br><span class="line"><span class="attr">do_train:</span> <span class="literal">true</span></span><br><span class="line"><span class="attr">finetuning_type:</span> <span class="string">lora</span></span><br><span class="line"><span class="attr">lora_target:</span> <span class="string">all</span>          <span class="comment"># 对所有 Linear 层注入 LoRA</span></span><br><span class="line"><span class="attr">lora_rank:</span> <span class="number">8</span></span><br><span class="line"><span class="attr">lora_alpha:</span> <span class="number">16</span></span><br><span class="line"><span class="attr">lora_dropout:</span> <span class="number">0.05</span></span><br><span class="line"></span><br><span class="line"><span class="comment">### 数据集</span></span><br><span class="line"><span class="attr">dataset:</span> <span class="string">my_vqa</span></span><br><span class="line"><span class="attr">template:</span> <span class="string">qwen2_vl</span></span><br><span class="line"><span class="attr">cutoff_len:</span> <span class="number">2048</span>          <span class="comment"># 必须容纳视觉 Token!</span></span><br><span class="line"><span class="attr">max_samples:</span> <span class="number">100000</span></span><br><span class="line"><span class="attr">overwrite_cache:</span> <span class="literal">true</span></span><br><span class="line"><span class="attr">preprocessing_num_workers:</span> <span class="number">8</span></span><br><span class="line"></span><br><span class="line"><span class="comment">### 输出</span></span><br><span class="line"><span class="attr">output_dir:</span> <span class="string">saves/qwen2vl-2b/lora-sft</span></span><br><span class="line"><span class="attr">logging_steps:</span> <span class="number">10</span></span><br><span class="line"><span class="attr">save_steps:</span> <span class="number">100</span></span><br><span class="line"><span class="attr">plot_loss:</span> <span class="literal">true</span></span><br><span class="line"><span class="attr">report_to:</span> <span class="string">wandb</span>          <span class="comment"># WandB 记录</span></span><br><span class="line"></span><br><span class="line"><span class="comment">### 训练超参</span></span><br><span class="line"><span class="attr">per_device_train_batch_size:</span> <span class="number">1</span></span><br><span class="line"><span class="attr">gradient_accumulation_steps:</span> <span class="number">8</span>    <span class="comment"># 等效 batch = 8</span></span><br><span class="line"><span class="attr">learning_rate:</span> <span class="number">1.0e-4</span>             <span class="comment"># LoRA 用大学习率 (全量的 10~100 倍)</span></span><br><span class="line"><span class="attr">num_train_epochs:</span> <span class="number">3.0</span></span><br><span class="line"><span class="attr">lr_scheduler_type:</span> <span class="string">cosine</span></span><br><span class="line"><span class="attr">warmup_ratio:</span> <span class="number">0.03</span></span><br><span class="line"><span class="attr">bf16:</span> <span class="literal">true</span></span><br><span class="line"><span class="attr">gradient_checkpointing:</span> <span class="literal">true</span>      <span class="comment"># 省激活显存的关键开关</span></span><br><span class="line"></span><br><span class="line"><span class="comment">### 显存不足时的降级选项 (QLoRA)</span></span><br><span class="line"><span class="comment"># quantization_bit: 4</span></span><br><span class="line"><span class="comment"># quantization_method: bitsandbytes</span></span><br></pre></td></tr></table></figure>
+<p>启动训练：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">llamafactory-cli train qwen2vl_lora_sft.yaml</span><br></pre></td></tr></table></figure>
+<p><strong>显存参考</strong>（经验值，实际随序列长度波动）：Qwen2-VL-2B + LoRA + bf16 + gradient checkpointing，batch=1、cutoff 2048，约需 12~16GB；加上 4-bit 量化可压到 8GB 内。7B 模型同配置约需 20~24GB，超限时开启 <code>quantization_bit: 4</code>。</p>
+<h3 id="33-训练超参的第一性解释"><a class="markdownIt-Anchor" href="#33-训练超参的第一性解释"></a> 3.3 训练超参的第一性解释</h3>
+<ul>
+<li><strong>学习率 1e-4</strong>：LoRA 参数是<strong>从零初始化的新参数</strong>（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="bold">B</mi><mo>=</mo><mn>0</mn></mrow><annotation encoding="application/x-tex">\mathbf{B}=0</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68611em;vertical-align:0em;"></span><span class="mord"><span class="mord mathbf">B</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">0</span></span></span></span>），不像全量微调是在预训练权重附近微移，所以可以用大一个数量级的学习率。用 1e-5 跑 LoRA 是新手最常见错误（表现为 loss 几乎不动）。</li>
+<li><strong>gradient_checkpointing</strong>：用&quot;反向时重算前向&quot;换显存，激活显存降约一个量级，速度慢约 20~30%。24GB 卡跑 7B 的必要开关。</li>
+<li><strong>等效 batch size = 1 × 8 = 8</strong>：小 batch + 梯度累积在 VLM 场景是常态（视觉 Token 使单样本显存波动大）。500 条样本 × 3 epoch = 1500 步 ÷ 8 ≈ 187 个优化步，loss 应在前 50 步内明显下降。</li>
+</ul>
+<h3 id="34-推理验证与前后对比"><a class="markdownIt-Anchor" href="#34-推理验证与前后对比"></a> 3.4 推理验证与前后对比</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 合并 LoRA 权重并导出</span></span><br><span class="line">llamafactory-cli <span class="built_in">export</span> --model_name_or_path Qwen/Qwen2-VL-2B-Instruct \</span><br><span class="line">  --adapter_name_or_path saves/qwen2vl-2b/lora-sft \</span><br><span class="line">  --template qwen2_vl --export_dir saves/qwen2vl-2b/merged</span><br><span class="line"></span><br><span class="line"><span class="comment"># 交互式推理对比</span></span><br><span class="line">llamafactory-cli chat --model_name_or_path saves/qwen2vl-2b/merged \</span><br><span class="line">  --template qwen2_vl</span><br></pre></td></tr></table></figure>
+<p>设计<strong>可区分的对比集</strong>：微调前后各跑一遍，每类 10 条。例如：</p>
+<table>
+<thead>
+<tr>
+<th>测试类型</th>
+<th>示例问题</th>
+<th>预期差异</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>训练域内</td>
+<td>用训练集同风格问题问新图</td>
+<td>微调后输出风格/格式明显对齐</td>
+</tr>
+<tr>
+<td>训练域外</td>
+<td>完全无关的通用图片问题</td>
+<td>两者都正常 → 无灾难性遗忘</td>
+</tr>
+<tr>
+<td>格式遵循</td>
+<td>“用 JSON 格式回答图中物体”</td>
+<td>微调后格式符合度提升（若训练数据含 JSON 答案）</td>
+</tr>
+<tr>
+<td>对抗样本</td>
+<td>训练中从未出现的极端构图</td>
+<td>观察是否暴露过拟合</td>
+</tr>
+</tbody>
+</table>
+<p><strong>MVP 验收标准</strong>：域内回答肉眼可见地改善了（风格、格式或事实），域外能力未退化，且 WandB 上 loss 从约 1.x 收敛到 0.3~0.6 区间并趋平。</p>
+<h3 id="35-训练过程最小验证脚本"><a class="markdownIt-Anchor" href="#35-训练过程最小验证脚本"></a> 3.5 训练过程最小验证脚本</h3>
+<p>不依赖 LLaMA-Factory，验证 LoRA 模块本身的行为（理解 1.2 节的机制）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">最小 LoRA 实现 + 行为验证。</span></span><br><span class="line"><span class="string">运行方式: python week4_lora_min.py</span></span><br><span class="line"><span class="string">依赖: torch</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">import</span> torch.nn <span class="keyword">as</span> nn</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">LoRALinear</span>(nn.Module):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, base: nn.Linear, r: <span class="built_in">int</span> = <span class="number">8</span>, alpha: <span class="built_in">int</span> = <span class="number">16</span></span>):</span><br><span class="line">        <span class="built_in">super</span>().__init__()</span><br><span class="line">        <span class="variable language_">self</span>.base = base</span><br><span class="line">        <span class="keyword">for</span> p <span class="keyword">in</span> <span class="variable language_">self</span>.base.parameters():        <span class="comment"># 冻结底座</span></span><br><span class="line">            p.requires_grad_(<span class="literal">False</span>)</span><br><span class="line">        <span class="variable language_">self</span>.A = nn.Parameter(torch.randn(r, base.in_features) * <span class="number">0.02</span>)</span><br><span class="line">        <span class="variable language_">self</span>.B = nn.Parameter(torch.zeros(base.out_features, r))  <span class="comment"># 关键: B=0</span></span><br><span class="line">        <span class="variable language_">self</span>.scale = alpha / r</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">forward</span>(<span class="params">self, x</span>):</span><br><span class="line">        <span class="keyword">return</span> <span class="variable language_">self</span>.base(x) + <span class="variable language_">self</span>.scale * (x @ <span class="variable language_">self</span>.A.T) @ <span class="variable language_">self</span>.B.T</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">torch.manual_seed(<span class="number">0</span>)</span><br><span class="line">base = nn.Linear(<span class="number">4096</span>, <span class="number">4096</span>)</span><br><span class="line">torch.nn.init.normal_(base.weight, std=<span class="number">0.02</span>)</span><br><span class="line">layer = LoRALinear(base, r=<span class="number">8</span>)</span><br><span class="line"></span><br><span class="line">x = torch.randn(<span class="number">2</span>, <span class="number">4096</span>)</span><br><span class="line">y_before = layer(x).detach().clone()</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 断言 1: 初始状态 B=0, LoRA 层输出与底座完全一致 ----</span></span><br><span class="line"><span class="keyword">assert</span> torch.allclose(y_before, base(x), atol=<span class="number">1e-6</span>), <span class="string">&quot;初始化后应等价于底座&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 断言 2: 只有 A/B 可训练 ----</span></span><br><span class="line">trainable = [n <span class="keyword">for</span> n, p <span class="keyword">in</span> layer.named_parameters() <span class="keyword">if</span> p.requires_grad]</span><br><span class="line"><span class="keyword">assert</span> trainable == [<span class="string">&quot;A&quot;</span>, <span class="string">&quot;B&quot;</span>], <span class="string">f&quot;可训练参数应为 A/B: <span class="subst">&#123;trainable&#125;</span>&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 断言 3: 训练一步后 delta 只来自低秩项 ----</span></span><br><span class="line">opt = torch.optim.AdamW([p <span class="keyword">for</span> p <span class="keyword">in</span> layer.parameters() <span class="keyword">if</span> p.requires_grad], lr=<span class="number">1e-3</span>)</span><br><span class="line">loss = layer(x).<span class="built_in">pow</span>(<span class="number">2</span>).mean()</span><br><span class="line">loss.backward()</span><br><span class="line">opt.step()</span><br><span class="line">y_after = layer(x).detach()</span><br><span class="line">delta = (y_after - y_before)</span><br><span class="line"><span class="comment"># delta 的秩不应超过 r=8 (低秩约束的数值验证)</span></span><br><span class="line">delta_mat = delta.reshape(-<span class="number">1</span>, <span class="number">4096</span>).<span class="built_in">float</span>()</span><br><span class="line">rank = torch.linalg.matrix_rank(delta_mat[:<span class="number">64</span>]).<span class="built_in">max</span>().item()</span><br><span class="line"><span class="keyword">assert</span> rank &lt;= <span class="number">8</span>, <span class="string">f&quot;更新量秩 <span class="subst">&#123;rank&#125;</span> 超过 r=8, LoRA 结构被破坏&quot;</span></span><br><span class="line">n_trainable = <span class="built_in">sum</span>(p.numel() <span class="keyword">for</span> p <span class="keyword">in</span> layer.parameters() <span class="keyword">if</span> p.requires_grad)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;✅ B=0 初始化等价 | 仅 A/B 可训练 (<span class="subst">&#123;n_trainable&#125;</span> 参数) | 更新秩 ≤ 8&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出</strong>：<code>✅ B=0 初始化等价 | 仅 A/B 可训练 (65536 参数) | 更新秩 ≤ 8</code>（A: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>r</mi><mo>×</mo><mi>d</mi><mo>=</mo><mn>8</mn><mo>×</mo><mn>4096</mn></mrow><annotation encoding="application/x-tex">r \times d = 8 \times 4096</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.66666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">8</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">4</span><span class="mord">0</span><span class="mord">9</span><span class="mord">6</span></span></span></span>，B: <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>d</mi><mo>×</mo><mi>r</mi><mo>=</mo><mn>4096</mn><mo>×</mo><mn>8</mn></mrow><annotation encoding="application/x-tex">d \times r = 4096 \times 8</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.77777em;vertical-align:-0.08333em;"></span><span class="mord mathnormal">d</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">r</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">4</span><span class="mord">0</span><span class="mord">9</span><span class="mord">6</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">8</span></span></span></span>，共 65536，即正文所说的 65K）。三个断言分别验证 LoRA 的三个关键行为：零起点安全、参数隔离、低秩更新。</p>
+<hr />
+<h2 id="4-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#4-工程权衡与失效模式"></a> 4. 工程权衡与失效模式</h2>
+<h3 id="41-超参权衡速查"><a class="markdownIt-Anchor" href="#41-超参权衡速查"></a> 4.1 超参权衡速查</h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>保守取值</th>
+<th>激进取值</th>
+<th>取舍</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>lora_rank</code></td>
+<td>8</td>
+<td>64</td>
+<td>大 r 拟合力强但过拟合风险高、显存多</td>
+</tr>
+<tr>
+<td><code>learning_rate</code></td>
+<td>5e-5</td>
+<td>2e-4</td>
+<td>大 lr 收敛快但易震荡；小 lr 稳但可能欠拟合</td>
+</tr>
+<tr>
+<td><code>epochs</code></td>
+<td>2</td>
+<td>5+</td>
+<td>小数据多轮必过拟合，看 eval loss 拐点</td>
+</tr>
+<tr>
+<td><code>cutoff_len</code></td>
+<td>1024</td>
+<td>4096</td>
+<td>越长显存越高，VLM 记得预留视觉 Token</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-四个代表性失效模式"><a class="markdownIt-Anchor" href="#42-四个代表性失效模式"></a> 4.2 四个代表性失效模式</h3>
+<p><strong>失效 1：Loss 不降（最常见）</strong></p>
+<ul>
+<li><strong>症状</strong>：训练几十步，loss 停在初始值附近抖动。</li>
+<li><strong>根因排查顺序</strong>：① 学习率过小（LoRA 用了全量的 1e-5）② 数据格式错，<code>&lt;image&gt;</code> 与 <code>images</code> 数量不匹配导致样本被静默丢弃 ③ <code>lora_target</code> 没有命中任何模块 ④ mask 配置错误导致有效 label 全是 -100。</li>
+<li><strong>定位</strong>：先跑 <code>llamafactory-cli train ... --max_samples 10 --num_train_epochs 1</code> 十分钟冒烟测试；打印一条预处理后的样本确认 label 非全 -100。</li>
+<li><strong>修复</strong>：按排查顺序逐项修正；lr 建议从 1e-4 起调。</li>
+</ul>
+<p><strong>失效 2：GPU OOM 在训练中途而非开局</strong></p>
+<ul>
+<li><strong>症状</strong>：前 100 步正常，遇到某张高分辨率大图突然 CUDA OOM。</li>
+<li><strong>根因</strong>：动态分辨率下视觉 Token 数随图片面积变化，单样本峰值显存不可预估；<code>group_by_length</code> 只按文本长度分组，不管图片。</li>
+<li><strong>定位</strong>：记录 OOM 样本的图片尺寸，验证 Token 计数（用第 3 周 4.3 节的公式）。</li>
+<li><strong>修复</strong>：预处理阶段统一限制图片最大边或最大面积；降低 batch 至 1；开启 <code>quantization_bit: 4</code>；或设置 <code>visual_max_tokens</code> 类参数限制视觉 Token 上限（框架支持各异，LLaMA-Factory 中可通过自定义图像处理参数控制）。</li>
+</ul>
+<p><strong>失效 3：过拟合——微调后&quot;变笨&quot;</strong></p>
+<ul>
+<li><strong>症状</strong>：域内任务表现完美，但通用问答能力明显退化（灾难性遗忘）。</li>
+<li><strong>根因</strong>：小数据 + 大 r + 多 epoch + 高 lr 的组合，让 LoRA 增量覆盖了 LLM 的通用能力方向。</li>
+<li><strong>定位</strong>：域外测试集（3.4 节对比集的第 2 类）精度大幅下降即确认；观察 WandB 中 eval loss 是否先降后升。</li>
+<li><strong>修复</strong>：降 r 到 8、epoch 降到 2、lr 减半；混入 10~20% 通用多模态指令数据（数据配比是治本手段）。</li>
+</ul>
+<p><strong>失效 4：Loss 收敛但推理结果与训练时完全不同</strong></p>
+<ul>
+<li><strong>症状</strong>：训练时 eval 输出正常，合并导出后推理输出退化。</li>
+<li><strong>根因</strong>：导出/推理时 template 不一致（如训练用 <code>qwen2_vl</code>，推理用默认模板），chat 模板错位导致提示词格式不同；或漏了 <code>--adapter_name_or_path</code> 导致用的是裸底座。</li>
+<li><strong>定位</strong>：对同一条样本打印训练框架内部的最终 prompt 字符串，与推理时手动构造的 prompt 逐字符对比。</li>
+<li><strong>修复</strong>：训练与推理<strong>始终显式指定同一 template</strong>；合并导出后先跑一条训练集内样本回归验证。</li>
+</ul>
+<hr />
+<h2 id="5-延伸思考题"><a class="markdownIt-Anchor" href="#5-延伸思考题"></a> 5. 延伸思考题</h2>
+<ol>
+<li><strong>秩的选择</strong>：假设你的任务是&quot;让模型输出严格遵循某个复杂 JSON schema&quot;，猜猜需要多大的 r？为什么结构化输出这种&quot;格式约束&quot;任务需要比普通问答更高的秩？（提示：格式约束要求改变输出分布的许多独立维度，等效于更高的目标函数秩；实验上 r=32~64 常见。）</li>
+<li><strong>LoRA 注入位置</strong>：<code>lora_target: all</code> 会把 LoRA 加到所有 Linear（包括 MLP 的 up/down projection）。设计消融实验比较&quot;只加 attention 的 q/v&quot;与&quot;全加&quot;在 500 条小样本上的差异，猜测哪个更容易过拟合、为什么。</li>
+<li><strong>视觉塔微调的边界</strong>：如果你要做一个&quot;医学影像报告生成&quot;模型，通用图片与医学影像的域差距极大，此时还该冻结视觉塔吗？给出你的冻结策略和数据量估算依据（提示：域差距大到 SigLIP 特征本身失效时，需要解冻视觉塔顶部若干层或用更大规模域内数据先做视觉塔继续预训练；几百条 SFT 数据远不够支撑）。</li>
+</ol>
+<hr />
+<p><em>下一篇：第 6 周：复盘与自测验收</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/VLM%20&%20VLA-1-VLM%20%E5%9F%BA%E7%A1%80%E4%B8%8E%E6%9E%B6%E6%9E%84%E6%B7%B1%E5%BA%A6%E6%8B%86%E8%A7%A3-%E7%AC%AC3%E5%91%A8-%E4%B8%BB%E6%B5%81VLM%E6%9E%B6%E6%9E%84%E4%B8%8E%E5%9B%BE%E5%83%8FToken%E5%85%A8%E6%B5%81%E7%A8%8B/" rel="prev" title="第3周-主流VLM架构与图像Token全流程">
+                  <i class="fa fa-angle-left"></i> 第3周-主流VLM架构与图像Token全流程
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/VLM%20&%20VLA-1-VLM%20%E5%9F%BA%E7%A1%80%E4%B8%8E%E6%9E%B6%E6%9E%84%E6%B7%B1%E5%BA%A6%E6%8B%86%E8%A7%A3-%E7%AC%AC6%E5%91%A8-%E5%A4%8D%E7%9B%98%E4%B8%8E%E8%87%AA%E6%B5%8B%E9%AA%8C%E6%94%B6/" rel="next" title="第6周-复盘与自测验收">
+                  第6周-复盘与自测验收 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">715k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">43:21</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

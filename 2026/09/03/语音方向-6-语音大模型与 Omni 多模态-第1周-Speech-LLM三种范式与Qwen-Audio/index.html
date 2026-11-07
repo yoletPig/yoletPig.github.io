@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的四个问题 1. 让 LLM「听懂语音」有三条路：级联包装、音频特征注入、Speech-to-Speech——各自的误差传播与延迟天花板是什么？ 2. Qwen-Audio 与 SALMONN 的音频塔、Projector 各怎…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第1周-Speech-LLM三种范式与Qwen-Audio">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-6-%E8%AF%AD%E9%9F%B3%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%20Omni%20%E5%A4%9A%E6%A8%A1%E6%80%81-%E7%AC%AC1%E5%91%A8-Speech-LLM%E4%B8%89%E7%A7%8D%E8%8C%83%E5%BC%8F%E4%B8%8EQwen-Audio/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的四个问题 1. 让 LLM「听懂语音」有三条路：级联包装、音频特征注入、Speech-to-Speech——各自的误差传播与延迟天花板是什么？ 2. Qwen-Audio 与 SALMONN 的音频塔、Projector 各怎…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T00:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-07T16:05:40.279Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="语音">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-6-%E8%AF%AD%E9%9F%B3%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%20Omni%20%E5%A4%9A%E6%A8%A1%E6%80%81-%E7%AC%AC1%E5%91%A8-Speech-LLM%E4%B8%89%E7%A7%8D%E8%8C%83%E5%BC%8F%E4%B8%8EQwen-Audio/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-6-%E8%AF%AD%E9%9F%B3%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%20Omni%20%E5%A4%9A%E6%A8%A1%E6%80%81-%E7%AC%AC1%E5%91%A8-Speech-LLM%E4%B8%89%E7%A7%8D%E8%8C%83%E5%BC%8F%E4%B8%8EQwen-Audio/","path":"2026/09/03/语音方向-6-语音大模型与 Omni 多模态-第1周-Speech-LLM三种范式与Qwen-Audio/","title":"第1周-Speech-LLM三种范式与Qwen-Audio"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第1周-Speech-LLM三种范式与Qwen-Audio | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-1-%E5%91%A8%E6%95%99%E7%A8%8Bspeech-llm-%E4%B8%89%E7%A7%8D%E8%8C%83%E5%BC%8F%E4%B8%8E-qwen-audio%E6%8A%8A%E4%BD%A0%E5%AD%A6%E8%BF%87%E7%9A%84-llava-%E5%90%AC%E4%B8%80%E9%81%8D"><span class="nav-number">1.</span> <span class="nav-text"> 第 1 周教程：Speech-LLM 三种范式与 Qwen-Audio——把你学过的 LLaVA 听一遍</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E8%AF%AD%E9%9F%B3%E8%BF%9B-llm-%E7%9A%84%E6%A0%B9%E6%9C%AC%E7%9F%9B%E7%9B%BE"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：语音进 LLM 的根本矛盾</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E7%9F%9B%E7%9B%BE%E5%AE%9A%E4%B9%89"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 矛盾定义</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E4%B8%89%E8%8C%83%E5%BC%8F%E9%80%9F%E8%A7%88"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 三范式速览</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E8%8C%83%E5%BC%8F-a%E7%BA%A7%E8%81%94%E5%8C%85%E8%A3%85%E8%AF%AF%E5%B7%AE%E4%B9%98%E6%B3%95%E4%B8%8E%E5%BB%B6%E8%BF%9F%E5%8A%A0%E6%B3%95"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 范式 A：级联包装——误差乘法与延迟加法</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E7%BB%93%E6%9E%84"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 结构</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E8%AF%AF%E5%B7%AE%E4%B9%98%E6%B3%95"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 误差乘法</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-%E5%BB%B6%E8%BF%9F%E5%8A%A0%E6%B3%95"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 延迟加法</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#24-%E4%B8%A2%E6%8E%89%E7%9A%84%E5%89%AF%E8%AF%AD%E8%A8%80%E4%BF%A1%E6%81%AF"><span class="nav-number">1.2.4.</span> <span class="nav-text"> 2.4 丢掉的副语言信息</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#25-%E7%BA%A7%E8%81%94%E4%BD%95%E6%97%B6%E4%BB%8D%E6%98%AF%E6%AD%A3%E7%A1%AE%E7%AD%94%E6%A1%88"><span class="nav-number">1.2.5.</span> <span class="nav-text"> 2.5 级联何时仍是正确答案</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E8%8C%83%E5%BC%8F-b%E9%9F%B3%E9%A2%91%E7%89%B9%E5%BE%81%E6%B3%A8%E5%85%A5%E6%8A%8A%E4%BD%A0%E5%AD%A6%E8%BF%87%E7%9A%84-llava-%E5%90%AC%E4%B8%80%E9%81%8D"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 范式 B：音频特征注入——把你学过的 LLaVA 听一遍</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E7%BB%93%E6%9E%84%E5%90%8C%E6%9E%84"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 结构同构</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-qwen-audio%E5%A4%9A%E4%BB%BB%E5%8A%A1%E9%9F%B3%E9%A2%91%E5%A1%94-%E6%B1%A0%E5%8C%96%E9%99%8D%E9%87%87%E6%A0%B7"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 Qwen-Audio：多任务音频塔 + 池化降采样</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-salmonn%E5%8F%8C%E7%BC%96%E7%A0%81%E5%99%A8-%E7%AA%97%E5%8F%A3%E7%BA%A7-q-former"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 SALMONN：双编码器 + 窗口级 Q-Former</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#34-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%BF%85%E9%A1%BB%E9%99%8D%E9%87%87%E6%A0%B7%E5%AE%9A%E9%87%8F"><span class="nav-number">1.3.4.</span> <span class="nav-text"> 3.4 为什么必须降采样（定量）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E8%8C%83%E5%BC%8F-cspeech-to-speechllm-%E7%9B%B4%E6%8E%A5%E5%BC%80%E5%8F%A3"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 范式 C：Speech-to-Speech——LLM 直接开口</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E4%B8%89%E8%8C%83%E5%BC%8F%E5%AE%9A%E4%BD%8D%E6%80%BB%E7%BB%93"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 三范式定位总结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#61-%E7%BA%A7%E8%81%94%E8%AF%AF%E5%B7%AE%E4%B9%98%E6%B3%95%E6%A8%A1%E6%8B%9F"><span class="nav-number">1.6.1.</span> <span class="nav-text"> 6.1 级联误差乘法模拟</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#62-%E9%9F%B3%E9%A2%91-projectormlp-%E7%89%88%E4%B8%8E-q-former-%E7%89%88%E7%BA%AF-pytorch"><span class="nav-number">1.6.2.</span> <span class="nav-text"> 6.2 音频 Projector：MLP 版与 Q-Former 版（纯 PyTorch）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#63-%E4%B8%8A%E4%B8%8B%E6%96%87%E9%A2%84%E7%AE%97%E8%AE%A1%E7%AE%97%E5%99%A8mvp-%E7%94%A8"><span class="nav-number">1.6.3.</span> <span class="nav-text"> 6.3 上下文预算计算器（MVP 用）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#64-%E7%BA%A7%E8%81%94%E5%BB%B6%E8%BF%9F%E5%8A%A0%E6%B3%95%E6%A8%A1%E6%8B%9F"><span class="nav-number">1.6.4.</span> <span class="nav-text"> 6.4 级联延迟加法模拟</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.7.</span> <span class="nav-text"> 7. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#71-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.7.1.</span> <span class="nav-text"> 7.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#72-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.7.2.</span> <span class="nav-text"> 7.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#8-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.8.</span> <span class="nav-text"> 8. 延伸思考题（含解析)</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#9-%E6%9C%AC%E5%91%A8%E9%99%84%E5%BD%95%E9%9F%B3%E9%A2%91%E7%90%86%E8%A7%A3%E7%9A%84%E5%B9%BF%E5%BA%A6%E4%B8%80%E8%A7%88"><span class="nav-number">1.9.</span> <span class="nav-text"> 9. 本周附录：音频理解的「广度」一览</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.10.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">257</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">41</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">13</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-6-%E8%AF%AD%E9%9F%B3%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%20Omni%20%E5%A4%9A%E6%A8%A1%E6%80%81-%E7%AC%AC1%E5%91%A8-Speech-LLM%E4%B8%89%E7%A7%8D%E8%8C%83%E5%BC%8F%E4%B8%8EQwen-Audio/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第1周-Speech-LLM三种范式与Qwen-Audio | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的四个问题 1. 让 LLM「听懂语音」有三条路：级联包装、音频特征注入、Speech-to-Speech——各自的误差传播与延迟天花板是什么？ 2. Qwen-Audio 与 SALMONN 的音频塔、Projector 各怎…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第1周-Speech-LLM三种范式与Qwen-Audio
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 08:00:00" itemprop="dateCreated datePublished" datetime="2026-09-03T08:00:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-08 00:05:40" itemprop="dateModified" datetime="2026-11-08T00:05:40+08:00">2026-11-08</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91/" itemprop="url" rel="index"><span itemprop="name">语音方向</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91/Stage-6-%E8%AF%AD%E9%9F%B3%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E-Omni-%E5%A4%9A%E6%A8%A1%E6%80%81/" itemprop="url" rel="index"><span itemprop="name">Stage 6-语音大模型与 Omni 多模态</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>5.3k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>19 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的四个问题 1. 让 LLM「听懂语音」有三条路：级联包装、音频特征注入、Speech-to-Speech——各自的误差传播与延迟天花板是什么？ 2. Qwen-Audio 与 SALMONN 的音频塔、Projector 各怎…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-1-周教程speech-llm-三种范式与-qwen-audio把你学过的-llava-听一遍"><a class="markdownIt-Anchor" href="#第-1-周教程speech-llm-三种范式与-qwen-audio把你学过的-llava-听一遍"></a> 第 1 周教程：Speech-LLM 三种范式与 Qwen-Audio——把你学过的 LLaVA 听一遍</h1>
+<blockquote>
+<p><strong>本周要回答的四个问题</strong></p>
+<ol>
+<li>让 LLM「听懂语音」有三条路：级联包装、音频特征注入、Speech-to-Speech——各自的误差传播与延迟天花板是什么？</li>
+<li>Qwen-Audio 与 SALMONN 的音频塔、Projector 各怎么设计？为什么都要做「token 降采样」？</li>
+<li>音频塔 ≈ Vision Tower、Projector 完全同构——这个类比的逐项对照表是什么？差异点在哪？</li>
+<li>级联方案丢掉的「副语言信息」（语气、情绪、说话人）如何在特征注入范式里被找回来？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 1 周。交付物：三范式架构图 + 与 VLM 阶段 LLaVA 图的逐项对照清单（同构点与差异点）。</p>
+<hr />
+<h2 id="1-第一性原理语音进-llm-的根本矛盾"><a class="markdownIt-Anchor" href="#1-第一性原理语音进-llm-的根本矛盾"></a> 1. 第一性原理：语音进 LLM 的根本矛盾</h2>
+<h3 id="11-矛盾定义"><a class="markdownIt-Anchor" href="#11-矛盾定义"></a> 1.1 矛盾定义</h3>
+<p>文本是<strong>离散符号序列</strong>，天然适配 LLM 的词表。语音是<strong>连续的一维时序信号</strong>（16 kHz 时每秒 16000 个采样点），且携带两层信息：</p>
+<ul>
+<li><strong>语义层</strong>：说了什么（可转写为文字）；</li>
+<li><strong>副语言层</strong>（paralinguistic）：谁说的、什么情绪、什么语气、环境声是什么。</li>
+</ul>
+<p>根本矛盾：<strong>想让 LLM 理解语音，要么先转成文字（丢副语言信息、级联误差），要么把连续信号映射进 LLM 的离散嵌入空间（对齐难、序列长）</strong>。三种范式就是对这一矛盾的三种回答。</p>
+<h3 id="12-三范式速览"><a class="markdownIt-Anchor" href="#12-三范式速览"></a> 1.2 三范式速览</h3>
+<table>
+<thead>
+<tr>
+<th>范式</th>
+<th>结构</th>
+<th>信息保真</th>
+<th>延迟</th>
+<th>误差传播</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A：级联包装</td>
+<td>ASR → 文本 → LLM</td>
+<td>丢副语言</td>
+<td>两段串行相加</td>
+<td>乘法级联</td>
+</tr>
+<tr>
+<td>B：特征注入（类 LLaVA）</td>
+<td>音频塔 → Projector → LLM</td>
+<td>保留</td>
+<td>单模型</td>
+<td>端到端可联合优化</td>
+</tr>
+<tr>
+<td>C：Speech-to-Speech</td>
+<td>音频 ⇄ 离散语音 token ⇄ LLM</td>
+<td>全保留</td>
+<td>最低（可全双工）</td>
+<td>端到端，但训练最难</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="2-范式-a级联包装误差乘法与延迟加法"><a class="markdownIt-Anchor" href="#2-范式-a级联包装误差乘法与延迟加法"></a> 2. 范式 A：级联包装——误差乘法与延迟加法</h2>
+<h3 id="21-结构"><a class="markdownIt-Anchor" href="#21-结构"></a> 2.1 结构</h3>
+<p>最简单的方案：把 Stage 2 学的 ASR 当作 LLM 的前端麦克风。</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>波形</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>ASR</mtext></mpadded></mover><mover accent="true"><mi>w</mi><mo>^</mo></mover><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>拼进 prompt</mtext></mpadded></mover><mtext>LLM</mtext><mo>→</mo><mtext>回答</mtext></mrow><annotation encoding="application/x-tex">\text{波形} \xrightarrow{\text{ASR}} \hat{w} \xrightarrow{\text{拼进 prompt}} \text{LLM} \to \text{回答}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">波形</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">ASR</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.69444em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02691em;">w</span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.16666em;"><span class="mord">^</span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">拼进</span><span class="mord mtight"> prompt</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord">LLM</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">回答</span></span></span></span></span></span></p>
+<p>你 Stage 7 要做的端侧助手，本质就是这一范式的工程化（SenseVoice → Qwen2.5 → TTS）。它的天花板必须提前算清楚。</p>
+<h3 id="22-误差乘法"><a class="markdownIt-Anchor" href="#22-误差乘法"></a> 2.2 误差乘法</h3>
+<p><strong>这个公式在干什么</strong>：它量化级联范式最要命的短板——错误会<strong>相乘传播</strong>，而不是各自独立。级联链路上每多一个模块，端到端正确率就多乘一个小于 1 的数。</p>
+<p>设 ASR 整句正确率 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mtext>ASR</mtext></msub></mrow><annotation encoding="application/x-tex">P_{\text{ASR}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">ASR</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>，LLM 在正确转写下的回答正确率 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mtext>LLM</mtext></msub></mrow><annotation encoding="application/x-tex">P_{\text{LLM}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">LLM</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>。级联后端到端正确率（近似，假设 ASR 错误必然导致回答错误）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>P</mi><mtext>end2end</mtext></msub><mo>≈</mo><msub><mi>P</mi><mtext>ASR</mtext></msub><mo>⋅</mo><msub><mi>P</mi><mtext>LLM</mtext></msub></mrow><annotation encoding="application/x-tex">P_{\text{end2end}} \approx P_{\text{ASR}} \cdot P_{\text{LLM}}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">end2end</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">ASR</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">LLM</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span></p>
+<p>每个符号的物理含义：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mtext>ASR</mtext></msub></mrow><annotation encoding="application/x-tex">P_{\text{ASR}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">ASR</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 是「转写文本没错」的概率；<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mtext>LLM</mtext></msub></mrow><annotation encoding="application/x-tex">P_{\text{LLM}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">LLM</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 是「拿到正确转写时答对」的概率；两者相乘 = 「转写对<strong>且</strong>答对」的概率。这个近似偏悲观（LLM 有语言先验，个别转写错误能靠上下文猜回来），所以它是<strong>量级估计</strong>而非精确值——第 8 节 Q1 会展开。</p>
+<p>数字感受：ASR 90%、LLM 80% → 端到端只剩 72%。<strong>ASR 的 10% 错误是 LLM 永远无法修复的</strong>——这就是误差传播天花板。特征注入范式让音频特征直接进 LLM，LLM 有机会「结合上下文猜回」ASR 会错的部分，联合训练还能反传梯度给编码器。</p>
+<h3 id="23-延迟加法"><a class="markdownIt-Anchor" href="#23-延迟加法"></a> 2.3 延迟加法</h3>
+<p>级联是串行的：用户说完话后，总等待 = ASR 全部解码 + LLM 首 token。而范式 B 在音频流入时编码器就能并行工作。可运行的量化见第 6 节代码。</p>
+<h3 id="24-丢掉的副语言信息"><a class="markdownIt-Anchor" href="#24-丢掉的副语言信息"></a> 2.4 丢掉的副语言信息</h3>
+<p>「我没事」（平静地说）和「我没事！」（带着哭腔），转写完全相同，语义天差地别。级联范式把这一层全部抹掉——这是特征注入范式存在的第二个理由。</p>
+<h3 id="25-级联何时仍是正确答案"><a class="markdownIt-Anchor" href="#25-级联何时仍是正确答案"></a> 2.5 级联何时仍是正确答案</h3>
+<p>级联在技术上「旧」，但工程上有三个不可替代的优点：</p>
+<ol>
+<li><strong>可审计</strong>：ASR 文本是天然的日志与安全过滤点，纯语音输出没有中间态可查；</li>
+<li><strong>模块可替换</strong>：ASR 与 LLM 可各自独立升级、端侧可自由混搭（你 Stage 7 的 SenseVoice + Qwen2.5 正是这个组合）；</li>
+<li><strong>数据门槛低</strong>：文本指令数据远比语音指令数据丰富——语音指令数据的稀缺，正是第 5-6 周要动手补的课。</li>
+</ol>
+<p>所以不要预先判定范式优劣：<strong>云端理解用 B/C，端侧产品用 A</strong>——这个结论会在 Stage 7 再验证一次。</p>
+<hr />
+<h2 id="3-范式-b音频特征注入把你学过的-llava-听一遍"><a class="markdownIt-Anchor" href="#3-范式-b音频特征注入把你学过的-llava-听一遍"></a> 3. 范式 B：音频特征注入——把你学过的 LLaVA 听一遍</h2>
+<h3 id="31-结构同构"><a class="markdownIt-Anchor" href="#31-结构同构"></a> 3.1 结构同构</h3>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>波形</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>音频塔</mtext></mpadded></mover><msub><mi mathvariant="bold">h</mi><mi>a</mi></msub><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>Projector</mtext></mpadded></mover><mi mathvariant="bold">z</mi><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>占位符替换</mtext></mpadded></mover><mtext>LLM</mtext></mrow><annotation encoding="application/x-tex">\text{波形} \xrightarrow{\text{音频塔}} \mathbf{h}_a \xrightarrow{\text{Projector}} \mathbf{z} \xrightarrow{\text{占位符替换}} \text{LLM}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">波形</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">音频塔</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.2503309999999999em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord"><span class="mord mathbf">h</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.151392em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">a</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Projector</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord"><span class="mord mathbf">z</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">占位符替换</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord">LLM</span></span></span></span></span></span></p>
+<p>你在 VLM 阶段对这条链路做过维度追踪（CLIP → MLP Projector → LLaMA）。音频版<strong>逐项同构</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>LLaVA（你已学）</th>
+<th>Speech-LLM 对应</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Vision Tower（CLIP ViT）</td>
+<td>音频塔（Whisper encoder / BEATs）</td>
+<td>都是冻结或弱微调的预训练编码器</td>
+</tr>
+<tr>
+<td>图像 → 576 个 patch token</td>
+<td>音频 → <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>T</mi></mrow><annotation encoding="application/x-tex">T</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span></span></span></span> 帧特征（编码器帧率 × 秒数，Whisper 系为 50 Hz）</td>
+<td>音频是 1D 时序，长度随语音时长<strong>无上限</strong></td>
+</tr>
+<tr>
+<td>MLP Projector <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>W</mi><mo>∈</mo><msup><mi mathvariant="double-struck">R</mi><mrow><msub><mi>d</mi><mrow><mi>e</mi><mi>n</mi><mi>c</mi></mrow></msub><mo>×</mo><msub><mi>d</mi><mrow><mi>L</mi><mi>L</mi><mi>M</mi></mrow></msub></mrow></msup></mrow><annotation encoding="application/x-tex">W \in \mathbb{R}^{d_{enc} \times d_{LLM}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72243em;vertical-align:-0.0391em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.849108em;vertical-align:0em;"></span><span class="mord"><span class="mord"><span class="mord mathbb">R</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.849108em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.16454285714285719em;"><span style="top:-2.357em;margin-left:0em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">n</span><span class="mord mathnormal mtight">c</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.143em;"><span></span></span></span></span></span></span><span class="mbin mtight">×</span><span class="mord mtight"><span class="mord mathnormal mtight">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567071428571427em;margin-left:0em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight">L</span><span class="mord mathnormal mtight" style="margin-right:0.10903em;">M</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.14329285714285717em;"><span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></span></td>
+<td>同款 MLP，或 Q-Former</td>
+<td>把编码器空间映射进 LLM 嵌入空间</td>
+</tr>
+<tr>
+<td><code>&lt;image&gt;</code> 占位符替换为图像特征</td>
+<td><code>&lt;audio&gt;</code> 占位符替换为音频特征</td>
+<td>模板拼接逻辑完全一致</td>
+</tr>
+<tr>
+<td>图文对齐预训练（两阶段）</td>
+<td>音频-文本对齐预训练</td>
+<td>LLaVA 第一阶段只训 Projector；Qwen-Audio 例外：预训练阶段训音频塔、冻 LLM（见 3.2）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>差异点（面试必答）</strong>：图像是二维、定长（固定分辨率 → 固定 576 token）；音频是一维时序，<strong>帧率敏感</strong>——30 秒音频按 50 Hz 就是 1500 token，直接塞进 LLM 上下文会爆炸。所以音频侧的 Projector 额外承担<strong>降采样</strong>职责（这是与视觉侧最大的工程差异）。</p>
+<h3 id="32-qwen-audio多任务音频塔-池化降采样"><a class="markdownIt-Anchor" href="#32-qwen-audio多任务音频塔-池化降采样"></a> 3.2 Qwen-Audio：多任务音频塔 + 池化降采样</h3>
+<p>Qwen-Audio（阿里，<em>Qwen-Audio: Advancing Universal Audio Understanding via Unified Large-Scale Audio-Language Models</em>，arXiv:2311.07919，2023）的音频理解范围远超语音：语音、自然声、音乐、歌声共 30+ 种任务、8 种语言统一训练。</p>
+<ul>
+<li><strong>音频塔</strong>：以 Whisper-large-v2 的 encoder 初始化（约 640M 参数），输入 16 kHz 波形 → 80 通道梅尔谱，卷积 stem 下采样后输出 <strong>50 Hz、1280 维</strong>特征（每 20 ms 一帧）；</li>
+<li><strong>Projector（降采样靠池化）</strong>：论文的做法非常朴素——在编码器输出后接一个 <strong>stride = 2 的池化层（pooling）</strong>，把相邻两帧拼/压成 1 帧，得到约 <strong>25 Hz</strong> 的音频表示（每帧约对应 40 ms 音频），再映射进 LLM 嵌入空间。<strong>没有</strong> cross-attention 采样器、没有 Q-Former——Qwen-Audio 用「最笨」的池化完成了降采样，把模型容量省给了 LLM；</li>
+<li><strong>多任务联合</strong>：ASR、语音翻译、方言识别、音频描述（AAC）、声音事件分类（AudioSet 系）、音乐问答、语音情感识别（SER）等，统一成「音频 + 任务指令 → 文本」格式联合训练；</li>
+<li><strong>训练分两段</strong>：多任务预训练阶段<strong>冻结 LLM、只训音频塔</strong>；SFT（Qwen-Audio-Chat）阶段反过来<strong>冻结音频塔、只训 LLM</strong>——与你 VLM 阶段「先训对齐层、再训 LLM」的两阶段思路互为镜像；</li>
+<li><strong>谱系</strong>：Qwen-Audio（Whisper-large-v2 塔）→ Qwen2-Audio（换用 Whisper-large-v3 塔，预训练配方改用自然语言 prompt，指令跟随更强，Stage 6 第 5-6 周微调就用它）。</li>
+</ul>
+<blockquote>
+<p><strong>深入拆解：为什么「池化降采样」就够了？</strong><br />
+音频 token 进 LLM 前必须压缩，压缩手段按「聪明程度」排序：cross-attention 采样（BLIP-2 Q-Former 式，可学习查询按内容挑选信息）&gt; 池化/拼接（固定规则压缩）。Qwen-Audio 选后者，理由有三：① 参数最少，千小时级多任务预训练下不易过拟合；② 语音是均匀时序信号，信息密度沿时间轴相对平稳，均匀降采样的损失可控；③ 池化是纯张量操作，工程零风险。代价是时间分辨率减半——需要精确时间戳的任务会受损。面试时要能讲清「什么时候可以偷懒用池化、什么时候必须上 attention 采样」。</p>
+</blockquote>
+<h3 id="33-salmonn双编码器-窗口级-q-former"><a class="markdownIt-Anchor" href="#33-salmonn双编码器-窗口级-q-former"></a> 3.3 SALMONN：双编码器 + 窗口级 Q-Former</h3>
+<p>SALMONN（字节 + 清华，<em>SALMONN: Towards Generic Hearing Abilities for Large Language Models</em>，2023）回答的是另一个问题：<strong>语音和非语音（环境声、音乐）用同一个编码器不够好，怎么办？</strong></p>
+<ul>
+<li><strong>双编码器</strong>：Whisper encoder（擅长语音语义）+ BEATs（自监督音频事件编码器，擅长非语音声音）并行提取，特征拼接；</li>
+<li><strong>Window-level Q-Former</strong>：把音频按时间窗切块，每窗用一组可学习查询向量做 cross-attention 压缩（窗口内因果，保证可流式扩展）；</li>
+<li><strong>三阶段训练</strong>：① 对齐（训 Q-Former + 线性层）→ ② 指令微调 → ③ 激活（用带噪声/音乐的数据激活推理与鲁棒能力，论文称之为 activation tuning）。</li>
+</ul>
+<p><strong>双编码器的启示</strong>：单塔覆盖不了所有听感任务时，就并联多个专家塔再融合——这个「多塔 + 融合」模式你在 VLM 的多分辨率方案里也见过。</p>
+<h3 id="34-为什么必须降采样定量"><a class="markdownIt-Anchor" href="#34-为什么必须降采样定量"></a> 3.4 为什么必须降采样（定量）</h3>
+<p><strong>这个公式在干什么</strong>：它是音频 token 预算的一行速算器——拿到任何「音频进 LLM」的架构，先用它估出一条音频要吃掉多少上下文，再判断方案可不可行。</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>token 数</mtext><mo>=</mo><mtext>时长(s)</mtext><mo>×</mo><mtext>帧率(Hz)</mtext><mo>÷</mo><mtext>降采样倍率</mtext></mrow><annotation encoding="application/x-tex">\text{token 数} = \text{时长(s)} \times \text{帧率(Hz)} \div \text{降采样倍率}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord text"><span class="mord">token </span><span class="mord cjk_fallback">数</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord cjk_fallback">时长</span><span class="mord">(s)</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord cjk_fallback">帧率</span><span class="mord">(Hz)</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">÷</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">降采样倍率</span></span></span></span></span></span></p>
+<p>符号含义：时长是音频秒数；帧率是编码器输出特征的时间密度（Whisper 系为 50 Hz，即每秒 50 帧）；降采样倍率是 projector 把多少帧压成 1 个 LLM token（Qwen-Audio 用 stride-2 池化即 2 倍，本节代码演示的 cross-attention 采样是 4 倍）。</p>
+<p>30 秒音频：50 Hz 不降采样 = 1500 token；2 倍降采样（Qwen-Audio 式）= 750 token；4 倍 = 375 token。LLM 上下文是稀缺资源（尤其端侧），且注意力计算 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>O</mi><mo stretchy="false">(</mo><msup><mi>L</mi><mn>2</mn></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">O(L^2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.02778em;">O</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span> 随序列长度平方增长——<strong>音频 token 率是 Speech-LLM 的第一性能变量</strong>。第 4 周的 codec 深挖会从生成侧再次撞上这个问题。</p>
+<hr />
+<h2 id="4-范式-cspeech-to-speechllm-直接开口"><a class="markdownIt-Anchor" href="#4-范式-cspeech-to-speechllm-直接开口"></a> 4. 范式 C：Speech-to-Speech——LLM 直接开口</h2>
+<p>范式 B 让 LLM 听懂了，但输出仍是文字（还要外接 TTS）。范式 C 让 LLM 直接生成<strong>离散语音 token</strong>，再由声码器还原为波形——你在 Stage 5 第 2 周学过的 EnCodec/RVQ 在这里登场：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>音频</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>codec 编码</mtext></mpadded></mover><mtext>语音 token</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>LLM 建模</mtext></mpadded></mover><mtext>语音 token</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>codec 解码</mtext></mpadded></mover><mtext>波形</mtext></mrow><annotation encoding="application/x-tex">\text{音频} \xrightarrow{\text{codec 编码}} \text{语音 token} \xrightarrow{\text{LLM 建模}} \text{语音 token} \xrightarrow{\text{codec 解码}} \text{波形}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.119108em;vertical-align:-0.01100000000000012em;"></span><span class="mord text"><span class="mord cjk_fallback">音频</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1081079999999999em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">codec </span><span class="mord cjk_fallback mtight">编码</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.01100000000000012em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">语音</span><span class="mord"> token</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">LLM </span><span class="mord cjk_fallback mtight">建模</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.119108em;vertical-align:-0.01100000000000012em;"></span><span class="mord text"><span class="mord cjk_fallback">语音</span><span class="mord"> token</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1081079999999999em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">codec </span><span class="mord cjk_fallback mtight">解码</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.01100000000000012em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">波形</span></span></span></span></span></span></p>
+<ul>
+<li><strong>Moshi</strong>（Kyutai）：真正的<strong>全双工</strong>——同一条音频流里同时建模「用户声道」和「模型声道」，模型边听边说，没有轮流；第 3 周细拆；</li>
+<li><strong>GLM-4-Voice</strong>、<strong>Qwen2.5-Omni 的 Talker</strong>：半双工但端到端，第 2 周细拆。</li>
+</ul>
+<p>范式 C 的独特价值：<strong>副语言信息可以生成</strong>。级联 + 外挂 TTS 的回答永远是「播音腔」；端到端模型可以带着笑声、叹息、犹豫的语气回答。代价是训练数据（成对的语音对话）极其稀缺，这是它至今不是主流交付形态的原因。</p>
+<hr />
+<h2 id="5-三范式定位总结"><a class="markdownIt-Anchor" href="#5-三范式定位总结"></a> 5. 三范式定位总结</h2>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">级联包装：工程最快、可控性最强、误差乘法          → 端侧产品首选（Stage 7）</span><br><span class="line">特征注入：理解侧最优、多任务广度最大              → 音频理解模型主流（Qwen2-Audio）</span><br><span class="line">Speech-to-Speech：延迟最低、副语言可生成、训练最难 → 交互终局形态（Moshi/Omni）</span><br></pre></td></tr></table></figure>
+<p>三者不是替代关系：<strong>Qwen2.5-Omni 的理解侧是范式 B，生成侧是范式 C，而你的端侧助手是范式 A 的极致工程化</strong>。同一个知识体系的三个切面。</p>
+<hr />
+<h2 id="6-实现与验证"><a class="markdownIt-Anchor" href="#6-实现与验证"></a> 6. 实现与验证</h2>
+<h3 id="61-级联误差乘法模拟"><a class="markdownIt-Anchor" href="#61-级联误差乘法模拟"></a> 6.1 级联误差乘法模拟</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"></span><br><span class="line">rng = np.random.default_rng(<span class="number">0</span>)</span><br><span class="line">N = <span class="number">20000</span>           <span class="comment"># 模拟样本数</span></span><br><span class="line">p_asr, p_llm = <span class="number">0.90</span>, <span class="number">0.80</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ASR 阶段：每句以 p_asr 概率转写正确</span></span><br><span class="line">asr_correct = rng.random(N) &lt; p_asr</span><br><span class="line"><span class="comment"># LLM 阶段：转写正确时以 p_llm 答对；转写错误时假设必然答错</span></span><br><span class="line">answer_correct = asr_correct &amp; (rng.random(N) &lt; p_llm)</span><br><span class="line"></span><br><span class="line">cascade_acc = answer_correct.mean()</span><br><span class="line">oracle_acc = p_llm                      <span class="comment"># 若 ASR 完美，上界就是 p_llm</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;级联端到端正确率: <span class="subst">&#123;cascade_acc:<span class="number">.3</span>f&#125;</span> (理论 <span class="subst">&#123;p_asr*p_llm:<span class="number">.3</span>f&#125;</span>)&quot;</span>)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;误差传播损失: <span class="subst">&#123;oracle_acc - cascade_acc:<span class="number">.3</span>f&#125;</span>&quot;</span>)</span><br><span class="line"><span class="keyword">assert</span> <span class="built_in">abs</span>(cascade_acc - p_asr * p_llm) &lt; <span class="number">0.02</span>, <span class="string">&quot;模拟应与理论乘法一致&quot;</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;级联误差乘法验证通过 ✓&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出</strong>：端到端正确率 ≈ 0.72，损失 ≈ 0.08——ASR 的 10% 错误在级联里不可修复。</p>
+<h3 id="62-音频-projectormlp-版与-q-former-版纯-pytorch"><a class="markdownIt-Anchor" href="#62-音频-projectormlp-版与-q-former-版纯-pytorch"></a> 6.2 音频 Projector：MLP 版与 Q-Former 版（纯 PyTorch）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">import</span> torch.nn <span class="keyword">as</span> nn</span><br><span class="line"></span><br><span class="line">torch.manual_seed(<span class="number">0</span>)</span><br><span class="line">B, T, d_enc, d_llm = <span class="number">1</span>, <span class="number">1500</span>, <span class="number">1280</span>, <span class="number">896</span>   <span class="comment"># 30s×50Hz 音频，Whisper 1280 维</span></span><br><span class="line"></span><br><span class="line">audio_feats = torch.randn(B, T, d_enc)    <span class="comment"># 音频塔输出</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 方案一：MLP Projector（LLaVA 同款，不降采样）----</span></span><br><span class="line">mlp_proj = nn.Sequential(nn.Linear(d_enc, d_llm), nn.GELU(), nn.Linear(d_llm, d_llm))</span><br><span class="line">z_mlp = mlp_proj(audio_feats)</span><br><span class="line"><span class="keyword">assert</span> z_mlp.shape == (B, T, d_llm)       <span class="comment"># token 数不变：1500 个</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 方案二：cross-attention 采样器（BLIP-2/Q-Former 思想的 1D 版，降采样 4×）----</span></span><br><span class="line"><span class="comment"># 注：Qwen-Audio 实际用更朴素的 stride-2 池化（2×）；本类演示&quot;学习式压缩&quot;的机制</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">AudioSampler</span>(nn.Module):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;每 4 帧音频用 1 个可学习查询做 cross-attention，输出 1 个 LLM token。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, d_enc, d_llm, downsample=<span class="number">4</span></span>):</span><br><span class="line">        <span class="built_in">super</span>().__init__()</span><br><span class="line">        <span class="variable language_">self</span>.k = downsample</span><br><span class="line">        <span class="variable language_">self</span>.q = nn.Parameter(torch.randn(<span class="number">1</span>, <span class="number">1</span>, d_llm) * <span class="number">0.02</span>)</span><br><span class="line">        <span class="variable language_">self</span>.Wq = nn.Linear(d_llm, d_llm)</span><br><span class="line">        <span class="variable language_">self</span>.Wkv = nn.Linear(d_enc, d_llm)   <span class="comment"># 音频特征 -&gt; K=V</span></span><br><span class="line">        <span class="variable language_">self</span>.out = nn.Linear(d_llm, d_llm)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">forward</span>(<span class="params">self, h</span>):                    <span class="comment"># h: (B, T, d_enc)</span></span><br><span class="line">        B, T, _ = h.shape</span><br><span class="line">        T2 = T // <span class="variable language_">self</span>.k</span><br><span class="line">        q = <span class="variable language_">self</span>.Wq(<span class="variable language_">self</span>.q).expand(B, T2, -<span class="number">1</span>)          <span class="comment"># (B, T/4, d_llm)</span></span><br><span class="line">        k = v = <span class="variable language_">self</span>.Wkv(h.reshape(B * T2, <span class="variable language_">self</span>.k, -<span class="number">1</span>))  <span class="comment"># (B*T2, 4, d_llm)</span></span><br><span class="line">        attn = torch.softmax(q.reshape(B*T2, <span class="number">1</span>, -<span class="number">1</span>) @ k.transpose(-<span class="number">1</span>, -<span class="number">2</span>)</span><br><span class="line">                             / (q.shape[-<span class="number">1</span>] ** <span class="number">0.5</span>), dim=-<span class="number">1</span>)</span><br><span class="line">        <span class="keyword">return</span> <span class="variable language_">self</span>.out((attn @ v).reshape(B, T2, -<span class="number">1</span>))   <span class="comment"># (B, T/4, d_llm)</span></span><br><span class="line"></span><br><span class="line">sampler = AudioSampler(d_enc, d_llm, downsample=<span class="number">4</span>)</span><br><span class="line">z_s = sampler(audio_feats)</span><br><span class="line"><span class="keyword">assert</span> z_s.shape == (B, T // <span class="number">4</span>, d_llm), <span class="string">&quot;降采样后应为 375 个 token&quot;</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;MLP 方案: <span class="subst">&#123;z_mlp.shape[<span class="number">1</span>]&#125;</span> token | 采样器方案: <span class="subst">&#123;z_s.shape[<span class="number">1</span>]&#125;</span> token&quot;</span>)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;两种 Projector 形状验证通过 ✓&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出</strong>：<code>MLP 方案: 1500 token | 采样器方案: 375 token</code>。对照第 3.1 节表格：方案一 = LLaVA 的 MLP 原样搬来，token 数不减；方案二 = 可学习的 cross-attention 压缩（Q-Former 一族的核心机制），而 Qwen-Audio 的 stride-2 池化介于两者之间——<strong>音频侧特有的降采样需求</strong>就体现在这三档选择里。</p>
+<h3 id="63-上下文预算计算器mvp-用"><a class="markdownIt-Anchor" href="#63-上下文预算计算器mvp-用"></a> 6.3 上下文预算计算器（MVP 用）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">audio_token_budget</span>(<span class="params">duration_s, hz=<span class="number">50</span>, downsample=<span class="number">4</span>, text_tokens=<span class="number">128</span>, ctx=<span class="number">4096</span></span>):</span><br><span class="line">    n = <span class="built_in">int</span>(duration_s * hz / downsample) + text_tokens</span><br><span class="line">    <span class="keyword">assert</span> n &lt; ctx, <span class="string">f&quot;超出上下文: <span class="subst">&#123;n&#125;</span> &gt;= <span class="subst">&#123;ctx&#125;</span>&quot;</span></span><br><span class="line">    <span class="keyword">return</span> n</span><br><span class="line"></span><br><span class="line"><span class="comment"># Qwen2-Audio 支持最长 30s 音频；算一下 4× 降采样后的占用</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;30s 音频占用:&quot;</span>, audio_token_budget(<span class="number">30</span>), <span class="string">&quot;token&quot;</span>)   <span class="comment"># 375 + 128 = 503</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;剩余上下文:&quot;</span>, <span class="number">4096</span> - audio_token_budget(<span class="number">30</span>), <span class="string">&quot;token&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出</strong>：503 / 3593。不降采样则是 1628，剩余上下文直接砍半——这就是「帧率敏感」的代价。</p>
+<h3 id="64-级联延迟加法模拟"><a class="markdownIt-Anchor" href="#64-级联延迟加法模拟"></a> 6.4 级联延迟加法模拟</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">cascade_vs_parallel</span>(<span class="params">asr_ms, llm_ms</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;级联：LLM 必须等 ASR 全部解码完；特征注入：编码器与 LLM 流水重叠。&quot;&quot;&quot;</span></span><br><span class="line">    cascade = asr_ms + llm_ms                 <span class="comment"># 串行相加</span></span><br><span class="line">    overlap_encoder_ms = asr_ms * <span class="number">0.7</span>         <span class="comment"># 特征注入下编码器工作大部分被重叠</span></span><br><span class="line">    parallel = overlap_encoder_ms + llm_ms    <span class="comment"># 粗估：重叠掉编码器主体耗时</span></span><br><span class="line">    <span class="keyword">return</span> cascade, parallel</span><br><span class="line"></span><br><span class="line">c, p = cascade_vs_parallel(<span class="number">150</span>, <span class="number">400</span>)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;级联首响应 <span class="subst">&#123;c&#125;</span> ms | 特征注入约 <span class="subst">&#123;p:<span class="number">.0</span>f&#125;</span> ms&quot;</span>)</span><br><span class="line"><span class="keyword">assert</span> c &gt; p, <span class="string">&quot;级联延迟必然更高&quot;</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;延迟加法验证通过 ✓&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出</strong>：550 ms vs ~505 ms。真实重叠收益取决于实现，但「加法」性质不变——第 2 周的流式双轨流水线会把重叠做到极致。</p>
+<hr />
+<h2 id="7-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#7-工程权衡与失效模式"></a> 7. 工程权衡与失效模式</h2>
+<h3 id="71-权衡"><a class="markdownIt-Anchor" href="#71-权衡"></a> 7.1 权衡</h3>
+<ul>
+<li><strong>级联的确定性</strong>：ASR 输出可审计、可替换、出错可定位——产品级系统（尤其端侧）首选；特征注入是黑盒，错了不知道是编码器还是 LLM 的锅。</li>
+<li><strong>降采样倍率</strong>：压得越狠上下文越省，但细粒度时间信息（精确时间戳、快速连续指令）丢失越多。Qwen-Audio 的 stride-2 池化（2×）是理解任务与实现复杂度的折中；ASR 子任务要时间戳时必须保留更高分辨率。</li>
+<li><strong>单塔 vs 双塔</strong>：SALMONN 双编码器能力覆盖广，但参数量、对齐复杂度翻倍；Qwen-Audio 单塔靠数据规模取胜。</li>
+<li><strong>冻结音频塔与否</strong>：冻结省显存、防灾难性遗忘；解冻（第二阶段轻微微调）能提升对齐精度——与 VLM 阶段 ViT 冻结策略的权衡一模一样。</li>
+</ul>
+<h3 id="72-失效模式"><a class="markdownIt-Anchor" href="#72-失效模式"></a> 7.2 失效模式</h3>
+<ol>
+<li><strong>长音频 token 爆炸</strong>：忘记降采样或超过模型支持时长 → 截断或 OOM。症状：长音频回答驴唇不对马嘴（被截断）；定位：打印实际 token 数；修复：前端 VAD 分段（你 Stage 2 处理过 Whisper 30s 窗口的同类问题）。</li>
+<li><strong>音频幻觉</strong>：低质量/静音音频下，LLM「脑补」出并不存在的内容（与 Whisper 长音频幻觉同源）。修复：VAD 前置过滤 + 训练时加入负样本（「这段音频里有什么？」→「无有效语音」）。</li>
+<li><strong>副语言信息在 Projector 处漏掉</strong>：对齐阶段只用 ASR 数据训练，Projector 学会只传语义、丢掉情绪信息。症状：情感识别子任务准确率显著低于编码器探针（probe）上限；修复：对齐数据混入情感/事件描述任务（Qwen-Audio、SALMONN 的多任务配方）。</li>
+<li><strong>级联边界的延迟尖峰</strong>：ASR 遇到长句时整句解码慢，LLM 只能干等。症状：偶发的超高首字延迟；修复：流式 ASR 分段喂给 LLM，或换 NAR 模型（Stage 2 结论复用）。</li>
+</ol>
+<hr />
+<h2 id="8-延伸思考题含解析"><a class="markdownIt-Anchor" href="#8-延伸思考题含解析"></a> 8. 延伸思考题（含解析)</h2>
+<p><strong>Q1</strong>：级联范式误差乘法 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>P</mi><mtext>ASR</mtext></msub><mo>⋅</mo><msub><mi>P</mi><mtext>LLM</mtext></msub></mrow><annotation encoding="application/x-tex">P_{\text{ASR}} \cdot P_{\text{LLM}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">ASR</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">LLM</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 在什么假设下成立？现实中会更乐观还是更悲观？<br />
+<strong>A</strong>：假设「ASR 错 → 回答必错」。现实中略乐观：LLM 有语言先验，个别转写错误能靠上下文纠正；但也可能更悲观：转写错误把 LLM 带偏到自信的错误答案。所以该式是量级估计而非精确值——工程上用真实测试集测端到端准确率。</p>
+<p><strong>Q2</strong>：为什么说音频塔与 Vision Tower 同构，但 Projector 不同构？<br />
+<strong>A</strong>：同构在「冻结预训练编码器 + 可学习映射层 + 占位符替换」三件套；不同构在音频是 1D 时序、长度随时长无上限，Projector 必须兼任降采样（cross-attention 采样/池化），而图像固定分辨率下 token 数恒定，MLP 直投即可。</p>
+<p><strong>Q3</strong>：Qwen-Audio 降采样只用 stride-2 池化，而不用 BLIP-2 那样的 Q-Former / cross-attention 采样器，可能出于什么考虑？<br />
+<strong>A</strong>：① 池化零参数，30+ 任务的大规模多任务预训练下最不易过拟合，训练也最稳；② 语音信息沿时间轴相对均匀，固定规则压缩的损失可控，不需要「按内容挑重点」；③ BLIP-2 的重 Q-Former 是为了弥合「冻结 ViT 与冻结 LLM」的表示鸿沟，而 Qwen-Audio 预训练阶段会解冻音频塔联合训练，不需要额外的桥接模块。代价是时间分辨率减半——要精确时间戳的任务就得靠别的设计补。</p>
+<p><strong>Q4</strong>：SALMONN 为什么需要 BEATs 这个第二编码器？只用 Whisper 不行吗？<br />
+<strong>A</strong>：Whisper 在海量语音上训练，特征聚焦「说了什么」；环境声（狗叫、玻璃碎）、音乐结构等事件信息不在其分布内。BEATs 在 AudioSet 上自监督训练，补上非语音声音的表征。双塔拼接 = 能力并集。</p>
+<p><strong>Q5</strong>：Speech-to-Speech 范式为什么至今没有成为主流交付形态？<br />
+<strong>A</strong>：① 训练数据稀缺——成对的「语音问-语音答」远少于文本数据，多数系统仍要借道文本做监督；② 语音 token 序列极长（第 4 周细算），训练推理都贵；③ 文本输出可审计可控，纯语音输出难以做安全过滤与日志追溯。Omni 模型的折中是 Thinker 出文本、Talker 出语音（第 2 周）。</p>
+<hr />
+<h2 id="9-本周附录音频理解的广度一览"><a class="markdownIt-Anchor" href="#9-本周附录音频理解的广度一览"></a> 9. 本周附录：音频理解的「广度」一览</h2>
+<p>学习计划里强调：音频不只是语音。三大非语音子任务与对应数据，决定了音频塔的「通才」程度：</p>
+<table>
+<thead>
+<tr>
+<th>子任务</th>
+<th>代表数据集</th>
+<th>任务形态</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>音频描述（Audio Captioning）</td>
+<td>AudioCaps、Clotho</td>
+<td>听一段环境声 → 文字描述</td>
+</tr>
+<tr>
+<td>声音事件分类</td>
+<td>AudioSet（527 类）</td>
+<td>狗叫/玻璃碎/警笛 → 类别</td>
+</tr>
+<tr>
+<td>音乐理解</td>
+<td>MusicCaps、MTG-Jamendo</td>
+<td>风格/情绪/乐器问答</td>
+</tr>
+</tbody>
+</table>
+<p>Qwen-Audio 与 SALMONN 的多任务预训练都覆盖了这三类——这也是「通用听觉」（generic hearing）与「只做语音」的分界线。你的端侧助手只需要语音能力，但面试谈音频理解广度时，这三类是必答点。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 画出三范式架构图（级联 / 特征注入 / Speech-to-Speech），标注信息流与延迟特征。</li>
+<li>[ ] 把 VLM 阶段的 LLaVA 图与本周特征注入图并排放，完成逐项对照清单（≥5 个同构点 + ≥3 个差异点）。</li>
+<li>[ ] 跑通 6.1 / 6.2 / 6.3 三段代码，断言全部通过。</li>
+<li>[ ] 查表记录：Qwen2-Audio 音频塔帧率、降采样倍率、最长支持音频时长（写进对照清单）。</li>
+<li>[ ] 能口述：误差乘法、延迟加法、token 爆炸三个天花板的数字。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%AF%AD%E9%9F%B3/" rel="tag"># 语音</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-6-%E8%AF%AD%E9%9F%B3%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%20Omni%20%E5%A4%9A%E6%A8%A1%E6%80%81-README/" rel="prev" title="README">
+                  <i class="fa fa-angle-left"></i> README
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-6-%E8%AF%AD%E9%9F%B3%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%20Omni%20%E5%A4%9A%E6%A8%A1%E6%80%81-%E7%AC%AC2%E5%91%A8-Qwen2.5-Omni%E6%B7%B1%E5%BA%A6%E6%8B%86%E8%A7%A3/" rel="next" title="第2周-Qwen2.5-Omni深度拆解">
+                  第2周-Qwen2.5-Omni深度拆解 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">715k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">43:21</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

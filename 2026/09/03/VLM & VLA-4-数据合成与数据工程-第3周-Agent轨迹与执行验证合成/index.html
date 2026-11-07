@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的三个问题 1. ReAct 轨迹（Thought → Action → Observation → Final Answer）的数据结构是什么？为什么 Observation 必须来自真实环境执行？ 2. &#39;执行验证&#39;（Exe…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第3周-Agent轨迹与执行验证合成">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC3%E5%91%A8-Agent%E8%BD%A8%E8%BF%B9%E4%B8%8E%E6%89%A7%E8%A1%8C%E9%AA%8C%E8%AF%81%E5%90%88%E6%88%90/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的三个问题 1. ReAct 轨迹（Thought → Action → Observation → Final Answer）的数据结构是什么？为什么 Observation 必须来自真实环境执行？ 2. &#39;执行验证&#39;（Exe…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T15:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-07T16:05:40.307Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC3%E5%91%A8-Agent%E8%BD%A8%E8%BF%B9%E4%B8%8E%E6%89%A7%E8%A1%8C%E9%AA%8C%E8%AF%81%E5%90%88%E6%88%90/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC3%E5%91%A8-Agent%E8%BD%A8%E8%BF%B9%E4%B8%8E%E6%89%A7%E8%A1%8C%E9%AA%8C%E8%AF%81%E5%90%88%E6%88%90/","path":"2026/09/03/VLM & VLA-4-数据合成与数据工程-第3周-Agent轨迹与执行验证合成/","title":"第3周-Agent轨迹与执行验证合成"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第3周-Agent轨迹与执行验证合成 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-3-%E5%91%A8%E6%95%99%E7%A8%8B%E5%A4%9A%E6%AD%A5-agent-%E8%BD%A8%E8%BF%B9%E4%B8%8E-execution-trajectory-%E5%90%88%E6%88%90"><span class="nav-number">1.</span> <span class="nav-text"> 第 3 周教程：多步 Agent 轨迹与 Execution Trajectory 合成</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86agent-%E6%95%B0%E6%8D%AE%E7%9A%84%E6%A0%B8%E5%BF%83%E6%98%AF%E8%BF%87%E7%A8%8B%E7%9B%91%E7%9D%A3"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：Agent 数据的核心是&quot;过程监督&quot;</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E6%A0%B9%E6%9C%AC%E7%9F%9B%E7%9B%BE%E6%9C%80%E7%BB%88%E7%AD%94%E6%A1%88%E5%AF%B9-%E8%BF%87%E7%A8%8B%E6%AD%A3%E7%A1%AE"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 根本矛盾：最终答案对 ≠ 过程正确</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-react-%E8%BD%A8%E8%BF%B9%E7%9A%84%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 ReAct 轨迹的数据结构</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-%E5%A4%B1%E8%B4%A5%E8%BD%A8%E8%BF%B9%E4%B8%8E%E8%87%AA%E6%88%91%E7%BA%A0%E9%94%99%E8%B4%9F%E6%A0%B7%E6%9C%AC%E7%9A%84%E6%9E%84%E9%80%A0%E6%80%A7%E7%94%A8%E6%B3%95"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 失败轨迹与自我纠错：负样本的构造性用法</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E4%B8%8E%E6%95%B0%E6%8D%AE%E6%B5%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 系统架构与数据流</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E8%BD%A8%E8%BF%B9%E5%90%88%E6%88%90%E6%B5%81%E6%B0%B4%E7%BA%BF"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 轨迹合成流水线</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E7%8E%AF%E5%A2%83%E8%AE%BE%E8%AE%A1%E7%9A%84%E5%85%89%E8%B0%B1"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 环境设计的光谱</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E6%9C%AC%E5%91%A8-mvp%E5%8F%AF%E9%AA%8C%E8%AF%81%E8%BD%A8%E8%BF%B9%E7%94%9F%E6%88%90%E5%99%A8"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 本周 MVP：可验证轨迹生成器</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E5%8D%87%E7%BA%A7%E4%B8%BA-llm-%E7%AD%96%E7%95%A5"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 升级为 LLM 策略</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E5%86%B3%E7%AD%96%E8%A1%A8%E8%BD%A8%E8%BF%B9%E5%90%88%E6%88%90%E7%9A%84%E4%B8%89%E4%B8%AA%E6%97%8B%E9%92%AE"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 决策表：轨迹合成的三个旋钮</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E4%B8%89%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 三个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">257</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">41</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">13</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC3%E5%91%A8-Agent%E8%BD%A8%E8%BF%B9%E4%B8%8E%E6%89%A7%E8%A1%8C%E9%AA%8C%E8%AF%81%E5%90%88%E6%88%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第3周-Agent轨迹与执行验证合成 | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的三个问题 1. ReAct 轨迹（Thought → Action → Observation → Final Answer）的数据结构是什么？为什么 Observation 必须来自真实环境执行？ 2. &#39;执行验证&#39;（Exe…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第3周-Agent轨迹与执行验证合成
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 23:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T23:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-08 00:05:40" itemprop="dateModified" datetime="2026-11-08T00:05:40+08:00">2026-11-08</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Stage 4-数据合成与数据工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>15 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的三个问题 1. ReAct 轨迹（Thought → Action → Observation → Final Answer）的数据结构是什么？为什么 Observation 必须来自真实环境执行？ 2. '执行验证'（Exe…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-3-周教程多步-agent-轨迹与-execution-trajectory-合成"><a class="markdownIt-Anchor" href="#第-3-周教程多步-agent-轨迹与-execution-trajectory-合成"></a> 第 3 周教程：多步 Agent 轨迹与 Execution Trajectory 合成</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>ReAct 轨迹（Thought → Action → Observation → Final Answer）的数据结构是什么？为什么 Observation 必须来自真实环境执行？</li>
+<li>“执行验证”（Execution-based Verification）如何把轨迹数据从&quot;看起来对&quot;升级为&quot;验证过的对&quot;？</li>
+<li>失败轨迹与自我纠错数据为什么值钱？怎么合成？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 3 周。交付物：简易 Agent 轨迹生成器——在模拟环境（代码解释器/网页交互器）中自动记录多步工具调用，产出 50 条带环境反馈的可验证轨迹数据集。</p>
+<p><strong>勘误</strong>：学习计划所引 TaskCraft 标题不完整，正确为 <em><strong>TaskCraft: Automated Generation of Agentic Tasks</strong></em>（arXiv:2506.10055，已核实：OPPO Personal AI Lab，ICLR 2026；约 3.6 万条任务，难度分三层：原子任务 → 深度扩展的多跳任务 → 宽度扩展的多工具任务，带执行轨迹与可验证器）。AgentTuning（arXiv:2310.12823）标题无误。</p>
+<hr />
+<h2 id="1-第一性原理agent-数据的核心是过程监督"><a class="markdownIt-Anchor" href="#1-第一性原理agent-数据的核心是过程监督"></a> 1. 第一性原理：Agent 数据的核心是&quot;过程监督&quot;</h2>
+<h3 id="11-根本矛盾最终答案对-过程正确"><a class="markdownIt-Anchor" href="#11-根本矛盾最终答案对-过程正确"></a> 1.1 根本矛盾：最终答案对 ≠ 过程正确</h3>
+<p>普通 SFT 数据只监督<strong>最终答案</strong>（question → answer），Agent 任务的监督对象是<strong>决策序列</strong>：选什么工具、传什么参数、如何解读观察、失败后如何调整。这里有一个根本性的验证难题：</p>
+<ul>
+<li>教师模型写出的轨迹，<strong>每一步都可能错</strong>（调了不必要的工具、参数幻觉、对观察的误读），但只要最终答案碰巧对，LLM-as-a-Judge 也会给高分——判分者自己就在幻觉。</li>
+<li>反过来，一条&quot;答案错&quot;的轨迹可能是最有价值的训练数据（见 1.3）。</li>
+</ul>
+<p><strong>执行验证（Execution-based Verification）是唯一系统性解法</strong>：让轨迹在<strong>真实/模拟环境里重放</strong>，环境的返回值（Execution Status = 0/Success）是<strong>客观的过程监督信号</strong>。环境不幻觉——代码要么跑通要么报错，搜索要么返回结果要么为空。这就是本条合成线的第一性优势：与第 1 周的&quot;教师蒸馏&quot;不同，<strong>过程真值来自环境这个不可腐蚀的裁判</strong>。</p>
+<p>三种真值来源的对比（承接 Stage 4 的框架表）：</p>
+<table>
+<thead>
+<tr>
+<th>真值类型</th>
+<th>裁判</th>
+<th>可信度</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>教师标注（答案级）</td>
+<td>LLM/VLM</td>
+<td>会幻觉</td>
+<td>描述、推理类</td>
+</tr>
+<tr>
+<td>程序工具（几何级）</td>
+<td>检测器/计算</td>
+<td>精确可复现</td>
+<td>空间/感知类（第 2 周）</td>
+</tr>
+<tr>
+<td><strong>环境执行（过程级）</strong></td>
+<td>沙盒/模拟器</td>
+<td><strong>客观过程监督</strong></td>
+<td><strong>Agent 轨迹（本周）</strong></td>
+</tr>
+</tbody>
+</table>
+<h3 id="12-react-轨迹的数据结构"><a class="markdownIt-Anchor" href="#12-react-轨迹的数据结构"></a> 1.2 ReAct 轨迹的数据结构</h3>
+<p>ReAct（Reasoning + Acting）把决策序列显式化为交替的文本段：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;task&quot;</span><span class="punctuation">:</span> <span class="string">&quot;统计 /data 目录下所有 CSV 的总行数并写入 result.txt&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;trajectory&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;thought&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="string">&quot;需要先看目录里有哪些 CSV 文件，调用 list_files。&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;action&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;tool&quot;</span><span class="punctuation">:</span> <span class="string">&quot;list_files&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;args&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;path&quot;</span><span class="punctuation">:</span> <span class="string">&quot;/data&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">&#125;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;observation&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="string">&quot;sales_2024.csv, sales_2025.csv&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;thought&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="string">&quot;两个文件，逐个统计行数。&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;action&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;tool&quot;</span><span class="punctuation">:</span> <span class="string">&quot;run_python&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;args&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;code&quot;</span><span class="punctuation">:</span> <span class="string">&quot;...len(open(f).readlines())...&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">&#125;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;observation&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="string">&quot;sales_2024.csv: 1024\nsales_2025.csv: 890&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;thought&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="string">&quot;共 1914 行，写入结果文件。&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;action&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;tool&quot;</span><span class="punctuation">:</span> <span class="string">&quot;write_file&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;args&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;path&quot;</span><span class="punctuation">:</span> <span class="string">&quot;result.txt&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;text&quot;</span><span class="punctuation">:</span> <span class="string">&quot;1914&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">&#125;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;observation&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="string">&quot;written&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;status&quot;</span><span class="punctuation">:</span> <span class="number">0</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">    <span class="punctuation">&#123;</span><span class="attr">&quot;role&quot;</span><span class="punctuation">:</span> <span class="string">&quot;final_answer&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;content&quot;</span><span class="punctuation">:</span> <span class="string">&quot;共 1914 行，已写入 result.txt&quot;</span><span class="punctuation">&#125;</span></span><br><span class="line">  <span class="punctuation">]</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;verification&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;status&quot;</span><span class="punctuation">:</span> <span class="number">0</span><span class="punctuation">,</span> <span class="attr">&quot;goal_check&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">,</span> <span class="attr">&quot;replayed&quot;</span><span class="punctuation">:</span> <span class="literal"><span class="keyword">true</span></span><span class="punctuation">&#125;</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<p><strong>训练视角的关键细节</strong>（衔接 Stage 2 的 loss mask）：SFT 时 <strong>Thought 与 Action 是监督目标</strong>（模型要学的决策），<strong>Observation 必须掩码</strong>（label=-100）——它是环境生成的输入，不是模型的输出。这与 Stage 2 第 1 周的&quot;视觉 Token 掩码&quot;完全同构：<strong>凡是环境/外部系统产出的内容都不算 loss</strong>。AgentTuning 的混合微调（AgentInstruct 轨迹 + 通用指令混训）则解决 Stage 3 老朋友&quot;灾难性遗忘&quot;。</p>
+<h3 id="13-失败轨迹与自我纠错负样本的构造性用法"><a class="markdownIt-Anchor" href="#13-失败轨迹与自我纠错负样本的构造性用法"></a> 1.3 失败轨迹与自我纠错：负样本的构造性用法</h3>
+<p>故意引入错误动作的轨迹（Failure &amp; Self-Correction）有三重价值：</p>
+<ol>
+<li><strong>教会&quot;读懂环境反馈&quot;</strong>：错误动作触发报错，模型必须学会从 <code>KeyError: 'sales'</code> 这类反馈中定位问题——这种能力只能从&quot;真的失败过&quot;的轨迹中学。</li>
+<li><strong>教会&quot;回退与修复&quot;</strong>：纠正段（观察失败 → 归因 → 换方案 → 成功）是最难标注、也最难自己涌现的行为，必须显式合成。</li>
+<li><strong>对比学习式的信号</strong>：成功与失败轨迹成对，可作为 DPO 的偏好对（失败为 rejected）——为 Stage 6 的偏好对齐预埋接口。</li>
+</ol>
+<p>合成模式（每个都可程序化）：</p>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>注入的错误</th>
+<th>期望的纠错段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>参数幻觉</td>
+<td>调用不存在的文件/字段</td>
+<td>读报错 → <code>list_files</code> 确认正确名称 → 重试成功</td>
+</tr>
+<tr>
+<td>工具误用</td>
+<td>该用 <code>run_python</code> 处处用了 <code>grep</code></td>
+<td>结果不完整 → 切换工具 → 成功</td>
+</tr>
+<tr>
+<td>逻辑跳步</td>
+<td>未确认文件存在就写入</td>
+<td>报目录不存在 → 先建目录 → 成功</td>
+</tr>
+<tr>
+<td>过程冗余（软失败）</td>
+<td>重复调用同一工具</td>
+<td>观察到重复 → 合并步骤（教学效率型负例）</td>
+</tr>
+</tbody>
+</table>
+<p>注意：<strong>纠错轨迹的监督段包含&quot;错误动作&quot;本身</strong>——错误 action 前后的 thought 是模型要学的&quot;如何识别并修正&quot;，但错误 action 自身是否算 loss 有两派做法（学&quot;避免&quot;需要让模型见过错误模式；担心学坏则掩码错误 action 只留纠错思考）。工程默认：<strong>错误 action 掩码、前后 thought 与修复动作保留</strong>。</p>
+<hr />
+<h2 id="2-系统架构与数据流"><a class="markdownIt-Anchor" href="#2-系统架构与数据流"></a> 2. 系统架构与数据流</h2>
+<h3 id="21-轨迹合成流水线"><a class="markdownIt-Anchor" href="#21-轨迹合成流水线"></a> 2.1 轨迹合成流水线</h3>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line">任务池 (TaskCraft 式: 任务+所需工具+验证器)</span><br><span class="line">   │  采样</span><br><span class="line">   ▼</span><br><span class="line">┌─ 策略器 ─────────────────────────────────────┐</span><br><span class="line">│ 教师 LLM (或规则策略) 生成 ReAct 序列:          │</span><br><span class="line">│   Thought -&gt; Action(工具+参数)                │</span><br><span class="line">└──────────────────────────────────────────────┘</span><br><span class="line">   ▼</span><br><span class="line">┌─ 沙盒执行器 ───────  环境是唯一裁判 ───────────┐</span><br><span class="line">│ code interpreter / 文件沙盒 / mock HTTP       │</span><br><span class="line">│ 执行 Action -&gt; Observation + status           │</span><br><span class="line">│ 超时/危险操作熔断                               │</span><br><span class="line">└──────────────────────────────────────────────┘</span><br><span class="line">   ▼</span><br><span class="line">┌─ 验证器 ─────────────────────────────────────┐</span><br><span class="line">│ status==0 ? 目标状态检查 (result.txt 存在?)    │</span><br><span class="line">│ 答案核对 (1914 == 真值?)                       │</span><br><span class="line">├─ (可选) 负例注入: 按模式篡改一步 action 重放 ────┤</span><br><span class="line">└──────────────────────────────────────────────┘</span><br><span class="line">   ▼</span><br><span class="line">JSONL: &#123;task, trajectory, verification, mode: success|failure&#125;</span><br></pre></td></tr></table></figure>
+<p>两个架构要点：</p>
+<ol>
+<li><strong>观察必须来自重放，不能由 LLM 补写</strong>——LLM 补写的 Observation 会在数值/格式上露馅（比如编造的文件列表与沙盒真实状态不符），更重要的是它使 <code>verification</code> 失去意义。宁可轨迹粗糙，不可观察造假。</li>
+<li><strong>验证器与任务同时生成</strong>：TaskCraft 式数据集的任务定义里就带着 <code>golden_answer</code> 与 <code>valid_hop</code>（所需工具步数）——<strong>任务与判卷标准是一个原子单元</strong>，先造任务再造验证器会导致两者脱节。</li>
+</ol>
+<h3 id="22-环境设计的光谱"><a class="markdownIt-Anchor" href="#22-环境设计的光谱"></a> 2.2 环境设计的光谱</h3>
+<table>
+<thead>
+<tr>
+<th>环境</th>
+<th>真实度</th>
+<th>实现成本</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>代码解释器（沙盒容器）</td>
+<td>高（真执行）</td>
+<td>低（现成方案多）</td>
+<td>计算/文件/数据处理任务</td>
+</tr>
+<tr>
+<td>Mock API（记录-重放真实响应）</td>
+<td>中</td>
+<td>中</td>
+<td>工具调用/搜索类任务</td>
+</tr>
+<tr>
+<td>规则模拟器（自研状态机）</td>
+<td>低~中</td>
+<td>高</td>
+<td>具身/游戏类，Stage 9 前瞻</td>
+</tr>
+<tr>
+<td>真实网页/UI</td>
+<td>最高</td>
+<td>极高</td>
+<td>生产级 Agent，不在本周范围</td>
+</tr>
+</tbody>
+</table>
+<p>本周 MVP 用&quot;文件沙盒 + 代码解释器&quot;——成本低且验证信号硬。</p>
+<hr />
+<h2 id="3-实现与验证"><a class="markdownIt-Anchor" href="#3-实现与验证"></a> 3. 实现与验证</h2>
+<h3 id="31-本周-mvp可验证轨迹生成器"><a class="markdownIt-Anchor" href="#31-本周-mvp可验证轨迹生成器"></a> 3.1 本周 MVP：可验证轨迹生成器</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br><span class="line">188</span><br><span class="line">189</span><br><span class="line">190</span><br><span class="line">191</span><br><span class="line">192</span><br><span class="line">193</span><br><span class="line">194</span><br><span class="line">195</span><br><span class="line">196</span><br><span class="line">197</span><br><span class="line">198</span><br><span class="line">199</span><br><span class="line">200</span><br><span class="line">201</span><br><span class="line">202</span><br><span class="line">203</span><br><span class="line">204</span><br><span class="line">205</span><br><span class="line">206</span><br><span class="line">207</span><br><span class="line">208</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">ReAct 轨迹生成器: 任务池 -&gt; 教师策略 -&gt; 沙盒执行 -&gt; 验证, 含负例注入。</span></span><br><span class="line"><span class="string">运行方式: python stage4_week3_agent_traj.py --out traj.jsonl --n 50</span></span><br><span class="line"><span class="string">依赖: 标准库 (教师策略用规则版, 接 LLM 时替换 strategy 函数)</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> argparse</span><br><span class="line"><span class="keyword">import</span> json</span><br><span class="line"><span class="keyword">import</span> random</span><br><span class="line"><span class="keyword">import</span> subprocess</span><br><span class="line"><span class="keyword">import</span> sys</span><br><span class="line"><span class="keyword">import</span> tempfile</span><br><span class="line"><span class="keyword">from</span> pathlib <span class="keyword">import</span> Path</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 沙盒环境: 文件 + 代码执行 ----------</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">FileSandbox</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, root: <span class="built_in">str</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>.root = Path(root)</span><br><span class="line">        <span class="variable language_">self</span>.root.mkdir(exist_ok=<span class="literal">True</span>)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">list_files</span>(<span class="params">self, path=<span class="string">&quot;.&quot;</span></span>):</span><br><span class="line">        p = <span class="variable language_">self</span>.root / path</span><br><span class="line">        <span class="keyword">if</span> <span class="keyword">not</span> p.exists():</span><br><span class="line">            <span class="keyword">return</span> &#123;<span class="string">&quot;status&quot;</span>: <span class="number">1</span>, <span class="string">&quot;obs&quot;</span>: <span class="string">f&quot;No such directory: <span class="subst">&#123;path&#125;</span>&quot;</span>&#125;</span><br><span class="line">        <span class="keyword">return</span> &#123;<span class="string">&quot;status&quot;</span>: <span class="number">0</span>, <span class="string">&quot;obs&quot;</span>: <span class="string">&quot;, &quot;</span>.join(<span class="built_in">sorted</span>(f.name <span class="keyword">for</span> f <span class="keyword">in</span> p.iterdir()))&#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">run_python</span>(<span class="params">self, code: <span class="built_in">str</span>, timeout: <span class="built_in">int</span> = <span class="number">10</span></span>):</span><br><span class="line">        <span class="keyword">try</span>:</span><br><span class="line">            r = subprocess.run([sys.executable, <span class="string">&quot;-c&quot;</span>, code], capture_output=<span class="literal">True</span>,</span><br><span class="line">                               text=<span class="literal">True</span>, timeout=timeout, cwd=<span class="variable language_">self</span>.root)</span><br><span class="line">            <span class="keyword">return</span> &#123;<span class="string">&quot;status&quot;</span>: r.returncode, <span class="string">&quot;obs&quot;</span>: (r.stdout <span class="keyword">or</span> r.stderr).strip()&#125;</span><br><span class="line">        <span class="keyword">except</span> subprocess.TimeoutExpired:</span><br><span class="line">            <span class="keyword">return</span> &#123;<span class="string">&quot;status&quot;</span>: <span class="number">124</span>, <span class="string">&quot;obs&quot;</span>: <span class="string">&quot;TIMEOUT&quot;</span>&#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">write_file</span>(<span class="params">self, path, text</span>):</span><br><span class="line">        (<span class="variable language_">self</span>.root / path).write_text(text)</span><br><span class="line">        <span class="keyword">return</span> &#123;<span class="string">&quot;status&quot;</span>: <span class="number">0</span>, <span class="string">&quot;obs&quot;</span>: <span class="string">&quot;written&quot;</span>&#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">execute</span>(<span class="params">self, tool, **args</span>):</span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">getattr</span>(<span class="variable language_">self</span>, tool)(**args)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 任务池: 任务、验证器与策略原子绑定 ----------</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">make_tasks</span>(<span class="params">sandbox: FileSandbox</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;向沙盒投放 3 类任务, 返回 (生成器, 策略) 原子对&quot;&quot;&quot;</span></span><br><span class="line">    (sandbox.root / <span class="string">&quot;data&quot;</span>).mkdir(exist_ok=<span class="literal">True</span>)</span><br><span class="line">    (sandbox.root / <span class="string">&quot;data&quot;</span> / <span class="string">&quot;a.csv&quot;</span>).write_text(<span class="string">&quot;x\n1\n2\n3\n&quot;</span>)</span><br><span class="line">    (sandbox.root / <span class="string">&quot;data&quot;</span> / <span class="string">&quot;b.csv&quot;</span>).write_text(<span class="string">&quot;y\n4\n5\n&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">task_count</span>(<span class="params">sandbox</span>):</span><br><span class="line">        n = <span class="built_in">sum</span>(<span class="built_in">len</span>((sandbox.root / <span class="string">&quot;data&quot;</span> / f).read_text().splitlines()) - <span class="number">1</span></span><br><span class="line">                <span class="keyword">for</span> f <span class="keyword">in</span> [<span class="string">&quot;a.csv&quot;</span>, <span class="string">&quot;b.csv&quot;</span>])</span><br><span class="line">        <span class="keyword">return</span> &#123;<span class="string">&quot;task&quot;</span>: <span class="string">&quot;统计 /data 目录下所有 CSV 的数据行总数并写入 total.txt&quot;</span>,</span><br><span class="line">                <span class="string">&quot;goal_file&quot;</span>: <span class="string">&quot;total.txt&quot;</span>, <span class="string">&quot;golden&quot;</span>: <span class="built_in">str</span>(n)&#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">task_sort</span>(<span class="params">sandbox</span>):</span><br><span class="line">        <span class="keyword">return</span> &#123;<span class="string">&quot;task&quot;</span>: <span class="string">&quot;把 /data 下所有 CSV 文件名按字母序写入 sorted.txt (逗号分隔)&quot;</span>,</span><br><span class="line">                <span class="string">&quot;goal_file&quot;</span>: <span class="string">&quot;sorted.txt&quot;</span>, <span class="string">&quot;golden&quot;</span>: <span class="string">&quot;a.csv,b.csv&quot;</span>&#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">task_err</span>(<span class="params">sandbox</span>):</span><br><span class="line">        <span class="keyword">return</span> &#123;<span class="string">&quot;task&quot;</span>: <span class="string">&quot;读取 /data/missing.csv 的第一行并写入 head.txt；&quot;</span></span><br><span class="line">                        <span class="string">&quot;若文件不存在则改为读取 a.csv 并在 head.txt 注明来源&quot;</span>,</span><br><span class="line">                <span class="string">&quot;goal_file&quot;</span>: <span class="string">&quot;head.txt&quot;</span>, <span class="string">&quot;golden&quot;</span>: <span class="literal">None</span>&#125;   <span class="comment"># 开放验证</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">return</span> [(task_count, strategy_count), (task_sort, strategy_sort),</span><br><span class="line">            (task_err, strategy_err)]</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 教师策略 (规则版; 换成 LLM 调用即可升级) ----------</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">strategy_count</span>(<span class="params">sandbox, t</span>):</span><br><span class="line">    files = sandbox.list_files(<span class="string">&quot;data&quot;</span>)[<span class="string">&quot;obs&quot;</span>].split(<span class="string">&quot;, &quot;</span>)</span><br><span class="line">    lines = []</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;thought&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">&quot;先列出 data 目录文件。&quot;</span>&#125;)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;action&quot;</span>, <span class="string">&quot;content&quot;</span>: &#123;<span class="string">&quot;tool&quot;</span>: <span class="string">&quot;list_files&quot;</span>, <span class="string">&quot;args&quot;</span>: &#123;<span class="string">&quot;path&quot;</span>: <span class="string">&quot;data&quot;</span>&#125;&#125;&#125;)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;observation&quot;</span>, <span class="string">&quot;content&quot;</span>: sandbox.execute(<span class="string">&quot;list_files&quot;</span>, path=<span class="string">&quot;data&quot;</span>)[<span class="string">&quot;obs&quot;</span>]&#125;)</span><br><span class="line">    total = <span class="number">0</span></span><br><span class="line">    <span class="keyword">for</span> f <span class="keyword">in</span> files:</span><br><span class="line">        code = <span class="string">f&quot;print(len(open(&#x27;data/<span class="subst">&#123;f&#125;</span>&#x27;).readlines())-1)&quot;</span></span><br><span class="line">        r = sandbox.execute(<span class="string">&quot;run_python&quot;</span>, code=code)</span><br><span class="line">        lines += [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;thought&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">f&quot;统计 <span class="subst">&#123;f&#125;</span> 的数据行。&quot;</span>&#125;,</span><br><span class="line">                  &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;action&quot;</span>, <span class="string">&quot;content&quot;</span>: &#123;<span class="string">&quot;tool&quot;</span>: <span class="string">&quot;run_python&quot;</span>, <span class="string">&quot;args&quot;</span>: &#123;<span class="string">&quot;code&quot;</span>: code&#125;&#125;&#125;,</span><br><span class="line">                  &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;observation&quot;</span>, <span class="string">&quot;content&quot;</span>: r[<span class="string">&quot;obs&quot;</span>], <span class="string">&quot;status&quot;</span>: r[<span class="string">&quot;status&quot;</span>]&#125;]</span><br><span class="line">        total += <span class="built_in">int</span>(r[<span class="string">&quot;obs&quot;</span>])</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;thought&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">f&quot;共 <span class="subst">&#123;total&#125;</span> 行, 写入结果。&quot;</span>&#125;)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;action&quot;</span>, <span class="string">&quot;content&quot;</span>: &#123;<span class="string">&quot;tool&quot;</span>: <span class="string">&quot;write_file&quot;</span>,</span><br><span class="line">                 <span class="string">&quot;args&quot;</span>: &#123;<span class="string">&quot;path&quot;</span>: <span class="string">&quot;total.txt&quot;</span>, <span class="string">&quot;text&quot;</span>: <span class="built_in">str</span>(total)&#125;&#125;&#125;)</span><br><span class="line">    r = sandbox.execute(<span class="string">&quot;write_file&quot;</span>, path=<span class="string">&quot;total.txt&quot;</span>, text=<span class="built_in">str</span>(total))</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;observation&quot;</span>, <span class="string">&quot;content&quot;</span>: r[<span class="string">&quot;obs&quot;</span>], <span class="string">&quot;status&quot;</span>: r[<span class="string">&quot;status&quot;</span>]&#125;)</span><br><span class="line">    <span class="keyword">return</span> lines</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">strategy_sort</span>(<span class="params">sandbox, t</span>):</span><br><span class="line">    lines = [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;thought&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">&quot;列出 data 目录后按字母序写入。&quot;</span>&#125;,</span><br><span class="line">             &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;action&quot;</span>, <span class="string">&quot;content&quot;</span>: &#123;<span class="string">&quot;tool&quot;</span>: <span class="string">&quot;list_files&quot;</span>, <span class="string">&quot;args&quot;</span>: &#123;<span class="string">&quot;path&quot;</span>: <span class="string">&quot;data&quot;</span>&#125;&#125;&#125;]</span><br><span class="line">    r = sandbox.execute(<span class="string">&quot;list_files&quot;</span>, path=<span class="string">&quot;data&quot;</span>)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;observation&quot;</span>, <span class="string">&quot;content&quot;</span>: r[<span class="string">&quot;obs&quot;</span>], <span class="string">&quot;status&quot;</span>: r[<span class="string">&quot;status&quot;</span>]&#125;)</span><br><span class="line">    code = (<span class="string">&quot;import os\n&quot;</span></span><br><span class="line">            <span class="string">&quot;print(&#x27;,&#x27;.join(sorted(f for f in os.listdir(&#x27;data&#x27;) if f.endswith(&#x27;.csv&#x27;))))&quot;</span>)</span><br><span class="line">    r2 = sandbox.execute(<span class="string">&quot;run_python&quot;</span>, code=code)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;thought&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">&quot;用代码对 CSV 文件名排序并核对。&quot;</span>&#125;)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;action&quot;</span>, <span class="string">&quot;content&quot;</span>: &#123;<span class="string">&quot;tool&quot;</span>: <span class="string">&quot;run_python&quot;</span>, <span class="string">&quot;args&quot;</span>: &#123;<span class="string">&quot;code&quot;</span>: code&#125;&#125;&#125;)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;observation&quot;</span>, <span class="string">&quot;content&quot;</span>: r2[<span class="string">&quot;obs&quot;</span>], <span class="string">&quot;status&quot;</span>: r2[<span class="string">&quot;status&quot;</span>]&#125;)</span><br><span class="line">    names = r2[<span class="string">&quot;obs&quot;</span>].split(<span class="string">&quot;,&quot;</span>)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;thought&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">&quot;排序结果已确认, 写入 sorted.txt。&quot;</span>&#125;)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;action&quot;</span>, <span class="string">&quot;content&quot;</span>: &#123;<span class="string">&quot;tool&quot;</span>: <span class="string">&quot;write_file&quot;</span>,</span><br><span class="line">                 <span class="string">&quot;args&quot;</span>: &#123;<span class="string">&quot;path&quot;</span>: <span class="string">&quot;sorted.txt&quot;</span>, <span class="string">&quot;text&quot;</span>: <span class="string">&quot;,&quot;</span>.join(names)&#125;&#125;&#125;)</span><br><span class="line">    r = sandbox.execute(<span class="string">&quot;write_file&quot;</span>, path=<span class="string">&quot;sorted.txt&quot;</span>, text=<span class="string">&quot;,&quot;</span>.join(names))</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;observation&quot;</span>, <span class="string">&quot;content&quot;</span>: r[<span class="string">&quot;obs&quot;</span>], <span class="string">&quot;status&quot;</span>: r[<span class="string">&quot;status&quot;</span>]&#125;)</span><br><span class="line">    <span class="keyword">return</span> lines</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">strategy_err</span>(<span class="params">sandbox, t</span>):</span><br><span class="line">    lines = [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;thought&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">&quot;先列目录确认 missing.csv 是否存在。&quot;</span>&#125;,</span><br><span class="line">             &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;action&quot;</span>, <span class="string">&quot;content&quot;</span>: &#123;<span class="string">&quot;tool&quot;</span>: <span class="string">&quot;list_files&quot;</span>, <span class="string">&quot;args&quot;</span>: &#123;<span class="string">&quot;path&quot;</span>: <span class="string">&quot;data&quot;</span>&#125;&#125;&#125;]</span><br><span class="line">    r0 = sandbox.execute(<span class="string">&quot;list_files&quot;</span>, path=<span class="string">&quot;data&quot;</span>)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;observation&quot;</span>, <span class="string">&quot;content&quot;</span>: r0[<span class="string">&quot;obs&quot;</span>], <span class="string">&quot;status&quot;</span>: r0[<span class="string">&quot;status&quot;</span>]&#125;)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;thought&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">&quot;missing.csv 不在列表中, 按任务降级读取 a.csv。&quot;</span>&#125;)</span><br><span class="line">    code = (<span class="string">&quot;import os\n&quot;</span></span><br><span class="line">            <span class="string">&quot;src = &#x27;data/missing.csv&#x27; if os.path.exists(&#x27;data/missing.csv&#x27;) else &#x27;data/a.csv&#x27;\n&quot;</span></span><br><span class="line">            <span class="string">&quot;print(src + &#x27;:&#x27; + open(src).readline().strip())&quot;</span>)</span><br><span class="line">    r = sandbox.execute(<span class="string">&quot;run_python&quot;</span>, code=code)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;action&quot;</span>, <span class="string">&quot;content&quot;</span>: &#123;<span class="string">&quot;tool&quot;</span>: <span class="string">&quot;run_python&quot;</span>, <span class="string">&quot;args&quot;</span>: &#123;<span class="string">&quot;code&quot;</span>: code&#125;&#125;&#125;)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;observation&quot;</span>, <span class="string">&quot;content&quot;</span>: r[<span class="string">&quot;obs&quot;</span>], <span class="string">&quot;status&quot;</span>: r[<span class="string">&quot;status&quot;</span>]&#125;)</span><br><span class="line">    out = r[<span class="string">&quot;obs&quot;</span>]                                <span class="comment"># 形如 data/a.csv:x</span></span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;thought&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">&quot;已确认来源, 注明后写入 head.txt。&quot;</span>&#125;)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;action&quot;</span>, <span class="string">&quot;content&quot;</span>: &#123;<span class="string">&quot;tool&quot;</span>: <span class="string">&quot;write_file&quot;</span>,</span><br><span class="line">                 <span class="string">&quot;args&quot;</span>: &#123;<span class="string">&quot;path&quot;</span>: <span class="string">&quot;head.txt&quot;</span>, <span class="string">&quot;text&quot;</span>: out&#125;&#125;&#125;)</span><br><span class="line">    r2 = sandbox.execute(<span class="string">&quot;write_file&quot;</span>, path=<span class="string">&quot;head.txt&quot;</span>, text=out)</span><br><span class="line">    lines.append(&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;observation&quot;</span>, <span class="string">&quot;content&quot;</span>: r2[<span class="string">&quot;obs&quot;</span>], <span class="string">&quot;status&quot;</span>: r2[<span class="string">&quot;status&quot;</span>]&#125;)</span><br><span class="line">    <span class="keyword">return</span> lines</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">inject_failure</span>(<span class="params">trajectory, sandbox, mode, rng</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;负例注入: 篡改一步 run_python action 并真实重放, 生成纠错段&quot;&quot;&quot;</span></span><br><span class="line">    <span class="comment"># 定位第一个 run_python 步 (list_files 无法注入参数错误)</span></span><br><span class="line">    idx = <span class="built_in">next</span>((i <span class="keyword">for</span> i, s <span class="keyword">in</span> <span class="built_in">enumerate</span>(trajectory)</span><br><span class="line">                <span class="keyword">if</span> s[<span class="string">&quot;role&quot;</span>] == <span class="string">&quot;action&quot;</span> <span class="keyword">and</span> s[<span class="string">&quot;content&quot;</span>].get(<span class="string">&quot;tool&quot;</span>) == <span class="string">&quot;run_python&quot;</span>), <span class="literal">None</span>)</span><br><span class="line">    <span class="keyword">if</span> idx <span class="keyword">is</span> <span class="literal">None</span>:</span><br><span class="line">        <span class="keyword">return</span> trajectory</span><br><span class="line">    act = trajectory[idx][<span class="string">&quot;content&quot;</span>]</span><br><span class="line">    <span class="keyword">if</span> mode == <span class="string">&quot;wrong_arg&quot;</span> <span class="keyword">and</span> <span class="string">&quot;data/&quot;</span> <span class="keyword">in</span> act[<span class="string">&quot;args&quot;</span>].get(<span class="string">&quot;code&quot;</span>, <span class="string">&quot;&quot;</span>):</span><br><span class="line">        bad = &#123;**act, <span class="string">&quot;args&quot;</span>: &#123;<span class="string">&quot;code&quot;</span>: act[<span class="string">&quot;args&quot;</span>][<span class="string">&quot;code&quot;</span>].replace(<span class="string">&quot;data/&quot;</span>, <span class="string">&quot;data/missing_&quot;</span>)&#125;&#125;</span><br><span class="line">        err = sandbox.execute(**&#123;<span class="string">&quot;tool&quot;</span>: bad[<span class="string">&quot;tool&quot;</span>], **bad[<span class="string">&quot;args&quot;</span>]&#125;)</span><br><span class="line">        correction = [</span><br><span class="line">            &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;thought&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">f&quot;执行报错(<span class="subst">&#123;err[<span class="string">&#x27;obs&#x27;</span>][:<span class="number">40</span>]&#125;</span>)，文件名可能不对，先列目录核实。&quot;</span>&#125;,</span><br><span class="line">            &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;action&quot;</span>, <span class="string">&quot;content&quot;</span>: &#123;<span class="string">&quot;tool&quot;</span>: <span class="string">&quot;list_files&quot;</span>, <span class="string">&quot;args&quot;</span>: &#123;<span class="string">&quot;path&quot;</span>: <span class="string">&quot;data&quot;</span>&#125;&#125;&#125;,</span><br><span class="line">            &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;observation&quot;</span>, <span class="string">&quot;content&quot;</span>: sandbox.execute(<span class="string">&quot;list_files&quot;</span>, path=<span class="string">&quot;data&quot;</span>)[<span class="string">&quot;obs&quot;</span>]&#125;,</span><br><span class="line">            &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;thought&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">&quot;确认正确文件名，用原始代码重试。&quot;</span>&#125;]</span><br><span class="line">        <span class="keyword">return</span> trajectory[:idx] + [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;action&quot;</span>, <span class="string">&quot;content&quot;</span>: bad&#125;,</span><br><span class="line">                                   &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;observation&quot;</span>, <span class="string">&quot;content&quot;</span>: err[<span class="string">&quot;obs&quot;</span>], <span class="string">&quot;status&quot;</span>: err[<span class="string">&quot;status&quot;</span>]&#125;] + \</span><br><span class="line">               correction + trajectory[idx:]</span><br><span class="line">    <span class="keyword">return</span> trajectory                     <span class="comment"># 未适配的注入模式原样返回</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">verify</span>(<span class="params">sandbox, t</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;执行验证: 目标文件存在 + 内容匹配 golden&quot;&quot;&quot;</span></span><br><span class="line">    gf = sandbox.root / t[<span class="string">&quot;goal_file&quot;</span>]</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">not</span> gf.exists():</span><br><span class="line">        <span class="keyword">return</span> &#123;<span class="string">&quot;status&quot;</span>: <span class="number">1</span>, <span class="string">&quot;goal_check&quot;</span>: <span class="literal">False</span>&#125;</span><br><span class="line">    ok = t[<span class="string">&quot;golden&quot;</span>] <span class="keyword">is</span> <span class="literal">None</span> <span class="keyword">or</span> gf.read_text().strip() == t[<span class="string">&quot;golden&quot;</span>]</span><br><span class="line">    <span class="keyword">return</span> &#123;<span class="string">&quot;status&quot;</span>: <span class="number">0</span>, <span class="string">&quot;goal_check&quot;</span>: ok&#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    ap = argparse.ArgumentParser()</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--out&quot;</span>, default=<span class="string">&quot;traj.jsonl&quot;</span>); ap.add_argument(<span class="string">&quot;--n&quot;</span>, <span class="built_in">type</span>=<span class="built_in">int</span>, default=<span class="number">50</span>)</span><br><span class="line">    args = ap.parse_args()</span><br><span class="line">    rng = random.Random(<span class="number">0</span>)</span><br><span class="line"></span><br><span class="line">    records = []</span><br><span class="line">    <span class="keyword">while</span> <span class="built_in">len</span>(records) &lt; args.n:</span><br><span class="line">        <span class="keyword">with</span> tempfile.TemporaryDirectory() <span class="keyword">as</span> tmp:</span><br><span class="line">            sandbox = FileSandbox(tmp)</span><br><span class="line">            makers = make_tasks(sandbox)</span><br><span class="line">            <span class="comment"># 任务与策略原子绑定后按权重抽取: count 为主线 (4:1:1)</span></span><br><span class="line">            maker, strategy = rng.choices(makers, weights=[<span class="number">4</span>, <span class="number">1</span>, <span class="number">1</span>])[<span class="number">0</span>]</span><br><span class="line">            t = maker(sandbox)</span><br><span class="line">            full = strategy(sandbox, t)</span><br><span class="line">            v = verify(sandbox, t)</span><br><span class="line">            mode = <span class="string">&quot;success&quot;</span> <span class="keyword">if</span> (v[<span class="string">&quot;status&quot;</span>] == <span class="number">0</span> <span class="keyword">and</span> v[<span class="string">&quot;goal_check&quot;</span>]) <span class="keyword">else</span> <span class="string">&quot;failure&quot;</span></span><br><span class="line">            records.append(&#123;<span class="string">&quot;task&quot;</span>: t[<span class="string">&quot;task&quot;</span>], <span class="string">&quot;trajectory&quot;</span>: full,</span><br><span class="line">                            <span class="string">&quot;verification&quot;</span>: v, <span class="string">&quot;mode&quot;</span>: mode&#125;)</span><br><span class="line">            <span class="comment"># 每逢第 4 条记录且当前轨迹成功时注入 1 条纠错负例</span></span><br><span class="line">            <span class="keyword">if</span> mode == <span class="string">&quot;success&quot;</span> <span class="keyword">and</span> <span class="built_in">len</span>(records) % <span class="number">4</span> == <span class="number">0</span>:</span><br><span class="line">                inj = inject_failure(full, sandbox, <span class="string">&quot;wrong_arg&quot;</span>, rng)</span><br><span class="line">                <span class="keyword">if</span> inj <span class="keyword">is</span> <span class="keyword">not</span> full:            <span class="comment"># 注入未适配时跳过, 不产生&quot;伪负例&quot;</span></span><br><span class="line">                    records.append(&#123;<span class="string">&quot;task&quot;</span>: t[<span class="string">&quot;task&quot;</span>], <span class="string">&quot;trajectory&quot;</span>: inj,</span><br><span class="line">                                    <span class="string">&quot;verification&quot;</span>: v, <span class="string">&quot;mode&quot;</span>: <span class="string">&quot;self_correction&quot;</span>&#125;)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 断言: 数据集质量 ----</span></span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">len</span>(records) &gt;= <span class="number">50</span></span><br><span class="line">    n_corr = <span class="built_in">sum</span>(r[<span class="string">&quot;mode&quot;</span>] == <span class="string">&quot;self_correction&quot;</span> <span class="keyword">for</span> r <span class="keyword">in</span> records)</span><br><span class="line">    <span class="keyword">assert</span> n_corr &gt;= <span class="number">8</span>, <span class="string">f&quot;纠错轨迹不足: <span class="subst">&#123;n_corr&#125;</span>&quot;</span></span><br><span class="line">    <span class="keyword">for</span> r <span class="keyword">in</span> records:</span><br><span class="line">        <span class="keyword">assert</span> r[<span class="string">&quot;trajectory&quot;</span>][<span class="number">0</span>][<span class="string">&quot;role&quot;</span>] == <span class="string">&quot;thought&quot;</span>, <span class="string">&quot;ReAct 轨迹须以 Thought 开始&quot;</span></span><br><span class="line">        obs = [s <span class="keyword">for</span> s <span class="keyword">in</span> r[<span class="string">&quot;trajectory&quot;</span>] <span class="keyword">if</span> s[<span class="string">&quot;role&quot;</span>] == <span class="string">&quot;observation&quot;</span>]</span><br><span class="line">        <span class="keyword">assert</span> <span class="built_in">len</span>(obs) &gt;= <span class="number">3</span>, <span class="string">&quot;Observation 必须来自环境, 数量过少说明执行被跳过&quot;</span></span><br><span class="line">        <span class="keyword">if</span> r[<span class="string">&quot;mode&quot;</span>] == <span class="string">&quot;success&quot;</span>:</span><br><span class="line">            <span class="keyword">assert</span> r[<span class="string">&quot;verification&quot;</span>][<span class="string">&quot;goal_check&quot;</span>], <span class="string">&quot;success 轨迹必须通过执行验证&quot;</span></span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(args.out, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        f.writelines(json.dumps(r, ensure_ascii=<span class="literal">False</span>) + <span class="string">&quot;\n&quot;</span> <span class="keyword">for</span> r <span class="keyword">in</span> records)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;产出 <span class="subst">&#123;<span class="built_in">len</span>(records)&#125;</span> 条 -&gt; <span class="subst">&#123;args.out&#125;</span> &quot;</span></span><br><span class="line">          <span class="string">f&quot;(success <span class="subst">&#123;<span class="built_in">sum</span>(r[<span class="string">&#x27;mode&#x27;</span>]==<span class="string">&#x27;success&#x27;</span> <span class="keyword">for</span> r <span class="keyword">in</span> records)&#125;</span>, &quot;</span></span><br><span class="line">          <span class="string">f&quot;self_correction <span class="subst">&#123;n_corr&#125;</span>)&quot;</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    main()</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出</strong>（seed=0 实测）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">产出 50 条 -&gt; traj.jsonl (success 42, self_correction 8)</span><br></pre></td></tr></table></figure>
+<p>断言覆盖三个关键行为：轨迹结构合规（Thought 开头）、<strong>Observation 真实来自环境执行</strong>（数量下限 + 沙盒真的跑了 subprocess）、success 与验证器一致（<code>goal_check</code> 通过才允许标 success）。三类任务各自绑定了专属策略——原稿曾把所有任务都路由到 count 策略，导致 sort/err 类任务必然验证失败，这是&quot;任务与验证器原子绑定&quot;原则被破坏的反例，修复后任务-策略-验证器三位一体。训练接入时按 Stage 2 掩码规则处理：thought/action/final_answer 算 loss，observation 掩码。</p>
+<h3 id="32-升级为-llm-策略"><a class="markdownIt-Anchor" href="#32-升级为-llm-策略"></a> 3.2 升级为 LLM 策略</h3>
+<p>把 <code>strategy_count</code> 换成教师 LLM 的循环采样：<code>系统提示(工具 schema) → LLM 生成 thought+action → 沙盒执行 → observation 拼回上下文 → 循环至 final_answer 或步数上限</code>。升级后<strong>验证器不变</strong>——这正是执行验证架构的价值：策略层可以随便换，过程监督的客观性由环境层独立保证。</p>
+<hr />
+<h2 id="4-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#4-工程权衡与失效模式"></a> 4. 工程权衡与失效模式</h2>
+<h3 id="41-决策表轨迹合成的三个旋钮"><a class="markdownIt-Anchor" href="#41-决策表轨迹合成的三个旋钮"></a> 4.1 决策表：轨迹合成的三个旋钮</h3>
+<table>
+<thead>
+<tr>
+<th>旋钮</th>
+<th>保守</th>
+<th>激进</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>步数上限</td>
+<td>5 步</td>
+<td>15 步</td>
+<td>步数越长教师出错率越高，验证通过率下降；经验从 5 步起爬</td>
+</tr>
+<tr>
+<td>负例比例</td>
+<td>10~20%</td>
+<td>50%</td>
+<td>过多负例会让模型&quot;见过太多失败&quot;，输出变保守；带自我纠错的负例价值 &gt; 纯失败</td>
+</tr>
+<tr>
+<td>策略来源</td>
+<td>规则/脚本</td>
+<td>教师 LLM</td>
+<td>规则策略零成本但模式单一；LLM 策略多样但需更严验证</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-三个代表性失效模式"><a class="markdownIt-Anchor" href="#42-三个代表性失效模式"></a> 4.2 三个代表性失效模式</h3>
+<p><strong>失效 1：Observation 由 LLM 补写，验证形同虚设</strong></p>
+<ul>
+<li><strong>症状</strong>：轨迹读起来流畅完整，但沙盒重放时行为对不上（观察里出现的文件在沙盒里不存在）；模型学到&quot;编造环境反馈&quot;。</li>
+<li><strong>根因</strong>：为省事让教师一次生成整条轨迹（含观察），没接真实执行。</li>
+<li><strong>定位</strong>：随机抽 10 条轨迹在干净沙盒重放，比对每步观察。</li>
+<li><strong>修复</strong>：架构上强制&quot;执行器返回观察&quot;接口（本 MVP 的 <code>sandbox.execute</code> 是唯一观察来源）；重放一致性作为数据集验收项。</li>
+</ul>
+<p><strong>失效 2：验证器太弱，“status=0&quot;不等于&quot;目标达成”</strong></p>
+<ul>
+<li><strong>症状</strong>：代码跑通（status 0）但写错了结果文件（如把行数算成字节数），轨迹仍标 success。</li>
+<li><strong>根因</strong>：只检查了执行状态没检查目标状态（goal check）。</li>
+<li><strong>定位</strong>：抽验 success 轨迹的 <code>goal_file</code> 内容与 golden 是否一致。</li>
+<li><strong>修复</strong>：验证器双条件（status + goal_check，本 MVP 已实现）；任务定义时 golden 与验证逻辑原子绑定。</li>
+</ul>
+<p><strong>失效 3：负例注入破坏了轨迹因果性</strong></p>
+<ul>
+<li><strong>症状</strong>：纠错轨迹里&quot;报错信息&quot;与&quot;注入的错误&quot;对不上（错误 action 是 missing_a.csv，报错却提到别的），模型学到混乱的因果映射。</li>
+<li><strong>根因</strong>：注入错误后没有真实重放、报错文案是模板拼的。</li>
+<li><strong>定位</strong>：人工读 10 条 self_correction 轨迹，核对错误-反馈-修复三段的一致性。</li>
+<li><strong>修复</strong>：注入的 action 必须真实执行并捕获真实报错（本 MVP 的 <code>inject_failure</code> 真调沙盒）；每条负例做一次三段一致性抽检。</li>
+</ul>
+<hr />
+<h2 id="5-延伸思考题"><a class="markdownIt-Anchor" href="#5-延伸思考题"></a> 5. 延伸思考题</h2>
+<ol>
+<li><strong>与 DPO 的接口</strong>：把同一任务的 success 轨迹与 self_correction 轨迹配成偏好对（chosen/rejected）合适吗？思考 rejected 里含&quot;纠错成功&quot;的部分是否其实是好行为——更精细的做法是什么？（提示：rejected 应选&quot;失败未恢复&quot;的截断轨迹；纠错轨迹反而是 chosen 的加强版，Stage 6 的过程偏好会用到。）</li>
+<li><strong>环境真实度的边际</strong>：把 mock API 换成真实 API（如真搜索），轨迹质量与成本各变多少？在什么阶段值得升级？（提示：训练&quot;调用格式与反思模式&quot;阶段 mock 足够；训练&quot;处理真实噪声观察&quot;阶段必须真实环境——观察的分布本身就是训练信号。）</li>
+<li><strong>前瞻 Stage 9</strong>：本线产出的轨迹数据在多模态 Agent（看屏幕操作的 GUI Agent）场景要改什么？（提示：observation 从文本变成截图序列——这恰好回到&quot;环境产出内容掩码&quot;的同构规则；TaskCraft 的 atomic_trace/multihop 分层结构直接对应简单任务到多跳任务的课程化。）</li>
+</ol>
+<hr />
+<p><em>下一篇：第 4 周：数据清洗、语义去重与多维过滤</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC2%E5%91%A8-%E7%BB%86%E7%B2%92%E5%BA%A6%E8%A7%86%E8%A7%89%E4%B8%8E%E7%A9%BA%E9%97%B4%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90/" rel="prev" title="第2周-细粒度视觉与空间数据合成">
+                  <i class="fa fa-angle-left"></i> 第2周-细粒度视觉与空间数据合成
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/VLM%20&%20VLA-4-%E6%95%B0%E6%8D%AE%E5%90%88%E6%88%90%E4%B8%8E%E6%95%B0%E6%8D%AE%E5%B7%A5%E7%A8%8B-%E7%AC%AC4%E5%91%A8-%E6%95%B0%E6%8D%AE%E6%B8%85%E6%B4%97%E8%AF%AD%E4%B9%89%E5%8E%BB%E9%87%8D%E4%B8%8E%E8%BF%87%E6%BB%A4/" rel="next" title="第4周-数据清洗语义去重与过滤">
+                  第4周-数据清洗语义去重与过滤 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">715k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">43:21</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="1. 建立 Agent 权限模型的核心原则：最小权限 + 能力分级 + 人审门 + 纵深防御； 2. 掌握工具分级的实现方法； 3. 了解文件系统与网络层面的沙箱技术选项； 4. 理解&#39;审计日志为什么是权限体系的一半&#39;。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="08-权限与沙箱安全">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/08-%E6%9D%83%E9%99%90%E4%B8%8E%E6%B2%99%E7%AE%B1%E5%AE%89%E5%85%A8/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="1. 建立 Agent 权限模型的核心原则：最小权限 + 能力分级 + 人审门 + 纵深防御； 2. 掌握工具分级的实现方法； 3. 了解文件系统与网络层面的沙箱技术选项； 4. 理解&#39;审计日志为什么是权限体系的一半&#39;。">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T04:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-07T16:05:40.243Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Agent">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/08-%E6%9D%83%E9%99%90%E4%B8%8E%E6%B2%99%E7%AE%B1%E5%AE%89%E5%85%A8/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/08-%E6%9D%83%E9%99%90%E4%B8%8E%E6%B2%99%E7%AE%B1%E5%AE%89%E5%85%A8/","path":"2026/09/02/08-权限与沙箱安全/","title":"08-权限与沙箱安全"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>08-权限与沙箱安全 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#08-%E6%9D%83%E9%99%90%E4%B8%8E%E6%B2%99%E7%AE%B1%E5%AE%89%E5%85%A8"><span class="nav-number">1.</span> <span class="nav-text"> 08 - 权限与沙箱安全</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%9B%9B%E5%8E%9F%E5%88%99"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 四原则</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8E%9F%E5%88%99%E4%B8%80%E6%9C%80%E5%B0%8F%E6%9D%83%E9%99%90least-privilege"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 原则一：最小权限（least privilege）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8E%9F%E5%88%99%E4%BA%8C%E8%83%BD%E5%8A%9B%E5%88%86%E7%BA%A7risk-tiers"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 原则二：能力分级（risk tiers）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8E%9F%E5%88%99%E4%B8%89%E4%BA%BA%E5%AE%A1%E9%97%A8human-in-the-loop-hitl"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 原则三：人审门（human-in-the-loop, HITL）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8E%9F%E5%88%99%E5%9B%9B%E7%BA%B5%E6%B7%B1%E9%98%B2%E5%BE%A1defense-in-depth"><span class="nav-number">1.2.4.</span> <span class="nav-text"> 原则四：纵深防御（defense in depth）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E6%B2%99%E7%AE%B1%E6%8A%8A%E5%B0%B1%E7%AE%97%E6%A8%A1%E5%9E%8B%E7%96%AF%E4%BA%86%E4%B9%9F%E5%87%BA%E4%B8%8D%E4%BA%86%E7%AC%BC%E5%AD%90%E8%90%BD%E5%88%B0%E5%AE%9E%E5%A4%84"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 沙箱：把&quot;就算模型疯了也出不了笼子&quot;落到实处</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E4%B8%8E%E8%BF%9B%E7%A8%8B%E5%B1%82"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 文件系统与进程层</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%BD%91%E7%BB%9C%E5%B1%82"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 网络层</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%BB%A3%E7%A0%81%E6%89%A7%E8%A1%8C%E7%B1%BB%E5%B7%A5%E5%85%B7"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 代码执行类工具</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%A1%E8%AE%A1%E6%97%A5%E5%BF%97%E6%9D%83%E9%99%90%E4%BD%93%E7%B3%BB%E7%9A%84%E5%8F%A6%E4%B8%80%E5%8D%8A"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 审计日志：权限体系的另一半</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E6%8F%90%E7%A4%BA%E8%AF%8D%E7%BA%A6%E6%9D%9F%E7%9A%84%E6%AD%A3%E7%A1%AE%E4%BD%8D%E7%BD%AE"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 提示词约束的正确位置</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%87%AA%E6%B5%8B"><span class="nav-number">1.6.</span> <span class="nav-text"> 自测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%8B%E4%B8%80%E7%AF%87"><span class="nav-number">1.7.</span> <span class="nav-text"> 下一篇</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8F%82%E8%80%83%E6%9D%A5%E6%BA%90"><span class="nav-number">1.8.</span> <span class="nav-text"> 参考来源</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">257</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">41</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">13</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/08-%E6%9D%83%E9%99%90%E4%B8%8E%E6%B2%99%E7%AE%B1%E5%AE%89%E5%85%A8/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="08-权限与沙箱安全 | Yoleen的博客">
+      <meta itemprop="description" content="1. 建立 Agent 权限模型的核心原则：最小权限 + 能力分级 + 人审门 + 纵深防御； 2. 掌握工具分级的实现方法； 3. 了解文件系统与网络层面的沙箱技术选项； 4. 理解&#39;审计日志为什么是权限体系的一半&#39;。">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          08-权限与沙箱安全
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 12:30:00" itemprop="dateCreated datePublished" datetime="2026-09-02T12:30:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-08 00:05:40" itemprop="dateModified" datetime="2026-11-08T00:05:40+08:00">2026-11-08</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Agent%E5%BC%80%E5%8F%91/" itemprop="url" rel="index"><span itemprop="name">Agent开发</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>1.7k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>6 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">1. 建立 Agent 权限模型的核心原则：最小权限 + 能力分级 + 人审门 + 纵深防御； 2. 掌握工具分级的实现方法； 3. 了解文件系统与网络层面的沙箱技术选项； 4. 理解'审计日志为什么是权限体系的一半'。</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="08-权限与沙箱安全"><a class="markdownIt-Anchor" href="#08-权限与沙箱安全"></a> 08 - 权限与沙箱安全</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ol>
+<li>建立 Agent 权限模型的核心原则：<strong>最小权限 + 能力分级 + 人审门 + 纵深防御</strong>；</li>
+<li>掌握工具分级的实现方法；</li>
+<li>了解文件系统与网络层面的沙箱技术选项；</li>
+<li>理解&quot;审计日志为什么是权限体系的一半&quot;。</li>
+</ol>
+<p>先立一个认知：<strong>权限问题的本质不是&quot;防模型学坏&quot;，而是&quot;防止错误被授权放大&quot;</strong>。即使模型完全不带恶意（07 篇的错误级联），一个拥有 <code>rm -rf</code> 能力的 Agent 也会因为一次误判造成灾难。权限系统是你的代码、不是模型，说了算的最后防线。</p>
+<h2 id="1-四原则"><a class="markdownIt-Anchor" href="#1-四原则"></a> 1. 四原则</h2>
+<h3 id="原则一最小权限least-privilege"><a class="markdownIt-Anchor" href="#原则一最小权限least-privilege"></a> 原则一：最小权限（least privilege）</h3>
+<p>Agent 只应拿到<strong>完成当前任务所需的最小能力集合</strong>。落地为两条铁律：</p>
+<ol>
+<li><strong>不注册的工具不存在</strong>：模型无法调用没在工具注册表里的能力（03 篇）。给客服 Agent 挂上 <code>execute_sql</code> 再加限制，不如一开始就不挂；</li>
+<li><strong>凭据也最小化</strong>：Agent 使用的数据库账号应只读、限表、限行；API key 用 scope 最小的；<strong>绝不把用户的完整凭据透传给 Agent 环境</strong>。</li>
+</ol>
+<h3 id="原则二能力分级risk-tiers"><a class="markdownIt-Anchor" href="#原则二能力分级risk-tiers"></a> 原则二：能力分级（risk tiers）</h3>
+<p>按副作用把每个工具划入风险等级，<strong>等级决定执行策略</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>等级</th>
+<th>定义</th>
+<th>例子</th>
+<th>执行策略</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>T0 只读</td>
+<td>无副作用、不泄露敏感数据</td>
+<td>查天气、读公开文件</td>
+<td>自动放行</td>
+</tr>
+<tr>
+<td>T1 可逆写</td>
+<td>可撤销的本地修改</td>
+<td>新建草稿文件、写缓存</td>
+<td>放行 + 记审计日志</td>
+</tr>
+<tr>
+<td>T2 敏感读</td>
+<td>读隐私/凭据类数据</td>
+<td>读用户通讯录、读 <code>.env</code></td>
+<td>放行前脱敏或确认一次</td>
+</tr>
+<tr>
+<td>T3 不可逆/外发</td>
+<td>删除、发送、支付、发布</td>
+<td><code>rm</code>、发邮件、调用支付 API</td>
+<td><strong>强制人审</strong>，展示 diff/摘要</td>
+</tr>
+</tbody>
+</table>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> enum <span class="keyword">import</span> Enum, auto</span><br><span class="line"><span class="keyword">from</span> dataclasses <span class="keyword">import</span> dataclass</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Risk</span>(<span class="title class_ inherited__">Enum</span>):</span><br><span class="line">    T0_READ = auto()</span><br><span class="line">    T1_REVERSIBLE_WRITE = auto()</span><br><span class="line">    T2_SENSITIVE_READ = auto()</span><br><span class="line">    T3_IRREVERSIBLE = auto()</span><br><span class="line"></span><br><span class="line"><span class="meta">@dataclass</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">ToolSpec</span>:</span><br><span class="line">    fn: <span class="built_in">callable</span></span><br><span class="line">    risk: Risk</span><br><span class="line"></span><br><span class="line">POLICY = &#123;</span><br><span class="line">    Risk.T0_READ: <span class="string">&quot;auto&quot;</span>,</span><br><span class="line">    Risk.T1_REVERSIBLE_WRITE: <span class="string">&quot;auto_log&quot;</span>,</span><br><span class="line">    Risk.T2_SENSITIVE_READ: <span class="string">&quot;confirm_once_per_session&quot;</span>,</span><br><span class="line">    Risk.T3_IRREVERSIBLE: <span class="string">&quot;human_approval&quot;</span>,</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">gate</span>(<span class="params">spec: ToolSpec, args: <span class="built_in">dict</span>, session</span>) -&gt; <span class="built_in">bool</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;执行前的权限门。返回 False 则拒绝执行。&quot;&quot;&quot;</span></span><br><span class="line">    action = POLICY[spec.risk]</span><br><span class="line">    <span class="keyword">if</span> action == <span class="string">&quot;auto&quot;</span>:</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">True</span></span><br><span class="line">    <span class="keyword">if</span> action == <span class="string">&quot;human_approval&quot;</span>:</span><br><span class="line">        <span class="comment"># 展示将要做的事，等待人工批准（CLI 询问 / Web 确认按钮）</span></span><br><span class="line">        <span class="keyword">return</span> session.ask_human(</span><br><span class="line">            <span class="string">f&quot;请求执行【不可逆操作】<span class="subst">&#123;spec.fn.__name__&#125;</span>，参数：<span class="subst">&#123;args&#125;</span>\n批准？(y/N)&quot;</span></span><br><span class="line">        ).lower().startswith(<span class="string">&quot;y&quot;</span>)</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">True</span>  <span class="comment"># 其余等级：放行，配合审计日志</span></span><br></pre></td></tr></table></figure>
+<h3 id="原则三人审门human-in-the-loop-hitl"><a class="markdownIt-Anchor" href="#原则三人审门human-in-the-loop-hitl"></a> 原则三：人审门（human-in-the-loop, HITL）</h3>
+<p>T3 操作的审批界面要满足三条，否则审批形同虚设：</p>
+<ol>
+<li><strong>展示具体 diff/参数</strong>，不是&quot;Agent 请求执行 tool_x&quot;这种黑盒话术——人无法审批看不懂的东西；</li>
+<li><strong>默认拒绝</strong>（deny by default）：超时、用户离开都算拒绝；</li>
+<li><strong>支持&quot;本次会话内记住选择&quot;与&quot;永久规则&quot;两级缓存</strong>，否则审批疲劳会让用户无脑全点&quot;是&quot;（这是 HITL 系统的真实失败模式：审批疲劳 → 全部放行 → 权限系统名存实亡）。</li>
+</ol>
+<h3 id="原则四纵深防御defense-in-depth"><a class="markdownIt-Anchor" href="#原则四纵深防御defense-in-depth"></a> 原则四：纵深防御（defense in depth）</h3>
+<p><strong>不要把宝押在任何单层上</strong>。提示词里的&quot;请勿删除文件&quot;会被注入攻破（09 篇）、会被模型&quot;忘记&quot;（07 篇）。层次应是：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">提示词约束（软）→ 工具级校验（参数/schema）→ 权限门（分级/审批）</span><br><span class="line">→ 沙箱（OS 级隔离）→ 审计与告警（事后可追责/可回滚）</span><br></pre></td></tr></table></figure>
+<p>每一层都假设上一层会被突破。其中<strong>只有 OS 级沙箱和权限门是模型绕不过去的</strong>——这两层是硬防线。</p>
+<h2 id="2-沙箱把就算模型疯了也出不了笼子落到实处"><a class="markdownIt-Anchor" href="#2-沙箱把就算模型疯了也出不了笼子落到实处"></a> 2. 沙箱：把&quot;就算模型疯了也出不了笼子&quot;落到实处</h2>
+<p>按成本从低到高的常见选项（同一系统可叠加多层）：</p>
+<h3 id="文件系统与进程层"><a class="markdownIt-Anchor" href="#文件系统与进程层"></a> 文件系统与进程层</h3>
+<ul>
+<li><strong>专用工作目录</strong>：Agent 只能在 <code>./workspace</code> 内读写；以该目录为 cwd 启动，配合路径校验（警惕 <code>../</code> 逃逸与符号链接）；</li>
+<li><strong>专用低权限账号</strong>：Linux 下用 nobody 或专用用户跑 Agent 进程；不挂载敏感目录；</li>
+<li><strong>容器隔离</strong>：Docker 容器 + 只读根文件系统 + <code>--cap-drop=ALL</code> + 限网络，是性价比很高的标准做法；</li>
+<li><strong>gVisor / Firecracker</strong>：需要更强隔离（运行不可信代码、多租户）时的用户态内核/微虚拟机方案，Google App Engine 等生产系统的技术基础。</li>
+</ul>
+<h3 id="网络层"><a class="markdownIt-Anchor" href="#网络层"></a> 网络层</h3>
+<ul>
+<li><strong>默认断网</strong>：不需要网络的 Agent 直接禁网（容器 <code>--network none</code>），这是最有效的单条措施——既防数据外泄（exfiltration），也防注入攻击者远程回连；</li>
+<li>需要网络时用<strong>白名单代理</strong>：只允许访问列出的域名（工具 API 端点），所有出站经代理校验。</li>
+</ul>
+<h3 id="代码执行类工具"><a class="markdownIt-Anchor" href="#代码执行类工具"></a> 代码执行类工具</h3>
+<p>Agent 经常需要&quot;跑代码&quot;工具（数据分析场景）。要点：</p>
+<ul>
+<li>永远在沙箱内执行（容器/微虚拟机），限制 CPU/内存/时长/网络；</li>
+<li>不要试图用&quot;提示词 + 字符串黑名单&quot;过滤危险代码——黑名单必然遗漏，这是业界共识；</li>
+<li>成熟方案如各类沙箱运行时（例如 Anthropic 官方演示的容器化 code execution 工具、E2B 等第三方沙箱服务），选型以各自文档为准。</li>
+</ul>
+<h2 id="3-审计日志权限体系的另一半"><a class="markdownIt-Anchor" href="#3-审计日志权限体系的另一半"></a> 3. 审计日志：权限体系的另一半</h2>
+<p>没有审计的权限系统在出事后<strong>无法回答&quot;发生了什么&quot;</strong>。最小审计字段：</p>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="punctuation">&#123;</span></span><br><span class="line">  <span class="attr">&quot;ts&quot;</span><span class="punctuation">:</span> <span class="string">&quot;2026-11-06T10:00:00Z&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;session_id&quot;</span><span class="punctuation">:</span> <span class="string">&quot;s-123&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;tool&quot;</span><span class="punctuation">:</span> <span class="string">&quot;delete_file&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;args&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;path&quot;</span><span class="punctuation">:</span> <span class="string">&quot;workspace/draft.txt&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;risk_tier&quot;</span><span class="punctuation">:</span> <span class="string">&quot;T3&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;approval&quot;</span><span class="punctuation">:</span> <span class="punctuation">&#123;</span><span class="attr">&quot;type&quot;</span><span class="punctuation">:</span> <span class="string">&quot;human&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;by&quot;</span><span class="punctuation">:</span> <span class="string">&quot;user-alice&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;decision&quot;</span><span class="punctuation">:</span> <span class="string">&quot;allow&quot;</span><span class="punctuation">&#125;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;result&quot;</span><span class="punctuation">:</span> <span class="string">&quot;success&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;agent_step&quot;</span><span class="punctuation">:</span> <span class="number">14</span></span><br><span class="line"><span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<p>实践要点：追加写（append-only）、含审批记录、定期 review 异常模式（如某会话 T3 操作激增）、与回滚机制联动。</p>
+<h2 id="4-提示词约束的正确位置"><a class="markdownIt-Anchor" href="#4-提示词约束的正确位置"></a> 4. 提示词约束的正确位置</h2>
+<p>最后强调一次层次关系，因为它最容易被搞错：<strong>提示词约束是第一道软防线，不是唯一防线</strong>。</p>
+<ul>
+<li>它值得写：告诉模型&quot;执行删除前必须确认&quot;能降低误操作概率、改善人审界面展示的内容；</li>
+<li>它不可信：提示注入（09 篇）可以让模型&quot;合法地&quot;违反一切提示词约束；</li>
+<li>所以：<strong>安全判断必须放在模型之外的代码里</strong>（gate 函数、沙箱），提示词只是体验层。</li>
+</ul>
+<h2 id="自测"><a class="markdownIt-Anchor" href="#自测"></a> 自测</h2>
+<ol>
+<li>四个原则分别是什么？哪两层是&quot;模型绕不过去&quot;的硬防线？</li>
+<li>T0~T3 分级里，&quot;读用户通讯录&quot;属于哪级？为什么它比&quot;新建草稿文件&quot;更敏感？</li>
+<li>为什么审批疲劳会摧毁 HITL？两条缓解措施？</li>
+<li>为什么&quot;默认断网&quot;是最有效的单条措施？</li>
+</ol>
+<h2 id="下一篇"><a class="markdownIt-Anchor" href="#下一篇"></a> 下一篇</h2>
+<p>09 - 提示词注入与 Agent 安全——权限体系面对的头号威胁模型。</p>
+<h2 id="参考来源"><a class="markdownIt-Anchor" href="#参考来源"></a> 参考来源</h2>
+<ul>
+<li>OWASP Top 10 for LLM Applications（权限、沙箱相关风险分布在 LLM06 敏感信息泄露、LLM07 系统提示泄露等条目）: <a target="_blank" rel="noopener" href="https://genai.owasp.org/llm-top-10/">https://genai.owasp.org/llm-top-10/</a></li>
+<li>Anthropic, <em>Building Effective Agents</em>（HITL 与最小自主性建议）: <a target="_blank" rel="noopener" href="https://www.anthropic.com/research/building-effective-agents">https://www.anthropic.com/research/building-effective-agents</a></li>
+<li>OpenAI, <em>A practical guide to building agents</em>（guardrails 分层）: <a target="_blank" rel="noopener" href="https://cdn.openai.com/business-guides-and-resources/a-practical-guide-to-building-agents.pdf">https://cdn.openai.com/business-guides-and-resources/a-practical-guide-to-building-agents.pdf</a></li>
+<li>gVisor（Google 开源容器沙箱）: <a target="_blank" rel="noopener" href="https://gvisor.dev/">https://gvisor.dev/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Agent/" rel="tag"># Agent</a>
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/07-Agent%E5%BC%80%E5%8F%91%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98%E4%B8%8E%E9%99%B7%E9%98%B1/" rel="prev" title="07-Agent开发常见问题与陷阱">
+                  <i class="fa fa-angle-left"></i> 07-Agent开发常见问题与陷阱
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/09-%E6%8F%90%E7%A4%BA%E8%AF%8D%E6%B3%A8%E5%85%A5%E4%B8%8EAgent%E5%AE%89%E5%85%A8/" rel="next" title="09-提示词注入与Agent安全">
+                  09-提示词注入与Agent安全 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">715k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">43:21</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的四个问题 1. KITTI 论文表里的 Easy&#x2F;Moderate&#x2F;Hard 三列数字，官方是按什么规则切出来的？R11 和 R40 有什么区别？ 2. nuScenes 为什么不用 IoU 匹配、改用&#39;中心距离&#39;？NDS 这…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第4周-3D检测评测与数据集实战">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/06/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-2-%E4%BB%8E2D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B%E5%88%B03D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B-%E7%AC%AC4%E5%91%A8-3D%E6%A3%80%E6%B5%8B%E8%AF%84%E6%B5%8B%E4%B8%8E%E6%95%B0%E6%8D%AE%E9%9B%86%E5%AE%9E%E6%88%98/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的四个问题 1. KITTI 论文表里的 Easy&#x2F;Moderate&#x2F;Hard 三列数字，官方是按什么规则切出来的？R11 和 R40 有什么区别？ 2. nuScenes 为什么不用 IoU 匹配、改用&#39;中心距离&#39;？NDS 这…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-05T17:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-07T16:05:40.395Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="自动驾驶">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/06/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-2-%E4%BB%8E2D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B%E5%88%B03D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B-%E7%AC%AC4%E5%91%A8-3D%E6%A3%80%E6%B5%8B%E8%AF%84%E6%B5%8B%E4%B8%8E%E6%95%B0%E6%8D%AE%E9%9B%86%E5%AE%9E%E6%88%98/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/06/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-2-%E4%BB%8E2D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B%E5%88%B03D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B-%E7%AC%AC4%E5%91%A8-3D%E6%A3%80%E6%B5%8B%E8%AF%84%E6%B5%8B%E4%B8%8E%E6%95%B0%E6%8D%AE%E9%9B%86%E5%AE%9E%E6%88%98/","path":"2026/09/06/自动驾驶-2-从2D目标检测到3D目标检测-第4周-3D检测评测与数据集实战/","title":"第4周-3D检测评测与数据集实战"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第4周-3D检测评测与数据集实战 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-4-%E5%91%A8%E6%95%99%E7%A8%8B3d-%E6%A3%80%E6%B5%8B%E8%AF%84%E6%B5%8B%E4%B8%8E%E6%95%B0%E6%8D%AE%E9%9B%86%E5%AE%9E%E6%88%98"><span class="nav-number">1.</span> <span class="nav-text"> 第 4 周教程：3D 检测评测与数据集实战</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E8%AF%84%E6%B5%8B%E4%B8%BA%E4%BB%80%E4%B9%88%E9%87%8D%E8%A6%81%E5%90%8C%E4%B8%80%E4%B8%AA%E6%A8%A1%E5%9E%8B%E4%B8%A4%E5%BC%A0%E6%A6%9C%E5%8D%95%E4%B8%A4%E7%A7%8D%E4%BA%BA%E7%94%9F"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 评测为什么重要：同一个模型，两张榜单两种人生</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-kitti-%E8%AF%84%E6%B5%8Biou-%E9%97%A8%E6%B4%BE"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. KITTI 评测：IoU 门派</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E5%8C%B9%E9%85%8D%E4%B8%8E%E9%98%88%E5%80%BC"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 匹配与阈值</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-easy-moderate-hard%E5%AE%98%E6%96%B9%E9%9A%BE%E5%BA%A6%E5%AE%9A%E4%B9%89"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 Easy &#x2F; Moderate &#x2F; Hard：官方难度定义</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-r11-r40recall-%E9%87%87%E6%A0%B7%E7%82%B9%E6%95%B0"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 R11 → R40：recall 采样点数</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-nuscenes-%E8%AF%84%E6%B5%8B%E4%B8%AD%E5%BF%83%E8%B7%9D%E7%A6%BB%E9%97%A8%E6%B4%BE"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. nuScenes 评测：中心距离门派</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E7%94%A8-iou"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 为什么不用 IoU</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-map-%E4%B8%8E-kitti-%E7%9A%84%E4%B8%89%E4%B8%AA%E4%B8%8D%E5%90%8C"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 mAP 与 KITTI 的三个不同</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-%E4%BA%94%E9%A1%B9-tp-%E9%94%99%E8%AF%AFtrue-positive-metrics"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 五项 TP 错误（True Positive metrics）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#34-nds%E4%B8%80%E4%B8%AA%E6%95%B0%E5%AD%97%E5%90%88%E6%88%90%E5%85%AC%E5%BC%8F"><span class="nav-number">1.3.4.</span> <span class="nav-text"> 3.4 NDS：一个数字合成公式</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#35-%E6%89%8B%E7%AE%97%E4%B8%80%E4%B8%AA-nds%E4%BB%A3%E7%A0%81%E9%AA%8C%E8%AF%81"><span class="nav-number">1.3.5.</span> <span class="nav-text"> 3.5 手算一个 NDS（代码验证）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E4%B8%89%E5%A4%A7%E6%95%B0%E6%8D%AE%E9%9B%86%E8%A7%84%E6%A8%A1%E4%B8%8E%E4%BC%A0%E6%84%9F%E5%99%A8%E9%85%8D%E7%BD%AE%E6%9F%A5%E8%AF%81%E5%80%BC"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 三大数据集规模与传感器配置（查证值）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E6%89%8B%E5%86%99-bev-%E6%97%8B%E8%BD%AC%E6%A1%86-iou%E6%9C%AC%E5%91%A8%E6%A0%B8%E5%BF%83%E4%BA%A4%E4%BB%98"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 手写 BEV 旋转框 IoU（本周核心交付）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#51-%E9%97%AE%E9%A2%98%E7%9F%A9%E5%BD%A2%E4%B8%80%E8%BD%AC%E6%9C%80%E5%A4%A7%E6%9C%80%E5%B0%8F%E5%80%BC%E5%B0%B1%E5%A4%B1%E6%95%88%E4%BA%86"><span class="nav-number">1.5.1.</span> <span class="nav-text"> 5.1 问题：矩形一转，&quot;最大最小值&quot;就失效了</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#52-%E5%AE%8C%E6%95%B4%E5%AE%9E%E7%8E%B0-5-%E7%BB%84%E9%AA%8C%E8%AF%81"><span class="nav-number">1.5.2.</span> <span class="nav-text"> 5.2 完整实现 + 5 组验证</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#53-%E9%80%90%E6%A8%A1%E5%9D%97%E8%A7%A3%E8%AF%BB"><span class="nav-number">1.5.3.</span> <span class="nav-text"> 5.3 逐模块解读</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#54-bev-iou-%E4%B8%8E-3d-iou-%E7%9A%84%E5%85%B3%E7%B3%BB"><span class="nav-number">1.5.4.</span> <span class="nav-text"> 5.4 BEV IoU 与 3D IoU 的关系</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E6%A1%86%E6%9E%B6%E5%AF%BC%E8%A7%88openpcdet-%E4%B8%8E-mmdetection3d-%E4%B8%80%E5%8F%A5%E8%AF%9D"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 框架导览：OpenPCDet 与 MMDetection3D 一句话</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%B8%B8%E8%A7%81%E5%9D%91"><span class="nav-number">1.7.</span> <span class="nav-text"> 7. 工程权衡与常见坑</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#8-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.8.</span> <span class="nav-text"> 8. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.9.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">257</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">41</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">13</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/06/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-2-%E4%BB%8E2D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B%E5%88%B03D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B-%E7%AC%AC4%E5%91%A8-3D%E6%A3%80%E6%B5%8B%E8%AF%84%E6%B5%8B%E4%B8%8E%E6%95%B0%E6%8D%AE%E9%9B%86%E5%AE%9E%E6%88%98/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第4周-3D检测评测与数据集实战 | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的四个问题 1. KITTI 论文表里的 Easy&#x2F;Moderate&#x2F;Hard 三列数字，官方是按什么规则切出来的？R11 和 R40 有什么区别？ 2. nuScenes 为什么不用 IoU 匹配、改用&#39;中心距离&#39;？NDS 这…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第4周-3D检测评测与数据集实战
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-06 01:30:00" itemprop="dateCreated datePublished" datetime="2026-09-06T01:30:00+08:00">2026-09-06</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-08 00:05:40" itemprop="dateModified" datetime="2026-11-08T00:05:40+08:00">2026-11-08</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6/" itemprop="url" rel="index"><span itemprop="name">自动驾驶</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6/Stage-2-%E4%BB%8E2D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B%E5%88%B03D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B/" itemprop="url" rel="index"><span itemprop="name">Stage 2-从2D目标检测到3D目标检测</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>6.1k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>22 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的四个问题 1. KITTI 论文表里的 Easy/Moderate/Hard 三列数字，官方是按什么规则切出来的？R11 和 R40 有什么区别？ 2. nuScenes 为什么不用 IoU 匹配、改用'中心距离'？NDS 这…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-4-周教程3d-检测评测与数据集实战"><a class="markdownIt-Anchor" href="#第-4-周教程3d-检测评测与数据集实战"></a> 第 4 周教程：3D 检测评测与数据集实战</h1>
+<blockquote>
+<p><strong>本周要回答的四个问题</strong></p>
+<ol>
+<li>KITTI 论文表里的 Easy/Moderate/Hard 三列数字，官方是按什么规则切出来的？R11 和 R40 有什么区别？</li>
+<li>nuScenes 为什么<strong>不用 IoU</strong> 匹配、改用&quot;中心距离&quot;？NDS 这一个数是怎么从 6 个指标加权出来的？</li>
+<li>KITTI / nuScenes / Waymo 三大数据集各有多大、装了什么传感器、适合练什么？</li>
+<li>带朝向的 3D 框，IoU 怎么算？手写一个 BEV 旋转框 IoU，怎么证明它是对的？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 4 周。交付物：<code>bev_rotated_iou()</code> 通过 5 组数值测试（完全重合 = 1、轴对齐偏移手算 2/14、旋转 90° 手算 4/12、任意旋转与 20 万点蒙特卡洛差异 &lt; 0.01、完全分离 = 0）；手算一个 NDS 例子与公式核对。</p>
+<p><strong>为什么评测放最后一周</strong>：第 1 周手写的 IoU/NMS/mAP 三件套，在本周以 3D 形态&quot;回归&quot;——IoU 升级成 3D/BEV 旋转框 IoU，mAP 换了匹配规则。学完本周，你看到任何 3D 检测论文的实验表（KITTI 的三列 AP / nuScenes 的 mAP + NDS + 五项 TP 错误），都知道每个数字的来路。</p>
+<hr />
+<h2 id="1-评测为什么重要同一个模型两张榜单两种人生"><a class="markdownIt-Anchor" href="#1-评测为什么重要同一个模型两张榜单两种人生"></a> 1. 评测为什么重要：同一个模型，两张榜单两种人生</h2>
+<p>3D 检测领域的两大主流评测基准（benchmark）——KITTI 和 nuScenes——用了<strong>完全不同</strong>的匹配逻辑：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>KITTI</th>
+<th>nuScenes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>匹配方式</td>
+<td>3D IoU / BEV IoU ≥ 阈值（car 0.7，行人/骑行者 0.5）</td>
+<td>BEV 中心距离 ≤ 0.5/1/2/4 m（<strong>不用 IoU</strong>）</td>
+</tr>
+<tr>
+<td>汇总指标</td>
+<td>AP@R40，难度分 Easy/Mod/Hard 三列</td>
+<td>mAP（四档距离平均）+ 5 项 TP 错误 → 合成 NDS</td>
+</tr>
+<tr>
+<td>数据形态</td>
+<td>单帧（tracking 另有基准），城郊驾驶</td>
+<td>1000 个 20 s 场景，城市驾驶（波士顿/新加坡），6 相机 + 1 雷达 + 5 毫米波</td>
+</tr>
+<tr>
+<td>朝向怎么评</td>
+<td>单独的 AOS 指标（cosine 相似度）</td>
+<td>并入 AOE（朝向误差，弧度）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>这带来一个直接后果</strong>：一个 IoU 偏低但中心很准的模型（常见于远处小目标），在 KITTI 上吃亏、在 nuScenes 上占便宜；反之朝向回归烂的模型，KITTI 的主指标看不见问题，nuScenes 的 AOE 直接补刀。<strong>读懂评测协议是读懂论文数字的前提</strong>——下面两节分别拆解。</p>
+<hr />
+<h2 id="2-kitti-评测iou-门派"><a class="markdownIt-Anchor" href="#2-kitti-评测iou-门派"></a> 2. KITTI 评测：IoU 门派</h2>
+<h3 id="21-匹配与阈值"><a class="markdownIt-Anchor" href="#21-匹配与阈值"></a> 2.1 匹配与阈值</h3>
+<p>KITTI（<a target="_blank" rel="noopener" href="http://cvlibs.net/datasets/kitti%EF%BC%8CGeiger">cvlibs.net/datasets/kitti，Geiger</a> et al. 2012）沿用 PASCAL VOC 思路：预测框与真值框按 IoU 匹配（一个真值只能被一个预测占用，剩余预测记 FP），但 IoU 从 2D 像素框升级为两种 3D 形态：</p>
+<ul>
+<li><strong>BEV IoU</strong>：鸟瞰图（Bird’s Eye View）上两个带朝向矩形的交并比——本周第 5 节手写的就是它；</li>
+<li><strong>3D IoU</strong>：两个长方体的体积交并比，多乘一个 z 方向重叠（第 5.4 节说明两者关系）。</li>
+</ul>
+<p>官方匹配阈值（KITTI 官方评测页查证）：</p>
+<table>
+<thead>
+<tr>
+<th>类别</th>
+<th>3D/BEV IoU 阈值</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Car（汽车）</td>
+<td><strong>0.7</strong></td>
+</tr>
+<tr>
+<td>Pedestrian（行人）/ Cyclist（骑行者）</td>
+<td><strong>0.5</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>为什么 car 用 0.7 而行人只要 0.5</strong>：车是大目标（约 1.6×3.9×1.5 m），朝向和尺寸标得很准，用严阈值能区分出&quot;框得真好&quot;和&quot;大致框对&quot;；行人目标小、姿态多变，0.7 阈值下随机抖动就能把对的框判成错的，指标失去区分度。<strong>阈值是相对目标尺寸校准的，不是越严越好</strong>。</p>
+<h3 id="22-easy-moderate-hard官方难度定义"><a class="markdownIt-Anchor" href="#22-easy-moderate-hard官方难度定义"></a> 2.2 Easy / Moderate / Hard：官方难度定义</h3>
+<p>KITTI 官方评测页给出的三档难度（按<strong>最难条件</strong>归档——一个真值只要触碰任何一条上限就被降到更难一档）：</p>
+<table>
+<thead>
+<tr>
+<th>难度</th>
+<th>最小框高（Min. bounding box height）</th>
+<th>最大遮挡（Max. occlusion）</th>
+<th>最大截断（Max. truncation）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Easy</td>
+<td>40 px</td>
+<td>完全可见（Fully visible）</td>
+<td>15 %</td>
+</tr>
+<tr>
+<td>Moderate</td>
+<td>25 px</td>
+<td>部分遮挡（Partly occluded）</td>
+<td>30 %</td>
+</tr>
+<tr>
+<td>Hard</td>
+<td>25 px</td>
+<td>难以看清（Difficult to see）</td>
+<td>50 %</td>
+</tr>
+</tbody>
+</table>
+<p><strong>逐项解读</strong>：</p>
+<ul>
+<li><strong>框高阈值</strong>：标注框在<strong>图像平面</strong>上的像素高度。0.7 m 高的行人，框高 40 px 大约对应 13 m 内——这是用&quot;图像上的大小&quot;近似&quot;距离&quot;（远且小的目标点云只有十几个点，检出难度完全不同，第 1 周 Stage 1 的近密远疏在此回收）；</li>
+<li><strong>遮挡</strong>：0 = 完全可见，1 = 部分遮挡，2 = 难以看清（ largely occluded 的大半被挡）。Easy 档只收遮挡级 0 的目标；</li>
+<li><strong>截断</strong>：目标伸出图像边界的比例。截断 50% 的行人只剩半边，检出价值与难度都不同。</li>
+</ul>
+<p><strong>榜单排名以 Moderate 列为准</strong>（官方页面明说 “Methods are ranked on the moderately difficult results”）。所以论文摘要里那句 “our method achieves 82.63 AP on KITTI test” 几乎总是指 Car Moderate @R40。</p>
+<h3 id="23-r11-r40recall-采样点数"><a class="markdownIt-Anchor" href="#23-r11-r40recall-采样点数"></a> 2.3 R11 → R40：recall 采样点数</h3>
+<p>第 1 周的 AP 是 PR 曲线下面积，数值积分要在若干个 recall 采样点上取值：</p>
+<ul>
+<li><strong>R11</strong>（老版）：仿 PASCAL VOC 2011 以前，在 recall = {0, 0.1, …, 1.0} 共 11 个点取最大 precision 平均；</li>
+<li><strong>R40</strong>（现行）：<strong>2019-10-08 起</strong>，KITTI 官方采用 40 个均匀 recall 采样点（官方说明此举参考 MonoDIS 论文的分析，“yields a more fair comparison”）。</li>
+</ul>
+<p>R11 的 11 个点太稀，两个模型只在 11 个格点上比高下，偶然性大；R40 把采样密度提高近 4 倍，对 PR 曲线的刻画更细。<strong>读旧论文（2019-10 前）的数字要注意口径</strong>：R11 和 R40 的同一模型 AP 能差 1~3 个点，混着比就是耍流氓。</p>
+<hr />
+<h2 id="3-nuscenes-评测中心距离门派"><a class="markdownIt-Anchor" href="#3-nuscenes-评测中心距离门派"></a> 3. nuScenes 评测：中心距离门派</h2>
+<h3 id="31-为什么不用-iou"><a class="markdownIt-Anchor" href="#31-为什么不用-iou"></a> 3.1 为什么不用 IoU</h3>
+<p>nuScenes（Motional，arXiv 1903.11027，CVPR 2020）的检测评测（官方 devkit 文档查证）不用 IoU 匹配，改用 <strong>BEV 平面真值中心与预测中心的欧氏距离</strong>：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>d</mi><mtext>center</mtext></msub><mo>=</mo><msub><mrow><mo fence="true">∥</mo><mo stretchy="false">(</mo><msub><mi>x</mi><mrow><mi>p</mi><mi>r</mi><mi>e</mi><mi>d</mi></mrow></msub><mo separator="true">,</mo><msub><mi>y</mi><mrow><mi>p</mi><mi>r</mi><mi>e</mi><mi>d</mi></mrow></msub><mo stretchy="false">)</mo><mo>−</mo><mo stretchy="false">(</mo><msub><mi>x</mi><mrow><mi>g</mi><mi>t</mi></mrow></msub><mo separator="true">,</mo><msub><mi>y</mi><mrow><mi>g</mi><mi>t</mi></mrow></msub><mo stretchy="false">)</mo><mo fence="true">∥</mo></mrow><mn>2</mn></msub></mrow><annotation encoding="application/x-tex">d_{\text{center}} = \left\| (x_{pred}, y_{pred}) - (x_{gt}, y_{gt}) \right\|_2
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2805559999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">center</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.085808em;vertical-align:-0.335808em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;">∥</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361079999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">p</span><span class="mord mathnormal mtight" style="margin-right:0.02778em;">r</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361079999999999em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">p</span><span class="mord mathnormal mtight" style="margin-right:0.02778em;">r</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.28055599999999997em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03588em;">g</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.28055599999999997em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03588em;">g</span><span class="mord mathnormal mtight">t</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mclose">)</span><span class="mclose delimcenter" style="top:0em;">∥</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.11529999999999996em;"><span style="top:-2.364192em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.335808em;"><span></span></span></span></span></span></span></span></span></span></span></p>
+<p><strong>这个公式在干什么</strong>：只看俯视平面上两个中心的直线距离（米），与尺寸、朝向、置信度无关。距离 ≤ 阈值即算命中。官方在 {<strong>0.5, 1, 2, 4</strong>} m 四档阈值下分别算 AP，再取平均得到 mAP。</p>
+<p><strong>为什么放弃 IoU</strong>（nuScenes 论文的理由）：① 旋转框 IoU 计算贵（本周第 5 节你会亲手体会到：角点+多边形裁剪一整套），评测数百万预测时成本高；② 更本质的是，IoU 匹配把&quot;中心偏了一点&quot;和&quot;朝向差了 90°&quot;混在一个数里——一个中心精准但朝向全错的框，IoU 可能仍然达标，问题被掩盖。中心距离把&quot;定位&quot;单独拎出来评，朝向、尺寸、速度各自有专门的指标（见 3.3）——<strong>一个 IoU 拆成六个正交指标</strong>。</p>
+<p>另一个与 KITTI/COCO 的不同：mAP 是&quot;对 recall、precision &gt; 0.1 的 PR 曲线段积分&quot;——曲线两端（recall 或 precision ≤ 0.1 的部分）不参与积分，避免&quot;靠最后几个零散检出撑面积&quot;的刷分方式。</p>
+<h3 id="32-map-与-kitti-的三个不同"><a class="markdownIt-Anchor" href="#32-map-与-kitti-的三个不同"></a> 3.2 mAP 与 KITTI 的三个不同</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>KITTI AP</th>
+<th>nuScenes mAP</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>匹配</td>
+<td>IoU ≥ 单一阈值（每类固定）</td>
+<td>中心距离 ≤ 四档阈值平均</td>
+</tr>
+<tr>
+<td>朝向/尺寸</td>
+<td>隐含在 IoU 里</td>
+<td>不参与匹配（另有 AOE/ASE）</td>
+</tr>
+<tr>
+<td>recall 采样</td>
+<td>40 点（R40）</td>
+<td>PR 曲线积分（recall/precision &gt; 0.1）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="33-五项-tp-错误true-positive-metrics"><a class="markdownIt-Anchor" href="#33-五项-tp-错误true-positive-metrics"></a> 3.3 五项 TP 错误（True Positive metrics）</h3>
+<p>在<strong>中心距离 2 m 匹配</strong>下（官方 devkit：TP metrics 用 2 m 阈值），对每个命中框计算五项&quot;单属性&quot;误差，再对类别取平均（m 前缀）。全部是<strong>越小越好</strong>的正数：</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>全称</th>
+<th>测什么</th>
+<th>单位/定义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>ATE</strong></td>
+<td>Average Translation Error</td>
+<td>中心定位误差</td>
+<td>BEV 中心欧氏距离（米）</td>
+</tr>
+<tr>
+<td><strong>ASE</strong></td>
+<td>Average Scale Error</td>
+<td>尺寸误差</td>
+<td><strong>1 − IoU</strong>（先把框的中心与朝向对齐后再算 IoU，纯看尺寸）</td>
+</tr>
+<tr>
+<td><strong>AOE</strong></td>
+<td>Average Orientation Error</td>
+<td>朝向误差</td>
+<td>最小 yaw 差（弧度；barrier 类 180° 封顶）</td>
+</tr>
+<tr>
+<td><strong>AVE</strong></td>
+<td>Average Velocity Error</td>
+<td>速度误差</td>
+<td>速度向量差的模（m/s）</td>
+</tr>
+<tr>
+<td><strong>AAE</strong></td>
+<td>Average Attribute Error</td>
+<td>属性分类误差</td>
+<td>1 − 属性分类准确率</td>
+</tr>
+</tbody>
+</table>
+<p><strong>注意两处&quot;对齐&quot;技巧</strong>：ASE 先把中心朝向对齐再算 IoU，保证它只测&quot;高宽长准不准&quot;；AOE 取&quot;最小 yaw 差&quot;是因为车头朝向有 180° 对称性（一辆车头朝北和朝南的框，对检测而言可能都对）——这与第 3 周坑 1&quot;sin/cos 解码丢 180°&quot;呼应，但方向相反：<strong>模型端要区分车头车尾（朝向 bin），评测端反而允许 180° 误差</strong>。</p>
+<h3 id="34-nds一个数字合成公式"><a class="markdownIt-Anchor" href="#34-nds一个数字合成公式"></a> 3.4 NDS：一个数字合成公式</h3>
+<p>nuScenes 检测分数（nuScenes Detection Score, NDS）官方 devkit 公式：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>NDS</mtext><mo>=</mo><mfrac><mrow><mn>5</mn><mo>⋅</mo><mtext>mAP</mtext><mo>+</mo><munder><mo>∑</mo><mrow><mi>i</mi><mo>∈</mo><mo stretchy="false">{</mo><mi>T</mi><mi>P</mi><mo stretchy="false">}</mo></mrow></munder><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mtext>m</mtext><mi>T</mi><msub><mi>P</mi><mi>i</mi></msub><mo separator="true">,</mo><mtext> </mtext><mn>0</mn><mo stretchy="false">)</mo></mrow><mn>10</mn></mfrac></mrow><annotation encoding="application/x-tex">\text{NDS} = \frac{5 \cdot \text{mAP} + \sum_{i \in \{TP\}} \max(1 - \text{m}TP_i,\ 0)}{10}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord">NDS</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.30071em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.61471em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span><span class="mord">0</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.86471em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">5</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord text"><span class="mord">mAP</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:-0.0000050000000000050004em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.22528999999999993em;"><span style="top:-2.40029em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mrel mtight">∈</span><span class="mopen mtight">{</span><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span><span class="mord mathnormal mtight" style="margin-right:0.13889em;">P</span><span class="mclose mtight">}</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.47471em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop">max</span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord text"><span class="mord">m</span></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">0</span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p><strong>这个公式在干什么</strong>（逐项拆）：</p>
+<ul>
+<li><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><mn>1</mn><mo>−</mo><mtext>m</mtext><mi>T</mi><msub><mi>P</mi><mi>i</mi></msub><mo separator="true">,</mo><mn>0</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">\max(1 - \text{m}TP_i, 0)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mop">max</span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">m</span></span><span class="mord mathnormal" style="margin-right:0.13889em;">T</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">0</span><span class="mclose">)</span></span></span></span>：把五项&quot;越小越好&quot;的误差翻转成&quot;越大越好&quot;的得分——误差 0.2 m 的 ATE 得 0.8 分；误差超过 1 时得分钳到 0（否则会出现负分，一个烂指标倒扣其他指标的分）；</li>
+<li><strong>权重 5 : 1 : 1 : 1 : 1 : 1</strong>：mAP 占总分的一半，五项 TP 错误合计占另一半——设计者认为&quot;检出没有&quot;仍然是最重要的事，但&quot;检出了但朝向/速度/尺寸全烂&quot;也必须能在总分里体现；</li>
+<li>分母 10 = 5 + 5，归一到 [0, 1]。</li>
+</ul>
+<p><strong>结果拿来做什么</strong>：NDS 是&quot;既能查漏检、又能查质量&quot;的综合分。一个 mAP 高但 AOE 巨大的模型（典型的：没好好学朝向），KITTI 主指标看不见，NDS 会直接掉 10% 以上——这就是 nuScenes 榜单上 mAP 排名与 NDS 排名经常不一致的原因。</p>
+<h3 id="35-手算一个-nds代码验证"><a class="markdownIt-Anchor" href="#35-手算一个-nds代码验证"></a> 3.5 手算一个 NDS（代码验证）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 假设只有一个类别&quot;car&quot;，评测器给出四个匹配档下的 AP ----</span></span><br><span class="line">aps = &#123;<span class="string">&quot;0.5m&quot;</span>: <span class="number">0.20</span>, <span class="string">&quot;1m&quot;</span>: <span class="number">0.40</span>, <span class="string">&quot;2m&quot;</span>: <span class="number">0.60</span>, <span class="string">&quot;4m&quot;</span>: <span class="number">0.80</span>&#125;</span><br><span class="line">mAP = np.mean(<span class="built_in">list</span>(aps.values()))</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;各中心距离阈值下的 AP: <span class="subst">&#123;aps&#125;</span>&quot;</span>)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;mAP = mean(0.2, 0.4, 0.6, 0.8) = <span class="subst">&#123;mAP:<span class="number">.4</span>f&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 5 类 TP 错误（各类平均后的均值），先换成得分 max(1 - err, 0) ----</span></span><br><span class="line">errs = &#123;<span class="string">&quot;mATE&quot;</span>: <span class="number">0.30</span>, <span class="string">&quot;mASE&quot;</span>: <span class="number">0.20</span>, <span class="string">&quot;mAOE&quot;</span>: <span class="number">0.10</span>, <span class="string">&quot;mAVE&quot;</span>: <span class="number">0.20</span>, <span class="string">&quot;mAAE&quot;</span>: <span class="number">0.10</span>&#125;</span><br><span class="line">scores = &#123;k: <span class="built_in">max</span>(<span class="number">1.0</span> - v, <span class="number">0.0</span>) <span class="keyword">for</span> k, v <span class="keyword">in</span> errs.items()&#125;</span><br><span class="line"><span class="keyword">for</span> k <span class="keyword">in</span> errs:</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;<span class="subst">&#123;k&#125;</span>: 误差 <span class="subst">&#123;errs[k]:<span class="number">.2</span>f&#125;</span> -&gt; 得分 1-err = <span class="subst">&#123;scores[k]:<span class="number">.2</span>f&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- NDS = (5*mAP + sum(TP scores)) / 10 ----</span></span><br><span class="line">nds = (<span class="number">5</span> * mAP + <span class="built_in">sum</span>(scores.values())) / <span class="number">10</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;NDS = (5 x <span class="subst">&#123;mAP:<span class="number">.1</span>f&#125;</span> + <span class="subst">&#123;<span class="built_in">sum</span>(scores.values()):<span class="number">.2</span>f&#125;</span>) / 10 = <span class="subst">&#123;nds:<span class="number">.4</span>f&#125;</span>&quot;</span>)</span><br><span class="line"><span class="keyword">assert</span> <span class="built_in">abs</span>(nds - <span class="number">0.66</span>) &lt; <span class="number">1e-9</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;验证通过：NDS = (5x0.5 + 0.7+0.8+0.9+0.8+0.9)/10 = (2.5+4.1)/10 = 0.66&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>真实运行输出</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">各中心距离阈值下的 AP: &#123;&#x27;0.5m&#x27;: 0.2, &#x27;1m&#x27;: 0.4, &#x27;2m&#x27;: 0.6, &#x27;4m&#x27;: 0.8&#125;</span><br><span class="line">mAP = mean(0.2, 0.4, 0.6, 0.8) = 0.5000</span><br><span class="line">mATE: 误差 0.30 -&gt; 得分 0.70</span><br><span class="line">mASE: 误差 0.20 -&gt; 得分 0.80</span><br><span class="line">mAOE: 误差 0.10 -&gt; 得分 0.90</span><br><span class="line">mAVE: 误差 0.20 -&gt; 得分 0.80</span><br><span class="line">mAAE: 误差 0.10 -&gt; 得分 0.90</span><br><span class="line">NDS = (5 x 0.5 + 4.10) / 10 = 0.6600</span><br><span class="line">验证通过：NDS = (5x0.5 + 0.7+0.8+0.9+0.8+0.9)/10 = (2.5+4.1)/10 = 0.66</span><br></pre></td></tr></table></figure>
+<p>读一遍：这个假想模型 mAP 只有 0.5，但五项误差都小，NDS 拿到 0.66——<strong>TP 错误项贡献了 (4.1/10) ≈ 62% 的总分</strong>（4.1 ÷ 6.6）。反过来若 mAP = 0.6 而 AOE = 1.2（超 1 钳 0），NDS 掉到 (3.0 + 3.2)/10 = 0.62。这就是&quot;nuScenes 更宽容匹配 + TP 补刀&quot;的定量感受。</p>
+<blockquote>
+<p><strong>动手验证</strong>：把 <code>errs</code> 里的 mAOE 改成 1.5（朝向彻底没学），NDS 变成多少？再想想为什么 nuScenes 榜单上 CenterPoint 论文报告两阶段 65.5 NDS，而某些 mAP 更高的方法 NDS 反而更低。</p>
+</blockquote>
+<hr />
+<h2 id="4-三大数据集规模与传感器配置查证值"><a class="markdownIt-Anchor" href="#4-三大数据集规模与传感器配置查证值"></a> 4. 三大数据集规模与传感器配置（查证值）</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>KITTI（2012→）</th>
+<th>nuScenes（2019→）</th>
+<th>Waymo Open Dataset（2019→）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>规模</td>
+<td><strong>7481 训练帧 + 7518 测试帧</strong>（官方评测页；共标注 80,256 个目标）</td>
+<td><strong>1000 个场景 × 20 s</strong>；约 140 万张相机图像、39 万帧激光点云、140 万雷达回波与目标框</td>
+<td>v1.0 论文：<strong>1150 个 20 s 场景</strong>（后续版本扩至 2000+ segments，以官网为准）；约 23 万帧、常被引用为约 1200 万个 3D 框标注</td>
+</tr>
+<tr>
+<td>标注频率</td>
+<td>逐帧标注</td>
+<td>关键帧 <strong>2 Hz</strong>（20 s × 2 Hz = 40 关键帧/场景），非关键帧仅作传感器数据</td>
+<td>10 Hz 传感器数据，标注框跨帧一致（有实例 ID）</td>
+</tr>
+<tr>
+<td>激光雷达</td>
+<td>Velodyne HDL-64E（64 线机械式）×1</td>
+<td>Velodyne HDL-32E ×1</td>
+<td>1 个中距顶部 + 4 个短距激光雷达（共 5 个）</td>
+</tr>
+<tr>
+<td>相机</td>
+<td>PointGrey Flea2 彩色/灰度相机共 4 个</td>
+<td>6 个环视相机（360° 覆盖）</td>
+<td>5 个相机（含前向长焦+广角等）</td>
+</tr>
+<tr>
+<td>毫米波雷达</td>
+<td>无</td>
+<td><strong>5 个</strong>（TRXV0，四角+车尾）</td>
+<td>无（补盲雷达在后续数据集中出现，以官网为准）</td>
+</tr>
+<tr>
+<td>定位</td>
+<td>OXTS RT3000 GPS/IMU</td>
+<td>GPS/IMU + 高精地图（提供地图层）</td>
+<td>GPS/IMU</td>
+</tr>
+<tr>
+<td>采集地</td>
+<td>德国卡尔斯鲁厄等（城郊）</td>
+<td>波士顿 + 新加坡（含左行交通、雨天/夜间）</td>
+<td>美国多个城市（阳光充足为主）</td>
+</tr>
+<tr>
+<td>适合练什么</td>
+<td>快速入门、单帧 3D 检测、CPU 友好（12 GB 量级）</td>
+<td>时序/速度/多模态融合、恶劣天气（约 4 GB 的 mini split 即可上手）</td>
+<td>大规模训练、工业化数据管线（TFRecord 生态较重）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>几个量级感受</strong>：</p>
+<ul>
+<li>KITTI 检测集<strong>只有约 1.5 万帧</strong>——现代 3D 检测论文在其上&quot;过拟合&quot;多年，排名差异常小于随机种子波动，所以大家同时报 nuScenes/Waymo；</li>
+<li>nuScenes 的 39 万帧激光点云里，<strong>带标注的关键帧只有 4 万</strong>（1000 × 40）——第 3 周&quot;速度头需要连续帧标签&quot;在这里落地：时序标注成本极高；</li>
+<li>Waymo 的 5 激光雷达布置让点云比 KITTI 密得多，同样模型在 Waymo 上远距离行人检出明显更好——数据集的传感器配置决定了&quot;任务的物理难度&quot;。</li>
+</ul>
+<blockquote>
+<p>数据规模口径说明：Waymo 各版本（v1.0 → v2.x）规模差异大，官方 about 页现列 2030 segments；KITTI/nuScenes 数字均出自官方页面。写报告引用时请以官网当时的说明为准。</p>
+</blockquote>
+<hr />
+<h2 id="5-手写-bev-旋转框-iou本周核心交付"><a class="markdownIt-Anchor" href="#5-手写-bev-旋转框-iou本周核心交付"></a> 5. 手写 BEV 旋转框 IoU（本周核心交付）</h2>
+<h3 id="51-问题矩形一转最大最小值就失效了"><a class="markdownIt-Anchor" href="#51-问题矩形一转最大最小值就失效了"></a> 5.1 问题：矩形一转，&quot;最大最小值&quot;就失效了</h3>
+<p>第 1 周的 IoU 对轴对齐框只要四个 max/min 就能算交集；框一旦带朝向，交集变成<strong>两个凸多边形的交</strong>——不能用坐标夹逼，要走计算几何：</p>
+<ol>
+<li><strong>角点展开</strong>：7 自由度框 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mi>x</mi><mo separator="true">,</mo><mi>y</mi><mo separator="true">,</mo><mi>w</mi><mo separator="true">,</mo><mi>l</mi><mo separator="true">,</mo><mtext>yaw</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">(x, y, w, l, \text{yaw})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord mathnormal">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.01968em;">l</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord text"><span class="mord">yaw</span></span><span class="mclose">)</span></span></span></span> → BEV 平面 4 个角点；</li>
+<li><strong>凸多边形裁剪</strong>：用其中一个矩形（凸）逐边裁剪另一个矩形，得到交集多边形——经典算法是 <strong>Sutherland–Hodgman</strong>；</li>
+<li><strong>鞋带公式（shoelace）</strong>：算交集多边形面积，代回 IoU 定义。</li>
+</ol>
+<h3 id="52-完整实现-5-组验证"><a class="markdownIt-Anchor" href="#52-完整实现-5-组验证"></a> 5.2 完整实现 + 5 组验证</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># exp5_bev_rotated_iou.py（归档于 实验脚本/）—— BEV 旋转框 IoU（角点展开 + Sutherland–Hodgman 裁剪 + 鞋带公式）</span></span><br><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">box2corners</span>(<span class="params">x, y, w, l, yaw</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;BEV 旋转框 (x,y,w,l,yaw) -&gt; 4 个角点，逆时针顺序，shape (4,2)。</span></span><br><span class="line"><span class="string">    约定：l 沿朝向 yaw 方向，w 垂直朝向。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="comment"># 本体坐标系（车头朝 +x_local）：沿 l 的半长、沿 w 的半宽，按逆时针排列</span></span><br><span class="line">    local = np.array([</span><br><span class="line">        [ l/<span class="number">2</span>, -w/<span class="number">2</span>],</span><br><span class="line">        [ l/<span class="number">2</span>,  w/<span class="number">2</span>],</span><br><span class="line">        [-l/<span class="number">2</span>,  w/<span class="number">2</span>],</span><br><span class="line">        [-l/<span class="number">2</span>, -w/<span class="number">2</span>],</span><br><span class="line">    ])</span><br><span class="line">    c, s = np.cos(yaw), np.sin(yaw)</span><br><span class="line">    R = np.array([[c, -s], [s, c]])</span><br><span class="line">    <span class="keyword">return</span> local @ R.T + np.array([x, y])</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">poly_area</span>(<span class="params">poly</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;鞋带公式（shoelace）计算多边形面积，输入 (K,2)。&quot;&quot;&quot;</span></span><br><span class="line">    x, y = poly[:, <span class="number">0</span>], poly[:, <span class="number">1</span>]</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0.5</span> * <span class="built_in">abs</span>(np.dot(x, np.roll(y, -<span class="number">1</span>)) - np.dot(y, np.roll(x, -<span class="number">1</span>)))</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">clip_convex</span>(<span class="params">subject, clip</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;Sutherland–Hodgman：用凸多边形 clip 裁剪 subject，返回裁剪后顶点。</span></span><br><span class="line"><span class="string">    两个多边形都须是逆时针。&quot;&quot;&quot;</span></span><br><span class="line">    output = subject</span><br><span class="line">    n = <span class="built_in">len</span>(clip)</span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n):</span><br><span class="line">        a, b = clip[i], clip[(i + <span class="number">1</span>) % n]</span><br><span class="line">        <span class="comment"># 边 a-&gt;b 的&quot;内侧&quot; = 叉积 &gt;= 0（左侧）</span></span><br><span class="line">        edge = b - a</span><br><span class="line">        inputs = output</span><br><span class="line">        output = []</span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">len</span>(inputs) == <span class="number">0</span>:</span><br><span class="line">            <span class="keyword">break</span></span><br><span class="line">        <span class="keyword">def</span> <span class="title function_">inside</span>(<span class="params">p</span>):</span><br><span class="line">            <span class="keyword">return</span> np.cross(edge, p - a) &gt;= -<span class="number">1e-12</span></span><br><span class="line">        p_prev = inputs[-<span class="number">1</span>]</span><br><span class="line">        prev_in = inside(p_prev)</span><br><span class="line">        <span class="keyword">for</span> p <span class="keyword">in</span> inputs:</span><br><span class="line">            cur_in = inside(p)</span><br><span class="line">            <span class="keyword">if</span> cur_in != prev_in:</span><br><span class="line">                <span class="comment"># 线段 p_prev-&gt;p 与直线 a-&gt;b 求交</span></span><br><span class="line">                t = np.cross(a - p_prev, edge) / np.cross(p - p_prev, edge)</span><br><span class="line">                output.append(p_prev + t * (p - p_prev))</span><br><span class="line">            <span class="keyword">if</span> cur_in:</span><br><span class="line">                output.append(p)</span><br><span class="line">            p_prev, prev_in = p, cur_in</span><br><span class="line">    <span class="keyword">return</span> np.array(output)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">bev_rotated_iou</span>(<span class="params">box_a, box_b</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;两个 BEV 旋转框的 IoU。输入 (x, y, w, l, yaw)。&quot;&quot;&quot;</span></span><br><span class="line">    ca = box2corners(*box_a)</span><br><span class="line">    cb = box2corners(*box_b)</span><br><span class="line">    area_a = poly_area(ca)</span><br><span class="line">    area_b = poly_area(cb)</span><br><span class="line">    inter_poly = clip_convex(ca, cb) <span class="keyword">if</span> area_a &gt; <span class="number">0</span> <span class="keyword">and</span> area_b &gt; <span class="number">0</span> <span class="keyword">else</span> []</span><br><span class="line">    inter = poly_area(inter_poly) <span class="keyword">if</span> <span class="built_in">len</span>(inter_poly) &gt;= <span class="number">3</span> <span class="keyword">else</span> <span class="number">0.0</span></span><br><span class="line">    union = area_a + area_b - inter</span><br><span class="line">    <span class="keyword">return</span> inter / union <span class="keyword">if</span> union &gt; <span class="number">0</span> <span class="keyword">else</span> <span class="number">0.0</span></span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">point_in_box</span>(<span class="params">p, box</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;蒙特卡洛用：判断点是否在旋转框内（转到本体坐标判 |lx|,|ly|）。&quot;&quot;&quot;</span></span><br><span class="line">    x, y, w, l, yaw = box</span><br><span class="line">    c, s = np.cos(yaw), np.sin(yaw)</span><br><span class="line">    dx, dy = p[:, <span class="number">0</span>] - x, p[:, <span class="number">1</span>] - y</span><br><span class="line">    lx = c * dx + s * dy          <span class="comment"># R^T @ d 的第一行</span></span><br><span class="line">    ly = -s * dx + c * dy</span><br><span class="line">    <span class="keyword">return</span> (np.<span class="built_in">abs</span>(lx) &lt;= l/<span class="number">2</span>) &amp; (np.<span class="built_in">abs</span>(ly) &lt;= w/<span class="number">2</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">iou_monte_carlo</span>(<span class="params">box_a, box_b, n=<span class="number">200_000</span>, rng=<span class="literal">None</span></span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;蒙特卡洛撒点估计 IoU（用于交叉验证解析值）。&quot;&quot;&quot;</span></span><br><span class="line">    rng = rng <span class="keyword">or</span> np.random.default_rng(<span class="number">7</span>)</span><br><span class="line">    corners = np.vstack([box2corners(*box_a), box2corners(*box_b)])</span><br><span class="line">    lo, hi = corners.<span class="built_in">min</span>(<span class="number">0</span>) - <span class="number">0.5</span>, corners.<span class="built_in">max</span>(<span class="number">0</span>) + <span class="number">0.5</span></span><br><span class="line">    pts = rng.uniform(lo, hi, size=(n, <span class="number">2</span>))</span><br><span class="line">    ina = point_in_box(pts, box_a)</span><br><span class="line">    inb = point_in_box(pts, box_b)</span><br><span class="line">    area_rect = np.prod(hi - lo)</span><br><span class="line">    inter = (ina &amp; inb).mean() * area_rect</span><br><span class="line">    union = (ina | inb).mean() * area_rect</span><br><span class="line">    <span class="keyword">return</span> inter / union</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    rng = np.random.default_rng(<span class="number">7</span>)</span><br><span class="line">    <span class="comment"># ---- 测试1：完全重合 -&gt; 1.0 ----</span></span><br><span class="line">    b = (<span class="number">10.0</span>, <span class="number">5.0</span>, <span class="number">2.0</span>, <span class="number">4.5</span>, <span class="number">0.3</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;测试1 完全重合      IoU = <span class="subst">&#123;bev_rotated_iou(b, b):<span class="number">.6</span>f&#125;</span>&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">abs</span>(bev_rotated_iou(b, b) - <span class="number">1.0</span>) &lt; <span class="number">1e-9</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 测试2：轴对齐偏移，手算 2/14 ----</span></span><br><span class="line">    <span class="comment"># A=[0,0,4,2] 面积8, B=[3,0,4,2] 偏移后交集 1x2=2, 并集 8+8-2=14</span></span><br><span class="line">    a2, b2 = (<span class="number">0</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">4</span>, <span class="number">0.0</span>), (<span class="number">3</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">4</span>, <span class="number">0.0</span>)</span><br><span class="line">    i2 = bev_rotated_iou(a2, b2)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;测试2 轴对齐偏移    IoU = <span class="subst">&#123;i2:<span class="number">.6</span>f&#125;</span>（手算 2/14 = <span class="subst">&#123;<span class="number">2</span>/<span class="number">14</span>:<span class="number">.6</span>f&#125;</span>）&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">abs</span>(i2 - <span class="number">2</span>/<span class="number">14</span>) &lt; <span class="number">1e-9</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 测试3：同一中心、旋转 90°，手算 4/12 ----</span></span><br><span class="line">    <span class="comment"># A: w=2,l=4 面积8；B 旋转90°后 w=4,l=2 面积8；交集 = 中央 2x2 = 4；并集 12</span></span><br><span class="line">    a3 = (<span class="number">0</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">4</span>, <span class="number">0.0</span>)</span><br><span class="line">    b3 = (<span class="number">0</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">4</span>, np.pi / <span class="number">2</span>)</span><br><span class="line">    i3 = bev_rotated_iou(a3, b3)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;测试3 旋转90°      IoU = <span class="subst">&#123;i3:<span class="number">.6</span>f&#125;</span>（手算 4/12 = <span class="subst">&#123;<span class="number">4</span>/<span class="number">12</span>:<span class="number">.6</span>f&#125;</span>）&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">abs</span>(i3 - <span class="number">4</span>/<span class="number">12</span>) &lt; <span class="number">1e-9</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 测试4：任意旋转 vs 20万点蒙特卡洛 ----</span></span><br><span class="line">    a4 = (<span class="number">2.0</span>, -<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">4.5</span>, <span class="number">0.7</span>)</span><br><span class="line">    b4 = (<span class="number">2.5</span>, -<span class="number">0.5</span>, <span class="number">1.8</span>, <span class="number">4.2</span>, -<span class="number">0.4</span>)</span><br><span class="line">    i4 = bev_rotated_iou(a4, b4)</span><br><span class="line">    i4_mc = iou_monte_carlo(a4, b4, n=<span class="number">200_000</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;测试4 任意旋转     IoU 解析 = <span class="subst">&#123;i4:<span class="number">.6</span>f&#125;</span>, 蒙特卡洛 = <span class="subst">&#123;i4_mc:<span class="number">.6</span>f&#125;</span>, 差异 = <span class="subst">&#123;<span class="built_in">abs</span>(i4-i4_mc):<span class="number">.4</span>f&#125;</span>&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">abs</span>(i4 - i4_mc) &lt; <span class="number">0.01</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---- 测试5：不相交 -&gt; 0 ----</span></span><br><span class="line">    i5 = bev_rotated_iou((<span class="number">0</span>, <span class="number">0</span>, <span class="number">2</span>, <span class="number">4</span>, <span class="number">0.3</span>), (<span class="number">50</span>, <span class="number">50</span>, <span class="number">2</span>, <span class="number">4</span>, <span class="number">1.0</span>))</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;测试5 完全分离      IoU = <span class="subst">&#123;i5:<span class="number">.6</span>f&#125;</span>&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> i5 == <span class="number">0.0</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;验证通过：BEV 旋转框 IoU 与手算/蒙特卡洛全部一致&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>真实运行输出</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">测试1 完全重合      IoU = 1.000000</span><br><span class="line">测试2 轴对齐偏移    IoU = 0.142857（手算 2/14 = 0.142857）</span><br><span class="line">测试3 旋转90°      IoU = 0.333333（手算 4/12 = 0.333333）</span><br><span class="line">测试4 任意旋转     IoU 解析 = 0.322625, 蒙特卡洛 = 0.321238, 差异 = 0.0014</span><br><span class="line">测试5 完全分离      IoU = 0.000000</span><br><span class="line">验证通过：BEV 旋转框 IoU 与手算/蒙特卡洛全部一致</span><br></pre></td></tr></table></figure>
+<h3 id="53-逐模块解读"><a class="markdownIt-Anchor" href="#53-逐模块解读"></a> 5.3 逐模块解读</h3>
+<ul>
+<li><strong>box2corners</strong>：本体坐标里按逆时针排 4 个角（沿车头 ±l/2、沿车宽 ±w/2），旋转矩阵 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>R</mi></mrow><annotation encoding="application/x-tex">R</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.00773em;">R</span></span></span></span> 转到世界系再加中心。<strong>逆时针顺序是后面一切的前提</strong>——Sutherland–Hodgman 的&quot;内侧&quot;判定（叉积 ≥ 0）依赖顶点顺序一致；</li>
+<li><strong>clip_convex</strong>：对裁剪多边形的每条边，把被裁多边形的顶点序列走一遍：出界进界的过渡点求交插入，界内点保留。两矩形相交时交集最多 8 个顶点（两个&quot;十字&quot;交点 × 各边）；</li>
+<li><strong>蒙特卡洛交叉验证</strong>：在一个包围盒里撒 20 万个均匀点，落在&quot;两框交&quot;与&quot;两框并&quot;里的频率 × 包围盒面积 = 交/并面积的估计。撒点估计的统计误差 ∝ <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mi mathvariant="normal">/</mi><msqrt><mi>N</mi></msqrt></mrow><annotation encoding="application/x-tex">1/\sqrt{N}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.176665em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">/</span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.9266650000000001em;"><span class="svg-align" style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord" style="padding-left:0.833em;"><span class="mord mathnormal" style="margin-right:0.10903em;">N</span></span></span><span style="top:-2.886665em;"><span class="pstrut" style="height:3em;"></span><span class="hide-tail" style="min-width:0.853em;height:1.08em;"><svg width='400em' height='1.08em' viewBox='0 0 400000 1080' preserveAspectRatio='xMinYMin slice'><path d='M95,702
+c-2.7,0,-7.17,-2.7,-13.5,-8c-5.8,-5.3,-9.5,-10,-9.5,-14
+c0,-2,0.3,-3.3,1,-4c1.3,-2.7,23.83,-20.7,67.5,-54
+c44.2,-33.3,65.8,-50.3,66.5,-51c1.3,-1.3,3,-2,5,-2c4.7,0,8.7,3.3,12,10
+s173,378,173,378c0.7,0,35.3,-71,104,-213c68.7,-142,137.5,-285,206.5,-429
+c69,-144,104.5,-217.7,106.5,-221
+l0 -0
+c5.3,-9.3,12,-14,20,-14
+H400000v40H845.2724
+s-225.272,467,-225.272,467s-235,486,-235,486c-2.7,4.7,-9,7,-19,7
+c-6,0,-10,-1,-12,-3s-194,-422,-194,-422s-65,47,-65,47z
+M834 80h400000v40h-400000z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.11333499999999996em;"><span></span></span></span></span></span></span></span></span>，20 万点在 IoU ≈ 0.3 量级下误差约千分之几，足以确认解析实现没有大错。</li>
+</ul>
+<p><strong>工程建议</strong>：真实评测/训练代码用 <code>shapely</code>（<code>box(...).intersection(...)</code>）或框架自带的旋转 IoU CUDA 核；手写版的价值在于让你理解&quot;旋转 IoU 到底在算什么&quot;，以及面试时能白板推出来。</p>
+<h3 id="54-bev-iou-与-3d-iou-的关系"><a class="markdownIt-Anchor" href="#54-bev-iou-与-3d-iou-的关系"></a> 5.4 BEV IoU 与 3D IoU 的关系</h3>
+<p>BEV IoU 是<strong>近似</strong>：只看俯视图，忽略 z 方向。设两框 z 区间分别为 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><msub><mi>z</mi><mn>1</mn></msub><mo separator="true">,</mo><msub><mi>z</mi><mn>1</mn></msub><mo>+</mo><msub><mi>h</mi><mn>1</mn></msub><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[z_1, z_1+h_1]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.04398em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.04398em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span></span></span></span>、<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><msub><mi>z</mi><mn>2</mn></msub><mo separator="true">,</mo><msub><mi>z</mi><mn>2</mn></msub><mo>+</mo><msub><mi>h</mi><mn>2</mn></msub><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[z_2, z_2+h_2]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.04398em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.04398em;">z</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.04398em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span></span></span></span>，则：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mtext>IoU</mtext><mrow><mn>3</mn><mi>D</mi></mrow></msub><mo>=</mo><msub><mtext>IoU</mtext><mrow><mi>B</mi><mi>E</mi><mi>V</mi></mrow></msub><mo>×</mo><mfrac><mtext>z 方向重叠高度</mtext><mtext>z 方向并集高度</mtext></mfrac></mrow><annotation encoding="application/x-tex">\text{IoU}_{3D} = \text{IoU}_{BEV} \times \frac{\text{z 方向重叠高度}}{\text{z 方向并集高度}}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord text"><span class="mord">IoU</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">3</span><span class="mord mathnormal mtight" style="margin-right:0.02778em;">D</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord text"><span class="mord">IoU</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.05017em;">B</span><span class="mord mathnormal mtight" style="margin-right:0.05764em;">E</span><span class="mord mathnormal mtight" style="margin-right:0.22222em;">V</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:2.04633em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.36033em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord">z </span><span class="mord cjk_fallback">方向并集高度</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord">z </span><span class="mord cjk_fallback">方向重叠高度</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p><strong>这个公式在干什么</strong>：3D 交集体积 = BEV 交集面积 × z 重叠高度；3D 并集体积不是简单的乘积展开，但上式给出了正确的分解思路——BEV 完全重合（IoU_BEV = 1）的两框，若一辆在桥上、一辆在桥下（z 重叠为 0），3D IoU 仍是 0。KITTI 的 car 目标高度相似且贴地，BEV IoU 与 3D IoU 差别不大，所以工程上常用更便宜的 BEV IoU 做训练时的匹配；但<strong>悬空/多层场景两者会系统性背离</strong>。nuScenes 干脆绕开两者用中心距离，也是规避旋转 IoU 计算成本的一种选择。</p>
+<hr />
+<h2 id="6-框架导览openpcdet-与-mmdetection3d-一句话"><a class="markdownIt-Anchor" href="#6-框架导览openpcdet-与-mmdetection3d-一句话"></a> 6. 框架导览：OpenPCDet 与 MMDetection3D 一句话</h2>
+<ul>
+<li><strong>OpenPCDet</strong>（open-mmlab 团队主导的 PCDet 体系，GitHub 4k+ star）：点云 3D 检测的&quot;参考实现&quot;库，PointPillars/SECOND/CenterPoint/PV-RCNN 全都有官方配置，代码结构清晰（dataloader → 模型 → 头 分层），<strong>第 5 周机动周推荐用它跑预训练 PointPillars</strong>，把第 2 周的 shape 链逐项对照；</li>
+<li><strong>MMDetection3D</strong>（OpenMMLab，<a target="_blank" rel="noopener" href="http://github.com/open-mmlab/mmdetection3d%EF%BC%89%EF%BC%9A%E9%85%8D%E7%BD%AE%E4%BD%93%E7%B3%BB%E6%9B%B4%E5%BA%9E%E5%A4%A7%E3%80%81%E8%A6%86%E7%9B%96">github.com/open-mmlab/mmdetection3d）：配置体系更庞大、覆盖</a> 2D/3D/多模态（还有相机-only 方法），适合读多种方法的实现做横向对比；与 OpenPCDet 二选一即可。</li>
+</ul>
+<p>两库的关系像&quot;专题精装房 vs 大型精装商城&quot;：学原理、改结构用 OpenPCDet 顺手；比模型、找 baseline 用 MMDetection3D 全。</p>
+<hr />
+<h2 id="7-工程权衡与常见坑"><a class="markdownIt-Anchor" href="#7-工程权衡与常见坑"></a> 7. 工程权衡与常见坑</h2>
+<ol>
+<li><strong>R11/R40 口径混用</strong>：复现 2019 年以前的论文时，他们报的是 R11 数字，与现行榜单直接对比会&quot;虚低&quot;。看 KITTI 论文表先找脚注有没有说明 recall 位置。</li>
+<li><strong>3D IoU 的中心锚点歧义</strong>：KITTI 标注锚点是<strong>框底部中心</strong>，nuScenes 是<strong>几何中心</strong>（第 2 周 1 节提过）——评测脚本里 z 锚点不一致会把所有框&quot;平移半个车高&quot;，3D IoU 全线下降，BEV IoU 却看不出来（z 不参与）——这是&quot;BEV IoU 达标但 3D 指标离奇低&quot;的头号原因。</li>
+<li><strong>nuScenes mAP 的 &gt;0.1 截断</strong>：复现评测时漏掉&quot;recall/precision &gt; 0.1 才积分&quot;的条件，mAP 会系统性偏高（把长尾的零面积段算了进去）。</li>
+<li><strong>TP 错误的&quot;忽略类&quot;</strong>：barrier 不评 AOE/AVE/AAE，锥桶不评 AVE/AAE——自己写 NDS 汇总时若不按类屏蔽，会把无效误差平均进去拉低分数。</li>
+<li><strong>蒙特卡洛验证的包围盒</strong>：撒点包围盒若不含两框并集的边缘，估计偏大；代码里 <code>±0.5</code> 的余量别删。</li>
+<li><strong>评估时的置信度 filtering</strong>：与第 1 周坑 3 相同——先卡阈值再算 AP 会低估；评测协议要求把所有预测按分数排序参与计算。</li>
+</ol>
+<hr />
+<h2 id="8-延伸思考题含解析"><a class="markdownIt-Anchor" href="#8-延伸思考题含解析"></a> 8. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：为什么 KITTI 用图像上的框高（40/25 px）划分难度，而不是直接用距离？<br />
+<strong>A</strong>：KITTI 没有给出&quot;每个目标距离&quot;的官方字段吗？其实有（点云可算），但 2012 年设计时想沿用 PASCAL 传统且框高与&quot;点云里有多少点&quot;单调相关（近→大→点多）。框高是&quot;目标在两个模态里共同可见的大小&quot;代理，图像/点云都受它约束。副作用：同一难度档内实际距离范围很宽。</p>
+<p><strong>Q2</strong>：一个模型朝向回归全错（都差 90°），KITTI car AP@0.7 和 nuScenes mAP、NDS 各会怎么变？<br />
+<strong>A</strong>：KITTI：旋转 90° 的框 IoU 大幅下降（长宽互换），AP@0.7 崩；nuScenes：mAP 几乎不变（匹配只看中心距离），但 AOE ≈ 1.57 → TP 得分 0 → NDS 掉约 10 个点。这就是 3.4 节&quot;NDS 补刀&quot;的具象化。</p>
+<p><strong>Q3</strong>：nuScenes 为什么匹配阈值给到 4 m 那么宽？<br />
+<strong>A</strong>：四档平均等价于&quot;对定位误差的积分&quot;——0.5 m 档筛精定位，4 m 档保底粗糙检出。城市路口场景下，远处行人的中心误差普遍在 1~2 m，若只用 0.5 m 一档，mAP 会低到失去区分度。多档平均让&quot;检出&quot;与&quot;定位好&quot;分档计分。</p>
+<p><strong>Q4</strong>：手写的 <code>bev_rotated_iou</code> 在什么输入下会出错或变慢？<br />
+<strong>A</strong>：① 顶点顺序若被改成顺时针，叉积&quot;内侧&quot;判定反转，交集算成 0——顺序是隐式契约；② 大量框两两算 IoU（NMS/匹配）时 Python 循环是瓶颈，生产用向量化角点 + shapely 批量或 CUDA 核；③ 数值上 <code>1e-12</code> 的容差防浮点抖动，去掉后共点边界情况会闪断。</p>
+<p><strong>Q5</strong>：同一个模型在 KITTI 上 Car Moderate AP = 0.85，在 nuScenes 上 car mAP 只有 0.6，模型是不是退步了？<br />
+<strong>A</strong>：不能直接比。场景难度（城市 vs 城郊）、类别数（3 类 vs 10 类）、匹配协议（IoU 0.7 vs 中心距离四档平均）全都不同。跨数据集比较的唯一合法方式是&quot;同一数据集内的相对排名&quot;，或者把模型在两个集上都跑一遍看各自的相对提升。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 跑通 <code>实验脚本/exp5_bev_rotated_iou.py</code>（正文 5.2 节同款代码）：5 组测试全过（重合=1、轴对齐 2/14、旋转 90° 4/12、蒙特卡洛差异 &lt; 0.01、分离=0）。</li>
+<li>[ ] 跑通 NDS 手算例子：mAP = 0.5、五项 TP 得分合计 4.1 → NDS = 0.66；把 mAOE 改 1.5 观察钳零效应。</li>
+<li>[ ] 能不看资料复述：KITTI 三档难度的三个判据、R40 与 R11 的区别、nuScenes 五项 TP 错误各测什么、NDS 权重 5:1:1:1:1:1。</li>
+<li>[ ] 说出 BEV IoU 与 3D IoU 的关系式，并举一个两者背离的场景（桥上桥下）。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6/" rel="tag"># 自动驾驶</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/06/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-2-%E4%BB%8E2D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B%E5%88%B03D%E7%9B%AE%E6%A0%87%E6%A3%80%E6%B5%8B-%E7%AC%AC3%E5%91%A8-CenterPoint%E4%B8%8E3D%E6%A3%80%E6%B5%8B%E7%AE%97%E6%B3%95%E8%B0%B1%E7%B3%BB/" rel="prev" title="第3周-CenterPoint与3D检测算法谱系">
+                  <i class="fa fa-angle-left"></i> 第3周-CenterPoint与3D检测算法谱系
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/06/%E8%87%AA%E5%8A%A8%E9%A9%BE%E9%A9%B6-3-%E5%A4%9A%E4%BC%A0%E6%84%9F%E5%99%A8%E6%A0%87%E5%AE%9A-README/" rel="next" title="README">
+                  README <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">715k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">43:21</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

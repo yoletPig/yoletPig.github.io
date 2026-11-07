@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="进阶篇第 3 章。架构决策中最不可逆的一类是数据决策（07 篇可逆性分级：改存储 ≈ 心脏手术）。本章四条主线：存储选型的决策框架、事务与隔离级别的准确理解、跨服务一致性的工程手段、缓存与派生数据的治理。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="13-进阶-数据架构与一致性">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/13-%E8%BF%9B%E9%98%B6-%E6%95%B0%E6%8D%AE%E6%9E%B6%E6%9E%84%E4%B8%8E%E4%B8%80%E8%87%B4%E6%80%A7/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="进阶篇第 3 章。架构决策中最不可逆的一类是数据决策（07 篇可逆性分级：改存储 ≈ 心脏手术）。本章四条主线：存储选型的决策框架、事务与隔离级别的准确理解、跨服务一致性的工程手段、缓存与派生数据的治理。">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-01T23:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-07T16:05:40.239Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="架构">
+<meta property="article:tag" content="设计模式">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/13-%E8%BF%9B%E9%98%B6-%E6%95%B0%E6%8D%AE%E6%9E%B6%E6%9E%84%E4%B8%8E%E4%B8%80%E8%87%B4%E6%80%A7/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/13-%E8%BF%9B%E9%98%B6-%E6%95%B0%E6%8D%AE%E6%9E%B6%E6%9E%84%E4%B8%8E%E4%B8%80%E8%87%B4%E6%80%A7/","path":"2026/09/02/13-进阶-数据架构与一致性/","title":"13-进阶-数据架构与一致性"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>13-进阶-数据架构与一致性 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#13-%E8%BF%9B%E9%98%B6%E6%95%B0%E6%8D%AE%E6%9E%B6%E6%9E%84%E4%B8%8E%E4%B8%80%E8%87%B4%E6%80%A7"><span class="nav-number">1.</span> <span class="nav-text"> 13 - 进阶：数据架构与一致性</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%AD%98%E5%82%A8%E9%80%89%E5%9E%8B%E4%BB%8E%E8%A6%81%E4%BB%80%E4%B9%88%E4%BF%9D%E8%AF%81%E5%80%92%E6%8E%A8"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 存储选型：从&quot;要什么保证&quot;倒推</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E4%BA%8B%E5%8A%A1%E4%B8%8E%E9%9A%94%E7%A6%BB%E6%8A%8A%E5%9B%9B%E4%B8%AA%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB%E8%AF%BB%E5%87%86"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 事务与隔离：把四个隔离级别读准</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E5%B9%B6%E5%8F%91%E5%BC%82%E5%B8%B8%E9%80%9F%E6%9F%A5"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 并发异常速查</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E5%B7%A5%E7%A8%8B%E8%A6%81%E7%82%B9"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 工程要点</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E8%B7%A8%E6%9C%8D%E5%8A%A1%E4%B8%80%E8%87%B4%E6%80%A7%E6%94%BE%E5%BC%83%E5%B9%BB%E6%83%B3%E9%80%89%E6%8B%A9%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 跨服务一致性：放弃幻想，选择模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E7%BC%96%E6%8E%92%E5%BC%8F-saga%E6%8A%8A%E9%95%BF%E4%BA%8B%E5%8A%A1%E5%86%99%E6%88%90%E8%A1%A5%E5%81%BF%E9%93%BE"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 编排式 Saga：把长事务写成补偿链</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%BA%8B%E5%8A%A1%E6%80%A7%E5%8F%91%E4%BB%B6%E7%AE%B1transactional-outbox%E6%9C%AC%E5%9C%B0%E4%BA%8B%E5%8A%A1-%E5%8F%AF%E9%9D%A0%E6%8A%95%E9%80%92"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 事务性发件箱（Transactional Outbox）：本地事务 + 可靠投递</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-%E4%B8%80%E8%87%B4%E6%80%A7%E7%BA%A7%E5%88%AB%E7%9A%84%E8%AF%9A%E5%AE%9E%E5%A3%B0%E6%98%8E"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 一致性级别的诚实声明</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E7%BC%93%E5%AD%98%E4%B8%8E%E6%B4%BE%E7%94%9F%E6%95%B0%E6%8D%AE%E4%B8%80%E8%87%B4%E6%80%A7%E7%9A%84%E6%97%A5%E5%B8%B8%E6%88%98%E5%9C%BA"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 缓存与派生数据：一致性的日常战场</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E7%BC%93%E5%AD%98%E5%A4%B1%E6%95%88%E7%9A%84%E7%AD%96%E7%95%A5%E9%80%89%E6%8B%A9"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 缓存失效的策略选择</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E5%87%BB%E7%A9%BF%E7%A9%BF%E9%80%8F%E9%9B%AA%E5%B4%A9%E9%9D%A2%E8%AF%95%E4%B8%89%E8%BF%9E%E4%B9%9F%E6%98%AF%E7%9C%9F%E4%BA%8B%E6%95%85"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 击穿&#x2F;穿透&#x2F;雪崩（面试三连，也是真事故）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#43-%E6%B4%BE%E7%94%9F%E6%95%B0%E6%8D%AE%E7%9A%84%E7%AE%A1%E7%90%86%E5%8E%9F%E5%88%99"><span class="nav-number">1.4.3.</span> <span class="nav-text"> 4.3 派生数据的管理原则</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E6%95%B0%E6%8D%AE%E6%9E%B6%E6%9E%84%E7%9A%84%E6%BC%94%E8%BF%9B%E9%A2%84%E5%9F%8B"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 数据架构的演进预埋</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%87%AA%E6%B5%8B"><span class="nav-number">1.6.</span> <span class="nav-text"> 自测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%8B%E4%B8%80%E7%AF%87"><span class="nav-number">1.7.</span> <span class="nav-text"> 下一篇</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8F%82%E8%80%83%E6%9D%A5%E6%BA%90"><span class="nav-number">1.8.</span> <span class="nav-text"> 参考来源</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">257</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">41</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">13</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/13-%E8%BF%9B%E9%98%B6-%E6%95%B0%E6%8D%AE%E6%9E%B6%E6%9E%84%E4%B8%8E%E4%B8%80%E8%87%B4%E6%80%A7/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="13-进阶-数据架构与一致性 | Yoleen的博客">
+      <meta itemprop="description" content=" 进阶篇第 3 章。架构决策中最不可逆的一类是数据决策（07 篇可逆性分级：改存储 ≈ 心脏手术）。本章四条主线：存储选型的决策框架、事务与隔离级别的准确理解、跨服务一致性的工程手段、缓存与派生数据的治理。">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          13-进阶-数据架构与一致性
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 07:30:00" itemprop="dateCreated datePublished" datetime="2026-09-02T07:30:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-08 00:05:40" itemprop="dateModified" datetime="2026-11-08T00:05:40+08:00">2026-11-08</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F%E4%B8%8E%E6%9E%B6%E6%9E%84/" itemprop="url" rel="index"><span itemprop="name">设计模式与架构</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.3k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>8 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 进阶篇第 3 章。架构决策中最不可逆的一类是数据决策（07 篇可逆性分级：改存储 ≈ 心脏手术）。本章四条主线：存储选型的决策框架、事务与隔离级别的准确理解、跨服务一致性的工程手段、缓存与派生数据的治理。</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="13-进阶数据架构与一致性"><a class="markdownIt-Anchor" href="#13-进阶数据架构与一致性"></a> 13 - 进阶：数据架构与一致性</h1>
+<blockquote>
+<p>进阶篇第 3 章。架构决策中<strong>最不可逆</strong>的一类是数据决策（07 篇可逆性分级：改存储 ≈ 心脏手术）。本章四条主线：存储选型的决策框架、事务与隔离级别的准确理解、跨服务一致性的工程手段、缓存与派生数据的治理。</p>
+</blockquote>
+<h2 id="1-存储选型从要什么保证倒推"><a class="markdownIt-Anchor" href="#1-存储选型从要什么保证倒推"></a> 1. 存储选型：从&quot;要什么保证&quot;倒推</h2>
+<p>选型正确的思考顺序不是&quot;用什么数据库&quot;，而是<strong>先写下数据必须满足的保证，再倒推</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>你需要的保证</th>
+<th>候选方向</th>
+<th>典型代表</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>强一致事务、复杂查询</td>
+<td>关系型</td>
+<td>PostgreSQL、MySQL</td>
+</tr>
+<tr>
+<td>海量写入、按分区键查询、水平扩展</td>
+<td>分片/宽列</td>
+<td>Cassandra 类、TiDB 类</td>
+</tr>
+<tr>
+<td>文档形状多变、读多写少</td>
+<td>文档库</td>
+<td>MongoDB、DynamoDB</td>
+</tr>
+<tr>
+<td>全文检索/倒排</td>
+<td>搜索引擎</td>
+<td>Elasticsearch/OpenSearch</td>
+</tr>
+<tr>
+<td>对象/大文件</td>
+<td>对象存储</td>
+<td>S3/OSS</td>
+</tr>
+<tr>
+<td>高频低延迟 KV</td>
+<td>内存 KV</td>
+<td>Redis</td>
+</tr>
+<tr>
+<td>事件流持久化</td>
+<td>日志型</td>
+<td>Kafka</td>
+</tr>
+<tr>
+<td>分析型聚合（列存）</td>
+<td>OLAP</td>
+<td>ClickHouse/StarRocks 类</td>
+</tr>
+</tbody>
+</table>
+<p>两条元纪律比表格本身重要：</p>
+<ol>
+<li><strong>默认关系型</strong>：绝大多数业务数据需要事务与关联查询，PostgreSQL/MySQL 能覆盖到团队忘记还有其他选项的规模。<strong>“数据量大&quot;不等于&quot;关系型不行”</strong>（分库分表前还有索引优化/读写分离/缓存三层，09 篇阶梯）；</li>
+<li><strong>多存储 = 多一致性难题</strong>：每多一种存储，就多一份&quot;两处数据如何对齐&quot;的长期税（§3）。一个系统里 5 种存储通常意味着 5 倍的运维与对账工作，<strong>每引入一种都要能回答&quot;它替代了什么、放弃了什么&quot;</strong>。</li>
+</ol>
+<h2 id="2-事务与隔离把四个隔离级别读准"><a class="markdownIt-Anchor" href="#2-事务与隔离把四个隔离级别读准"></a> 2. 事务与隔离：把四个隔离级别读准</h2>
+<h3 id="21-并发异常速查"><a class="markdownIt-Anchor" href="#21-并发异常速查"></a> 2.1 并发异常速查</h3>
+<table>
+<thead>
+<tr>
+<th>异常</th>
+<th>定义</th>
+<th>RU</th>
+<th>RC</th>
+<th>RR</th>
+<th>SER</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>脏读</td>
+<td>读到未提交数据</td>
+<td>可能</td>
+<td>避免</td>
+<td>避免</td>
+<td>避免</td>
+</tr>
+<tr>
+<td>不可重复读</td>
+<td>同事务两次读同一行结果不同</td>
+<td>可能</td>
+<td>可能</td>
+<td>避免</td>
+<td>避免</td>
+</tr>
+<tr>
+<td>幻读</td>
+<td>同条件两次查询行集不同</td>
+<td>可能</td>
+<td>可能</td>
+<td>视实现*</td>
+<td>避免</td>
+</tr>
+<tr>
+<td>丢失更新</td>
+<td>两事务读-改-写，后者覆盖前者</td>
+<td>可能</td>
+<td>可能</td>
+<td>可能**</td>
+<td>避免</td>
+</tr>
+</tbody>
+</table>
+<p>*SQL 标准的 RR 只防&quot;纯幻读&quot;，PostgreSQL 的 RR 实际提供快照隔离（MVCC，每个事务看到一致的快照），防住多数幻读但仍存在写偏斜（write skew）；**MySQL InnoDB 的 RR 通过间隙锁（next-key locking）在多数场景防幻读与丢失更新，但读后写仍需显式加锁（<code>SELECT ... FOR UPDATE</code>）才稳妥。各家实现与 SQL 标准有差异——<strong>以所用数据库的官方文档为准，别背教科书表格</strong>。</p>
+<h3 id="22-工程要点"><a class="markdownIt-Anchor" href="#22-工程要点"></a> 2.2 工程要点</h3>
+<ol>
+<li><strong>锁的最小化</strong>：事务要短；事务里不做 RPC/HTTP 调用（把网络延迟变成锁持有时间，是连接池耗尽的头号原因）；</li>
+<li><strong>乐观并发优先</strong>：用版本号列（<code>UPDATE ... WHERE version=n</code>）做冲突检测，多数读多写少场景比悲观锁吞吐高；冲突率真高再上悲观锁；</li>
+<li><strong>死锁的最小化</strong>：多行更新按统一顺序（如按主键排序）访问——消灭&quot;互相等待&quot;的结构性成因。</li>
+</ol>
+<h2 id="3-跨服务一致性放弃幻想选择模式"><a class="markdownIt-Anchor" href="#3-跨服务一致性放弃幻想选择模式"></a> 3. 跨服务一致性：放弃幻想，选择模式</h2>
+<p>微服务拆分后（08 篇 v4 阶段），跨服务的本地事务不存在了。诚实的选项只有两类：</p>
+<h3 id="31-编排式-saga把长事务写成补偿链"><a class="markdownIt-Anchor" href="#31-编排式-saga把长事务写成补偿链"></a> 3.1 编排式 Saga：把长事务写成补偿链</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">下单 Saga：</span><br><span class="line">  1. 订单服务：创建订单(pending)          ← 本地事务</span><br><span class="line">  2. 库存服务：预占库存                    ← 失败 → 补偿 1：取消订单</span><br><span class="line">  3. 支付服务：扣款                        ← 失败 → 补偿 2：释放库存 → 补偿 1</span><br><span class="line">  4. 订单服务：订单置 confirmed</span><br></pre></td></tr></table></figure>
+<p>要点：</p>
+<ul>
+<li><strong>每步必须同时定义补偿动作</strong>；补偿本身也要幂等（重试安全，Agent 系列 12 篇同款纪律）；</li>
+<li><strong>中间态可见</strong>：Saga 执行中订单是 pending——业务流程（客服、报表）必须理解中间态；</li>
+<li><strong>补偿不可能时</strong>（如已发货无法&quot;取消发货&quot;）：设计上避免——把不可补偿步骤尽量放最后，或改为人工处理流程；</li>
+<li>编排（orchestration，中心 Saga 协调器）vs 协同（choreography，事件链各自响应）：前者流程显式可观测，后者少一个组件但流程散落。<strong>步骤超过 3 个选编排</strong>。</li>
+</ul>
+<h3 id="32-事务性发件箱transactional-outbox本地事务-可靠投递"><a class="markdownIt-Anchor" href="#32-事务性发件箱transactional-outbox本地事务-可靠投递"></a> 3.2 事务性发件箱（Transactional Outbox）：本地事务 + 可靠投递</h3>
+<p>跨服务事件的经典难题：<strong>&quot;更新数据库&quot;与&quot;发事件&quot;是两个系统，无法原子</strong>。直接发，崩溃点在中间就丢事件；先更新后发，同样。</p>
+<p>解法：<strong>同一个本地事务里写业务表 + outbox 表</strong>，由独立的 relay 轮询/订阅 outbox 投递事件：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">BEGIN</span>;</span><br><span class="line">  <span class="keyword">UPDATE</span> orders <span class="keyword">SET</span> status<span class="operator">=</span><span class="string">&#x27;confirmed&#x27;</span> <span class="keyword">WHERE</span> id<span class="operator">=</span>$<span class="number">1</span>;</span><br><span class="line">  <span class="keyword">INSERT INTO</span> outbox(topic, payload, created_at)</span><br><span class="line">       <span class="keyword">VALUES</span> (<span class="string">&#x27;order.confirmed&#x27;</span>, <span class="string">&#x27;&#123;&quot;order_id&quot;:1&#125;&#x27;</span>, now());</span><br><span class="line"><span class="keyword">COMMIT</span>;   <span class="comment">-- 业务与事件同生共死</span></span><br><span class="line"><span class="comment">-- relay: SELECT ... FROM outbox ORDER BY id LIMIT n → 发布到 Kafka → 标记已发</span></span><br></pre></td></tr></table></figure>
+<p>代价与正确预期：投递是<strong>至少一次</strong>——消费方必须幂等（按事件 ID 去重）。这个模式与量化 08 篇的&quot;标签工程&quot;无关，但与 Agent 12 篇的事件日志是同一个思想：<strong>先落盘、再传播、消费端幂等</strong>。</p>
+<h3 id="33-一致性级别的诚实声明"><a class="markdownIt-Anchor" href="#33-一致性级别的诚实声明"></a> 3.3 一致性级别的诚实声明</h3>
+<p>跨服务数据必然出现不一致窗口。工程上的正确做法不是消灭它，而是<strong>声明并管理它</strong>：</p>
+<ul>
+<li>对外接口文档写明哪些读是&quot;可能陈旧&quot;的；</li>
+<li>关键读操作提供一致性锚点（读自己的写：读路由到主库，或读前先确认事件已消费）；</li>
+<li>对账任务（reconciliation）：定期比对两处数据，差异告警——<strong>对账不是丢人的补丁，是最终一致系统的标准组成部分</strong>（金融系统叫&quot;日切对账&quot;）。</li>
+</ul>
+<h2 id="4-缓存与派生数据一致性的日常战场"><a class="markdownIt-Anchor" href="#4-缓存与派生数据一致性的日常战场"></a> 4. 缓存与派生数据：一致性的日常战场</h2>
+<h3 id="41-缓存失效的策略选择"><a class="markdownIt-Anchor" href="#41-缓存失效的策略选择"></a> 4.1 缓存失效的策略选择</h3>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>流程</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Cache-aside（旁路）</td>
+<td>读：miss 则查库回填；写：更库 + 删缓存</td>
+<td>默认选择</td>
+</tr>
+<tr>
+<td>Write-through</td>
+<td>写穿透缓存与库</td>
+<td>一致性要求高、写少</td>
+</tr>
+<tr>
+<td>TTL-only</td>
+<td>只靠过期</td>
+<td>可容忍陈旧窗口的统计类数据</td>
+</tr>
+</tbody>
+</table>
+<p>经典问题&quot;先删缓存还是先更新库&quot;：cache-aside 标准做法是<strong>先更新库，再删缓存</strong>（配合 TTL 兜底）。为什么是&quot;删&quot;不是&quot;改&quot;：改缓存需要保证与库的一致（并发写会交错出旧值覆盖新值），删是幂等的、让下次读自然回填。残余风险窗口（删后、回填前读到旧值）用短 TTL 或延迟双删缓解——<strong>没有零窗口的方案，只有与业务容忍度匹配的方案</strong>。</p>
+<h3 id="42-击穿穿透雪崩面试三连也是真事故"><a class="markdownIt-Anchor" href="#42-击穿穿透雪崩面试三连也是真事故"></a> 4.2 击穿/穿透/雪崩（面试三连，也是真事故）</h3>
+<ul>
+<li><strong>穿透</strong>（查不存在的 key，每次都打到库）：空值缓存 + 布隆过滤器前置；</li>
+<li><strong>击穿</strong>（热点 key 过期瞬间并发回填打垮库）：互斥回填（单飞 singleflight——同 key 只放一个请求去查库，其余等待）；</li>
+<li><strong>雪崩</strong>（大量 key 同时过期）：过期时间加随机抖动。</li>
+</ul>
+<h3 id="43-派生数据的管理原则"><a class="markdownIt-Anchor" href="#43-派生数据的管理原则"></a> 4.3 派生数据的管理原则</h3>
+<p>缓存之外的派生数据（搜索索引、报表表、物化视图）遵循同一原则：<strong>必须能从源头重建</strong>。重建能力（replay 源数据重灌索引）是派生层的最后保险——丢失不可重建的派生数据，等于把派生层当成了真相源（违反单一事实来源，Single Source of Truth）。</p>
+<h2 id="5-数据架构的演进预埋"><a class="markdownIt-Anchor" href="#5-数据架构的演进预埋"></a> 5. 数据架构的演进预埋</h2>
+<ol>
+<li><strong>迁移脚本纳入版本控制</strong>（schema 迁移工具如 Flyway/Alembic 的语义），每次变更是可回放的迁移步——schema 与代码同版本发布；</li>
+<li><strong>扩列不缩列</strong>：废弃字段先停写、观察、再删除（与 API 12 篇的破坏性变更流程同构）；</li>
+<li><strong>大表变更先评估锁影响</strong>：加列有默认值在部分数据库是全表重写（如 MySQL 8 前的某些 DDL）——大表的 DDL 是高危操作，变更前查清所用引擎的行为；</li>
+<li><strong>备份要演练恢复</strong>：没有做过恢复演练的备份等于没有备份。</li>
+</ol>
+<h2 id="自测"><a class="markdownIt-Anchor" href="#自测"></a> 自测</h2>
+<ol>
+<li>选型的正确思考顺序？为什么&quot;默认关系型&quot;？</li>
+<li>RR 级别在不同数据库行为不同——这句话对你使用隔离级别意味着什么？</li>
+<li>Saga 的补偿为什么必须幂等？&quot;不可补偿步骤&quot;怎么处理？</li>
+<li>事务性发件箱解决什么原子性问题？投递语义是什么、消费方要做什么？</li>
+<li>cache-aside 为什么&quot;删缓存&quot;优于&quot;改缓存&quot;？</li>
+<li>派生数据的第一原则是什么？</li>
+</ol>
+<h2 id="下一篇"><a class="markdownIt-Anchor" href="#下一篇"></a> 下一篇</h2>
+<p>14 - 进阶：大型系统风格案例剖析——用本系列的眼光读几个著名系统的公开设计。</p>
+<h2 id="参考来源"><a class="markdownIt-Anchor" href="#参考来源"></a> 参考来源</h2>
+<ul>
+<li>Martin Kleppmann, <em>Designing Data-Intensive Applications</em>, O’Reilly, 2017（第 7/9/11 章：事务隔离、一致性、Saga/outbox 的系统论述——本篇主要框架的出处）</li>
+<li>PostgreSQL 文档·并发控制（RR 即快照隔离、写偏斜的官方说明）: <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/current/transaction-iso.html">https://www.postgresql.org/docs/current/transaction-iso.html</a></li>
+<li>MySQL InnoDB 手册·锁与事务: <a target="_blank" rel="noopener" href="https://dev.mysql.com/doc/refman/8.0/en/innodb-locking.html">https://dev.mysql.com/doc/refman/8.0/en/innodb-locking.html</a></li>
+<li>Chris Richardson, <em>Microservices Patterns</em>（Manning, 2018，Saga 与事务性发件箱的模式化表述）</li>
+<li>AWS Builders’ Library 关于缓存与回填的工程实践文章: <a target="_blank" rel="noopener" href="https://aws.amazon.com/builders-library/">https://aws.amazon.com/builders-library/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" rel="tag"># 设计模式</a>
+              <a href="/tags/%E6%9E%B6%E6%9E%84/" rel="tag"># 架构</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/12-%E8%BF%9B%E9%98%B6-API%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%A5%91%E7%BA%A6%E7%AE%A1%E7%90%86/" rel="prev" title="12-进阶-API设计与契约管理">
+                  <i class="fa fa-angle-left"></i> 12-进阶-API设计与契约管理
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/14-%E8%BF%9B%E9%98%B6-%E5%A4%A7%E5%9E%8B%E7%B3%BB%E7%BB%9F%E9%A3%8E%E6%A0%BC%E6%A1%88%E4%BE%8B%E5%89%96%E6%9E%90/" rel="next" title="14-进阶-大型系统风格案例剖析">
+                  14-进阶-大型系统风格案例剖析 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">715k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">43:21</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

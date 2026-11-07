@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的三个问题 1. 传统 KV Cache 管理的显存浪费（碎片&#x2F;过度预分配）到底有多少？从哪来？ 2. PagedAttention 的分页机制怎么运作？Continuous Batching 与 Static Batching…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第3周-vLLM与PagedAttention">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC3%E5%91%A8-vLLM%E4%B8%8EPagedAttention/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的三个问题 1. 传统 KV Cache 管理的显存浪费（碎片&#x2F;过度预分配）到底有多少？从哪来？ 2. PagedAttention 的分页机制怎么运作？Continuous Batching 与 Static Batching…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-04T04:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-07T16:05:40.331Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC3%E5%91%A8-vLLM%E4%B8%8EPagedAttention/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC3%E5%91%A8-vLLM%E4%B8%8EPagedAttention/","path":"2026/09/04/VLM & VLA-8-大模型与多模态训练系统及推理工程-第3周-vLLM与PagedAttention/","title":"第3周-vLLM与PagedAttention"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第3周-vLLM与PagedAttention | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-3-%E5%91%A8%E6%95%99%E7%A8%8B%E9%AB%98%E5%90%9E%E5%90%90%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E%E6%A0%B8%E5%BF%83vllm-%E4%B8%8E-pagedattention"><span class="nav-number">1.</span> <span class="nav-text"> 第 3 周教程：高吞吐推理引擎核心——vLLM 与 PagedAttention</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86kv-cache-%E6%98%AF%E6%8E%A8%E7%90%86%E7%9A%84%E6%98%BE%E5%AD%98%E4%B8%BB%E8%A7%92"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：KV Cache 是推理的显存主角</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E6%A0%B9%E6%9C%AC%E7%9F%9B%E7%9B%BEkv-cache-%E7%9A%84%E9%9C%80%E6%B1%82%E6%98%AF%E5%8A%A8%E6%80%81%E7%9A%84%E6%98%BE%E5%AD%98%E5%88%86%E9%85%8D%E6%98%AF%E9%9D%99%E6%80%81%E7%9A%84"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 根本矛盾：KV Cache 的需求是动态的，显存分配是静态的</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-pagedattention%E6%8A%8A%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%E7%9A%84%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98%E6%90%AC%E8%BF%9B-kv-cache"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 PagedAttention：把操作系统的虚拟内存搬进 KV Cache</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-continuous-batching%E8%B0%83%E5%BA%A6%E7%B2%92%E5%BA%A6%E4%BB%8E%E6%89%B9%E5%88%B0%E8%BF%AD%E4%BB%A3"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 Continuous Batching：调度粒度从&quot;批&quot;到&quot;迭代&quot;</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#14-mha-mqa-gqa%E6%B3%A8%E6%84%8F%E5%8A%9B%E7%BB%93%E6%9E%84%E5%AF%B9-kv-%E7%9A%84%E5%BD%B1%E5%93%8D"><span class="nav-number">1.1.4.</span> <span class="nav-text"> 1.4 MHA &#x2F; MQA &#x2F; GQA：注意力结构对 KV 的影响</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E9%83%A8%E7%BD%B2%E4%B8%8E%E5%8E%8B%E6%B5%8B"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 部署与压测</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E5%86%B3%E7%AD%96%E8%A1%A8vllm-%E6%9C%8D%E5%8A%A1%E7%9A%84%E5%85%B3%E9%94%AE%E6%97%8B%E9%92%AE"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 决策表：vLLM 服务的关键旋钮</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%B8%89%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 三个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">257</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">41</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">13</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC3%E5%91%A8-vLLM%E4%B8%8EPagedAttention/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第3周-vLLM与PagedAttention | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的三个问题 1. 传统 KV Cache 管理的显存浪费（碎片&#x2F;过度预分配）到底有多少？从哪来？ 2. PagedAttention 的分页机制怎么运作？Continuous Batching 与 Static Batching…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第3周-vLLM与PagedAttention
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 12:30:00" itemprop="dateCreated datePublished" datetime="2026-09-04T12:30:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-08 00:05:40" itemprop="dateModified" datetime="2026-11-08T00:05:40+08:00">2026-11-08</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Stage 8-大模型与多模态训练系统及推理工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>9 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的三个问题 1. 传统 KV Cache 管理的显存浪费（碎片/过度预分配）到底有多少？从哪来？ 2. PagedAttention 的分页机制怎么运作？Continuous Batching 与 Static Batching…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-3-周教程高吞吐推理引擎核心vllm-与-pagedattention"><a class="markdownIt-Anchor" href="#第-3-周教程高吞吐推理引擎核心vllm-与-pagedattention"></a> 第 3 周教程：高吞吐推理引擎核心——vLLM 与 PagedAttention</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>传统 KV Cache 管理的显存浪费（碎片/过度预分配）到底有多少？从哪来？</li>
+<li>PagedAttention 的分页机制怎么运作？Continuous Batching 与 Static Batching 差在哪？</li>
+<li>MHA/MQA/GQA 对推理显存与吞吐意味着什么？</li>
+<li>（实战）QPS / TTFT / ITL 三个指标怎么测？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 3 周。交付物：部署 vLLM 推理服务（Qwen2.5-VL/LLaVA），asyncio 压测 50 并发，对比 HF <code>generate()</code> 与 vLLM 的 QPS、TTFT、ITL。</p>
+<p><strong>论文</strong>：vLLM（<em>Efficient Memory Management for Large Language Model Serving with PagedAttention</em>, SOSP 2023, arXiv:2309.06180）——学习计划所引无误。Stage 3 第 2 周（评测加速）与本篇的关系：那里是&quot;用&quot;，这里是&quot;懂&quot;。</p>
+<hr />
+<h2 id="1-第一性原理kv-cache-是推理的显存主角"><a class="markdownIt-Anchor" href="#1-第一性原理kv-cache-是推理的显存主角"></a> 1. 第一性原理：KV Cache 是推理的显存主角</h2>
+<h3 id="11-根本矛盾kv-cache-的需求是动态的显存分配是静态的"><a class="markdownIt-Anchor" href="#11-根本矛盾kv-cache-的需求是动态的显存分配是静态的"></a> 1.1 根本矛盾：KV Cache 的需求是动态的，显存分配是静态的</h3>
+<p>自回归生成时，已生成 Token 的 K/V 必须缓存（否则每步重算全前缀）。公式（第 1 周 1.3 节）：单序列 KV = <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mi>L</mi><mo>×</mo><msub><mi>n</mi><mrow><mi>k</mi><mi>v</mi></mrow></msub><mo>×</mo><msub><mi>d</mi><mrow><mi>h</mi><mi>e</mi><mi>a</mi><mi>d</mi></mrow></msub><mo>×</mo><mi>S</mi><mo>×</mo><mi>b</mi></mrow><annotation encoding="application/x-tex">2 \times L \times n_{kv} \times d_{head} \times S \times b</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal">L</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.73333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span><span class="mord mathnormal mtight" style="margin-right:0.03588em;">v</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">h</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.76666em;vertical-align:-0.08333em;"></span><span class="mord mathnormal" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord mathnormal">b</span></span></span></span>。7B（32 层、GQA-8、head_dim 128、bf16）8k 上下文 ≈ <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><mn>32</mn><mo>×</mo><mn>8</mn><mo>×</mo><mn>128</mn><mo>×</mo><mn>8192</mn><mo>×</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">2 \times 32 \times 8 \times 128 \times 8192 \times 2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">3</span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">8</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mord">2</span><span class="mord">8</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">8</span><span class="mord">1</span><span class="mord">9</span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">2</span></span></span></span> B ≈ <strong>1.1 GB</strong>——<strong>一个并发请求就吃掉 GB 级</strong>，服务吞吐的上限直接由&quot;能同时装下多少条 KV&quot;决定。</p>
+<p>传统实现（HF 风格）为每个请求<strong>按 max_length 预分配一块连续显存</strong>存 KV。论文实测口径（vLLM SOSP 2023，实验条件为其测试的模型与负载）：这种管理方式下<strong>实际有效利用率仅 20.4%~38.2%</strong>，浪费来自三类（论文术语 reserved / internal / external fragmentation）：</p>
+<ol>
+<li><strong>预留浪费（reserved）</strong>：prefill 阶段就为&quot;未来将生成的 Token&quot;预留 KV 并贯穿整个请求生命周期；</li>
+<li><strong>内部碎片（internal fragmentation）</strong>：按潜在最大长度超额分配——预留 max_length=8000，实际生成 300 Token，闲置 96%；</li>
+<li><strong>外部碎片（external fragmentation）</strong>：连续分配的要求让显存被切成碎片，即使总量够也找不到连续块 → 新请求被拒绝（论文里 memory waste 与 premature preemption 的来源）。</li>
+</ol>
+<p><strong>这解释了 Stage 3/4 阶段&quot;vLLM 快 3~8 倍&quot;的深层原因</strong>：不只 batching 更聪明，而是同样显存能装下数倍的并发序列——论文实测传统管理的 KV 有效利用率仅 <strong>20.4%~38.2%</strong>，PagedAttention 把浪费压到&quot;块内碎片 &lt;4%&quot;的近零水平。</p>
+<h3 id="12-pagedattention把操作系统的虚拟内存搬进-kv-cache"><a class="markdownIt-Anchor" href="#12-pagedattention把操作系统的虚拟内存搬进-kv-cache"></a> 1.2 PagedAttention：把操作系统的虚拟内存搬进 KV Cache</h3>
+<p>vLLM 的方案逐字借鉴 OS 分页：</p>
+<table>
+<thead>
+<tr>
+<th>OS 虚拟内存</th>
+<th>PagedAttention</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>虚拟地址空间</td>
+<td>每请求的逻辑 KV 序列</td>
+</tr>
+<tr>
+<td>物理页框（固定 4KB）</td>
+<td>物理 KV Block（固定 16 个 Token/块）</td>
+</tr>
+<tr>
+<td>页表（虚拟→物理映射）</td>
+<td>Block Table（每请求一张逻辑块→物理块表）</td>
+</tr>
+<tr>
+<td>按需分页</td>
+<td>KV 按块惰性分配（生成一个块才占一个物理块）</td>
+</tr>
+<tr>
+<td>共享内存页</td>
+<td><strong>多请求共享相同前缀的物理块</strong>（Copy-on-Write 语义，第 4 周 RadixAttention 的先声）</td>
+</tr>
+</tbody>
+</table>
+<p>收益链条：<strong>碎片消除</strong>（块内浪费 &lt;4%，块粒度 16 Token，论文默认 block size 16）→ 同显存能容纳的并发请求数提升数倍（论文实测可持续请求率较 Orca 提升约 1.7×~8×、对 FasterTransformer 至多 22×）→ batch 变大 → 吞吐提升（论文口径：吞吐较 SOTA 系统 2~4×）。外加两个推论能力：<strong>前缀共享</strong>（同 System Prompt 的请求复用物理块）与<strong>按需抢占/换出</strong>（显存紧张时把低优先级序列的块换出到 CPU）。</p>
+<h3 id="13-continuous-batching调度粒度从批到迭代"><a class="markdownIt-Anchor" href="#13-continuous-batching调度粒度从批到迭代"></a> 1.3 Continuous Batching：调度粒度从&quot;批&quot;到&quot;迭代&quot;</h3>
+<p>Static Batching（HF generate 传统形态）：凑一批请求 → 全部一起生成 → <strong>最长的那条结束时整批才释放</strong>——短请求陪跑几十倍的空转（Stage 2 评测加速篇已给过数值）。</p>
+<p>Continuous Batching（vLLM/SGLang 的默认）：<strong>每次迭代（decode 一步）层面动态调度</strong>——某序列生成完 EOS，立即退出；排队的新请求立即补进 batch；prefill 与 decode 混合调度（第 4 周 Chunked Prefill 展开）。GPU 的 decode 永远满载。</p>
+<p>两个引擎机制的关系：<strong>PagedAttention 解决&quot;装得下&quot;（显存利用率），Continuous Batching 解决&quot;转得快&quot;（调度利用率）</strong>——两者叠加才有 vLLM 的量级优势。</p>
+<h3 id="14-mha-mqa-gqa注意力结构对-kv-的影响"><a class="markdownIt-Anchor" href="#14-mha-mqa-gqa注意力结构对-kv-的影响"></a> 1.4 MHA / MQA / GQA：注意力结构对 KV 的影响</h3>
+<table>
+<thead>
+<tr>
+<th>结构</th>
+<th>KV 头数</th>
+<th>KV Cache（相对 MHA）</th>
+<th>质量</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MHA（Multi-Head）</td>
+<td>= 查询头数（如 32）</td>
+<td>1×（基准）</td>
+<td>最好</td>
+</tr>
+<tr>
+<td>MQA（Multi-Query）</td>
+<td>1</td>
+<td><strong>1/32</strong></td>
+<td>略降</td>
+</tr>
+<tr>
+<td><strong>GQA</strong>（Grouped-Query）</td>
+<td>分组（如 8）</td>
+<td><strong>1/4</strong></td>
+<td>接近 MHA</td>
+</tr>
+</tbody>
+</table>
+<p>第 1 周思考题 3 的答案展开：7B 模型 MHA 下 32k 上下文 batch 16 的 KV = 2(KV)×32(层)×32(头)×128(head_dim)×32768(S)×16(B)×2(bf16 字节) ≈ <strong>275GB</strong>；GQA（8 头）= <strong>69GB</strong>——差 4 倍。GQA 用 1/4 的显存拿到接近 MHA 的质量，是&quot;KV Cache 是推理瓶颈&quot;这一论断在<strong>模型结构侧</strong>的回应（PagedAttention 是系统侧的回应）。现代模型（Qwen2/2.5、Llama-3）几乎清一色 GQA。</p>
+<hr />
+<h2 id="2-实现与验证"><a class="markdownIt-Anchor" href="#2-实现与验证"></a> 2. 实现与验证</h2>
+<h3 id="21-部署与压测"><a class="markdownIt-Anchor" href="#21-部署与压测"></a> 2.1 部署与压测</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 部署 VLM 推理服务 (OpenAI 协议; served-model-name 与压测脚本里的 model 字段对应)</span></span><br><span class="line">python -m vllm.entrypoints.openai.api_server \</span><br><span class="line">  --model Qwen/Qwen2.5-VL-7B-Instruct \</span><br><span class="line">  --served-model-name served-model \</span><br><span class="line">  --max-model-len 8192 \</span><br><span class="line">  --gpu-memory-utilization 0.90 \</span><br><span class="line">  --max-num-seqs 64</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">asyncio 压测: vLLM 服务 vs HF generate 的 QPS/TTFT/ITL 对比。</span></span><br><span class="line"><span class="string">运行方式: python stage8_week3_bench.py --backend vllm --url http://localhost:8000/v1 \</span></span><br><span class="line"><span class="string">            --concurrency 50 --n 50 --mode chat</span></span><br><span class="line"><span class="string">          python stage8_week3_bench.py --backend hf --model Qwen/Qwen2.5-VL-7B-Instruct ...</span></span><br><span class="line"><span class="string">依赖: openai, aiohttp, asyncio, time, statistics</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> argparse</span><br><span class="line"><span class="keyword">import</span> asyncio</span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"><span class="keyword">import</span> statistics <span class="keyword">as</span> st</span><br><span class="line"><span class="keyword">from</span> openai <span class="keyword">import</span> AsyncOpenAI</span><br><span class="line"></span><br><span class="line">PROMPT = (<span class="string">&quot;这张图片里的主要物体是什么？请用三句话详细描述画面内容、&quot;</span></span><br><span class="line">          <span class="string">&quot;颜色构成，以及它们可能的使用场景。&quot;</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">one_request</span>(<span class="params">client, sem, img_url, max_tokens, stats</span>):</span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">with</span> sem:</span><br><span class="line">        t0 = time.perf_counter()</span><br><span class="line">        first = <span class="literal">None</span></span><br><span class="line">        stream = <span class="keyword">await</span> client.chat.completions.create(</span><br><span class="line">            model=<span class="string">&quot;served-model&quot;</span>,</span><br><span class="line">            messages=[&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: [</span><br><span class="line">                &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;image_url&quot;</span>, <span class="string">&quot;image_url&quot;</span>: &#123;<span class="string">&quot;url&quot;</span>: img_url&#125;&#125;,</span><br><span class="line">                &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;text&quot;</span>, <span class="string">&quot;text&quot;</span>: PROMPT&#125;]&#125;],</span><br><span class="line">            max_tokens=max_tokens, temperature=<span class="number">0.0</span>, stream=<span class="literal">True</span>)</span><br><span class="line">        n = <span class="number">0</span></span><br><span class="line">        <span class="keyword">async</span> <span class="keyword">for</span> chunk <span class="keyword">in</span> stream:</span><br><span class="line">            <span class="keyword">if</span> chunk.choices <span class="keyword">and</span> chunk.choices[<span class="number">0</span>].delta.content:</span><br><span class="line">                <span class="keyword">if</span> first <span class="keyword">is</span> <span class="literal">None</span>:</span><br><span class="line">                    first = time.perf_counter() - t0        <span class="comment"># TTFT</span></span><br><span class="line">                n += <span class="number">1</span></span><br><span class="line">        total = time.perf_counter() - t0</span><br><span class="line">        itl = (total - first) / <span class="built_in">max</span>(<span class="number">1</span>, n - <span class="number">1</span>)               <span class="comment"># ITL (流式 decode 间隔)</span></span><br><span class="line">        stats.append(&#123;<span class="string">&quot;ttft&quot;</span>: first, <span class="string">&quot;itl&quot;</span>: itl, <span class="string">&quot;total&quot;</span>: total&#125;)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">bench</span>(<span class="params">args</span>):</span><br><span class="line">    client = AsyncOpenAI(base_url=args.url, api_key=<span class="string">&quot;EMPTY&quot;</span>, timeout=<span class="number">300</span>)</span><br><span class="line">    sem = asyncio.Semaphore(args.concurrency)</span><br><span class="line">    stats = []</span><br><span class="line">    img = <span class="string">&quot;https://placehold.co/448x448.png&quot;</span>                <span class="comment"># 实测换成真实图片 URL/base64</span></span><br><span class="line">    t0 = time.perf_counter()</span><br><span class="line">    <span class="keyword">await</span> asyncio.gather(*[one_request(client, sem, img, <span class="number">256</span>, stats) <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(args.n)])</span><br><span class="line">    wall = time.perf_counter() - t0</span><br><span class="line">    qps = args.n / wall</span><br><span class="line">    ttfts = [s[<span class="string">&quot;ttft&quot;</span>] <span class="keyword">for</span> s <span class="keyword">in</span> stats]</span><br><span class="line">    itls = [s[<span class="string">&quot;itl&quot;</span>] <span class="keyword">for</span> s <span class="keyword">in</span> stats]</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;[vLLM] QPS=<span class="subst">&#123;qps:<span class="number">.1</span>f&#125;</span>  TTFT p50=<span class="subst">&#123;st.median(ttfts)*<span class="number">1000</span>:<span class="number">.0</span>f&#125;</span>ms &quot;</span></span><br><span class="line">          <span class="string">f&quot;p95=<span class="subst">&#123;<span class="built_in">sorted</span>(ttfts)[<span class="built_in">int</span>(<span class="number">.95</span>*<span class="built_in">len</span>(ttfts))]*<span class="number">1000</span>:<span class="number">.0</span>f&#125;</span>ms  &quot;</span></span><br><span class="line">          <span class="string">f&quot;ITL p50=<span class="subst">&#123;st.median(itls)*<span class="number">1000</span>:<span class="number">.1</span>f&#125;</span>ms&quot;</span>)</span><br><span class="line">    <span class="keyword">return</span> qps, ttfts, itls</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    ap = argparse.ArgumentParser()</span><br><span class="line">    ap.set_defaults(url=<span class="string">&quot;http://localhost:8000/v1&quot;</span>, concurrency=<span class="number">50</span>, n=<span class="number">50</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--url&quot;</span>); ap.add_argument(<span class="string">&quot;--concurrency&quot;</span>, <span class="built_in">type</span>=<span class="built_in">int</span>); ap.add_argument(<span class="string">&quot;--n&quot;</span>, <span class="built_in">type</span>=<span class="built_in">int</span>)</span><br><span class="line">    asyncio.run(bench(ap.parse_args()))</span><br></pre></td></tr></table></figure>
+<p>HF 对照组（同 prompt 集，串行/静态批）：记录相同三指标。<strong>预期形态</strong>（7B、50 并发、256 输出 Token、A100 量级，务必以实测为准）：vLLM QPS 常为 HF generate 的 <strong>5~20 倍</strong>；TTFT 相近或略优；差距主要在吞吐（Continuous Batching 吃满 decode）。压测纪律：预热 5 条再计数；三指标分开报告（<strong>TTFT 对交互体验、ITL 对流式体验、QPS 对成本</strong>——一个数字讲不清推理性能）。</p>
+<hr />
+<h2 id="3-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#3-工程权衡与失效模式"></a> 3. 工程权衡与失效模式</h2>
+<h3 id="31-决策表vllm-服务的关键旋钮"><a class="markdownIt-Anchor" href="#31-决策表vllm-服务的关键旋钮"></a> 3.1 决策表：vLLM 服务的关键旋钮</h3>
+<table>
+<thead>
+<tr>
+<th>参数</th>
+<th>起点</th>
+<th>权衡</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gpu_memory_utilization</code></td>
+<td>0.85~0.92</td>
+<td>高 → KV 多、并发强；留太少给视觉编码器/激活会 OOM（VLM 场景注意！）</td>
+</tr>
+<tr>
+<td><code>max_num_seqs</code></td>
+<td>64~256</td>
+<td>并发上限；过高加剧调度与 cache 压力</td>
+</tr>
+<tr>
+<td><code>max_model_len</code></td>
+<td>按业务</td>
+<td>直接决定 KV 预算（8k → 数万块）</td>
+</tr>
+<tr>
+<td>block_size</td>
+<td>16（默认）</td>
+<td>大块省块表、小块减碎片，默认即可</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-三个代表性失效模式"><a class="markdownIt-Anchor" href="#32-三个代表性失效模式"></a> 3.2 三个代表性失效模式</h3>
+<p><strong>失效 1：VLM 的视觉编码显存没算进预算</strong></p>
+<ul>
+<li><strong>症状</strong>：<code>gpu_memory_utilization=0.9</code> 下启动即 OOM，或高并发下周期性 OOM。</li>
+<li><strong>根因</strong>：vLLM 的预算给 KV+权重，VLM 的视觉编码器（ViT）激活与图像 embedding 在峰值时另需数 GB——预算把它们挤掉了。</li>
+<li><strong>定位</strong>：OOM 栈在 vision tower / multimodal projector 附近。</li>
+<li><strong>修复</strong>：降 <code>gpu_memory_utilization</code>（0.85→0.75 试起）；限制输入图像分辨率；<code>max_num_batched_tokens</code> 调低（vLLM 对多模态的 token 预算参数）。</li>
+</ul>
+<p><strong>失效 2：长请求被抢占/重算——尾部延迟尖刺</strong></p>
+<ul>
+<li><strong>症状</strong>：P99 TTFT/总延迟远高于 P50（数倍），日志出现 preemption/swap。</li>
+<li><strong>根因</strong>：显存被长序列占满后，新长请求被抢占（KV 换出），恢复时全量重算——Continuous Batching 的公平性代价。</li>
+<li><strong>定位</strong>：vLLM 日志的 preemption 计数；按请求长度分桶看延迟分布。</li>
+<li><strong>修复</strong>：限制 <code>max_model_len</code>；长短请求分池部署；或接受抢占但监控 SLO 违约率。</li>
+</ul>
+<p><strong>失效 3：把&quot;吞吐数字&quot;跨引擎跨负载乱比</strong></p>
+<ul>
+<li><strong>症状</strong>：报告声称&quot;我们引擎比 vLLM 快 3 倍&quot;，复现不出来。</li>
+<li><strong>根因</strong>：负载形态不同（短问答 vs 长生成、共享前缀比例不同——共享前缀场景 SGLang 的 Radix 占尽便宜，第 4 周）、并发压力不同、指标口径不同（QPS vs tokens/s）。</li>
+<li><strong>定位</strong>：审计对比双方的 prompt 集与调度参数是否一致。</li>
+<li><strong>修复</strong>：性能报告四要素——硬件/引擎版本/负载描述/指标口径；跨引擎对比用同一压测脚本。</li>
+</ul>
+<hr />
+<h2 id="4-延伸思考题"><a class="markdownIt-Anchor" href="#4-延伸思考题"></a> 4. 延伸思考题</h2>
+<ol>
+<li><strong>块大小的设计空间</strong>：PagedAttention 默认 16 Token/块。推导块大小对&quot;块内碎片率&quot;（期望浪费 = 块大小/2）与&quot;块表开销&quot;（每块一条表项）的双向影响，并讨论为何 16 是工程甜点（提示：块太小→块表访存与调度开销大；太大→内部碎片回升至接近连续分配）。</li>
+<li><strong>Prefix 共享与安全</strong>：多请求共享物理前缀块在多租户服务里有信息泄漏面吗？设计一个攻击场景与防御方案。（提示：CoW 语义下共享块只读，理论上安全；风险在共享判定逻辑与缓存淘汰的边界 case——这是系统安全的经典&quot;共享即攻击面&quot;命题。）</li>
+<li><strong>实测 GQA 的价值</strong>：找一个同时提供 MHA 与 GQA 权重的模型对（或用配置改造），实测 32k 上下文下的 KV 显存与吞吐差，验证 1.4 节的 4 倍推算——把第 1 周思考题变成实测报告。</li>
+</ol>
+<hr />
+<p><em>下一篇：第 4 周：前沿推理系统——SGLang 与 Prefix Caching</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC2%E5%91%A8-ZeRO%E4%B8%8EFlashAttention/" rel="prev" title="第2周-ZeRO与FlashAttention">
+                  <i class="fa fa-angle-left"></i> 第2周-ZeRO与FlashAttention
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/VLM%20&%20VLA-8-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E6%A8%A1%E6%80%81%E8%AE%AD%E7%BB%83%E7%B3%BB%E7%BB%9F%E5%8F%8A%E6%8E%A8%E7%90%86%E5%B7%A5%E7%A8%8B-%E7%AC%AC4%E5%91%A8-SGLang%E4%B8%8EPrefixCaching/" rel="next" title="第4周-SGLang与PrefixCaching">
+                  第4周-SGLang与PrefixCaching <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">715k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">43:21</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

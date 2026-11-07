@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的问题 1. GPU → SM → warp → thread 的层级是什么？为什么&#39;SM 数 × 每 SM 线程数&#39;决定并行度？ 2. 访存合并（Coalescing）是什么？为什么 90% 的 kernel 慢在访存而不是计…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第1周-GPU硬件模型与CUDA编程模型">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-3-CUDA%20%E4%B8%8E%E7%AE%97%E5%AD%90%E4%BC%98%E5%8C%96%E5%85%A5%E9%97%A8%E5%88%B0%E5%AE%9E%E6%88%98-%E7%AC%AC1%E5%91%A8-GPU%E7%A1%AC%E4%BB%B6%E6%A8%A1%E5%9E%8B%E4%B8%8ECUDA%E7%BC%96%E7%A8%8B%E6%A8%A1%E5%9E%8B/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的问题 1. GPU → SM → warp → thread 的层级是什么？为什么&#39;SM 数 × 每 SM 线程数&#39;决定并行度？ 2. 访存合并（Coalescing）是什么？为什么 90% 的 kernel 慢在访存而不是计…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-04T20:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-07T16:05:40.355Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="推理优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-3-CUDA%20%E4%B8%8E%E7%AE%97%E5%AD%90%E4%BC%98%E5%8C%96%E5%85%A5%E9%97%A8%E5%88%B0%E5%AE%9E%E6%88%98-%E7%AC%AC1%E5%91%A8-GPU%E7%A1%AC%E4%BB%B6%E6%A8%A1%E5%9E%8B%E4%B8%8ECUDA%E7%BC%96%E7%A8%8B%E6%A8%A1%E5%9E%8B/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-3-CUDA%20%E4%B8%8E%E7%AE%97%E5%AD%90%E4%BC%98%E5%8C%96%E5%85%A5%E9%97%A8%E5%88%B0%E5%AE%9E%E6%88%98-%E7%AC%AC1%E5%91%A8-GPU%E7%A1%AC%E4%BB%B6%E6%A8%A1%E5%9E%8B%E4%B8%8ECUDA%E7%BC%96%E7%A8%8B%E6%A8%A1%E5%9E%8B/","path":"2026/09/05/模型性能优化-3-CUDA 与算子优化入门到实战-第1周-GPU硬件模型与CUDA编程模型/","title":"第1周-GPU硬件模型与CUDA编程模型"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第1周-GPU硬件模型与CUDA编程模型 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-1-%E5%91%A8%E6%95%99%E7%A8%8Bgpu-%E7%A1%AC%E4%BB%B6%E6%A8%A1%E5%9E%8B%E4%B8%8E-cuda-%E7%BC%96%E7%A8%8B%E6%A8%A1%E5%9E%8B"><span class="nav-number">1.</span> <span class="nav-text"> 第 1 周教程：GPU 硬件模型与 CUDA 编程模型</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86gpu-%E6%98%AF%E4%B8%80%E5%8F%B0%E7%94%A8%E5%B9%B6%E8%A1%8C%E6%8D%A2%E5%BB%B6%E8%BF%9F%E7%9A%84%E6%9C%BA%E5%99%A8"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：GPU 是一台&quot;用并行换延迟&quot;的机器</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E7%A1%AC%E4%BB%B6%E5%B1%82%E7%BA%A7"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 硬件层级</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E8%AE%BF%E5%AD%98%E5%B1%82%E7%BA%A7%E5%BF%85%E9%A1%BB%E8%83%8C%E4%B8%8B%E7%9A%84%E6%95%B0%E5%AD%97%E7%BA%A7%E7%9B%B4%E8%A7%89"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 访存层级（必须背下的数字级直觉）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-%E8%AE%BF%E5%AD%98%E5%90%88%E5%B9%B6coalescing"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 访存合并（Coalescing）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#14-roofline-%E6%A8%A1%E5%9E%8B%E5%85%88%E5%88%A4%E6%96%AD%E7%93%B6%E9%A2%88%E5%86%8D%E5%8A%A8%E6%89%8B"><span class="nav-number">1.1.4.</span> <span class="nav-text"> 1.4 Roofline 模型：先判断瓶颈再动手</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#15-%E6%89%8B%E7%AE%97-7b-decode-%E4%B8%8A%E9%99%90%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E4%B9%8B%E4%B8%80"><span class="nav-number">1.1.5.</span> <span class="nav-text"> 1.5 手算 7B decode 上限（本周交付之一）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E4%B8%8E%E6%95%B0%E6%8D%AE%E6%B5%81%E4%B8%80%E4%B8%AA-kernel-%E7%9A%84%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 系统架构与数据流：一个 kernel 的生命周期</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 实现与验证（本周交付核心）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-vector_add%E4%BD%A0%E7%9A%84%E7%AC%AC%E4%B8%80%E4%B8%AA-kernel%E5%AE%8C%E6%95%B4%E5%8F%AF%E7%BC%96%E8%AF%91"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 vector_add：你的第一个 kernel（完整可编译）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-matrix_transpose%E5%90%88%E5%B9%B6%E8%AE%BF%E5%AD%98%E7%9A%84%E5%AF%B9%E7%85%A7%E7%BB%84%E5%AE%8C%E6%95%B4%E5%8F%AF%E7%BC%96%E8%AF%91"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 matrix_transpose：合并访存的对照组（完整可编译）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%AE%9E%E6%93%8D%E9%99%84%E5%BD%95%E4%BA%91-gpu-%E7%8E%AF%E5%A2%83%E9%80%9F%E6%9F%A5%E6%AF%8F%E6%AC%A1%E5%BC%80%E5%AE%9E%E9%AA%8C%E5%85%88%E8%BF%87%E4%B8%80%E9%81%8D"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 实操附录：云 GPU 环境速查（每次开实验先过一遍）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#61-%E6%9C%AC%E5%91%A8%E4%B8%A4%E4%B8%AA%E5%AE%9E%E9%AA%8C%E7%9A%84%E9%A2%84%E6%9C%9F%E6%95%B0%E5%AD%97%E9%94%9A%E7%82%B9%E5%AF%B9%E4%B8%8D%E4%B8%8A%E5%B0%B1%E6%8E%92%E6%9F%A5"><span class="nav-number">1.6.1.</span> <span class="nav-text"> 6.1 本周两个实验的预期数字锚点（对不上就排查）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#62-%E5%8D%A0%E7%94%A8%E7%8E%87occupancy%E5%BF%AB%E9%80%9F%E5%BF%83%E7%AE%97%E6%B3%95"><span class="nav-number">1.6.2.</span> <span class="nav-text"> 6.2 占用率（occupancy）快速心算法</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.7.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">257</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">41</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">13</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-3-CUDA%20%E4%B8%8E%E7%AE%97%E5%AD%90%E4%BC%98%E5%8C%96%E5%85%A5%E9%97%A8%E5%88%B0%E5%AE%9E%E6%88%98-%E7%AC%AC1%E5%91%A8-GPU%E7%A1%AC%E4%BB%B6%E6%A8%A1%E5%9E%8B%E4%B8%8ECUDA%E7%BC%96%E7%A8%8B%E6%A8%A1%E5%9E%8B/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第1周-GPU硬件模型与CUDA编程模型 | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的问题 1. GPU → SM → warp → thread 的层级是什么？为什么&#39;SM 数 × 每 SM 线程数&#39;决定并行度？ 2. 访存合并（Coalescing）是什么？为什么 90% 的 kernel 慢在访存而不是计…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第1周-GPU硬件模型与CUDA编程模型
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-05 04:00:00" itemprop="dateCreated datePublished" datetime="2026-09-05T04:00:00+08:00">2026-09-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-08 00:05:40" itemprop="dateModified" datetime="2026-11-08T00:05:40+08:00">2026-11-08</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" itemprop="url" rel="index"><span itemprop="name">模型性能优化</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/Stage-3-CUDA-%E4%B8%8E%E7%AE%97%E5%AD%90%E4%BC%98%E5%8C%96%E5%85%A5%E9%97%A8%E5%88%B0%E5%AE%9E%E6%88%98/" itemprop="url" rel="index"><span itemprop="name">Stage 3-CUDA 与算子优化入门到实战</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.3k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的问题 1. GPU → SM → warp → thread 的层级是什么？为什么'SM 数 × 每 SM 线程数'决定并行度？ 2. 访存合并（Coalescing）是什么？为什么 90% 的 kernel 慢在访存而不是计…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-1-周教程gpu-硬件模型与-cuda-编程模型"><a class="markdownIt-Anchor" href="#第-1-周教程gpu-硬件模型与-cuda-编程模型"></a> 第 1 周教程：GPU 硬件模型与 CUDA 编程模型</h1>
+<blockquote>
+<p><strong>本周要回答的问题</strong></p>
+<ol>
+<li>GPU → SM → warp → thread 的层级是什么？为什么&quot;SM 数 × 每 SM 线程数&quot;决定并行度？</li>
+<li>访存合并（Coalescing）是什么？为什么 90% 的 kernel 慢在访存而不是计算？</li>
+<li>Roofline 模型怎么判断算子是算力瓶颈还是访存瓶颈？</li>
+<li>已知权重 14 GB、显存带宽 2 TB/s，7B decode 的理论上限是多少 tokens/s？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 1 周。交付物：① 手写 <code>vector_add</code> 与 <code>matrix_transpose</code>（合并/非合并对比）；② 用 Roofline 手算 7B decode 上限。</p>
+<blockquote>
+<p><strong>爬坡提示</strong>：本周所有代码先<strong>逐行读懂注释</strong>，改参数（块大小、矩阵尺寸）重跑看性能变化，最后再合上文档仿写。这是整个 Stage 3 的学习姿势。</p>
+</blockquote>
+<hr />
+<h2 id="1-第一性原理gpu-是一台用并行换延迟的机器"><a class="markdownIt-Anchor" href="#1-第一性原理gpu-是一台用并行换延迟的机器"></a> 1. 第一性原理：GPU 是一台&quot;用并行换延迟&quot;的机器</h2>
+<h3 id="11-硬件层级"><a class="markdownIt-Anchor" href="#11-硬件层级"></a> 1.1 硬件层级</h3>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>GPU</mtext><mo>⊃</mo><mtext>GPC</mtext><mo>⊃</mo><mtext>TPC</mtext><mo>⊃</mo><munder><munder><mtext>SM（流多处理器）</mtext><mo stretchy="true">⏟</mo></munder><mtext>基本调度单位</mtext></munder><mo>⊃</mo><mo stretchy="false">{</mo><mtext>CUDA Core</mtext><mo separator="true">,</mo><mtext> Tensor Core</mtext><mo separator="true">,</mo><mtext> 寄存器堆</mtext><mo separator="true">,</mo><mtext> 共享内存</mtext><mo stretchy="false">}</mo></mrow><annotation encoding="application/x-tex">\text{GPU} \supset \text{GPC} \supset \text{TPC} \supset \underbrace{\text{SM（流多处理器）}}_{\text{基本调度单位}} \supset \{\text{CUDA Core},\ \text{Tensor Core},\ \text{寄存器堆},\ \text{共享内存}\}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72243em;vertical-align:-0.0391em;"></span><span class="mord text"><span class="mord">GPU</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⊃</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.72243em;vertical-align:-0.0391em;"></span><span class="mord text"><span class="mord">GPC</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⊃</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.72243em;vertical-align:-0.0391em;"></span><span class="mord text"><span class="mord">TPC</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⊃</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.009661em;vertical-align:-1.3263310000000001em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6833299999999998em;"><span style="top:-1.6736689999999999em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">基本调度单位</span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord munder"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.68333em;"><span class="svg-align" style="top:-2.352em;"><span class="pstrut" style="height:3em;"></span><span class="stretchy" style="height:0.548em;min-width:1.6em;"><span class="brace-left" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMinYMin slice'><path d='M0 6l6-6h17c12.688 0 19.313.3 20 1 4 4 7.313 8.3 10 13
+ 35.313 51.3 80.813 93.8 136.5 127.5 55.688 33.7 117.188 55.8 184.5 66.5.688
+ 0 2 .3 4 1 18.688 2.7 76 4.3 172 5h399450v120H429l-6-1c-124.688-8-235-61.7
+-331-161C60.687 138.7 32.312 99.3 7 54L0 41V6z'/></svg></span><span class="brace-center" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMidYMin slice'><path d='M199572 214
+c100.7 8.3 195.3 44 280 108 55.3 42 101.7 93 139 153l9 14c2.7-4 5.7-8.7 9-14
+ 53.3-86.7 123.7-153 211-199 66.7-36 137.3-56.3 212-62h199568v120H200432c-178.3
+ 11.7-311.7 78.3-403 201-6 8-9.7 12-11 12-.7.7-6.7 1-18 1s-17.3-.3-18-1c-1.3 0
+-5-4-11-12-44.7-59.3-101.3-106.3-170-141s-145.3-54.3-229-60H0V214z'/></svg></span><span class="brace-right" style="height:0.548em;"><svg width='400em' height='0.548em' viewBox='0 0 400000 548' preserveAspectRatio='xMaxYMin slice'><path d='M399994 0l6 6v35l-6 11c-56 104-135.3 181.3-238 232-57.3
+ 28.7-117 45-179 50H-300V214h399897c43.3-7 81-15 113-26 100.7-33 179.7-91 237
+-174 2.7-5 6-9 10-13 .7-1 7.3-1 20-1h17z'/></svg></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord">SM</span><span class="mord cjk_fallback">（流多处理器）</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.648em;"><span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.3263310000000001em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">⊃</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">{</span><span class="mord text"><span class="mord">CUDA Core</span></span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord text"><span class="mord">Tensor Core</span></span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord text"><span class="mord cjk_fallback">寄存器堆</span></span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord text"><span class="mord cjk_fallback">共享内存</span></span><span class="mclose">}</span></span></span></span></span></p>
+<ul>
+<li><strong>SM（Streaming Multiprocessor）</strong>：GPU 的基本计算单元，如 A100 有 108 个、4090 有 128 个。每个 SM 独立调度自己名下的线程；</li>
+<li><strong>warp</strong>：32 个线程的<strong>锁步执行组</strong>，是硬件真正的调度粒度——同 warp 内所有线程执行同一条指令（SIMT），分支发散会串行化；</li>
+<li><strong>线程层级</strong>：<code>grid</code>（整个任务）→ <code>block</code>（一组线程，同 block 可共享内存 + 同步）→ <code>warp</code> → <code>thread</code>。</li>
+</ul>
+<p><strong>并行度 = SM 数 × 每 SM 并发线程数</strong>（A100：108 × 2048 ≈ 22 万线程）。GPU 不靠&quot;快&quot;取胜——单核频率低于 CPU——它靠<strong>海量线程掩盖访存延迟</strong>：一个 warp 等显存时，调度器立刻切到另一个就绪的 warp（零开销切换）。这就是&quot;延迟隐藏（latency hiding）&quot;，理解它才理解后面所有优化。</p>
+<h3 id="12-访存层级必须背下的数字级直觉"><a class="markdownIt-Anchor" href="#12-访存层级必须背下的数字级直觉"></a> 1.2 访存层级（必须背下的数字级直觉）</h3>
+<table>
+<thead>
+<tr>
+<th>层级</th>
+<th>容量（A100 量级）</th>
+<th>延迟</th>
+<th>谁管理</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>寄存器</td>
+<td>每线程最多 255 个 32-bit（A100 每 SM 共 64K 个）</td>
+<td>~1 cycle</td>
+<td>编译器</td>
+</tr>
+<tr>
+<td>共享内存（shared）</td>
+<td>每 SM 最多 164 KB（A100，可配置）</td>
+<td>~20-30 cycles</td>
+<td><strong>程序员显式</strong></td>
+</tr>
+<tr>
+<td>L2</td>
+<td>40 MB</td>
+<td>~200 cycles</td>
+<td>硬件</td>
+</tr>
+<tr>
+<td>显存（HBM）</td>
+<td>40/80 GB</td>
+<td>~500 cycles</td>
+<td>硬件</td>
+</tr>
+</tbody>
+</table>
+<p>关键结论：<strong>共享内存比显存快 ~20 倍但小 ~100 万倍</strong>——所有&quot;分块（tiling）&quot;优化的本质，都是把反复使用的数据搬进共享内存再用。</p>
+<h3 id="13-访存合并coalescing"><a class="markdownIt-Anchor" href="#13-访存合并coalescing"></a> 1.3 访存合并（Coalescing）</h3>
+<p>一个 warp 的 32 个线程<strong>同时</strong>发出访存请求。若它们访问的 32 个地址落在<strong>一段连续内存</strong>里，硬件合并成一次事务（32 线程 × 4 字节 = 128 字节，恰好一条缓存行）；若地址散乱（如按列遍历行主序矩阵），每个线程各触发一次独立事务——<strong>带宽利用率可能掉到 1/32</strong>。</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>合并</mtext><mo>:</mo><mtext> </mtext><mo stretchy="false">[</mo><msub><mi>a</mi><mn>0</mn></msub><mo separator="true">,</mo><msub><mi>a</mi><mn>1</mn></msub><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msub><mi>a</mi><mn>31</mn></msub><mo stretchy="false">]</mo><mtext> 连续</mtext><mo>→</mo><mn>1</mn><mtext> 次事务</mtext><mspace width="2em"/><mtext>非合并</mtext><mo>:</mo><mtext> </mtext><mo stretchy="false">[</mo><msub><mi>a</mi><mn>0</mn></msub><mo separator="true">,</mo><msub><mi>a</mi><mi>N</mi></msub><mo separator="true">,</mo><msub><mi>a</mi><mrow><mn>2</mn><mi>N</mi></mrow></msub><mo separator="true">,</mo><mo>…</mo><mtext> </mtext><mo stretchy="false">]</mo><mo>→</mo><mtext>最多 </mtext><mn>32</mn><mtext> 次事务</mtext></mrow><annotation encoding="application/x-tex">\text{合并}:\ [a_0, a_1, \dots, a_{31}] \text{ 连续} \to 1 \text{ 次事务} \qquad
+\text{非合并}:\ [a_{0}, a_{N}, a_{2N}, \dots] \to \text{最多 } 32 \text{ 次事务}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">合并</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">:</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">0</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">3</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span><span class="mord text"><span class="mord"> </span><span class="mord cjk_fallback">连续</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord text"><span class="mord"> </span><span class="mord cjk_fallback">次事务</span></span><span class="mspace" style="margin-right:2em;"></span><span class="mord text"><span class="mord cjk_fallback">非合并</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">:</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">0</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.10903em;">N</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span><span class="mord mathnormal mtight" style="margin-right:0.10903em;">N</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mclose">]</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">最多</span><span class="mord"> </span></span><span class="mord">3</span><span class="mord">2</span><span class="mord text"><span class="mord"> </span><span class="mord cjk_fallback">次事务</span></span></span></span></span></span></p>
+<h3 id="14-roofline-模型先判断瓶颈再动手"><a class="markdownIt-Anchor" href="#14-roofline-模型先判断瓶颈再动手"></a> 1.4 Roofline 模型：先判断瓶颈再动手</h3>
+<p>算子的<strong>算术强度（Arithmetic Intensity, AI）</strong> = 浮点运算数 / 搬运字节数。硬件有两道墙：算力上限 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>π</mi></mrow><annotation encoding="application/x-tex">\pi</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">π</span></span></span></span>（FLOPS）与带宽上限 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>β</mi></mrow><annotation encoding="application/x-tex">\beta</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span></span></span></span>（Byte/s）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>可达性能</mtext><mo>=</mo><mi>min</mi><mo>⁡</mo><mo fence="false">(</mo><mi>π</mi><mo separator="true">,</mo><mtext> </mtext><mi>β</mi><mo>×</mo><mtext>AI</mtext><mo fence="false">)</mo><mo separator="true">,</mo><mspace width="2em"/><msup><mtext>拐点 AI</mtext><mo>∗</mo></msup><mo>=</mo><mi>π</mi><mi mathvariant="normal">/</mi><mi>β</mi></mrow><annotation encoding="application/x-tex">\text{可达性能} = \min\big(\pi,\ \beta \times \text{AI}\big), \qquad \text{拐点 AI}^* = \pi / \beta
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">可达性能</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.20001em;vertical-align:-0.35001em;"></span><span class="mop">min</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mord mathnormal" style="margin-right:0.03588em;">π</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.20001em;vertical-align:-0.35001em;"></span><span class="mord text"><span class="mord">AI</span></span><span class="mord"><span class="delimsizing size1">)</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord text"><span class="mord cjk_fallback">拐点</span><span class="mord"> AI</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.761926em;"><span style="top:-3.1362300000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mbin mtight">∗</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">π</span><span class="mord">/</span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span></span></span></span></span></p>
+<ul>
+<li>AI &lt; AI*：<strong>访存瓶颈</strong>（性能 = β × AI，优化方向：减少搬运/提高复用）；</li>
+<li>AI &gt; AI*：算力瓶颈（优化方向：Tensor Core、指令级并行）。</li>
+</ul>
+<p>例（A100）：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>π</mi><mo>≈</mo><mn>312</mn></mrow><annotation encoding="application/x-tex">\pi \approx 312</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.48312em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">π</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">3</span><span class="mord">1</span><span class="mord">2</span></span></span></span> TFLOPS(FP16)，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>β</mi><mo>=</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">\beta = 2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord mathnormal" style="margin-right:0.05278em;">β</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">2</span></span></span></span> TB/s → AI* ≈ 156 FLOP/Byte。<strong>LLM 的绝大多数算子（elementwise、norm、decode GEMV）AI 远低于 156，全是访存瓶颈</strong>——这就是&quot;理解访存才理解推理优化&quot;的含义。</p>
+<h3 id="15-手算-7b-decode-上限本周交付之一"><a class="markdownIt-Anchor" href="#15-手算-7b-decode-上限本周交付之一"></a> 1.5 手算 7B decode 上限（本周交付之一）</h3>
+<p>decode 每生成一个 token，需把全部权重（≈ 14 GB @FP16）过一遍，计算量相对搬运可忽略（batch=1 时 AI ≈ 2 FLOP/Byte）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>tokens/s</mtext><mo>≤</mo><mfrac><mi>β</mi><mtext>权重字节数</mtext></mfrac><mo>=</mo><mfrac><mrow><mn>2</mn><mo>×</mo><mn>1</mn><msup><mn>0</mn><mn>12</mn></msup><mtext> B/s</mtext></mrow><mrow><mn>14</mn><mo>×</mo><mn>1</mn><msup><mn>0</mn><mn>9</mn></msup><mtext> B</mtext></mrow></mfrac><mo>≈</mo><mn>143</mn><mtext> tokens/s</mtext></mrow><annotation encoding="application/x-tex">\text{tokens/s} \le \frac{\beta}{\text{权重字节数}} = \frac{2 \times 10^{12}\ \text{B/s}}{14 \times 10^9\ \text{B}} \approx 143\ \text{tokens/s}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">tokens/s</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≤</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.0574399999999997em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3714399999999998em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord cjk_fallback">权重字节数</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05278em;">β</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.260438em;vertical-align:-0.7693300000000001em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.491108em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.740108em;"><span style="top:-2.9890000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">9</span></span></span></span></span></span></span></span><span class="mspace"> </span><span class="mord text"><span class="mord">B</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mord mtight">2</span></span></span></span></span></span></span></span></span><span class="mspace"> </span><span class="mord text"><span class="mord">B/s</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7693300000000001em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord">4</span><span class="mord">3</span><span class="mspace"> </span><span class="mord text"><span class="mord">tokens/s</span></span></span></span></span></span></p>
+<p>推论三连：① 这是 batch=1 的天花板，任何框架都超不过（KV cache 搬运还会再扣一点）；② batch 增大 → 同一份权重摊给更多序列 → 每 token 成本下降（连续批处理的收益来源）；③ INT4 量化把权重缩到 ~3.7 GB → 上限升 ~3.8×（Stage 2 第 5-6 周已算过同一笔账）。</p>
+<hr />
+<h2 id="2-系统架构与数据流一个-kernel-的生命周期"><a class="markdownIt-Anchor" href="#2-系统架构与数据流一个-kernel-的生命周期"></a> 2. 系统架构与数据流：一个 kernel 的生命周期</h2>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">CPU 侧：分配显存 → H2D 拷贝数据 → 配置 grid/block → 启动 kernel（异步）</span><br><span class="line">GPU 侧：grid 拆给各 SM → block 内线程协作（共享内存 + __syncthreads）</span><br><span class="line">        → warp 锁步执行 → 访存（合并与否决定效率）</span><br><span class="line">CPU 侧：同步等待 → D2H 拷回结果</span><br></pre></td></tr></table></figure>
+<hr />
+<h2 id="3-实现与验证本周交付核心"><a class="markdownIt-Anchor" href="#3-实现与验证本周交付核心"></a> 3. 实现与验证（本周交付核心）</h2>
+<h3 id="31-vector_add你的第一个-kernel完整可编译"><a class="markdownIt-Anchor" href="#31-vector_add你的第一个-kernel完整可编译"></a> 3.1 vector_add：你的第一个 kernel（完整可编译）</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line">// vector_add.cu —— 逐行注释版</span><br><span class="line">#include &lt;cstdio&gt;</span><br><span class="line">#include &lt;cuda_runtime.h&gt;</span><br><span class="line"></span><br><span class="line">// 在 GPU 上执行的函数；每个线程算一个元素</span><br><span class="line">__global__ void vector_add(const float* a, const float* b, float* c, int n) &#123;</span><br><span class="line">    // ① 全局线程编号：blockIdx.x（第几个块）× blockDim.x（块宽）+ 块内偏移</span><br><span class="line">    int i = blockIdx.x * blockDim.x + threadIdx.x;</span><br><span class="line">    // ② 越界保护：线程总数通常向上取整到块宽的倍数</span><br><span class="line">    if (i &lt; n) &#123;</span><br><span class="line">        c[i] = a[i] + b[i];   // ③ 相邻线程读相邻地址 → 完美合并访存</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">int main() &#123;</span><br><span class="line">    int n = 1 &lt;&lt; 24;                       // 16M 个元素</span><br><span class="line">    size_t bytes = n * sizeof(float);</span><br><span class="line">    float *ha = new float[n], *hb = new float[n], *hc = new float[n];</span><br><span class="line">    for (int i = 0; i &lt; n; i++) &#123; ha[i] = 1.0f; hb[i] = 2.0f; &#125;</span><br><span class="line"></span><br><span class="line">    float *da, *db, *dc;                   // d 前缀 = device（显存）</span><br><span class="line">    cudaMalloc(&amp;da, bytes); cudaMalloc(&amp;db, bytes); cudaMalloc(&amp;dc, bytes);</span><br><span class="line">    cudaMemcpy(da, ha, bytes, cudaMemcpyHostToDevice);   // H2D</span><br><span class="line">    cudaMemcpy(db, hb, bytes, cudaMemcpyHostToDevice);</span><br><span class="line"></span><br><span class="line">    int block = 256;                                  // 块宽：128/256/512 常见</span><br><span class="line">    int grid = (n + block - 1) / block;               // 块数：向上取整</span><br><span class="line">    vector_add&lt;&lt;&lt;grid, block&gt;&gt;&gt;(da, db, dc, n);       // &lt;&lt;&lt;&gt;&gt;&gt; 启动 kernel</span><br><span class="line"></span><br><span class="line">    cudaMemcpy(hc, dc, bytes, cudaMemcpyDeviceToHost); // D2H</span><br><span class="line">    for (int i = 0; i &lt; n; i++)                       // 断言式验证</span><br><span class="line">        if (hc[i] != 3.0f) &#123; printf(&quot;FAIL at %d\n&quot;, i); return 1; &#125;</span><br><span class="line">    printf(&quot;vector_add PASS: %d elements, all == 3.0\n&quot;, n);</span><br><span class="line">    return 0;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>编译与运行：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">nvcc -O3 -<span class="built_in">arch</span>=sm_86 vector_add.cu -o vector_add   <span class="comment"># sm_86=RTX 30 系/A10; A100 用 sm_80</span></span><br><span class="line">./vector_add</span><br><span class="line"><span class="comment"># 预期输出：vector_add PASS: 16777216 elements, all == 3.0</span></span><br></pre></td></tr></table></figure>
+<h3 id="32-matrix_transpose合并访存的对照组完整可编译"><a class="markdownIt-Anchor" href="#32-matrix_transpose合并访存的对照组完整可编译"></a> 3.2 matrix_transpose：合并访存的对照组（完整可编译）</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br></pre></td><td class="code"><pre><span class="line">// transpose.cu —— 同一份数据，两种访存模式，性能差 3-10 倍</span><br><span class="line">#include &lt;cstdio&gt;</span><br><span class="line">#include &lt;cuda_runtime.h&gt;</span><br><span class="line">#define N 4096   // N×N 矩阵</span><br><span class="line"></span><br><span class="line">// 非合并版：按行读（合并）、按列写（跨行，非合并！）</span><br><span class="line">__global__ void transpose_naive(const float* in, float* out) &#123;</span><br><span class="line">    int x = blockIdx.x * blockDim.x + threadIdx.x;  // 列</span><br><span class="line">    int y = blockIdx.y * blockDim.y + threadIdx.y;  // 行</span><br><span class="line">    if (x &lt; N &amp;&amp; y &lt; N)</span><br><span class="line">        out[x * N + y] = in[y * N + x];  // 写侧相邻线程地址跨 N → 非合并</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">// 合并版：用共享内存中转，读写两侧都合并</span><br><span class="line">__global__ void transpose_shared(const float* in, float* out) &#123;</span><br><span class="line">    __shared__ float tile[32][33];       // +1 padding 避免 bank conflict</span><br><span class="line">    int x = blockIdx.x * 32 + threadIdx.x;</span><br><span class="line">    int y = blockIdx.y * 32 + threadIdx.y;</span><br><span class="line">    if (x &lt; N &amp;&amp; y &lt; N) tile[threadIdx.y][threadIdx.x] = in[y * N + x]; // 合并读</span><br><span class="line">    __syncthreads();                     // 等整个块写完共享内存</span><br><span class="line">    x = blockIdx.y * 32 + threadIdx.x;   // 读写块的坐标互换</span><br><span class="line">    y = blockIdx.x * 32 + threadIdx.y;</span><br><span class="line">    if (x &lt; N &amp;&amp; y &lt; N) out[y * N + x] = tile[threadIdx.x][threadIdx.y]; // 合并写</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">int main() &#123;</span><br><span class="line">    size_t bytes = (size_t)N * N * sizeof(float);</span><br><span class="line">    float *h = new float[N*N];  for (int i = 0; i &lt; N*N; i++) h[i] = i % 7919;</span><br><span class="line">    float *di, *do_; cudaMalloc(&amp;di, bytes); cudaMalloc(&amp;do_, bytes);</span><br><span class="line">    cudaMemcpy(di, h, bytes, cudaMemcpyHostToDevice);</span><br><span class="line">    dim3 block(32, 32), grid(N/32, N/32);</span><br><span class="line"></span><br><span class="line">    cudaEvent_t s, e; cudaEventCreate(&amp;s); cudaEventCreate(&amp;e);</span><br><span class="line">    for (int v = 0; v &lt; 2; v++) &#123;</span><br><span class="line">        cudaEventRecord(s);</span><br><span class="line">        for (int it = 0; it &lt; 20; it++)</span><br><span class="line">            v == 0 ? transpose_naive&lt;&lt;&lt;grid, block&gt;&gt;&gt;(di, do_)</span><br><span class="line">                   : transpose_shared&lt;&lt;&lt;grid, block&gt;&gt;&gt;(di, do_);</span><br><span class="line">        cudaEventRecord(e); cudaEventSynchronize(e);</span><br><span class="line">        float ms; cudaEventElapsedTime(&amp;ms, s, e);</span><br><span class="line">        double gbps = 2.0 * bytes * 20 / (ms * 1e6);   // 读+写，GB/s</span><br><span class="line">        printf(&quot;%s: %.3f ms/20iter, %.1f GB/s\n&quot;,</span><br><span class="line">               v == 0 ? &quot;naive  &quot; : &quot;shared &quot;, ms, gbps);</span><br><span class="line">    &#125;</span><br><span class="line">    // 验证：转置两次应还原</span><br><span class="line">    transpose_shared&lt;&lt;&lt;grid, block&gt;&gt;&gt;(di, do_);</span><br><span class="line">    transpose_shared&lt;&lt;&lt;grid, block&gt;&gt;&gt;(do_, di);</span><br><span class="line">    cudaMemcpy(h, di, bytes, cudaMemcpyDeviceToHost);</span><br><span class="line">    for (int i = 0; i &lt; N*N; i++) if (h[i] != i % 7919) &#123; printf(&quot;FAIL\n&quot;); return 1; &#125;</span><br><span class="line">    printf(&quot;transpose PASS（两次转置还原）\n&quot;);</span><br><span class="line">    return 0;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">nvcc -O3 -<span class="built_in">arch</span>=sm_86 transpose.cu -o transpose &amp;&amp; ./transpose</span><br><span class="line"><span class="comment"># 预期：shared 版带宽为 naive 版的 3-10 倍（云卡型号不同倍数不同）</span></span><br></pre></td></tr></table></figure>
+<p><strong>交付要点</strong>：把两版的 <code>GB/s</code> 抄进实验记录；用 <code>ncu --metrics dram__throughput.avg.pct_of_peak ./transpose</code> 抓显存带宽利用率，确认合并版接近峰值、非合并版远低于峰值——这就是&quot;90% kernel 慢在访存&quot;的亲眼见证。</p>
+<hr />
+<h2 id="4-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#4-工程权衡与失效模式"></a> 4. 工程权衡与失效模式</h2>
+<h3 id="41-权衡"><a class="markdownIt-Anchor" href="#41-权衡"></a> 4.1 权衡</h3>
+<ul>
+<li><strong>块大小选择</strong>：太小（&lt; 128）→ warp 数不足、延迟隐藏差；太大 → 寄存器/共享内存摊薄、occupancy 反降。128~512 是安全区，用 <code>ncu</code> 的 occupancy 报告校准。</li>
+<li><strong>occupancy 不是越高越好</strong>：它只是延迟隐藏的<strong>手段</strong>；访存已饱和时，更高的 occupancy 只是更多线程抢同一条带宽。</li>
+<li><strong>CPU-GPU 同步是隐形杀手</strong>：每次 <code>cudaMemcpy</code> D2H 或 <code>cudaDeviceSynchronize</code> 都会打断流水——推理框架都在拼命减少同步点。</li>
+</ul>
+<h3 id="42-失效模式"><a class="markdownIt-Anchor" href="#42-失效模式"></a> 4.2 失效模式</h3>
+<ol>
+<li><strong>越界写显存</strong>：症状——偶发崩溃/结果错乱；根因——忘记 <code>if (i &lt; n)</code> 保护，多余线程写脏相邻内存；修复——边界检查（§3.1 ②）+ <code>compute-sanitizer</code> 体检。</li>
+<li><strong>warp 分支发散</strong>：症状——<code>if/else</code> 两侧都慢；根因——同 warp 内线程走了不同分支，硬件只能串行执行两侧；修复——让分支按 warp 对齐（如 <code>if (threadIdx.x &lt; 32)</code> 整 warp 一致）。</li>
+<li><strong>共享内存 bank conflict</strong>：症状——共享内存版没达到预期加速；根因——同 warp 多线程访问同一 bank 的不同地址被串行化；修复——<code>+1</code> padding（§3.2 的 <code>[32][33]</code>）。</li>
+<li><strong>用 CPU 思维写循环</strong>：症状——在线程里写 for 循环遍历整个数组；根因——没有把迭代映射到线程；修复——&quot;一个元素一个线程&quot;的映射思维。</li>
+</ol>
+<hr />
+<h2 id="5-延伸思考题含解析"><a class="markdownIt-Anchor" href="#5-延伸思考题含解析"></a> 5. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：GPU 单核比 CPU 慢，为什么深度学习快几十倍？<br />
+<strong>A</strong>：深度学习的并行度天然巨大（百万级元素级操作），GPU 用 22 万级并发线程 + 零开销切换掩盖访存延迟，总吞吐 = 海量线程 × 单线程慢速，净效果远超 CPU 的少量快核。前提是负载有足够的并行度与规整访存。</p>
+<p><strong>Q2</strong>：warp 发散为什么代价是&quot;串行&quot;而不是&quot;报错&quot;？<br />
+<strong>A</strong>：SIMT 硬件只有一套取指/执行单元，同 warp 必须执行同一条指令；遇到分支时先执行 if 分支（else 侧线程被掩码屏蔽），再执行 else 侧——两条路径的时间相加。</p>
+<p><strong>Q3</strong>：Roofline 拐点 AI* = π/β 在 H100 上约是多少？对&quot;该不该写融合算子&quot;意味着什么？<br />
+<strong>A</strong>：H100：~990 TFLOPS(FP16) / 3.35 TB/s ≈ 295 FLOP/Byte。常见 elementwise 算子 AI ≈ 0.25~2，远在拐点左侧 → 融合（提高 AI：一次搬运做多步计算）几乎总是赚。这是第 3 周的理论预告。</p>
+<p><strong>Q4</strong>：transpose_shared 里 <code>tile[32][33]</code> 的 +1 是什么？不加会怎样？<br />
+<strong>A</strong>：共享内存分 32 个 bank（4 字节/bank），32×32 矩阵按列访问时 32 个线程打同一 bank → 32 路冲突（串行 32 倍）。+1 列 padding 让列访问错开到不同 bank。</p>
+<p><strong>Q5</strong>：decode 上限 143 tokens/s 是&quot;权重 14GB ÷ 带宽&quot;，那 prefill 呢？<br />
+<strong>A</strong>：prefill 一次前向处理整个 prompt（seq 个 token 共享同一份权重搬运），是算力+带宽混合瓶颈，吞吐用 tokens/s 计远高于 decode，但首 token 延迟（TTFT）正比于 prompt 长度——&quot;prefill 看算力、decode 看带宽&quot;是推理优化的第一口诀。</p>
+<hr />
+<h2 id="6-实操附录云-gpu-环境速查每次开实验先过一遍"><a class="markdownIt-Anchor" href="#6-实操附录云-gpu-环境速查每次开实验先过一遍"></a> 6. 实操附录：云 GPU 环境速查（每次开实验先过一遍）</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ① 确认硬件与算力（sm_xx 决定 nvcc 的 -arch 参数）</span></span><br><span class="line">nvidia-smi --query-gpu=name,memory.total --format=csv</span><br><span class="line"><span class="comment"># 用 deviceQuery 或：</span></span><br><span class="line">python -c <span class="string">&quot;import torch; p=torch.cuda.get_device_properties(0); \</span></span><br><span class="line"><span class="string">print(p.name, f&#x27;sm_&#123;p.major&#125;&#123;p.minor&#125;&#x27;, p.multi_processor_count, &#x27;SMs&#x27;)&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ② 工具链版本</span></span><br><span class="line">nvcc --version &amp;&amp; ncu --version &amp;&amp; nsys --version</span><br><span class="line"></span><br><span class="line"><span class="comment"># ③ 编译模板（按卡的算力改 -arch）</span></span><br><span class="line">nvcc -O3 -<span class="built_in">arch</span>=sm_86 kernel.cu -o kernel &amp;&amp; ./kernel</span><br><span class="line"><span class="comment">#   A100 → sm_80 | A10/L20 → sm_86 | 4090 → sm_89 | H100 → sm_90</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ④ 体检三件套</span></span><br><span class="line">compute-sanitizer ./kernel          <span class="comment"># 越界/竞态检查（交付前必跑）</span></span><br><span class="line">ncu ./kernel                        <span class="comment"># 单 kernel 剖析</span></span><br><span class="line">nsys profile ./kernel               <span class="comment"># 系统时间线</span></span><br></pre></td></tr></table></figure>
+<p><strong>常见坑</strong>：<code>-arch</code> 与实卡不符 → 编译通过但运行报 <code>no kernel image</code>；云上容器缺 <code>compute-sanitizer</code> → 用 <code>apt</code>/<code>conda</code> 补 CUDA Toolkit 完整组件。把这些写进你的实验启动脚本，每次开机 30 秒自检。</p>
+<h3 id="61-本周两个实验的预期数字锚点对不上就排查"><a class="markdownIt-Anchor" href="#61-本周两个实验的预期数字锚点对不上就排查"></a> 6.1 本周两个实验的预期数字锚点（对不上就排查）</h3>
+<table>
+<thead>
+<tr>
+<th>实验</th>
+<th>预期</th>
+<th>偏差时查什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>vector_add 带宽</td>
+<td>达峰值带宽 60-80%（简单算子上限）</td>
+<td>块大小、n 是否太小</td>
+</tr>
+<tr>
+<td>transpose naive</td>
+<td>峰值带宽 10-30%</td>
+<td>非合并写是预期内的慢</td>
+</tr>
+<tr>
+<td>transpose shared</td>
+<td>峰值带宽 50-80%，为 naive 的 3-10×</td>
+<td>&lt; 3× → 查 bank conflict</td>
+</tr>
+<tr>
+<td>7B decode 手算</td>
+<td>~143 tokens/s @2TB/s</td>
+<td>代入你租的卡的真实带宽重算</td>
+</tr>
+</tbody>
+</table>
+<p><strong>爬坡验收标准</strong>：合上文档，仅凭&quot;一个元素一个线程 + 越界保护 + H2D/D2H&quot;三个提示，独立写出 <code>vector_add</code> 并编译通过——这是从&quot;读懂&quot;到&quot;会写&quot;的第一道门。</p>
+<h3 id="62-占用率occupancy快速心算法"><a class="markdownIt-Anchor" href="#62-占用率occupancy快速心算法"></a> 6.2 占用率（occupancy）快速心算法</h3>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>occupancy</mtext><mo>=</mo><mfrac><mtext>每 SM 活跃 warp 数</mtext><mtext>每 SM 最大 warp 数（如 64）</mtext></mfrac></mrow><annotation encoding="application/x-tex">\text{occupancy} = \frac{\text{每 SM 活跃 warp 数}}{\text{每 SM 最大 warp 数（如 64）}}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord text"><span class="mord">occupancy</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.24077em;vertical-align:-0.8804400000000001em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.3603299999999998em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord cjk_fallback">每</span><span class="mord"> SM </span><span class="mord cjk_fallback">最大</span><span class="mord"> warp </span><span class="mord cjk_fallback">数（如</span><span class="mord"> 64</span><span class="mord cjk_fallback">）</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord text"><span class="mord cjk_fallback">每</span><span class="mord"> SM </span><span class="mord cjk_fallback">活跃</span><span class="mord"> warp </span><span class="mord cjk_fallback">数</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8804400000000001em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p>三个限制源取最小：① 每线程寄存器数 × 线程数 ≤ 寄存器堆；② 每块共享内存 × 块数 ≤ 配额；③ 线程总数上限。用 <code>nvcc --ptxas-options=-v</code> 看每 kernel 的寄存器/共享内存用量，用 <code>cudaOccupancyMaxActiveBlocksPerMultiprocessor</code> API 算实际值——第 2 周调 MatMul 时会反复用到这套流程。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 背下访存层级表与 Roofline 公式（含 A100 的 AI* ≈ 156）。</li>
+<li>[ ] 手算 7B decode 上限：14 GB / 2 TB/s ≈ 143 tokens/s（闭卷）。</li>
+<li>[ ] 云 GPU 上编译运行 <code>vector_add</code>（PASS 输出）与 <code>transpose</code>（两版带宽对比）。</li>
+<li>[ ] 用 <code>ncu</code> 抓 transpose 两版的带宽利用率，截图存档。</li>
+<li>[ ] 合上文档仿写一遍 <code>vector_add</code>（爬坡验收：编译通过 + 输出正确）。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%8E%A8%E7%90%86%E4%BC%98%E5%8C%96/" rel="tag"># 推理优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-3-CUDA%20%E4%B8%8E%E7%AE%97%E5%AD%90%E4%BC%98%E5%8C%96%E5%85%A5%E9%97%A8%E5%88%B0%E5%AE%9E%E6%88%98-README/" rel="prev" title="README">
+                  <i class="fa fa-angle-left"></i> README
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-3-CUDA%20%E4%B8%8E%E7%AE%97%E5%AD%90%E4%BC%98%E5%8C%96%E5%85%A5%E9%97%A8%E5%88%B0%E5%AE%9E%E6%88%98-%E7%AC%AC2%E5%91%A8-MatMul%E4%BC%98%E5%8C%96%E4%B8%89%E9%98%B6/" rel="next" title="第2周-MatMul优化三阶">
+                  第2周-MatMul优化三阶 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">715k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">43:21</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

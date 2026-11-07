@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的问题 1. NPU 不支持的算子怎么办？「CPU 自定义算子 + NPU 主体」混合执行的调用链是什么？ 2. rknncustomop 的注册流程是什么？NCHW&#x2F;NHWC 与量化参数透传要注意什么？ 3. 自定义算子落 C…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第4周-RKNN自定义算子与MTK-NeuroPilot">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-4-GGML-llama.cpp%20%E4%B8%8E%E7%AB%AF%E4%BE%A7%E6%8E%A8%E7%90%86-%E7%AC%AC4%E5%91%A8-RKNN%E8%87%AA%E5%AE%9A%E4%B9%89%E7%AE%97%E5%AD%90%E4%B8%8EMTK-NeuroPilot/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的问题 1. NPU 不支持的算子怎么办？「CPU 自定义算子 + NPU 主体」混合执行的调用链是什么？ 2. rknncustomop 的注册流程是什么？NCHW&#x2F;NHWC 与量化参数透传要注意什么？ 3. 自定义算子落 C…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-05T00:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-07T16:05:40.363Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="推理优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-4-GGML-llama.cpp%20%E4%B8%8E%E7%AB%AF%E4%BE%A7%E6%8E%A8%E7%90%86-%E7%AC%AC4%E5%91%A8-RKNN%E8%87%AA%E5%AE%9A%E4%B9%89%E7%AE%97%E5%AD%90%E4%B8%8EMTK-NeuroPilot/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-4-GGML-llama.cpp%20%E4%B8%8E%E7%AB%AF%E4%BE%A7%E6%8E%A8%E7%90%86-%E7%AC%AC4%E5%91%A8-RKNN%E8%87%AA%E5%AE%9A%E4%B9%89%E7%AE%97%E5%AD%90%E4%B8%8EMTK-NeuroPilot/","path":"2026/09/05/模型性能优化-4-GGML-llama.cpp 与端侧推理-第4周-RKNN自定义算子与MTK-NeuroPilot/","title":"第4周-RKNN自定义算子与MTK-NeuroPilot"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第4周-RKNN自定义算子与MTK-NeuroPilot | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-4-%E5%91%A8%E6%95%99%E7%A8%8Brknn-%E8%87%AA%E5%AE%9A%E4%B9%89%E7%AE%97%E5%AD%90%E4%B8%8E-mtk-neuropilot%E8%A1%A5%E4%B8%8A-npu-%E7%9A%84%E7%AE%97%E5%AD%90%E7%BC%BA%E5%8F%A3"><span class="nav-number">1.</span> <span class="nav-text"> 第 4 周教程：RKNN 自定义算子与 MTK-NeuroPilot——补上 NPU 的算子缺口</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86npu-%E6%98%AF%E7%AE%97%E5%AD%90%E7%99%BD%E5%90%8D%E5%8D%95%E7%A1%AC%E4%BB%B6%E8%87%AA%E5%AE%9A%E4%B9%89%E7%AE%97%E5%AD%90%E6%98%AF%E9%80%83%E7%94%9F%E9%97%A8"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：NPU 是&quot;算子白名单&quot;硬件，自定义算子是逃生门</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E4%B8%BA%E4%BB%80%E4%B9%88%E6%80%BB%E4%BC%9A%E6%92%9E%E4%B8%8A%E7%AE%97%E5%AD%90%E7%BC%BA%E5%8F%A3"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 为什么总会撞上算子缺口</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-rknn_custom_op-%E7%9A%84%E6%B3%A8%E5%86%8C%E4%B8%8E%E6%89%A7%E8%A1%8C%E9%93%BE"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 rknn_custom_op 的注册与执行链</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-%E6%90%AC%E8%BF%90%E6%88%90%E6%9C%AC%E6%A8%A1%E5%9E%8B%E9%9D%A2%E8%AF%95%E9%AB%98%E9%A2%91"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 搬运成本模型（面试高频）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#14-mtk-neuropilot%E5%B9%B3%E8%A1%8C%E5%AE%87%E5%AE%99%E7%9A%84%E5%90%8C%E6%9E%84%E6%B5%81%E7%A8%8B"><span class="nav-number">1.1.4.</span> <span class="nav-text"> 1.4 MTK NeuroPilot：平行宇宙的同构流程</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 实现与验证（本周交付核心）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E8%87%AA%E5%AE%9A%E4%B9%89%E7%AE%97%E5%AD%90%E5%AE%9E%E6%88%98rmsnormrknn"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 自定义算子实战：RMSNorm（RKNN）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-mtk-%E4%BE%A7%E5%90%8C%E6%A8%A1%E5%9E%8B%E8%BD%AC%E6%8D%A2%E5%AF%B9%E7%85%A7%E5%AE%9E%E9%AA%8C"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 MTK 侧同模型转换（对照实验）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-rk3588-vs-mtk%E5%AF%B9%E6%AF%94%E8%A1%A8%E4%BA%A4%E4%BB%98"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 「RK3588 vs MTK」对比表（交付）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%8F%8C%E6%9D%BF%E5%AE%9E%E6%88%98%E8%AE%B0%E5%BD%95%E6%A8%A1%E6%9D%BF%E4%B8%A4%E6%9D%BF%E9%83%BD%E8%A6%81%E5%AE%9E%E6%93%8D%E7%9A%84%E8%AF%81%E6%8D%AE%E9%93%BE"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 双板实战记录模板（两板都要实操的证据链）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#51-%E7%8E%AF%E5%A2%83%E7%99%BB%E8%AE%B0%E8%A1%A8%E6%AF%8F%E6%AC%A1%E5%AE%9E%E9%AA%8C%E5%89%8D%E5%A1%AB"><span class="nav-number">1.5.1.</span> <span class="nav-text"> 5.1 环境登记表（每次实验前填）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#52-%E5%90%8C%E6%A8%A1%E5%9E%8B%E5%8F%8C%E6%9D%BF%E5%AF%B9%E6%AF%94%E7%9A%84%E6%9C%80%E5%B0%8F%E5%AE%9E%E9%AA%8C%E8%AE%BE%E8%AE%A1"><span class="nav-number">1.5.2.</span> <span class="nav-text"> 5.2 同模型双板对比的最小实验设计</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#53-%E8%87%AA%E5%AE%9A%E4%B9%89%E7%AE%97%E5%AD%90%E7%9A%84%E6%80%A7%E8%83%BD%E9%AA%8C%E6%94%B6%E6%B8%85%E5%8D%95"><span class="nav-number">1.5.3.</span> <span class="nav-text"> 5.3 自定义算子的性能验收清单</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.6.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">257</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">41</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">13</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-4-GGML-llama.cpp%20%E4%B8%8E%E7%AB%AF%E4%BE%A7%E6%8E%A8%E7%90%86-%E7%AC%AC4%E5%91%A8-RKNN%E8%87%AA%E5%AE%9A%E4%B9%89%E7%AE%97%E5%AD%90%E4%B8%8EMTK-NeuroPilot/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第4周-RKNN自定义算子与MTK-NeuroPilot | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的问题 1. NPU 不支持的算子怎么办？「CPU 自定义算子 + NPU 主体」混合执行的调用链是什么？ 2. rknncustomop 的注册流程是什么？NCHW&#x2F;NHWC 与量化参数透传要注意什么？ 3. 自定义算子落 C…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第4周-RKNN自定义算子与MTK-NeuroPilot
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-05 08:00:00" itemprop="dateCreated datePublished" datetime="2026-09-05T08:00:00+08:00">2026-09-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-08 00:05:40" itemprop="dateModified" datetime="2026-11-08T00:05:40+08:00">2026-11-08</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" itemprop="url" rel="index"><span itemprop="name">模型性能优化</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/Stage-4-GGML-llama-cpp-%E4%B8%8E%E7%AB%AF%E4%BE%A7%E6%8E%A8%E7%90%86/" itemprop="url" rel="index"><span itemprop="name">Stage 4-GGML-llama.cpp 与端侧推理</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>11 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的问题 1. NPU 不支持的算子怎么办？「CPU 自定义算子 + NPU 主体」混合执行的调用链是什么？ 2. rknncustomop 的注册流程是什么？NCHW/NHWC 与量化参数透传要注意什么？ 3. 自定义算子落 C…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-4-周教程rknn-自定义算子与-mtk-neuropilot补上-npu-的算子缺口"><a class="markdownIt-Anchor" href="#第-4-周教程rknn-自定义算子与-mtk-neuropilot补上-npu-的算子缺口"></a> 第 4 周教程：RKNN 自定义算子与 MTK-NeuroPilot——补上 NPU 的算子缺口</h1>
+<blockquote>
+<p><strong>本周要回答的问题</strong></p>
+<ol>
+<li>NPU 不支持的算子怎么办？「CPU 自定义算子 + NPU 主体」混合执行的调用链是什么？</li>
+<li><code>rknn_custom_op</code> 的注册流程是什么？NCHW/NHWC 与量化参数透传要注意什么？</li>
+<li>自定义算子落 CPU 后，数据搬运成本怎么算？什么时候必须写？</li>
+<li>MTK NeuroPilot 工具链（.tflite → APU）与 RKNN 流程的异同？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 5 周。交付物：① 在 RKNN 上实现一个自定义算子（如 RMSNorm），混合部署并验证正确性；② MTK 板完成同一模型的 NeuroPilot 转换与推理；③ 输出「RK3588 vs MTK」同模型对比表。</p>
+<hr />
+<h2 id="1-第一性原理npu-是算子白名单硬件自定义算子是逃生门"><a class="markdownIt-Anchor" href="#1-第一性原理npu-是算子白名单硬件自定义算子是逃生门"></a> 1. 第一性原理：NPU 是&quot;算子白名单&quot;硬件，自定义算子是逃生门</h2>
+<h3 id="11-为什么总会撞上算子缺口"><a class="markdownIt-Anchor" href="#11-为什么总会撞上算子缺口"></a> 1.1 为什么总会撞上算子缺口</h3>
+<p>NPU 编译器只认固定的算子集（Conv/MatMul/常见激活等）。你的语音模型随时可能带上&quot;新东西&quot;：CIF 积分发射、flow matching 的 ODE 步、自定义归一化。转换报错只是表象，本质是<strong>硬件的确定性换来了算子集的封闭性</strong>。</p>
+<p>逃生门：<strong>混合执行</strong>——模型图中不支持的算子&quot;落&quot;CPU（用你自己的实现），其余部分仍在 NPU 上跑。运行时在两种执行域之间切换，数据经共享内存传递。</p>
+<h3 id="12-rknn_custom_op-的注册与执行链"><a class="markdownIt-Anchor" href="#12-rknn_custom_op-的注册与执行链"></a> 1.2 rknn_custom_op 的注册与执行链</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">转换期：标记目标算子为 custom（op_type 与自定义名一致）</span><br><span class="line">         ─► .rknn 图中该节点是&quot;黑洞&quot;，只记录输入/输出张量描述</span><br><span class="line">运行期：推理到该节点 ─► 回调你的 compute 函数（CPU）</span><br><span class="line">         ─► 你把输出写回，NPU 继续下游节点</span><br></pre></td></tr></table></figure>
+<p>注册三要素：① <strong>op 描述</strong>（名字、输入输出个数与形状推导）；② <strong>compute 回调</strong>（拿到输入指针、算、写输出）；③ <strong>内存与格式约定</strong>——两个高频坑：</p>
+<ul>
+<li><strong>布局</strong>：NPU 内部常用 NHWC，框架是 NCHW——自定义算子拿到的可能是 NHWC，按错布局读数据结果全错；</li>
+<li><strong>量化参数透传</strong>：若自定义算子的输入是量化张量（INT8 + scale/zp），你的 CPU 实现要么先反量化成浮点算、要么在整数域实现并保持 scale 语义——<strong>忘了透传 = 输出数值错一个 scale 倍数</strong>。</li>
+</ul>
+<h3 id="13-搬运成本模型面试高频"><a class="markdownIt-Anchor" href="#13-搬运成本模型面试高频"></a> 1.3 搬运成本模型（面试高频）</h3>
+<p>设自定义算子输入/输出合计 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>B</mi></mrow><annotation encoding="application/x-tex">B</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span></span></span></span> 字节，每秒调用 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>f</mi></mrow><annotation encoding="application/x-tex">f</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord mathnormal" style="margin-right:0.10764em;">f</span></span></span></span> 次：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>t</mi><mtext>copy</mtext></msub><mo>≈</mo><mfrac><mrow><mn>2</mn><mi>B</mi></mrow><mrow><mi>B</mi><msub><mi>W</mi><mtext>NPU↔CPU</mtext></msub></mrow></mfrac><mo separator="true">,</mo><mspace width="2em"/><mtext>占比</mtext><mo>=</mo><msub><mi>t</mi><mtext>copy</mtext></msub><mo>⋅</mo><mi>f</mi><mtext> </mtext><mi mathvariant="normal">/</mi><mtext> </mtext><msub><mi>t</mi><mtext>frame</mtext></msub></mrow><annotation encoding="application/x-tex">t_{\text{copy}} \approx \frac{2B}{BW_{\text{NPU↔CPU}}}, \qquad \text{占比} = t_{\text{copy}} \cdot f \ /\ t_{\text{frame}}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.9011879999999999em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.15139200000000003em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">copy</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.19633em;vertical-align:-0.8360000000000001em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.36033em;"><span style="top:-2.3139999999999996em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05017em;">B</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">NPU↔CPU</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span><span class="mord mathnormal" style="margin-right:0.05017em;">B</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8360000000000001em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord text"><span class="mord cjk_fallback">占比</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.9011879999999999em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.15139200000000003em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">copy</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.10764em;">f</span><span class="mspace"> </span><span class="mord">/</span><span class="mspace"> </span><span class="mord"><span class="mord mathnormal">t</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">frame</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span></p>
+<p>判定：搬运占比 &lt; 5% 可接受；&gt; 20% 要考虑替代方案（改写模型结构绕开该算子、或把相邻算子一起拉下 CPU 减少往返次数）。<strong>“自定义算子的代价不在计算，在搬运”</strong>——这是本节的核心结论。</p>
+<h3 id="14-mtk-neuropilot平行宇宙的同构流程"><a class="markdownIt-Anchor" href="#14-mtk-neuropilot平行宇宙的同构流程"></a> 1.4 MTK NeuroPilot：平行宇宙的同构流程</h3>
+<p>MTK（Genio 系列）的链路：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>模型</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>TFLite</mtext></mpadded></mover><munderover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>量化</mtext></mpadded><mpadded width="+0.6em" lspace="0.3em"><mtext>NeuroPilot Converter</mtext></mpadded></munderover><mtext>.tflite(APU 优化)</mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>APU Runtime</mtext></mpadded></mover><mtext>APU</mtext></mrow><annotation encoding="application/x-tex">\text{模型} \xrightarrow{\text{TFLite}} \xrightarrow[\text{量化}]{\text{NeuroPilot Converter}} \text{.tflite(APU 优化)} \xrightarrow{\text{APU Runtime}} \text{APU}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.1113309999999998em;vertical-align:-0.010999999999999899em;"></span><span class="mord text"><span class="mord cjk_fallback">模型</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">TFLite</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span></span><span class="base"><span class="strut" style="height:1.7084389999999998em;vertical-align:-0.600331em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1081079999999999em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">NeuroPilot Converter</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span><span style="top:-2.0996690000000005em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">量化</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.600331em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.350331em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord">.tflite(APU </span><span class="mord cjk_fallback">优化</span><span class="mord">)</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">APU Runtime</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord">APU</span></span></span></span></span></span></p>
+<p>与 RKNN 的对应关系（记忆锚点）：</p>
+<table>
+<thead>
+<tr>
+<th>环节</th>
+<th>RKNN</th>
+<th>NeuroPilot</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>中间格式</td>
+<td>ONNX</td>
+<td>TFLite（也支持 ONNX 转换）</td>
+</tr>
+<tr>
+<td>转换工具</td>
+<td>rknn-toolkit2</td>
+<td>NeuroPilot Converter / ai-devtool</td>
+</tr>
+<tr>
+<td>量化</td>
+<td>非对称 + 校准集</td>
+<td>INT8/INT16 + 校准；量化选项类似</td>
+</tr>
+<tr>
+<td>运行时</td>
+<td>rknn_runtime（C API）</td>
+<td>NeuroPilot SDK（C/C++ API）</td>
+</tr>
+<tr>
+<td>异构调度</td>
+<td>core_mask 核绑定</td>
+<td>APU/GPU/CPU 调度策略（按算力分配）</td>
+</tr>
+</tbody>
+</table>
+<p>差异点：MTK 走 TFLite 生态（算子集以 TFLite 为准），自定义算子路径不同（TFLite custom op 注册机制）；Genio 的 APU 算力按 TOPS 分档，转换时要指定目标 APU 能力等级。</p>
+<hr />
+<h2 id="2-实现与验证本周交付核心"><a class="markdownIt-Anchor" href="#2-实现与验证本周交付核心"></a> 2. 实现与验证（本周交付核心）</h2>
+<h3 id="21-自定义算子实战rmsnormrknn"><a class="markdownIt-Anchor" href="#21-自定义算子实战rmsnormrknn"></a> 2.1 自定义算子实战：RMSNorm（RKNN）</h3>
+<p><strong>步骤 1：转换侧标记自定义算子</strong>（Python，x86 主机）</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># build_custom_rmsnorm.py —— 把模型中的 RMSNorm 替换为自定义节点</span></span><br><span class="line"><span class="keyword">from</span> rknn.api <span class="keyword">import</span> RKNN</span><br><span class="line">rknn = RKNN()</span><br><span class="line">rknn.config(target_platform=<span class="string">&quot;RK3588&quot;</span>)</span><br><span class="line">rknn.load_onnx(model=<span class="string">&quot;model_with_rmsnorm.onnx&quot;</span>,</span><br><span class="line">               <span class="comment"># 关键：声明该算子走自定义实现（按工具链版本语法填写节点名）</span></span><br><span class="line">               )</span><br><span class="line">rknn.build(do_quantization=<span class="literal">True</span>, dataset=<span class="string">&quot;calib_list.txt&quot;</span>)</span><br><span class="line">rknn.export_rknn(<span class="string">&quot;model_custom.rknn&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>步骤 2：C 侧注册与实现</strong>（板端，骨架代码）</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// custom_rmsnorm.c —— 逐行注释版（真实签名以 rknn_custom_op.h 为准）</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;rknn_api.h&quot;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;math.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="comment">// ① 计算回调：拿到输入张量，算完写输出</span></span><br><span class="line"><span class="type">static</span> <span class="type">int</span> <span class="title function_">rmsnorm_compute</span><span class="params">(RKNNCustomOpContext* ctx,</span></span><br><span class="line"><span class="params">                           RKNNCustomOpTensor* inputs,</span></span><br><span class="line"><span class="params">                           RKNNCustomOpTensor* outputs)</span> &#123;</span><br><span class="line">    <span class="comment">// ② 读描述：形状、数据类型、量化参数（别忘！）</span></span><br><span class="line">    <span class="type">int</span> n = inputs[<span class="number">0</span>].attr.n_elems;          <span class="comment">// 元素总数</span></span><br><span class="line">    <span class="type">float</span>* x = (<span class="type">float</span>*)inputs[<span class="number">0</span>].buf;        <span class="comment">// 若为 INT8 需先按 scale 反量化</span></span><br><span class="line">    <span class="type">float</span>* y = (<span class="type">float</span>*)outputs[<span class="number">0</span>].buf;</span><br><span class="line">    <span class="type">float</span> eps = <span class="number">1e-6</span>f;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// ③ RMSNorm 本体：平方和 → 均值 → rsqrt → 缩放</span></span><br><span class="line">    <span class="type">float</span> ss = <span class="number">0.f</span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; n; i++) ss += x[i] * x[i];</span><br><span class="line">    <span class="type">float</span> inv = <span class="number">1.0f</span> / sqrtf(ss / n + eps);</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; n; i++) y[i] = x[i] * inv;   <span class="comment">// 增益 g 可作为第 2 个输入</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="comment">// ④ 注册表：名字必须与转换期标记的一致</span></span><br><span class="line">RKNNCustomOp rmsnorm_op = &#123;</span><br><span class="line">    .op_type = <span class="string">&quot;CustomRMSNorm&quot;</span>,       <span class="comment">// 与转换侧对齐</span></span><br><span class="line">    .compute = rmsnorm_compute,</span><br><span class="line">    <span class="comment">// ... 形状推导/初始化回调按头文件补全</span></span><br><span class="line">&#125;;</span><br><span class="line"><span class="comment">// 运行时：rknn_register_custom_ops(&amp;rmsnorm_op, 1) 后再 init_runtime</span></span><br></pre></td></tr></table></figure>
+<p><strong>步骤 3：正确性验证</strong>（交付的断言）</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># verify_custom.py —— 同输入对比：浮点参考 vs 板端自定义执行</span></span><br><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"><span class="keyword">from</span> rknnlite.api <span class="keyword">import</span> RKNNLite          <span class="comment"># 板端</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">ref_rmsnorm</span>(<span class="params">x, eps=<span class="number">1e-6</span></span>):</span><br><span class="line">    <span class="keyword">return</span> x / np.sqrt((x**<span class="number">2</span>).mean(-<span class="number">1</span>, keepdims=<span class="literal">True</span>) + eps)</span><br><span class="line"></span><br><span class="line">x = np.load(<span class="string">&quot;test_input.npy&quot;</span>)</span><br><span class="line">rknn = RKNNLite(); rknn.load_rknn(<span class="string">&quot;model_custom.rknn&quot;</span>)</span><br><span class="line">rknn.init_runtime()</span><br><span class="line">y_board = rknn.inference(inputs=[x])[<span class="number">0</span>]</span><br><span class="line">y_ref = ref_rmsnorm(x)                      <span class="comment"># 端到端参考（略去其余层时用单层图验证）</span></span><br><span class="line">cos = (y_board.flatten() @ y_ref.flatten()) / (</span><br><span class="line">      np.linalg.norm(y_board) * np.linalg.norm(y_ref))</span><br><span class="line"><span class="keyword">assert</span> cos &gt; <span class="number">0.999</span>, <span class="string">f&quot;自定义算子输出与参考不一致，cos=<span class="subst">&#123;cos:<span class="number">.4</span>f&#125;</span>&quot;</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;自定义 RMSNorm 验证通过 ✓（cos=<span class="subst">&#123;cos:<span class="number">.5</span>f&#125;</span>）&quot;</span>)</span><br></pre></td></tr></table></figure>
+<h3 id="22-mtk-侧同模型转换对照实验"><a class="markdownIt-Anchor" href="#22-mtk-侧同模型转换对照实验"></a> 2.2 MTK 侧同模型转换（对照实验）</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># NeuroPilot Converter（x86 主机，按官方 SDK 版本）</span></span><br><span class="line"><span class="comment"># 1) 模型 → TFLite（量化后）</span></span><br><span class="line"><span class="comment"># 2) converter 指定目标 Genio 平台与 APU 能力，产出 APU 优化模型</span></span><br><span class="line"><span class="comment"># 3) 板端用 NeuroPilot C API 推理，记录延迟</span></span><br><span class="line"><span class="comment"># 交付：把与 §2.1 相同的模型与相同输入跑一遍，作为对比表的右半边</span></span><br></pre></td></tr></table></figure>
+<h3 id="23-rk3588-vs-mtk对比表交付"><a class="markdownIt-Anchor" href="#23-rk3588-vs-mtk对比表交付"></a> 2.3 「RK3588 vs MTK」对比表（交付）</h3>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>RK3588（NPU）</th>
+<th>MTK（APU）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>同一模型延迟</td>
+<td><em>实测</em></td>
+<td><em>实测</em></td>
+</tr>
+<tr>
+<td>转换掉点（端到端指标）</td>
+<td><em>实测（第 3 周数据）</em></td>
+<td><em>实测</em></td>
+</tr>
+<tr>
+<td>自定义算子支持</td>
+<td>C 回调，本周已验证</td>
+<td>TFLite custom op（记录流程差异）</td>
+</tr>
+<tr>
+<td>工具链坑点记录</td>
+<td><em>你的实录</em></td>
+<td><em>你的实录</em></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="3-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#3-工程权衡与失效模式"></a> 3. 工程权衡与失效模式</h2>
+<h3 id="31-权衡"><a class="markdownIt-Anchor" href="#31-权衡"></a> 3.1 权衡</h3>
+<ul>
+<li><strong>自定义算子的粒度</strong>：算子越小、调用越频繁，搬运占比越高——有时把&quot;一串小算子&quot;打包成一个自定义算子反而更快（一次往返干多件事，融合思想在异构场景的复用）。</li>
+<li><strong>CPU 实现的优化责任</strong>：落 CPU 的算子没人帮你做 SIMD 特化——热点自定义算子要自己上 NEON/AVX（第 2 周技能复用）。</li>
+<li><strong>平台锁定成本</strong>：RKNN 与 NeuroPilot 的转换脚本、自定义算子互不通用——若产品要双平台，把&quot;模型本体（ONNX）&quot;作为唯一事实源，平台产物全部脚本化再生成。</li>
+</ul>
+<h3 id="32-失效模式"><a class="markdownIt-Anchor" href="#32-失效模式"></a> 3.2 失效模式</h3>
+<ol>
+<li><strong>布局错乱</strong>：症状——自定义算子输出是&quot;有规律的乱码&quot;（通道错位）；根因——NPU 给的是 NHWC、按 NCHW 读了；修复——打印输入 attr 的实际布局，转换期强制统一。</li>
+<li><strong>量化参数没透传</strong>：症状——输出整体偏大/偏小固定倍数；根因——把 INT8 输入当数值直接用，没乘 scale；修复——读张量量化参数，先反量化或整数域实现。</li>
+<li><strong>搬运吃掉收益</strong>：症状——加了自定义算子后比纯 CPU 还慢；根因——每帧多次小块往返；修复——合并算子、或用 §1.3 的成本模型先算账再动手。</li>
+<li><strong>转换工具与板端运行时版本错配</strong>：症状——加载即崩或结果错；根因——厂商工具链版本矩阵严格；修复——锁定版本组合并写进环境文档（RKNN 与 MTK 都有此坑）。</li>
+</ol>
+<hr />
+<h2 id="4-延伸思考题含解析"><a class="markdownIt-Anchor" href="#4-延伸思考题含解析"></a> 4. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：什么时候&quot;必须&quot;写自定义算子，什么时候应该改写模型绕开它？<br />
+<strong>A</strong>：算子处于热路径且搬运成本可接受 → 自定义算子；算子只在离线/低频路径 → 可忍；算子引发高频小块往返、或实现复杂度过高 → 优先改写模型结构（用支持的算子等价替换）。先算搬运账，再谈实现——顺序不能反。</p>
+<p><strong>Q2</strong>：自定义算子的 CPU 实现为什么常常要自己写 SIMD？<br />
+<strong>A</strong>：NPU 工具链只对图内算子做编译优化；你的回调函数就是普通 C 代码，编译器不会替你调 NEON 内联。它在热路径上，性能就是你的责任——这是&quot;混合执行&quot;的隐性成本。</p>
+<p><strong>Q3</strong>：为什么两个平台都坚持从中间格式（ONNX/TFLite）出发？<br />
+<strong>A</strong>：中间格式是训练框架与所有部署工具链的最大公约数——RKNN 走 ONNX、NeuroPilot 主走 TFLite（也支持 ONNX 转换）。以中间格式为唯一事实源，任何平台的产物都可脚本化再生成——平台锁定只锁住转换脚本，锁不住模型资产。这是部署工程的可移植性原则。</p>
+<p><strong>Q4</strong>：RMSNorm 落 CPU 真的划算吗？什么情况下它应该留在 NPU？<br />
+<strong>A</strong>：RMSNorm 计算轻、但每层每帧都调用——若张量大（长序列），搬运可能超过计算。若 NPU 支持等价结构（多数支持：Mul+ReduceMean+Rsqrt+Mul 可编译融合），就该留 NPU；只有当它带特殊变体（如你的模型自定义的归一化）时才落 CPU。<strong>能用原生算子拼出来，就不要自定义</strong>。</p>
+<p><strong>Q5</strong>：对比表的&quot;转换掉点&quot;一列，如果 MTK 明显优于 RK3588，可能的原因有哪些？<br />
+<strong>A</strong>：① 量化策略差异（校准算法、敏感度处理）；② 算子融合粒度不同（融合越多中间量化误差越少）；③ 目标平台配置是否指定正确（错误的算力档位会换内核）。排查顺序：先确认配置正确，再看逐层对比，最后才是算法差异——别把配置错误当成平台差距。</p>
+<hr />
+<h2 id="5-双板实战记录模板两板都要实操的证据链"><a class="markdownIt-Anchor" href="#5-双板实战记录模板两板都要实操的证据链"></a> 5. 双板实战记录模板（两板都要实操的证据链）</h2>
+<h3 id="51-环境登记表每次实验前填"><a class="markdownIt-Anchor" href="#51-环境登记表每次实验前填"></a> 5.1 环境登记表（每次实验前填）</h3>
+<table>
+<thead>
+<tr>
+<th>项</th>
+<th>RK3588 板</th>
+<th>MTK 板</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>系统/固件版本</td>
+<td><em>填</em></td>
+<td><em>填</em></td>
+</tr>
+<tr>
+<td>工具链版本</td>
+<td>rknn-toolkit2 <em>x.y.z</em></td>
+<td>NeuroPilot SDK <em>x.y</em></td>
+</tr>
+<tr>
+<td>runtime 版本</td>
+<td><em>填（必须与工具链匹配）</em></td>
+<td><em>填</em></td>
+</tr>
+<tr>
+<td>内存/存储</td>
+<td><em>填</em></td>
+<td><em>填</em></td>
+</tr>
+<tr>
+<td>散热条件</td>
+<td>被动/风扇</td>
+<td>被动/风扇</td>
+</tr>
+</tbody>
+</table>
+<h3 id="52-同模型双板对比的最小实验设计"><a class="markdownIt-Anchor" href="#52-同模型双板对比的最小实验设计"></a> 5.2 同模型双板对比的最小实验设计</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">同一模型（语音方向成果，如 DeepFilterNet3 或小型 VAD）：</span><br><span class="line">① 各自工具链转换（INT8，同校准集）</span><br><span class="line">② 同输入推理 100 次：记录 平均延迟 / P99 延迟 / 吞吐</span><br><span class="line">③ 端到端指标：降噪用 PESQ，VAD 用 F1（与 FP32 参考比）</span><br><span class="line">④ 功耗：稳态推理时的板级功率（若有测量条件）</span><br><span class="line">⑤ 记录&quot;最痛的一个坑&quot;：各自写 3 行（现象/根因/解法）</span><br></pre></td></tr></table></figure>
+<p><strong>纪律</strong>：⑤ 的踩坑记录是最有面试价值的部分——&quot;我在 RK3588 上遇到 X，定位到 Y，用 Z 解决&quot;这种一手经验，远比背文档有说服力。</p>
+<h3 id="53-自定义算子的性能验收清单"><a class="markdownIt-Anchor" href="#53-自定义算子的性能验收清单"></a> 5.3 自定义算子的性能验收清单</h3>
+<p>写完自定义算子只验证&quot;正确&quot;还不够，还要验收&quot;不拖后腿&quot;：</p>
+<table>
+<thead>
+<tr>
+<th>验收项</th>
+<th>方法</th>
+<th>通过标准</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>正确性</td>
+<td>§2.1 的余弦断言</td>
+<td>cos &gt; 0.999</td>
+</tr>
+<tr>
+<td>搬运占比</td>
+<td>§1.3 成本模型实测</td>
+<td>&lt; 5%（&lt; 20% 可接受）</td>
+</tr>
+<tr>
+<td>CPU 占用</td>
+<td><code>perf top</code> 看回调函数占时</td>
+<td>不在 Top3 之外失控</td>
+</tr>
+<tr>
+<td>与纯 NPU 全图对比</td>
+<td>同模型改写成原生算子版</td>
+<td>混合版延迟增幅 &lt; 15%</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 自定义算子三件套完成：转换标记 + C 实现 + 正确性断言（cos &gt; 0.999）。</li>
+<li>[ ] 验证布局与量化参数两个坑（故意写错一版，记录症状——面试素材）。</li>
+<li>[ ] 用 §1.3 成本模型为你的算子算一次搬运占比，写进实验记录。</li>
+<li>[ ] MTK 板完成同模型转换与推理，填完「RK3588 vs MTK」对比表。</li>
+<li>[ ] 把两平台的工具链版本组合与踩坑点写成一页笔记（双板实操的证据链）。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%8E%A8%E7%90%86%E4%BC%98%E5%8C%96/" rel="tag"># 推理优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-4-GGML-llama.cpp%20%E4%B8%8E%E7%AB%AF%E4%BE%A7%E6%8E%A8%E7%90%86-%E7%AC%AC3%E5%91%A8-%E5%BC%82%E6%9E%84%E5%8D%B8%E8%BD%BD%E4%B8%8ERKNN%E9%83%A8%E7%BD%B2%E5%AE%9E%E6%88%98/" rel="prev" title="第3周-异构卸载与RKNN部署实战">
+                  <i class="fa fa-angle-left"></i> 第3周-异构卸载与RKNN部署实战
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/05/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-4-GGML-llama.cpp%20%E4%B8%8E%E7%AB%AF%E4%BE%A7%E6%8E%A8%E7%90%86-%E7%AC%AC5-6%E5%91%A8-%E7%AB%AF%E4%BE%A7%E6%8E%A8%E7%90%86%E5%85%A8%E5%AE%B6%E6%A1%B6%E6%95%B4%E5%90%88%E4%B8%8E%E9%80%89%E5%9E%8B%E6%8A%A5%E5%91%8A%E5%A4%8D%E7%9B%98/" rel="next" title="第5-6周-端侧推理全家桶整合与选型报告复盘">
+                  第5-6周-端侧推理全家桶整合与选型报告复盘 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">715k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">43:21</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

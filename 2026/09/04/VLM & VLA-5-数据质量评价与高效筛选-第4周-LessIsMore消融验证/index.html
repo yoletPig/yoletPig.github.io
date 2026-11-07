@@ -1,0 +1,574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的三个问题 1. A&#x2F;B&#x2F;C 三组消融（全量 &#x2F; 随机 30% &#x2F; 筛选 30%）怎么设计才能让结论可信？ 2. 打分阶段如何用 vLLM 把 10k+ 数据的 NLL 计算压缩到几十分钟？ 3. &#39;筛选 30% ≥ 全量 98…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第4周-LessIsMore消融验证">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC4%E5%91%A8-LessIsMore%E6%B6%88%E8%9E%8D%E9%AA%8C%E8%AF%81/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的三个问题 1. A&#x2F;B&#x2F;C 三组消融（全量 &#x2F; 随机 30% &#x2F; 筛选 30%）怎么设计才能让结论可信？ 2. 打分阶段如何用 vLLM 把 10k+ 数据的 NLL 计算压缩到几十分钟？ 3. &#39;筛选 30% ≥ 全量 98…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T19:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-07T16:05:40.315Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC4%E5%91%A8-LessIsMore%E6%B6%88%E8%9E%8D%E9%AA%8C%E8%AF%81/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC4%E5%91%A8-LessIsMore%E6%B6%88%E8%9E%8D%E9%AA%8C%E8%AF%81/","path":"2026/09/04/VLM & VLA-5-数据质量评价与高效筛选-第4周-LessIsMore消融验证/","title":"第4周-LessIsMore消融验证"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第4周-LessIsMore消融验证 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-4-%E5%91%A8%E6%95%99%E7%A8%8B%E7%AD%9B%E9%80%89%E7%AE%97%E6%B3%95%E9%AA%8C%E8%AF%81%E4%B8%8E-less-is-more-%E6%B6%88%E8%9E%8D%E5%AE%9E%E9%AA%8C"><span class="nav-number">1.</span> <span class="nav-text"> 第 4 周教程：筛选算法验证与 “Less is More” 消融实验</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E6%B6%88%E8%9E%8D%E5%AE%9E%E9%AA%8C%E7%9A%84%E8%AF%81%E6%98%8E%E8%B4%A3%E4%BB%BB"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：消融实验的证明责任</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E6%A0%B9%E6%9C%AC%E7%9F%9B%E7%9B%BE%E4%BD%A0%E6%83%B3%E8%AF%81%E6%98%8E%E7%9A%84-vs-%E6%95%B0%E6%8D%AE%E8%83%BD%E8%AF%81%E6%98%8E%E7%9A%84"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 根本矛盾：你想证明的 vs 数据能证明的</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E5%88%A4%E5%AE%9A%E9%98%88%E5%80%BC%E7%9A%84%E7%AE%97%E6%9C%AF"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 判定阈值的算术</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-%E6%95%B0%E6%8D%AE-scaling-%E8%A7%86%E8%A7%92"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 数据 Scaling 视角</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 实现与验证</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E9%AB%98%E6%95%88%E6%89%B9%E9%87%8F%E6%89%93%E5%88%86vllm-%E7%9A%84-prompt_logprobs-%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 高效批量打分：vLLM 的 prompt_logprobs 模式</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E4%B8%89%E7%BB%84%E6%B6%88%E8%9E%8D%E7%9A%84%E6%89%A7%E8%A1%8C%E6%B8%85%E5%8D%95"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 三组消融的执行清单</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-%E6%B6%88%E8%9E%8D%E6%8A%A5%E5%91%8A%E6%A8%A1%E6%9D%BF"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 消融报告模板</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E5%86%B3%E7%AD%96%E8%A1%A8%E6%B6%88%E8%9E%8D%E8%A7%84%E6%A8%A1%E7%9A%84%E9%80%89%E6%8B%A9"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 决策表：消融规模的选择</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%B8%89%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 三个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">257</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">41</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">13</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC4%E5%91%A8-LessIsMore%E6%B6%88%E8%9E%8D%E9%AA%8C%E8%AF%81/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第4周-LessIsMore消融验证 | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的三个问题 1. A&#x2F;B&#x2F;C 三组消融（全量 &#x2F; 随机 30% &#x2F; 筛选 30%）怎么设计才能让结论可信？ 2. 打分阶段如何用 vLLM 把 10k+ 数据的 NLL 计算压缩到几十分钟？ 3. &#39;筛选 30% ≥ 全量 98…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第4周-LessIsMore消融验证
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 03:30:00" itemprop="dateCreated datePublished" datetime="2026-09-04T03:30:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-08 00:05:40" itemprop="dateModified" datetime="2026-11-08T00:05:40+08:00">2026-11-08</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89/" itemprop="url" rel="index"><span itemprop="name">Stage 5-数据质量评价与高效筛选</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.1k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>11 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的三个问题 1. A/B/C 三组消融（全量 / 随机 30% / 筛选 30%）怎么设计才能让结论可信？ 2. 打分阶段如何用 vLLM 把 10k+ 数据的 NLL 计算压缩到几十分钟？ 3. '筛选 30% ≥ 全量 98…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-4-周教程筛选算法验证与-less-is-more-消融实验"><a class="markdownIt-Anchor" href="#第-4-周教程筛选算法验证与-less-is-more-消融实验"></a> 第 4 周教程：筛选算法验证与 “Less is More” 消融实验</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>A/B/C 三组消融（全量 / 随机 30% / 筛选 30%）怎么设计才能让结论可信？</li>
+<li>打分阶段如何用 vLLM 把 10k+ 数据的 NLL 计算压缩到几十分钟？</li>
+<li>&quot;筛选 30% ≥ 全量 98% 性能&quot;这个结论需要哪些证据链才算被证明？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 4 周。交付物：① 10,000 条混合数据集上导出 30% 随机子集与 30% 算法筛选子集；② 同参数微调后在 POPE/MMBench 上评测；③ 消融对比报告，证明筛选子集 &gt; 随机子集、且 ≥ 全量性能的 98%。</p>
+<hr />
+<h2 id="1-第一性原理消融实验的证明责任"><a class="markdownIt-Anchor" href="#1-第一性原理消融实验的证明责任"></a> 1. 第一性原理：消融实验的证明责任</h2>
+<h3 id="11-根本矛盾你想证明的-vs-数据能证明的"><a class="markdownIt-Anchor" href="#11-根本矛盾你想证明的-vs-数据能证明的"></a> 1.1 根本矛盾：你想证明的 vs 数据能证明的</h3>
+<p>你想证明的命题是：“<strong>筛选算法选择的 30% 子集，训练效果优于随机 30%，且逼近全量</strong>”。这是一个关于<strong>算法有效性</strong>的因果命题。它的证明责任要求排除所有替代解释：</p>
+<table>
+<thead>
+<tr>
+<th>替代解释（混杂变量）</th>
+<th>排除手段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>“效果差只是因为数据少”</td>
+<td>B 组（随机 30%）的存在——它是同预算对照</td>
+</tr>
+<tr>
+<td>“效果差异是训练随机性”</td>
+<td>锁种子 + 关键组复跑；报告方差</td>
+</tr>
+<tr>
+<td>“效果差异是超参巧合”</td>
+<td>三组完全同超参（同 lr/epoch/batch/模板）</td>
+</tr>
+<tr>
+<td>“评测波动”</td>
+<td>固定评测协议（Stage 3 纪律）：框架版本/提取器/裁判归档</td>
+</tr>
+<tr>
+<td>“筛选过程泄漏了评测信息”</td>
+<td>打分只用参考模型对<strong>训练数据</strong>计算，绝不触碰评测集</td>
+</tr>
+</tbody>
+</table>
+<p><strong>B 组（随机 30%）是整个实验的灵魂</strong>。没有它，“筛选 30% 表现好&quot;什么也证明不了——可能是数据少的普遍失败（需要 A 组参照），也可能是任何 30% 子集都行（需要 B 组证伪）。文献中不少&quot;数据选择有效&quot;的论文在加入随机基线后失效（XMAS 论文明确指出&quot;现有方法无一能在不同子集规模上稳定超过随机选择”——arXiv:2510.01454），这就是 B 组的威慑力。</p>
+<h3 id="12-判定阈值的算术"><a class="markdownIt-Anchor" href="#12-判定阈值的算术"></a> 1.2 判定阈值的算术</h3>
+<p>学习计划的验收线：“筛选 30% ≥ 全量 × 98%”。在基准分数上操作化：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>retention</mtext><mo>=</mo><mfrac><msub><mover accent="true"><mi>S</mi><mo>ˉ</mo></mover><mtext>filtered</mtext></msub><msub><mover accent="true"><mi>S</mi><mo>ˉ</mo></mover><mtext>full</mtext></msub></mfrac><mo>≥</mo><mn>0.98</mn></mrow><annotation encoding="application/x-tex">\text{retention} = \frac{\bar{S}_{\text{filtered}}}{\bar{S}_{\text{full}}} \geq 0.98
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.66786em;vertical-align:0em;"></span><span class="mord text"><span class="mord">retention</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.35722em;vertical-align:-0.8601099999999999em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.49711em;"><span style="top:-2.28989em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8201099999999999em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05764em;">S</span></span></span><span style="top:-3.25233em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.16666em;"><span class="mord">ˉ</span></span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">full</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8201099999999999em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05764em;">S</span></span></span><span style="top:-3.25233em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.16666em;"><span class="mord">ˉ</span></span></span></span></span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">filtered</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8601099999999999em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">0</span><span class="mord">.</span><span class="mord">9</span><span class="mord">8</span></span></span></span></span></p>
+<p><strong>这个公式在干什么</strong>：分子是&quot;筛选出的 30% 数据训练出的模型&quot;在基准上的平均分，分母是&quot;全量数据训练出的模型&quot;的平均分——两者之比回答&quot;扔掉 70% 数据后保住了多少性能&quot;。0.98 是学习计划的验收线：损失不超过 2%，换来 70% 的训练成本节省，才是&quot;Less is More&quot;成立的量化承诺。其中 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mover accent="true"><mi>S</mi><mo>ˉ</mo></mover></mrow><annotation encoding="application/x-tex">\bar{S}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8201099999999999em;vertical-align:0em;"></span><span class="mord accent"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8201099999999999em;"><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.05764em;">S</span></span></span><span style="top:-3.25233em;"><span class="pstrut" style="height:3em;"></span><span class="accent-body" style="left:-0.16666em;"><span class="mord">ˉ</span></span></span></span></span></span></span></span></span></span> 是各基准的均值（或加权均值）。三个必须写进报告的限定：</p>
+<ol>
+<li><strong>多基准聚合口径</strong>：单基准 98% 容易过/不过全凭运气，报告应给出逐基准 retention + 聚合 retention；</li>
+<li><strong>噪声边界</strong>：评测噪声（±0.5~1 分量级，Stage 3 经验）下，97.5% 与 98.5% 无实质差别——报告应附&quot;随机 30% 的 retention&quot;作对照，真正的证据是 <strong>C 组 − B 组 的差值及其方向一致性</strong>（在多数基准上 C &gt; B），而非卡死 98% 这条线；</li>
+<li><strong>成本维度</strong>：筛选算法的打分成本（GPU 时）+ 训练节省的成本 = 净收益，&quot;98% 性能 + 70% 训练成本节省&quot;才是完整命题。</li>
+</ol>
+<h3 id="13-数据-scaling-视角"><a class="markdownIt-Anchor" href="#13-数据-scaling-视角"></a> 1.3 数据 Scaling 视角</h3>
+<p>三组消融只测了&quot;30% 比例点&quot;。更有信息量的做法是<strong>扫描比例曲线</strong>：筛选子集 vs 随机子集在 {10%, 20%, 30%, 50%, 100%} 各点训练评测，画两条性能-数据量曲线。预期形态：低比例区两曲线差距最大（筛选价值最凸显），高比例区收敛（数据多了随机也够）。<strong>两条曲线的横向间距 = 筛选算法的&quot;等效数据倍率&quot;</strong>（如&quot;筛选 30% ≈ 随机 60%&quot;），这是比 retention 更强的算法价值度量。预算允许时至少补 10% 与 50% 两个点。</p>
+<hr />
+<h2 id="2-实现与验证"><a class="markdownIt-Anchor" href="#2-实现与验证"></a> 2. 实现与验证</h2>
+<h3 id="21-高效批量打分vllm-的-prompt_logprobs-模式"><a class="markdownIt-Anchor" href="#21-高效批量打分vllm-的-prompt_logprobs-模式"></a> 2.1 高效批量打分：vLLM 的 prompt_logprobs 模式</h3>
+<p>第 1 周用 transformers 原生前向算 NLL（口径正确但慢）；批量场景（10k+）迁移到 vLLM：<code>SamplingParams(prompt_logprobs=0)</code> 可在一次生成式调用中返回 prompt 每个位置的 logprob，配合预先拼好的&quot;prompt+回答&quot;序列与手工对齐的回答区偏移，即可批量取回答区 NLL。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">vLLM 批量 NLL 打分 (回答区): 10k+ 数据的分钟级打分。</span></span><br><span class="line"><span class="string">运行方式: 先启动 vLLM 服务 (见第4阶段教程), 再:</span></span><br><span class="line"><span class="string">  python stage5_week4_vllm_score.py --data sft_10k.jsonl --out scores_10k.jsonl</span></span><br><span class="line"><span class="string">依赖: vllm (或 openai 客户端连服务), transformers (仅 tokenizer)</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> argparse</span><br><span class="line"><span class="keyword">import</span> json</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    ap = argparse.ArgumentParser()</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--data&quot;</span>, required=<span class="literal">True</span>); ap.add_argument(<span class="string">&quot;--out&quot;</span>, default=<span class="string">&quot;scores_10k.jsonl&quot;</span>)</span><br><span class="line">    ap.add_argument(<span class="string">&quot;--model&quot;</span>, default=<span class="string">&quot;Qwen/Qwen2-VL-2B-Instruct&quot;</span>)</span><br><span class="line">    args = ap.parse_args()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">from</span> vllm <span class="keyword">import</span> LLM, SamplingParams</span><br><span class="line">    <span class="keyword">from</span> transformers <span class="keyword">import</span> AutoProcessor</span><br><span class="line">    processor = AutoProcessor.from_pretrained(args.model)</span><br><span class="line">    <span class="comment"># 打分用纯文本镜像: 多模态版把 &lt;图像占位&gt; 保留, offline LLM 直接喂多模态输入</span></span><br><span class="line">    <span class="comment"># (此处演示文本主干口径; 完整多模态打分用 vllm 的 multi_modal_data 输入, 结构相同)</span></span><br><span class="line">    llm = LLM(model=args.model, max_model_len=<span class="number">4096</span>,</span><br><span class="line">              enable_prefix_caching=<span class="literal">True</span>)          <span class="comment"># chat 模板前缀缓存 (Stage4 红利; vLLM &gt;= 0.9 已默认开启)</span></span><br><span class="line"></span><br><span class="line">    rows = [json.loads(l) <span class="keyword">for</span> l <span class="keyword">in</span> <span class="built_in">open</span>(args.data)]</span><br><span class="line">    prompts, spans = [], []                          <span class="comment"># spans: 回答区 [start, end) token 下标</span></span><br><span class="line">    <span class="keyword">for</span> r <span class="keyword">in</span> rows:</span><br><span class="line">        msgs = [&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: [</span><br><span class="line">            &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;image&quot;</span>&#125;, &#123;<span class="string">&quot;type&quot;</span>: <span class="string">&quot;text&quot;</span>, <span class="string">&quot;text&quot;</span>: r[<span class="string">&quot;question&quot;</span>]&#125;]&#125;]</span><br><span class="line">        p = processor.apply_chat_template(msgs, tokenize=<span class="literal">False</span>,</span><br><span class="line">                                          add_generation_prompt=<span class="literal">True</span>)</span><br><span class="line">        tok_p = processor.tokenizer(p, add_special_tokens=<span class="literal">False</span>)[<span class="string">&quot;input_ids&quot;</span>]</span><br><span class="line">        tok_a = processor.tokenizer(r[<span class="string">&quot;answer&quot;</span>], add_special_tokens=<span class="literal">False</span>)[<span class="string">&quot;input_ids&quot;</span>]</span><br><span class="line">        <span class="comment"># 注意: prompt 与 answer 分开编码再拼接, 若边界处发生 BPE 合并, span 会偏移</span></span><br><span class="line">        <span class="comment"># 1 个 Token; 回答区前的最后一位是 &lt;|im_start|&gt;assistant\n, 通常无合并风险,</span></span><br><span class="line">        <span class="comment"># 但切换 tokenizer 后建议抽查一次 (decode span 与原文比对)</span></span><br><span class="line">        prompts.append(&#123;<span class="string">&quot;prompt_token_ids&quot;</span>: tok_p + tok_a&#125;)</span><br><span class="line">        spans.append((<span class="built_in">len</span>(tok_p), <span class="built_in">len</span>(tok_p) + <span class="built_in">len</span>(tok_a)))</span><br><span class="line"></span><br><span class="line">    sp = SamplingParams(temperature=<span class="number">0</span>, max_tokens=<span class="number">1</span>, prompt_logprobs=<span class="number">0</span>)  <span class="comment"># 只要 prompt logprobs</span></span><br><span class="line">    outs = llm.generate(prompts, sp)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">import</span> math</span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(args.out, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        <span class="keyword">for</span> r, o, (s, e) <span class="keyword">in</span> <span class="built_in">zip</span>(rows, outs, spans):</span><br><span class="line">            lp = o.prompt_logprobs                     <span class="comment"># 长度 = prompt 长度, [0]=None</span></span><br><span class="line">            <span class="keyword">if</span> lp <span class="keyword">is</span> <span class="literal">None</span> <span class="keyword">or</span> e - s &lt; <span class="number">1</span>:</span><br><span class="line">                <span class="keyword">continue</span></span><br><span class="line">            nlls = []</span><br><span class="line">            <span class="keyword">for</span> t <span class="keyword">in</span> <span class="built_in">range</span>(s, e):</span><br><span class="line">                d = lp[t]                              <span class="comment"># &#123;token_id: Logprob&#125;</span></span><br><span class="line">                nlls.append(-<span class="built_in">next</span>(<span class="built_in">iter</span>(d.values())).logprob)</span><br><span class="line">            avg = <span class="built_in">sum</span>(nlls) / <span class="built_in">len</span>(nlls)</span><br><span class="line">            f.write(json.dumps(&#123;**r, <span class="string">&quot;nll&quot;</span>: <span class="built_in">round</span>(avg, <span class="number">4</span>),</span><br><span class="line">                                <span class="string">&quot;ppl&quot;</span>: <span class="built_in">round</span>(math.exp(avg), <span class="number">2</span>)&#125;, ensure_ascii=<span class="literal">False</span>) + <span class="string">&quot;\n&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;打分完成 -&gt; <span class="subst">&#123;args.out&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    main()</span><br></pre></td></tr></table></figure>
+<p><strong>量级参考</strong>（须以实测为准）：7B 模型、10k 条 × ~1.5k Token、单卡 A100 + prefix caching，打分约 10~40 分钟——比 transformers 逐批前向快 3~10 倍（主要来自 continuous batching 与 KV 复用）。<strong>口径一致性警告</strong>：vLLM 与 transformers 的数值可能有微小差异（kernel/精度实现不同），<strong>同一次筛选实验内的所有打分必须用同一引擎</strong>，不要 A 组用 transformers 打分、C 组用 vLLM 打分。</p>
+<h3 id="22-三组消融的执行清单"><a class="markdownIt-Anchor" href="#22-三组消融的执行清单"></a> 2.2 三组消融的执行清单</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 数据准备</span></span><br><span class="line">python - &lt;&lt;<span class="string">&#x27;PY&#x27;</span></span><br><span class="line">import json, random</span><br><span class="line">rows = [json.loads(l) <span class="keyword">for</span> l <span class="keyword">in</span> open(<span class="string">&quot;sft_10k.jsonl&quot;</span>)]</span><br><span class="line">coreset = &#123;json.dumps(r, sort_keys=True) <span class="keyword">for</span> r <span class="keyword">in</span> map(json.loads, open(<span class="string">&quot;coreset_30.jsonl&quot;</span>))&#125;</span><br><span class="line">random.Random(0).shuffle(rows)</span><br><span class="line">rand30 = rows[:3000]</span><br><span class="line"><span class="comment"># 过滤式抽取保证三组互斥命名清晰 (训练脚本按目录读)</span></span><br><span class="line">json.dump(rows, open(<span class="string">&quot;exp_A_full.json&quot;</span>, <span class="string">&quot;w&quot;</span>), ensure_ascii=False)</span><br><span class="line">json.dump(rand30, open(<span class="string">&quot;exp_B_random30.json&quot;</span>, <span class="string">&quot;w&quot;</span>), ensure_ascii=False)</span><br><span class="line">json.dump([r <span class="keyword">for</span> r <span class="keyword">in</span> rows <span class="keyword">if</span> json.dumps(r, sort_keys=True) <span class="keyword">in</span> coreset],</span><br><span class="line">          open(<span class="string">&quot;exp_C_filtered30.json&quot;</span>, <span class="string">&quot;w&quot;</span>), ensure_ascii=False)</span><br><span class="line">PY</span><br><span class="line"></span><br><span class="line"><span class="comment"># 训练: 完全同配置, 仅数据字段不同 (LLaMA-Factory YAML 三份, diff 只有 dataset/output_dir)</span></span><br><span class="line"><span class="keyword">for</span> g <span class="keyword">in</span> A_full B_random30 C_filtered30; <span class="keyword">do</span></span><br><span class="line">  FORCE_TORCHRUN=1 llamafactory-cli train cfg_<span class="variable">$&#123;g&#125;</span>.yaml</span><br><span class="line"><span class="keyword">done</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># 评测: 同协议跑 POPE / MMBench (Stage 3 第 2 周流程)</span></span><br><span class="line"><span class="keyword">for</span> g <span class="keyword">in</span> A_full B_random30 C_filtered30; <span class="keyword">do</span></span><br><span class="line">  python run.py --model saves/<span class="variable">$&#123;g&#125;</span>/merged --data POPE MMBench \</span><br><span class="line">    --work-dir evals/<span class="variable">$&#123;g&#125;</span> --<span class="built_in">nproc</span> 1</span><br><span class="line"><span class="keyword">done</span></span><br></pre></td></tr></table></figure>
+<p><strong>配置一致性核对表（跑之前逐项打勾）</strong>：</p>
+<ul>
+<li>[ ] 三份 YAML 逐字段 diff，仅 <code>dataset</code> 与 <code>output_dir</code> 不同；</li>
+<li>[ ] 同一随机种子、同一底座 checkpoint、同一框架 commit；</li>
+<li>[ ] 评测的 work-dir 全新（防 Stage 3 失效 3 的缓存复用）；</li>
+<li>[ ] C 组子集确实来自第 3 周 Pipeline 产物（文件 hash 归档）；</li>
+<li>[ ] B 组随机种子记录在案（换种子复跑时用 2~3 个）。</li>
+</ul>
+<h3 id="23-消融报告模板"><a class="markdownIt-Anchor" href="#23-消融报告模板"></a> 2.3 消融报告模板</h3>
+<figure class="highlight markdown"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="section"># Less-is-More 消融报告 v1</span></span><br><span class="line">参考模型: Qwen2-VL-2B (打分引擎 vLLM commit xxx) | 筛选: NLL两端(5%/20%) + KMeans(k=10)</span><br><span class="line">训练: Qwen2-VL-7B LoRA r=16, lr 1e-4, 2ep, seed 0/1/2 | 评测: VLMEvalKit <span class="language-xml"><span class="tag">&lt;<span class="name">commit</span>&gt;</span></span>, POPE/MMBench</span><br><span class="line"></span><br><span class="line">| 组 | 数据量 | POPE F1 | MMBench | 聚合 | retention |</span><br><span class="line">|---|---|---|---|---|---|</span><br><span class="line">| A 全量 | 10000 | 0.868 | 68.4 | 基准 | 100% |</span><br><span class="line">| B 随机30% | 3000 | 0.851 | 66.9 | -2.1% | 97.6% |</span><br><span class="line">| C 筛选30% | 3000 | 0.866 | 68.1 | -0.4% | 99.4% |</span><br><span class="line"></span><br><span class="line">结论: C &gt; B 于 2/2 基准 (方向一致); C retention = 99.4% ≥ 98% 达标。</span><br><span class="line">成本: 打分 35 min (单卡) + 训练 0.3x 全量 =&gt; 等效节省 ~2.1x 端到端成本。</span><br><span class="line">复现: 脚本清单 + 种子 + YAML diff 附后。</span><br></pre></td></tr></table></figure>
+<p>三段式结论纪律：<strong>方向性</strong>（C 是否稳定优于 B）、<strong>达标性</strong>（retention 是否 ≥98%）、<strong>经济性</strong>（打分成本 vs 训练节省的净账）。缺任何一段，&quot;Less is More&quot;都只是口号。</p>
+<hr />
+<h2 id="3-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#3-工程权衡与失效模式"></a> 3. 工程权衡与失效模式</h2>
+<h3 id="31-决策表消融规模的选择"><a class="markdownIt-Anchor" href="#31-决策表消融规模的选择"></a> 3.1 决策表：消融规模的选择</h3>
+<table>
+<thead>
+<tr>
+<th>预算</th>
+<th>实验设计</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>极小（教学验证）</td>
+<td>三组 × 1 种子 × POPE 单基准</td>
+<td>1 天内完成，先看方向</td>
+</tr>
+<tr>
+<td>标准（本周 MVP）</td>
+<td>三组 × 2~3 种子 × 2 基准</td>
+<td>报告方差与方向一致性</td>
+</tr>
+<tr>
+<td>充分（论文级）</td>
+<td>比例扫描 {10,30,50,100}% × 3 种子 × 4 基准</td>
+<td>画 Scaling 曲线与等效倍率</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-三个代表性失效模式"><a class="markdownIt-Anchor" href="#32-三个代表性失效模式"></a> 3.2 三个代表性失效模式</h3>
+<p><strong>失效 1：单种子单基准下的&quot;伪显著&quot;</strong></p>
+<ul>
+<li><strong>症状</strong>：C 比 B 高 0.3 分，宣布算法有效；换种子后反转。</li>
+<li><strong>根因</strong>：评测噪声 ±0.5~1 分与训练随机性叠加，单次运行的差异完全在噪声带内（Stage 3 第 3 周失效 2 的同源问题）。</li>
+<li><strong>定位</strong>：同配置换 2~3 个种子，看差值的符号稳定性；做配对比较（同种子下 C-B）而非独立比较。</li>
+<li><strong>修复</strong>：报告均值±方差与方向一致率；结论限定&quot;在本数据集/底座/预算下&quot;。</li>
+</ul>
+<p><strong>失效 2：筛选子集与全量数据的&quot;隐性泄漏&quot;使 C 组虚高</strong></p>
+<ul>
+<li><strong>症状</strong>：C 组在某基准上异常突出，甚至超过 A 组。</li>
+<li><strong>根因</strong>：打分阶段若曾用任何与评测相关的信号（如用同源模型在评测集上的表现校准阈值），筛选就泄漏了评测先验；或 Coreset 恰好富集了与评测集同分布的数据（若打分数据与评测数据同源抓取）。</li>
+<li><strong>定位</strong>：审计打分管线的输入输出——确认除参考模型 NLL 外无外部信号混入；对比三组子集与评测集的 CLIP 分布距离。</li>
+<li><strong>修复</strong>：打分输入与评测集物理隔离；C&gt;A 的结果要格外警惕并复跑验证（超全量通常意味着泄漏或噪声，DEITA 式&quot;超过全量&quot;结论需极强的对照支撑）。</li>
+</ul>
+<p><strong>失效 3：训练步数未对齐，&quot;数据少 = 训练少&quot;混淆变量</strong></p>
+<ul>
+<li><strong>症状</strong>：B/C 组欠训练（30% 数据 × 同 epoch = 30% 步数），性能差被归因于&quot;数据选择无用&quot;。</li>
+<li><strong>根因</strong>：同 epoch 配置下小数据组可见数据遍历次数相同但总步数少，收敛不充分；反之配同步数则过拟合。</li>
+<li><strong>定位</strong>：看三组 WandB 训练曲线——B/C 组的 eval loss 是否已进入平台期。</li>
+<li><strong>修复</strong>：主实验固定同 epoch（遍历次数公平）；附加&quot;同总步数&quot;的辅助组消除歧义；报告两种口径下结论的一致性。</li>
+</ul>
+<hr />
+<h2 id="4-延伸思考题"><a class="markdownIt-Anchor" href="#4-延伸思考题"></a> 4. 延伸思考题</h2>
+<ol>
+<li><strong>等效数据倍率</strong>：完成 {10%, 30%, 50%} 三点的比例扫描后，插值出&quot;筛选子集达到随机子集 X% 性能时的等效倍率&quot;。这个倍率在 10% 点大还是 50% 点大？为什么？（提示：低比例区筛选的&quot;挑精华&quot;空间最大，倍率最高；随比例上升两种选择的集合趋同，倍率收敛到 1。）</li>
+<li><strong>筛选的过拟合</strong>：筛选算法的超参（截断比例、K、ΔL 权重）是拿&quot;下游训练效果&quot;调优的——这本身构成对评测集的选择性压力。设计一个&quot;筛选超参的留出协议&quot;，防止算法在评测集上被隐式调参。（提示：超参调优用一组基准，最终报告换到从未参与调参的 held-out 基准；或按时间切分——用 2024 前基准调参，2024 后基准报告。）</li>
+<li><strong>反事实思考</strong>：假如你的筛选算法在 B 组对照下毫无优势（C ≈ B），有哪些可能的解释？至少列四个，并设计各自的最小判别实验。（提示：数据本身冗余度低（随机删也删不到冗余）；筛选代理与真实训练价值脱相关；训练对数据质量不敏感（模型容量/训练长度主导）；或——最有趣的一种——你的数据集已经是&quot;筛过的&quot;（Stage 4 清洗后），筛选的边际收益被前置消耗了。）</li>
+</ol>
+<hr />
+<p><em>下一篇：阶段五自测验收与复盘</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E7%AC%AC3%E5%91%A8-%E5%9B%B0%E9%9A%BE%E5%BA%A6%E7%9F%A9%E9%98%B5%E4%B8%8ECoreset%E9%80%89%E6%8B%A9/" rel="prev" title="第3周-困难度矩阵与Coreset选择">
+                  <i class="fa fa-angle-left"></i> 第3周-困难度矩阵与Coreset选择
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/VLM%20&%20VLA-5-%E6%95%B0%E6%8D%AE%E8%B4%A8%E9%87%8F%E8%AF%84%E4%BB%B7%E4%B8%8E%E9%AB%98%E6%95%88%E7%AD%9B%E9%80%89-%E9%98%B6%E6%AE%B5%E4%BA%94%E8%87%AA%E6%B5%8B%E9%AA%8C%E6%94%B6%E4%B8%8E%E5%A4%8D%E7%9B%98/" rel="next" title="阶段五自测验收与复盘">
+                  阶段五自测验收与复盘 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">715k</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">43:21</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>
