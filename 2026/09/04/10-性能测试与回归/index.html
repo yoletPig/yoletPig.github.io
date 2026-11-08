@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="1. 建立&#39;性能回归也是缺陷&#39;的意识，理解基准测试为什么必须讲纪律； 2. 掌握 timeit 的正确用法，能解释&#39;测出来忽高忽低&#39;的全部常见原因； 3. 会用 pytest-benchmark 把性能基线挂进测试套件，防止优化成果被回退；…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="10-性能测试与回归">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/10-%E6%80%A7%E8%83%BD%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%9B%9E%E5%BD%92/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="1. 建立&#39;性能回归也是缺陷&#39;的意识，理解基准测试为什么必须讲纪律； 2. 掌握 timeit 的正确用法，能解释&#39;测出来忽高忽低&#39;的全部常见原因； 3. 会用 pytest-benchmark 把性能基线挂进测试套件，防止优化成果被回退；…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T21:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.562Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="测试">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/10-%E6%80%A7%E8%83%BD%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%9B%9E%E5%BD%92/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/10-%E6%80%A7%E8%83%BD%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%9B%9E%E5%BD%92/","path":"2026/09/04/10-性能测试与回归/","title":"10-性能测试与回归"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>10-性能测试与回归 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#10-%E6%80%A7%E8%83%BD%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%9B%9E%E5%BD%92%E6%85%A2%E4%B9%9F%E6%98%AF-bug"><span class="nav-number">1.</span> <span class="nav-text"> 10 - 性能测试与回归：慢也是 bug</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%8A%9F%E8%83%BD%E5%AF%B9%E4%BA%86%E4%BD%86%E6%85%A2%E4%BA%86%E4%B9%9F%E6%98%AF-bug"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 功能对了但慢了也是 bug</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%9F%BA%E5%87%86%E6%B5%8B%E8%AF%95%E7%BA%AA%E5%BE%8B%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B5%8B%E5%87%BA%E6%9D%A5%E5%BF%BD%E9%AB%98%E5%BF%BD%E4%BD%8E"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 基准测试纪律：为什么测出来忽高忽低</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-pytest-benchmark%E6%8A%8A%E5%9F%BA%E7%BA%BF%E6%8C%82%E8%BF%9B%E6%B5%8B%E8%AF%95%E5%A5%97%E4%BB%B6"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. pytest-benchmark：把基线挂进测试套件</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%BE%AE%E5%9F%BA%E5%87%86%E9%99%B7%E9%98%B1%E4%BD%A0%E4%BB%A5%E4%B8%BA%E5%9C%A8%E6%B5%8B-a%E5%85%B6%E5%AE%9E%E5%9C%A8%E6%B5%8B-b"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 微基准陷阱：你以为在测 A，其实在测 B</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%86%85%E5%AD%98%E5%9B%9E%E5%BD%92tracemalloc-%E6%96%AD%E8%A8%80%E4%B8%8A%E9%99%90"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 内存回归：tracemalloc 断言上限</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-c-%E7%94%A8-google-benchmark"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. C++ 用 Google Benchmark</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/10-%E6%80%A7%E8%83%BD%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%9B%9E%E5%BD%92/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="10-性能测试与回归 | Yoleen的博客">
+      <meta itemprop="description" content="1. 建立&#39;性能回归也是缺陷&#39;的意识，理解基准测试为什么必须讲纪律； 2. 掌握 timeit 的正确用法，能解释&#39;测出来忽高忽低&#39;的全部常见原因； 3. 会用 pytest-benchmark 把性能基线挂进测试套件，防止优化成果被回退；…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          10-性能测试与回归
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 05:00:00" itemprop="dateCreated datePublished" datetime="2026-09-04T05:00:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%B5%8B%E8%AF%95/" itemprop="url" rel="index"><span itemprop="name">测试</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.8k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>10 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">1. 建立'性能回归也是缺陷'的意识，理解基准测试为什么必须讲纪律； 2. 掌握 timeit 的正确用法，能解释'测出来忽高忽低'的全部常见原因； 3. 会用 pytest-benchmark 把性能基线挂进测试套件，防止优化成果被回退；…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="10-性能测试与回归慢也是-bug"><a class="markdownIt-Anchor" href="#10-性能测试与回归慢也是-bug"></a> 10 - 性能测试与回归：慢也是 bug</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ol>
+<li>建立&quot;性能回归也是缺陷&quot;的意识，理解基准测试为什么必须讲纪律；</li>
+<li>掌握 timeit 的正确用法，能解释&quot;测出来忽高忽低&quot;的全部常见原因；</li>
+<li>会用 pytest-benchmark 把性能基线挂进测试套件，防止优化成果被回退；</li>
+<li>认识微基准的陷阱（死代码消除/常量折叠/分支预测）与内存回归（tracemalloc），并知道 C++ 侧的 Google Benchmark 怎么用。</li>
+</ol>
+<h2 id="1-功能对了但慢了也是-bug"><a class="markdownIt-Anchor" href="#1-功能对了但慢了也是-bug"></a> 1. 功能对了但慢了也是 bug</h2>
+<p>“性能回归算不算 bug&quot;在工程上不需要讨论——用户用脚投票：接口从 80ms 涨到 800ms，就是线上事故。性能问题的特殊之处只在于<strong>它悄悄发生</strong>：每一次看似无害的重构、每一次&quot;顺手加个日志”、每一版依赖升级，都可能让热点路径慢 10%。功能测试对此全绿——因为断言里没有时间。</p>
+<p>所以性能测试的目标从来不是&quot;测一次有多快&quot;，而是<strong>把速度变成受版本管理守护的属性</strong>：有一个基线，有一个能对比基线的机制，有一个人人看得到的回归警报。本章 3 节的 pytest-benchmark 就是这三件事的最小实现。</p>
+<p><strong>先分清两类测量</strong>：剖析（profiling，回答&quot;慢在哪&quot;，Python 语言精通 13 篇的 cProfile/line_profiler 是主角）与基准（benchmarking，回答&quot;有多慢/变快变慢了&quot;，本章主角）。两件事互相成就：先剖析找到热点，优化后用基准守住战果。</p>
+<h2 id="2-基准测试纪律为什么测出来忽高忽低"><a class="markdownIt-Anchor" href="#2-基准测试纪律为什么测出来忽高忽低"></a> 2. 基准测试纪律：为什么测出来忽高忽低</h2>
+<p>先看一个&quot;不讲纪律&quot;的现场（实测）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> timeit</span><br><span class="line"></span><br><span class="line">code = <span class="string">&quot;sum(range(1000))&quot;</span></span><br><span class="line"><span class="keyword">for</span> n <span class="keyword">in</span> (<span class="number">1</span>, <span class="number">10</span>, <span class="number">1000</span>):</span><br><span class="line">    ts = timeit.repeat(stmt=code, number=n, repeat=<span class="number">5</span>)</span><br><span class="line">    per_call = [t / n * <span class="number">1e6</span> <span class="keyword">for</span> t <span class="keyword">in</span> ts]          <span class="comment"># 换算成微秒/次</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;number=<span class="subst">&#123;n:&gt;<span class="number">5</span>&#125;</span>: 单次 <span class="subst">&#123;<span class="built_in">min</span>(per_call):<span class="number">7.2</span>f&#125;</span> ~ <span class="subst">&#123;<span class="built_in">max</span>(per_call):<span class="number">7.2</span>f&#125;</span> µs，&quot;</span></span><br><span class="line">          <span class="string">f&quot;波动 <span class="subst">&#123;<span class="number">100</span>*(<span class="built_in">max</span>(per_call)-<span class="built_in">min</span>(per_call))/<span class="built_in">min</span>(per_call):<span class="number">5.1</span>f&#125;</span>%&quot;</span>)</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">number=    1: 单次    5.00 ~    6.70 µs，波动  34.0%</span><br><span class="line">number=   10: 单次    5.05 ~    5.14 µs，波动   1.8%</span><br><span class="line">number= 1000: 单次    5.01 ~    5.16 µs，波动   2.9%</span><br></pre></td></tr></table></figure>
+<p>同样一段代码，<code>number=1</code> 时波动 34%，<code>number=10</code> 就收敛到 2% 以内——<strong>测量的固定开销（计时器精度、解释器调度）被摊薄了</strong>。这就是 timeit 官方文档强调 <code>number</code> 要够大的原因：让被测代码的耗时远大于测量噪声。<code>timeit.repeat</code> 取 <strong>min</strong> 作报告值（而不是平均）也是同理：min 最接近&quot;机器无干扰时的真实能力&quot;，均值会被各种干扰拉高。</p>
+<p>忽高忽低的完整原因清单（排查基准不稳定的第一个表）：</p>
+<table>
+<thead>
+<tr>
+<th>噪声源</th>
+<th>机理</th>
+<th>对策</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU 频率调节</td>
+<td>省电模式降频、睿频未热身</td>
+<td>预热跑若干轮再测；笔记本插电、关闭省电</td>
+</tr>
+<tr>
+<td>其他进程</td>
+<td>后台编译/杀毒/浏览器抢核</td>
+<td>关后台；CI 用独占 runner</td>
+</tr>
+<tr>
+<td>缓存冷热</td>
+<td>冷缓存首轮偏慢</td>
+<td>多轮 repeat，取 min</td>
+</tr>
+<tr>
+<td>GC</td>
+<td>分配多时触发回收抖动</td>
+<td><code>gc.disable()</code> 包住计时区（timeit 默认已关）</td>
+</tr>
+<tr>
+<td>数据太贴近</td>
+<td>常量折叠/过小输入</td>
+<td>见第 4 节；输入要&quot;真实规模&quot;</td>
+</tr>
+<tr>
+<td>WSL2 特有</td>
+<td>宿主机调度、时钟漂移</td>
+<td>加大 repeat 次数；重要结论换原生 Linux 复测</td>
+</tr>
+</tbody>
+</table>
+<p><strong>纪律总结</strong>（timeit 原则）：预热 → 多次 repeat → 每次跑够 <code>number</code> → 报告 min → 同机同环境对比。基准的价值在<strong>对比</strong>，一切换环境的绝对数字都不可比。</p>
+<h2 id="3-pytest-benchmark把基线挂进测试套件"><a class="markdownIt-Anchor" href="#3-pytest-benchmark把基线挂进测试套件"></a> 3. pytest-benchmark：把基线挂进测试套件</h2>
+<p>pytest-benchmark 让&quot;性能用例&quot;长得和普通测试一样，产出实测报告：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># bench_demo.py</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">sum_squares</span>(<span class="params">n: <span class="built_in">int</span></span>) -&gt; <span class="built_in">int</span>:</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">sum</span>(i * i <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n))</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># test_bench.py</span></span><br><span class="line"><span class="keyword">from</span> bench_demo <span class="keyword">import</span> sum_squares</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_sum_squares_1000</span>(<span class="params">benchmark</span>):</span><br><span class="line">    result = benchmark(sum_squares, <span class="number">1000</span>)   <span class="comment"># 被测函数经 fixture 包装执行</span></span><br><span class="line">    <span class="keyword">assert</span> result == <span class="number">332833500</span>              <span class="comment"># 功能断言照常写</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ pytest test_bench.py</span><br><span class="line">--------------------------------------------------- benchmark: 1 tests ---------------------------------------------------</span><br><span class="line">Name (time in us)             Min       Max     Mean  StdDev   Median     IQR   Outliers  OPS (Kops/s)  Rounds  Iterations</span><br><span class="line">--------------------------------------------------------------------------------------------------------------------------</span><br><span class="line">test_sum_squares_1000     24.8998  320.7996  28.2835  6.5302  26.4999  0.5998  2317;5320       35.3563   34483           1</span><br><span class="line">--------------------------------------------------------------------------------------------------------------------------</span><br></pre></td></tr></table></figure>
+<p>它自动完成纪律清单：预热、自适应轮数（Rounds 34483）、统计与离群点标注。<strong>防回退的两步</strong>：</p>
+<ol>
+<li><strong>存基线</strong>：<code>pytest --benchmark-autosave</code>（结果进 <code>.benchmarks/</code>，随仓库管理或只存 CI 机器）；</li>
+<li><strong>对比门禁</strong>：<code>pytest --benchmark-compare=0001 --benchmark-compare-fail=min:20%</code>——本轮 min 比基线慢超 20% 即红。把它挂进 nightly（08 篇分层：PR 不跑基准，因为 CI 机器噪声大，nightly 固定 runner 上跑对比才可靠）。</li>
+</ol>
+<p><strong>经验做法</strong>：性能用例的输入规模要&quot;真实业务规模&quot;（排序 1 万元素而不是 10 个），规模写在测试名里（<code>test_sum_squares_1000</code>）——小输入测的是框架开销，大输入才是业务性能；同一基线只跟同机同环境的数据比，跨机器比较没有意义。</p>
+<h2 id="4-微基准陷阱你以为在测-a其实在测-b"><a class="markdownIt-Anchor" href="#4-微基准陷阱你以为在测-a其实在测-b"></a> 4. 微基准陷阱：你以为在测 A，其实在测 B</h2>
+<p>微基准（测一个函数/几行代码）有四个经典陷阱，前两个 Python/C++ 通用：</p>
+<p><strong>陷阱一：常量折叠——测的是空循环。</strong> Python 编译器会把字面量表达式在编译期算掉（实测，41 倍差距）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&gt;&gt;&gt; timeit.timeit(&quot;2**31&quot;, number=1_000_000)        # 4.29 ns/op，编译期已折叠</span><br><span class="line">&gt;&gt;&gt; timeit.timeit(&quot;x**31&quot;, setup=&quot;x=2&quot;, number=1_000_000)   # 176.57 ns/op，真实计算</span><br></pre></td></tr></table></figure>
+<p>对策：被测表达式里<strong>永远有来自 runtime 的变量</strong>（<code>setup=</code>/fixture 注入），杜绝纯字面量。C++ 侧对应的陷阱是<strong>死代码消除</strong>：结果没被使用的计算会被编译器整个删掉，<code>-O2</code> 下你可能测了个寂寞——对策是 <code>benchmark::DoNotOptimize(result)</code>（第 6 节）阻止优化器丢掉结果。</p>
+<p><strong>陷阱二：分支预测预热。</strong> 处理&quot;几乎全 False&quot;分支的循环，CPU 分支预测器在长跑中命中率远高于冷启动——同样代码，&quot;先跑一万次再测&quot;与&quot;上来就测&quot;能差出数倍。对策：预热（pytest-benchmark 自动做；手写 timeit 用 repeat 的前几轮当预热，报告取 min）。</p>
+<p><strong>陷阱三：测的是分配不是算法。</strong> 在循环里 <code>new</code>/复制大对象的&quot;算法对比&quot;，比的其实是内存分配器。对策：把分配挪出被测区，或分别测&quot;纯计算&quot;与&quot;分配+计算&quot;两个版本，别混。</p>
+<p><strong>陷阱四：优化把瓶颈挪走了。</strong> 你测了 <code>list.append</code> 快了 30%，但真实瓶颈在别处（剖析数据说了算）。微基准只回答&quot;这个点快没快&quot;，不回答&quot;这个点重不重要&quot;——<strong>先剖析后优化</strong>（Python 语言精通 13 篇），否则优化得再漂亮也是负资产。</p>
+<h2 id="5-内存回归tracemalloc-断言上限"><a class="markdownIt-Anchor" href="#5-内存回归tracemalloc-断言上限"></a> 5. 内存回归：tracemalloc 断言上限</h2>
+<p>内存回归的常见形态：批处理任务从 500MB 涨到 5GB，OOM 容器被杀——同样没有功能测试能拦。Python 标准库 tracemalloc 能把&quot;峰值内存&quot;变成可断言的量：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># test_memory.py</span></span><br><span class="line"><span class="keyword">import</span> tracemalloc</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">build_report</span>(<span class="params">n: <span class="built_in">int</span></span>) -&gt; <span class="built_in">list</span>[<span class="built_in">str</span>]:</span><br><span class="line">    rows = []</span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n):</span><br><span class="line">        rows.append(<span class="string">f&quot;row-<span class="subst">&#123;i&#125;</span>: &quot;</span> + <span class="string">&quot;x&quot;</span> * <span class="number">40</span>)</span><br><span class="line">    <span class="keyword">return</span> rows</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_report_peak_memory</span>():</span><br><span class="line">    tracemalloc.start()</span><br><span class="line">    data = build_report(<span class="number">50_000</span>)</span><br><span class="line">    _, peak = tracemalloc.get_traced_memory()</span><br><span class="line">    tracemalloc.stop()</span><br><span class="line">    <span class="keyword">assert</span> peak &lt; <span class="number">6</span> * <span class="number">1024</span> * <span class="number">1024</span>        <span class="comment"># 实测峰值 ~5.4MB：上限留 10% 余量</span></span><br></pre></td></tr></table></figure>
+<p>要点：<strong>上限 = 实测值 × (1 + 合理余量)</strong>，别拍脑袋定 2 倍（挡不住缓慢劣化）也别 5%（噪声误杀）；阈值随合法需求变化时显式更新并写明理由（issue 链接）。更进一步可用 <code>tracemalloc.take_snapshot()</code> 对比两个时间点的分配栈，直接定位&quot;谁多分了&quot;（Python 语言精通 13 篇有完整剖析流程）。C++ 侧对应 valgrind massif 或 Sanitizer 的 allocator 统计，通常进 nightly 而不是 PR 门禁。</p>
+<h2 id="6-c-用-google-benchmark"><a class="markdownIt-Anchor" href="#6-c-用-google-benchmark"></a> 6. C++ 用 Google Benchmark</h2>
+<p>C++ 侧的等价物是 Google Benchmark（pytest-benchmark 的很多设计就源自它）：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// bench_sum.cpp</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;benchmark/benchmark.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;numeric&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;vector&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">static</span> <span class="type">long</span> <span class="type">long</span> <span class="title">sum_squares</span><span class="params">(<span class="type">const</span> std::vector&lt;<span class="type">int</span>&gt;&amp; v)</span> </span>&#123;</span><br><span class="line">    <span class="type">long</span> <span class="type">long</span> s = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> x : v) s += (<span class="type">long</span> <span class="type">long</span>)x * x;</span><br><span class="line">    <span class="keyword">return</span> s;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">static</span> <span class="type">void</span> <span class="title">BM_SumSquares</span><span class="params">(benchmark::State&amp; state)</span> </span>&#123;</span><br><span class="line">    <span class="function">std::vector&lt;<span class="type">int</span>&gt; <span class="title">v</span><span class="params">(<span class="number">1000</span>)</span></span>;</span><br><span class="line">    std::<span class="built_in">iota</span>(v.<span class="built_in">begin</span>(), v.<span class="built_in">end</span>(), <span class="number">1</span>);        <span class="comment">// 夹具构造放循环外</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">auto</span> _ : state) &#123;</span><br><span class="line">        <span class="type">long</span> <span class="type">long</span> r = <span class="built_in">sum_squares</span>(v);</span><br><span class="line">        benchmark::<span class="built_in">DoNotOptimize</span>(r);          <span class="comment">// ⭐ 防死代码消除</span></span><br><span class="line">        benchmark::<span class="built_in">ClobberMemory</span>();           <span class="comment">// 防编译器重排&quot;合并&quot;多轮计算</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"><span class="built_in">BENCHMARK</span>(BM_SumSquares);</span><br><span class="line"><span class="built_in">BENCHMARK_MAIN</span>();</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ cmake -S . -B build -DCMAKE_BUILD_TYPE=Release &amp;&amp; cmake --build build</span><br><span class="line">$ ./build/bench_sum</span><br><span class="line">--------------------------------------------------------</span><br><span class="line">Benchmark              Time             CPU   Iterations</span><br><span class="line">--------------------------------------------------------</span><br><span class="line">BM_SumSquares        421 ns          419 ns      1663042</span><br></pre></td></tr></table></figure>
+<p>四个关键点：① <code>DoNotOptimize</code>/<code>ClobberMemory</code> 是反死代码消除的标准组合（陷阱一的 C++ 解法）；② <strong>对比模式</strong>把两个实现挂进同一二进制跑出相对差（<code>BENCHMARK(BM_v1); BENCHMARK(BM_v2);</code> 同理，或多参数 <code>BENCHMARK(BM)-&gt;Arg(1000)-&gt;Arg(10000)</code> 扫规模曲线），<code>compare.py</code> 工具可对两次保存的结果输出增减百分比；③ Time 与 CPU 两列：差异大说明有 I/O 或睡眠混入；④ 迭代数由库自适应决定，等价于 pytest-benchmark 的 Rounds。与 CI 的接线同 3 节：nightly 固定 runner、保存 JSON、对比阈值门禁。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<p><strong>误区一：在 CI 的共享机器上跑性能门禁。</strong> 虚拟化/抢占让 20% 的回归淹没在噪声里。基准要么 nightly 固定 runner，要么接受&quot;CI 上只测相对趋势&quot;（同轮内两实现对比）。</p>
+<p><strong>误区二：均值当结论。</strong> 均值被离群点污染（pytest-benchmark 表里 Max 320µs 对 Min 25µs，均值 28 毫无意义）；报告与对比一律用 min 或 median（官方默认对比 min）。</p>
+<p><strong>误区三：优化前不建基线。</strong> “重构完快了 30%”——跟什么比？没有基线的优化故事无法验证。先 <code>--benchmark-autosave</code>，再动手。</p>
+<p><strong>误区四：微基准规模失真。</strong> 用 10 个元素测排序选型；分支预测、缓存行、内联策略在小输入上的行为与生产规模完全不同。输入规模对齐生产 P99。</p>
+<p><strong>误区五：内存阈值拍脑袋。</strong> 不量实测就定&quot;不超 100MB&quot;，要么太松（挡不住劣化）要么太紧（天天误报）。阈值=实测×1.1 起步，随需求演进显式调整。</p>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>性能回归是缺陷：需要基线、对比机制、回归警报三件套；剖析与基准各答一个问题；</li>
+<li>timeit 纪律：预热、多次 repeat、number 够大（实测 34%→2% 的波动差）、报告 min、同环境对比；噪声六源清单是排查表；</li>
+<li>pytest-benchmark：<code>benchmark</code> fixture + <code>--benchmark-autosave/--benchmark-compare-fail=min:20%</code> 挂 nightly 防回退；输入规模对齐真实业务；</li>
+<li>微基准四陷阱：常量折叠/死代码消除（变量注入、DoNotOptimize）、分支预测预热（预热+min）、分配混入、瓶颈错位（先剖析）；</li>
+<li>内存回归：tracemalloc 峰值断言（阈值=实测×1.1），snapshot 对比定位分配点；</li>
+<li>C++ 侧 Google Benchmark：夹具在循环外、<code>DoNotOptimize</code>+<code>ClobberMemory</code>、对比模式与 JSON 门禁同 Python 思路。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>复现第 2 节实验，再补测 <code>number=10000</code>，把三档波动画成一张表；解释为什么 repeat 的 min 比均值更适合做对比基线。</li>
+<li>给你最近优化过的一个函数补 pytest-benchmark 用例：先 autosave 基线，再&quot;假装重构&quot;（加一行无用代码）验证 <code>--benchmark-compare-fail=min:20%</code> 能不能拦住它。</li>
+<li>用 tracemalloc 给一个&quot;读文件→解析→构建 dict&quot;的流程写内存上限测试；故意改成逐行生成器版本，看峰值下降多少并记录。</li>
+<li>复现常量折叠陷阱（<code>2**31</code> vs <code>x**31</code>），再想一个&quot;看似在测运算、实际在测常量&quot;的例子（提示：字符串拼接两个字面量）。</li>
+<li>用 Google Benchmark 写 <code>BM_v1/BM_v2</code>（同一排序算法的&quot;值拷贝入参&quot;与&quot;引用入参&quot;两个版本），跑出对比数据并解释 Time 与 CPU 列的关系。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%B5%8B%E8%AF%95/" rel="tag"># 测试</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/09-%E9%9D%99%E6%80%81%E5%88%86%E6%9E%90%E4%B8%8EFuzzing/" rel="prev" title="09-静态分析与Fuzzing">
+                  <i class="fa fa-angle-left"></i> 09-静态分析与Fuzzing
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/11-C++%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%8F%8C%E8%AF%AD%E8%A8%80%E5%B7%A5%E7%A8%8B/" rel="next" title="11-C++测试与双语言工程">
+                  11-C++测试与双语言工程 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

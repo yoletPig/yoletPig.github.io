@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="1. 把类型检查纳入测试视野：mypy&#x2F;pyright 各自能拦下哪类&#39;跑起来才知道&#39;的 bug； 2. 建立精简的 Python lint 组合：ruff 的 B&#x2F;S&#x2F;PT 规则组与 bandit 安全扫描； 3. 掌握 C++ 侧三板斧…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="09-静态分析与Fuzzing">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/09-%E9%9D%99%E6%80%81%E5%88%86%E6%9E%90%E4%B8%8EFuzzing/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="1. 把类型检查纳入测试视野：mypy&#x2F;pyright 各自能拦下哪类&#39;跑起来才知道&#39;的 bug； 2. 建立精简的 Python lint 组合：ruff 的 B&#x2F;S&#x2F;PT 规则组与 bandit 安全扫描； 3. 掌握 C++ 侧三板斧…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T20:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.562Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="测试">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/09-%E9%9D%99%E6%80%81%E5%88%86%E6%9E%90%E4%B8%8EFuzzing/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/09-%E9%9D%99%E6%80%81%E5%88%86%E6%9E%90%E4%B8%8EFuzzing/","path":"2026/09/04/09-静态分析与Fuzzing/","title":"09-静态分析与Fuzzing"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>09-静态分析与Fuzzing | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#09-%E9%9D%99%E6%80%81%E5%88%86%E6%9E%90%E4%B8%8E-fuzzing%E8%AE%A9%E6%9C%BA%E5%99%A8%E5%9C%A8%E4%BD%A0%E4%B9%8B%E5%89%8D%E6%89%BE%E5%88%B0-bug"><span class="nav-number">1.</span> <span class="nav-text"> 09 - 静态分析与 Fuzzing：让机器在你之前找到 bug</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%B1%BB%E5%9E%8B%E6%A3%80%E6%9F%A5%E5%8D%B3%E6%B5%8B%E8%AF%95mypypyright-%E6%8B%A6%E4%B8%8B%E4%BB%80%E4%B9%88"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 类型检查即测试：mypy&#x2F;pyright 拦下什么</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-python-lint-%E4%BD%93%E7%B3%BBruff-%E8%A7%84%E5%88%99%E7%B2%BE%E9%80%89-bandit"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. Python lint 体系：ruff 规则精选 + bandit</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-c-%E4%BE%A7clang-tidy-%E7%B2%BE%E9%80%89-cppcheck"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. C++ 侧：clang-tidy 精选 + cppcheck</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-sanitizer%E8%BF%90%E8%A1%8C%E6%97%B6-ub-%E7%9A%84%E7%85%A7%E5%A6%96%E9%95%9Ccmake-%E6%8E%A5%E6%B3%95"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. Sanitizer：运行时 UB 的照妖镜（CMake 接法）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-fuzzing-%E5%85%A5%E9%97%A8afl-%E6%80%9D%E6%83%B3%E4%B8%8E-libfuzzer-%E6%9C%80%E5%B0%8F-harness"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. fuzzing 入门：AFL++ 思想与 libFuzzer 最小 harness</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-bug-%E6%A1%88%E4%BE%8B%E8%B5%B0%E8%AF%BBfuzz-%E6%89%BE%E5%88%B0%E7%9A%84%E7%9C%9F%E5%AE%9E%E7%B1%BB%E5%9E%8B-bug"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. bug 案例走读：fuzz 找到的真实类型 bug</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/09-%E9%9D%99%E6%80%81%E5%88%86%E6%9E%90%E4%B8%8EFuzzing/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="09-静态分析与Fuzzing | Yoleen的博客">
+      <meta itemprop="description" content="1. 把类型检查纳入测试视野：mypy&#x2F;pyright 各自能拦下哪类&#39;跑起来才知道&#39;的 bug； 2. 建立精简的 Python lint 组合：ruff 的 B&#x2F;S&#x2F;PT 规则组与 bandit 安全扫描； 3. 掌握 C++ 侧三板斧…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          09-静态分析与Fuzzing
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 04:30:00" itemprop="dateCreated datePublished" datetime="2026-09-04T04:30:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%B5%8B%E8%AF%95/" itemprop="url" rel="index"><span itemprop="name">测试</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.8k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>10 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">1. 把类型检查纳入测试视野：mypy/pyright 各自能拦下哪类'跑起来才知道'的 bug； 2. 建立精简的 Python lint 组合：ruff 的 B/S/PT 规则组与 bandit 安全扫描； 3. 掌握 C++ 侧三板斧…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="09-静态分析与-fuzzing让机器在你之前找到-bug"><a class="markdownIt-Anchor" href="#09-静态分析与-fuzzing让机器在你之前找到-bug"></a> 09 - 静态分析与 Fuzzing：让机器在你之前找到 bug</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ol>
+<li>把类型检查纳入测试视野：mypy/pyright 各自能拦下哪类&quot;跑起来才知道&quot;的 bug；</li>
+<li>建立精简的 Python lint 组合：ruff 的 B/S/PT 规则组与 bandit 安全扫描；</li>
+<li>掌握 C++ 侧三板斧：clang-tidy 精选检查、cppcheck、ASan/UBSan/TSan 的 CMake 接法；</li>
+<li>入门 fuzzing：理解 AFL++/libFuzzer 的思想，会写最小 harness，看懂一个 fuzz 发现的真实类型 bug。</li>
+</ol>
+<h2 id="1-类型检查即测试mypypyright-拦下什么"><a class="markdownIt-Anchor" href="#1-类型检查即测试mypypyright-拦下什么"></a> 1. 类型检查即测试：mypy/pyright 拦下什么</h2>
+<p>把类型检查器理解成<strong>零运行成本的自动测试</strong>：它对所有分支做一次&quot;类型层的全量执行&quot;——这是手写测试永远做不到的覆盖（05 篇说 property-based 能自动生成输入，类型检查更进一步：生成<strong>全部类型形态</strong>的输入）。</p>
+<p>一个真实的函数，两处潜伏 bug（实测 mypy 输出）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># demo_mypy.py</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">running_total</span>(<span class="params">xs: <span class="built_in">list</span>[<span class="built_in">float</span>]</span>) -&gt; <span class="built_in">list</span>[<span class="built_in">float</span>]:</span><br><span class="line">    out = []</span><br><span class="line">    total = <span class="number">0</span>                    <span class="comment"># ❌ 初始化成了 int</span></span><br><span class="line">    <span class="keyword">for</span> x <span class="keyword">in</span> xs:</span><br><span class="line">        total += x</span><br><span class="line">        out.append(total)</span><br><span class="line">    <span class="keyword">return</span> out                   <span class="comment"># ❌ 实际是 list[int]</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">send_notification</span>(<span class="params">user_id: <span class="built_in">int</span> | <span class="literal">None</span></span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">    <span class="keyword">return</span> <span class="string">f&quot;notify user <span class="subst">&#123;user_id.upper()&#125;</span>&quot;</span>   <span class="comment"># ❌ None 没有 .upper()</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ mypy demo_mypy.py --strict</span><br><span class="line">demo_mypy.py:5: error: Incompatible types in assignment (expression has type &quot;float&quot;, variable has type &quot;int&quot;)  [assignment]</span><br><span class="line">demo_mypy.py:7: error: Incompatible return value type (got &quot;list[int]&quot;, expected &quot;list[float]&quot;)  [return-value]</span><br><span class="line">demo_mypy.py:10: error: Item &quot;int&quot; of &quot;int | None&quot; has no attribute &quot;upper&quot;  [union-attr]</span><br></pre></td></tr></table></figure>
+<p>第三条 <code>union-attr</code> 正是生产事故的经典来源：<code>None</code> 在某个没测过的分支里悄悄流进来。运行时测试要专门构造&quot;None 进来&quot;的用例，mypy 对<strong>每一个可能为 None 的调用点</strong>都报警——这就是&quot;零成本全量覆盖&quot;的含义。</p>
+<p>工程要点：</p>
+<ol>
+<li><strong>分阶段收紧</strong>：<code>mypy . </code> 全仓一次基线（老的报错先 <code># type: ignore[码]</code> 记账），然后 CI 对<strong>改动文件</strong>强制 strict——增量策略与 08 篇的 diff 覆盖率同构；</li>
+<li><strong>mypy 与 pyright 的取舍</strong>：规则内核相近，pyright（VS Code/Pylance 默认）与编辑器体验一体化，mypy 是 CI 老牌标准——团队统一其一即可，别两套全开互相打架；</li>
+<li>类型检查<strong>替代不了</strong>行为测试（它不管 <code>total = 0</code> 该不该从 0 开始求和），但把它从&quot;可选修养&quot;升格为 CI 门禁（08 篇 yaml 已就位）后，你手写测试的数量会肉眼可见地下降。</li>
+</ol>
+<h2 id="2-python-lint-体系ruff-规则精选-bandit"><a class="markdownIt-Anchor" href="#2-python-lint-体系ruff-规则精选-bandit"></a> 2. Python lint 体系：ruff 规则精选 + bandit</h2>
+<p>ruff（Rust 实现，单工具替代 flake8/isort/pydocstyle 等数十个插件）的默认规则偏风格；真正抓 bug 的是三组扩展规则（实测输出）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ ruff check --<span class="keyword">select</span> B,S,PT .</span><br></pre></td></tr></table></figure>
+<table>
+<thead>
+<tr>
+<th>组</th>
+<th>来源</th>
+<th>抓什么</th>
+<th>代表规则（实测命中的）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>B</code></td>
+<td>flake8-bugbear</td>
+<td>真实 bug 模式</td>
+<td>可变默认参数、<code>assert (a, msg)</code> 永真、循环变量泄漏</td>
+</tr>
+<tr>
+<td><code>S</code></td>
+<td>flake8-bandit</td>
+<td>安全反模式</td>
+<td><code>S307</code> eval 使用、<code>S101</code> 生产代码 assert、硬编码密码</td>
+</tr>
+<tr>
+<td><code>PT</code></td>
+<td>flake8-pytest-style</td>
+<td>测试代码一致性</td>
+<td>fixture 参数风格、parametrize 写法、断言写法</td>
+</tr>
+</tbody>
+</table>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">S307 Use of possibly insecure function; consider using `ast.literal_eval`</span><br><span class="line"> --&gt; demo_ruff.py:4:5</span><br><span class="line">  |</span><br><span class="line">4 |     eval(user_input)</span><br><span class="line">  |     ^^^^^^^^^^^^^^^^</span><br></pre></td></tr></table></figure>
+<p><strong>配置建议</strong>（<code>pyproject.toml</code>）：<code>select = [&quot;E&quot;, &quot;F&quot;, &quot;B&quot;, &quot;S&quot;, &quot;PT&quot;]</code>，其中测试文件豁免 <code>S101</code>（pytest 的断言就是 assert，生产禁用与测试必用冲突）：</p>
+<figure class="highlight toml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">[tool.ruff.lint.per-file-ignores]</span></span><br><span class="line"><span class="attr">&quot;tests/**&quot;</span> = [<span class="string">&quot;S101&quot;</span>]</span><br></pre></td></tr></table></figure>
+<p>bandit 与 <code>S</code> 组的关系：bandit 是安全专用扫描器，规则更深（含中危/高危分级、<code># nosec</code> 白名单机制）；ruff 的 <code>S</code> 组是它的轻量子集。<strong>经验做法</strong>：日常门禁用 ruff <code>S</code> 组挡住低垂果实；发布到 PyPI 的包或处理不可信输入的服务，nightly 加 bandit 全量扫描（08 篇的分层策略再次适用）。</p>
+<h2 id="3-c-侧clang-tidy-精选-cppcheck"><a class="markdownIt-Anchor" href="#3-c-侧clang-tidy-精选-cppcheck"></a> 3. C++ 侧：clang-tidy 精选 + cppcheck</h2>
+<p>C++ 的 bug 面更宽（内存、未定义行为、生命周期），静态分析是刚需：</p>
+<p><strong>clang-tidy</strong>（基于真实编译数据库，误报率低）精选检查，经 CMake 接入（08 篇 yaml 里的 <code>-DCMAKE_CXX_CLANG_TIDY</code> 一行已生效）：</p>
+<table>
+<thead>
+<tr>
+<th>检查</th>
+<th>抓什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>bugprone-*</code></td>
+<td>悬悬引用、整数截断、异常逃逸析构</td>
+</tr>
+<tr>
+<td><code>cppcoreguidelines-slicing</code></td>
+<td>对象切片（多态按值拷贝丢失派生部分）</td>
+</tr>
+<tr>
+<td><code>modernize-use-override</code></td>
+<td>该写 <code>override</code> 的虚函数</td>
+</tr>
+<tr>
+<td><code>performance-*</code></td>
+<td>不必要的按值拷贝、<code>*</code> 传参可改引用</td>
+</tr>
+<tr>
+<td><code>readability-*</code></td>
+<td>命名、<code>const</code> 正确性</td>
+</tr>
+</tbody>
+</table>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># CMakeLists.txt 片段：clang-tidy 接入 + 警告即错误</span></span><br><span class="line"><span class="keyword">set</span>(CMAKE_CXX_CLANG_TIDY <span class="string">&quot;clang-tidy;-checks=bugprone-*,performance-*,modernize-use-override;--warnings-as-errors=*&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>cppcheck</strong>（免编译、超快，适合当&quot;第二意见&quot;）：<code>cppcheck --enable=warning,portability --inline-suppr src/</code>。与 clang-tidy 分工：cppcheck 扫<strong>没编译过的第三方/遗留目录</strong>，clang-tidy 守自家代码（它需要 compile_commands.json，<code>-DCMAKE_EXPORT_COMPILE_COMMANDS=ON</code> 生成）。</p>
+<h2 id="4-sanitizer运行时-ub-的照妖镜cmake-接法"><a class="markdownIt-Anchor" href="#4-sanitizer运行时-ub-的照妖镜cmake-接法"></a> 4. Sanitizer：运行时 UB 的照妖镜（CMake 接法）</h2>
+<p>静态分析抓<strong>看得出来的</strong>问题；内存与未定义行为要看<strong>运行时现场</strong>。三大 sanitizer：</p>
+<table>
+<thead>
+<tr>
+<th>工具</th>
+<th>抓什么</th>
+<th>开销</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ASan（<code>-fsanitize=address</code>）</td>
+<td>越界读/写、use-after-free、内存泄漏</td>
+<td>慢 ~2x，内存 ~3x</td>
+</tr>
+<tr>
+<td>UBSan（<code>-fsanitize=undefined</code>）</td>
+<td>有符号溢出、除零、错位对齐、空指针解引用</td>
+<td>慢 ~1.2x</td>
+</tr>
+<tr>
+<td>TSan（<code>-fsanitize=thread</code>）</td>
+<td>数据竞争、死锁</td>
+<td>慢 5~15x</td>
+</tr>
+</tbody>
+</table>
+<p>CMake 接法（一个构建目录一种 sanitizer，<strong>不要混用 ASan/TSan</strong>）：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 手动配置：Debug 构建挂 ASan+UBSan</span></span><br><span class="line">cmake -S . -B build-asan -DCMAKE_BUILD_TYPE=Debug \</span><br><span class="line">      -DCMAKE_CXX_FLAGS=<span class="string">&quot;-fsanitize=address,undefined -fno-omit-frame-pointer -g&quot;</span></span><br><span class="line">cmake --build build-asan</span><br><span class="line">ctest --<span class="keyword">test</span>-dir build-asan --output-<span class="keyword">on</span>-failure   <span class="comment"># gtest 用例照常跑，崩溃即详情</span></span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：nightly job 用 Sanitizer 构建跑全量 gtest（08 篇的 nightly 分层），PR 主线不用——开销会拖慢反馈；本地排查内存问题时第一反应就切 ASan 构建。</p>
+<h2 id="5-fuzzing-入门afl-思想与-libfuzzer-最小-harness"><a class="markdownIt-Anchor" href="#5-fuzzing-入门afl-思想与-libfuzzer-最小-harness"></a> 5. fuzzing 入门：AFL++ 思想与 libFuzzer 最小 harness</h2>
+<p>fuzzing = <strong>自动生成海量随机/变异输入，喂给被测函数，监控崩溃</strong>。两大谱系：AFL++（覆盖引导：用插桩记录每个输入到达的分支，优先变异&quot;能走到新代码&quot;的输入，文件/进程级，语言无关）与 libFuzzer（同思想的进程内版本，编译进二进制，与 ASan 是天生一对）。覆盖引导是它们的共同灵魂：<strong>盲随机</strong>几乎撞不出深层路径，&quot;以覆盖率为目标的进化&quot;才能。</p>
+<p>libFuzzer 最小 harness（被测对象：一个&quot;长度前缀协议&quot;解析器，故意留一个 bug）：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// fuzz_proto.cpp</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdint&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstddef&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstring&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 长度前缀协议：第 0 字节 = 负载长度 n，随后 n 字节为负载</span></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">parse</span><span class="params">(<span class="type">const</span> <span class="type">uint8_t</span>* data, <span class="type">size_t</span> size)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (size &lt; <span class="number">1</span>) <span class="keyword">return</span> <span class="number">-1</span>;</span><br><span class="line">    <span class="type">int</span> n = data[<span class="number">0</span>];</span><br><span class="line">    <span class="keyword">if</span> (n &gt; <span class="number">15</span>) <span class="keyword">return</span> <span class="number">-1</span>;              <span class="comment">// 上界检查</span></span><br><span class="line">    <span class="type">char</span> buf[<span class="number">16</span>] = &#123;<span class="number">0</span>&#125;;</span><br><span class="line">    <span class="built_in">memcpy</span>(buf, data + <span class="number">1</span>, (<span class="type">size_t</span>)n);   <span class="comment">// ❌ 没检查 size &gt;= n + 1</span></span><br><span class="line">    <span class="keyword">return</span> buf[<span class="number">0</span>];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">extern</span> <span class="string">&quot;C&quot;</span> <span class="function"><span class="type">int</span> <span class="title">LLVMFuzzerTestOneInput</span><span class="params">(<span class="type">const</span> <span class="type">uint8_t</span>* data, <span class="type">size_t</span> size)</span> </span>&#123;</span><br><span class="line">    <span class="built_in">parse</span>(data, size);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>编译与运行（clang 工具链：<code>sudo apt install clang</code> 即含 libFuzzer）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">clang++ -g -O1 -fsanitize=fuzzer,address fuzz_proto.cpp -o fuzz_proto</span><br><span class="line"><span class="built_in">mkdir</span> corpus &amp;&amp; <span class="built_in">echo</span> -n <span class="string">&quot;abc&quot;</span> &gt; corpus/seed1</span><br><span class="line">./fuzz_proto corpus/ -max_total_time=60</span><br></pre></td></tr></table></figure>
+<p>在本系列写作环境中没有 clang，但<strong>同一 bug 用 g++ + ASan 手工触发</strong>，可以完整看到 fuzzing 命中后你会看到的现场（1 字节输入 <code>{15}</code>：声明 15 字节负载、一个都没给）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ g++ -g -fsanitize=address -o proto proto.cpp &amp;&amp; ./proto</span><br><span class="line">==18175==ERROR: AddressSanitizer: stack-buffer-overflow on address 0x7ffc09219fe1 ...</span><br><span class="line">READ of size 15 at 0x7ffc09219fe1 thread T0</span><br><span class="line">    #1 0x6445a305f3e3 in parse(unsigned char const*, unsigned long) proto.cpp:12</span><br></pre></td></tr></table></figure>
+<p><code>#1</code> 直接指向 <code>memcpy</code> 那一行——这就是 fuzzing + sanitizer 组合的标准战果报告：<strong>崩溃输入 + 精确栈</strong>。修复：<code>if (n &gt; 15 || size &lt; (size_t)n + 1) return -1;</code>。Python 侧不需要 libFuzzer：hypothesis（05 篇）就是覆盖引导思想在 Python 的实现，Atheris 是 Python 解释器层的 libFuzzer 绑定，处理 C 扩展时值得一用。</p>
+<h2 id="6-bug-案例走读fuzz-找到的真实类型-bug"><a class="markdownIt-Anchor" href="#6-bug-案例走读fuzz-找到的真实类型-bug"></a> 6. bug 案例走读：fuzz 找到的真实类型 bug</h2>
+<p>最后一例，bug 的根源是<strong>类型</strong>，代码&quot;看起来全对&quot;。需求：协议头遇到 <code>0xFF</code> 终止符停止拷贝：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="function"><span class="type">int</span> <span class="title">copy_header</span><span class="params">(<span class="type">const</span> <span class="type">unsigned</span> <span class="type">char</span>* data, <span class="type">size_t</span> size, <span class="type">char</span>* out)</span> </span>&#123;</span><br><span class="line">    <span class="type">size_t</span> i = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">while</span> (i &lt; size) &#123;</span><br><span class="line">        <span class="type">char</span> c = data[i];            <span class="comment">// ❌ char 在 x86 Linux 上是 signed</span></span><br><span class="line">        <span class="keyword">if</span> (c == <span class="number">0xFF</span>)               <span class="comment">// 0xFF 是 int 255；c 是 -1 → 永不相等</span></span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        out[i] = c;</span><br><span class="line">        i++;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> (<span class="type">int</span>)i;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>实测运行（输入第 2 字节是 0xFF，<code>out</code> 只有 8 字节）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ ./typebug</span><br><span class="line">copied 8 bytes: A□BBBBBB□BBBBBB     # 没在终止符停，把 0xFF 后面的也拷了</span><br></pre></td></tr></table></figure>
+<p>加一个字节的输入就会写越界，ASan 现场：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">==25255==ERROR: AddressSanitizer: stack-buffer-overflow ...</span><br></pre></td></tr></table></figure>
+<p><strong>根因链条</strong>（这就是&quot;fuzz 找到的类型 bug&quot;的标准形态）：<code>data[i]</code> 是 <code>unsigned char</code>（0~255），赋给 <code>signed char</code> 后 0xFF 变成 -1；比较时 <code>c</code> 提升为 int 的 -1，与字面量 <code>0xFF</code>（int 的 255）永不相等——终止符失效，循环一路拷出去。三层防线各自能拦住它：</p>
+<ol>
+<li><strong>编译器警告</strong>：<code>-Wall -Wextra -Wconversion</code> 对 <code>char c = data[i]</code> 会给 narrowing 警告（所以 C++ 门禁必须开警告即错误，08 篇 yaml 已含）；</li>
+<li><strong>类型正确写法</strong>：<code>uint8_t c = data[i]; if (c == 0xFF) break;</code>——同一类型域内比较，符号问题不存在；</li>
+<li><strong>fuzz + ASan</strong>：构造到 <code>0xFF</code> 的输入只要几秒，越界写当场现形。</li>
+</ol>
+<p>AFL++/libFuzzer 历史上抓到的同类真实案例大量集中在解析器（图像库、压缩库、协议栈）——<strong>处理不可信字节的代码，fuzzing 不是可选项</strong>。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<p><strong>误区一：把静态分析当&quot;全绿工程&quot;。</strong> 首次接入必然海量告警，正确姿势是基线记账 + 增量强制（08 篇策略），一上来 <code>warnings-as-errors</code> 只会催生海量 <code># type: ignore</code>/<code>// NOLINT</code>。</p>
+<p><strong>误区二：sanitizer 构建只跑冒烟。</strong> ASan 只能抓&quot;被执行路径&quot;上的问题——挂在 nightly 全量测试上才有意义，只跑 hello world 等于没开。</p>
+<p><strong>误区三：harness 里写了业务断言。</strong> <code>LLVMFuzzerTestOneInput</code> 里每条 <code>assert</code> 都可能被合法输入&quot;证伪&quot;导致误报崩溃。harness 只该检查<strong>无输入能使之崩溃的不变量</strong>（不越界、不悬挂、返回值在域内）。</p>
+<p><strong>误区四：fuzz 种子库为空。</strong> 给几条&quot;典型合法输入&quot;当种子（corpus），引导引擎从合法结构开始变异——比纯随机起步快一个数量级。</p>
+<p><strong>误区五：Python 项目不 fuzz。</strong> 处理网络字节/用户上传的解析器照样 fuzz（hypothesis 收窄策略生成字节流即可），坐标转换、序列化、压缩解压都是高危区。</p>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>类型检查是零成本全量测试：<code>union-attr</code> 类 None 流入是它的招牌战果；基线 + 增量 strict 落地；</li>
+<li>lint 组合：ruff <code>B</code>（bug 模式）+ <code>S</code>（安全）+ <code>PT</code>（pytest 风格），测试文件豁免 S101；安全要求高的项目 nightly 加 bandit；</li>
+<li>C++ 静态面：clang-tidy 守自家代码（挂 CMake，警告即错误），cppcheck 扫免编译区域；</li>
+<li>ASan/UBSan/TSan 抓运行时 UB：nightly 全量跑 sanitizer 构建，PR 主线不背开销；ASan/TSan 不可同开；</li>
+<li>fuzzing 灵魂是覆盖引导；libFuzzer harness 极薄（只喂输入、只查崩溃不变量）；种子库决定起步速度；</li>
+<li>类型 bug 案例：<code>char</code> 符号扩展让终止符永不相等——编译警告、正确类型、fuzz+ASan 三层防线缺一不可。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>给 <code>running_total</code> 修两处类型问题后重跑 <code>mypy --strict</code> 至零告警；再故意写一个 <code>def f(x: int) -&gt; int: return x / 2</code> 看看它能否被抓（答案在第 1 节找）。</li>
+<li>在你的项目上跑 <code>ruff check --select B,S,PT</code>，对每条告警分类：真 bug / 风格 / 误报（误报写 nosec 或调整配置），记录三类比例。</li>
+<li>给本章 <code>parse</code> 修复后重新用 ASan 验证：<code>{15}</code>、<code>{15, 'a'}</code>、<code>{16, ...}</code> 三组输入的返回值与退出码。</li>
+<li>把 <code>copy_header</code> 的 <code>char c</code> 改成 <code>uint8_t c</code> 重跑实测，再开 <code>-Wall -Wextra -Wconversion</code> 看原始版本触发哪几条警告。</li>
+<li>为你自己的一个字符串解析函数写 libFuzzer harness（或 hypothesis 字节流策略），准备 5 条种子，fuzz 5 分钟，记录是否发现输入能触发未定义行为或异常。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%B5%8B%E8%AF%95/" rel="tag"># 测试</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/08-CI%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E8%B4%A8%E9%87%8F%E9%97%A8%E7%A6%81/" rel="prev" title="08-CI流水线与质量门禁">
+                  <i class="fa fa-angle-left"></i> 08-CI流水线与质量门禁
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/10-%E6%80%A7%E8%83%BD%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%9B%9E%E5%BD%92/" rel="next" title="10-性能测试与回归">
+                  10-性能测试与回归 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

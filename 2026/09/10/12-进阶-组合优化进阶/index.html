@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="进阶篇第 3 章。07 篇给了马科维茨与等权基准；本章补全&#39;优化器&#39;的完整工程：为什么原始 MVO 会失败、约束如何拯救它、Black-Litterman 如何处理&#39;估计误差&#39;、以及风险模型的角色。目标是判断自己的问题需不需要优化器，以及…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="12-进阶-组合优化进阶">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/10/12-%E8%BF%9B%E9%98%B6-%E7%BB%84%E5%90%88%E4%BC%98%E5%8C%96%E8%BF%9B%E9%98%B6/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="进阶篇第 3 章。07 篇给了马科维茨与等权基准；本章补全&#39;优化器&#39;的完整工程：为什么原始 MVO 会失败、约束如何拯救它、Black-Litterman 如何处理&#39;估计误差&#39;、以及风险模型的角色。目标是判断自己的问题需不需要优化器，以及…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-09T21:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.854Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="量化投资">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/10/12-%E8%BF%9B%E9%98%B6-%E7%BB%84%E5%90%88%E4%BC%98%E5%8C%96%E8%BF%9B%E9%98%B6/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/10/12-%E8%BF%9B%E9%98%B6-%E7%BB%84%E5%90%88%E4%BC%98%E5%8C%96%E8%BF%9B%E9%98%B6/","path":"2026/09/10/12-进阶-组合优化进阶/","title":"12-进阶-组合优化进阶"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>12-进阶-组合优化进阶 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#12-%E8%BF%9B%E9%98%B6%E7%BB%84%E5%90%88%E4%BC%98%E5%8C%96%E8%BF%9B%E9%98%B6"><span class="nav-number">1.</span> <span class="nav-text"> 12 - 进阶：组合优化进阶</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%8E%9F%E5%A7%8B-mvo-%E7%9A%84%E4%B8%89%E5%AE%97%E7%BD%AA%E4%BB%8E-07-%E7%AF%87%E7%9A%84%E6%9E%81%E7%AB%AF%E6%95%8F%E6%84%9F%E5%B1%95%E5%BC%80"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 原始 MVO 的三宗罪（从 07 篇的&quot;极端敏感&quot;展开）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E7%BA%A6%E6%9D%9F%E6%8A%8A%E4%BC%98%E5%8C%96%E5%99%A8%E4%BB%8E%E6%94%BE%E5%A4%A7%E5%99%AA%E5%A3%B0%E6%94%B9%E9%80%A0%E6%88%90%E8%A1%A8%E8%BE%BE%E8%A7%84%E5%88%99"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 约束：把优化器从&quot;放大噪声&quot;改造成&quot;表达规则&quot;</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-black-litterman%E7%BB%99%E8%A7%82%E7%82%B9%E4%B8%80%E4%B8%AA%E8%B4%9D%E5%8F%B6%E6%96%AF%E6%A1%86%E6%9E%B6"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. Black-Litterman：给&quot;观点&quot;一个贝叶斯框架</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E8%A7%A3%E5%86%B3%E7%9A%84%E9%97%AE%E9%A2%98"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 解决的问题</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%AE%83%E6%9C%89%E6%95%88%E4%BB%A5%E5%8F%8A%E5%B1%80%E9%99%90"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 为什么它有效（以及局限）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E9%A3%8E%E9%99%A9%E6%A8%A1%E5%9E%8B%E5%8D%8F%E6%96%B9%E5%B7%AE%E7%9A%84%E5%B7%A5%E4%B8%9A%E5%8C%96%E4%BC%B0%E8%AE%A1"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 风险模型：协方差的工业化估计</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E9%A3%8E%E9%99%A9%E5%B9%B3%E4%BB%B7%E4%B8%8E%E6%B3%A2%E5%8A%A8%E7%8E%87%E7%9B%AE%E6%A0%87%E7%9A%84%E4%BC%98%E5%8C%96%E5%99%A8%E8%A7%86%E8%A7%92"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 风险平价与波动率目标的优化器视角</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%86%B3%E7%AD%96%E6%A0%91%E4%BD%A0%E9%9C%80%E8%A6%81%E5%93%AA%E7%A7%8D%E4%BC%98%E5%8C%96"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 决策树：你需要哪种优化</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%87%AA%E6%B5%8B"><span class="nav-number">1.7.</span> <span class="nav-text"> 自测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%8B%E4%B8%80%E7%AF%87"><span class="nav-number">1.8.</span> <span class="nav-text"> 下一篇</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8F%82%E8%80%83%E6%9D%A5%E6%BA%90"><span class="nav-number">1.9.</span> <span class="nav-text"> 参考来源</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/10/12-%E8%BF%9B%E9%98%B6-%E7%BB%84%E5%90%88%E4%BC%98%E5%8C%96%E8%BF%9B%E9%98%B6/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="12-进阶-组合优化进阶 | Yoleen的博客">
+      <meta itemprop="description" content=" 进阶篇第 3 章。07 篇给了马科维茨与等权基准；本章补全&#39;优化器&#39;的完整工程：为什么原始 MVO 会失败、约束如何拯救它、Black-Litterman 如何处理&#39;估计误差&#39;、以及风险模型的角色。目标是判断自己的问题需不需要优化器，以及…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          12-进阶-组合优化进阶
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-10 05:30:00" itemprop="dateCreated datePublished" datetime="2026-09-10T05:30:00+08:00">2026-09-10</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E9%87%8F%E5%8C%96%E6%8A%95%E8%B5%84/" itemprop="url" rel="index"><span itemprop="name">量化投资</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>7 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 进阶篇第 3 章。07 篇给了马科维茨与等权基准；本章补全'优化器'的完整工程：为什么原始 MVO 会失败、约束如何拯救它、Black-Litterman 如何处理'估计误差'、以及风险模型的角色。目标是判断自己的问题需不需要优化器，以及…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="12-进阶组合优化进阶"><a class="markdownIt-Anchor" href="#12-进阶组合优化进阶"></a> 12 - 进阶：组合优化进阶</h1>
+<blockquote>
+<p>进阶篇第 3 章。07 篇给了马科维茨与等权基准；本章补全&quot;优化器&quot;的完整工程：为什么原始 MVO 会失败、约束如何拯救它、Black-Litterman 如何处理&quot;估计误差&quot;、以及风险模型的角色。目标是<strong>判断自己的问题需不需要优化器，以及需要什么样的优化器</strong>。</p>
+</blockquote>
+<h2 id="1-原始-mvo-的三宗罪从-07-篇的极端敏感展开"><a class="markdownIt-Anchor" href="#1-原始-mvo-的三宗罪从-07-篇的极端敏感展开"></a> 1. 原始 MVO 的三宗罪（从 07 篇的&quot;极端敏感&quot;展开）</h2>
+<ol>
+<li><strong>输入误差放大</strong>：最优权重是预期收益的凸函数，μ 估计的微小扰动 → 权重剧烈跳变（Michaud “error maximization”，07 篇已引）；</li>
+<li><strong>角点解</strong>：无约束 MVO 的解常常是&quot;三只股票各 33%&quot;式的极端组合——优化器把权重压到它<strong>认为</strong>收益最高的少数资产上，而&quot;认为&quot;建立在噪声上；</li>
+<li><strong>未建模的现实约束</strong>：无卖空限制、无换手约束、无行业暴露约束——解出的组合实盘不可执行（借不到那么多券、换手成本爆炸、行业赌注超风控线）。</li>
+</ol>
+<p>结论：<strong>裸 MVO 在实务中几乎从不直接使用</strong>。它被拯救的方式有三类：加约束（§2）、换输入（§3 Black-Litterman）、换目标（§4 风险预算）。</p>
+<h2 id="2-约束把优化器从放大噪声改造成表达规则"><a class="markdownIt-Anchor" href="#2-约束把优化器从放大噪声改造成表达规则"></a> 2. 约束：把优化器从&quot;放大噪声&quot;改造成&quot;表达规则&quot;</h2>
+<p>约束是<strong>风控与合规规则的数学表达</strong>，每条都该能追溯到一条业务理由：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 约束矩阵形式（以 scipy.optimize 或 cvxpy 表达）</span></span><br><span class="line">w = cp.Variable(n)</span><br><span class="line">constraints = [</span><br><span class="line">    cp.<span class="built_in">sum</span>(w) == <span class="number">1</span>,                    <span class="comment"># 满仓</span></span><br><span class="line">    w &gt;= <span class="number">0</span>,                            <span class="comment"># 不卖空（A 股学习期立场，07 篇）</span></span><br><span class="line">    w &lt;= <span class="number">0.10</span>,                         <span class="comment"># 单票上限：任何单一错误不致命（07 篇生存纪律）</span></span><br><span class="line">    sector_exposure @ w &lt;= <span class="number">0.30</span>,       <span class="comment"># 行业上限：不做单一行业全押</span></span><br><span class="line">    cp.norm(w - w_prev, <span class="number">1</span>) &lt;= <span class="number">0.20</span>,    <span class="comment"># 换手约束：L1 距离限仓（直连 10 篇成本）</span></span><br><span class="line">    tracking = cp.norm(w - benchmark_w, <span class="number">2</span>) &lt;= <span class="number">0.05</span>,   <span class="comment"># 跟踪误差约束（指数增强场景）</span></span><br><span class="line">]</span><br><span class="line">prob = cp.Problem(cp.Maximize(alpha @ w - lambda_risk * cp.quad_form(w, cov)),</span><br><span class="line">                  constraints)</span><br></pre></td></tr></table></figure>
+<p>四条常被忽略的工程要点：</p>
+<ol>
+<li><strong>换手约束（L1 距离）是成本模型的优化器内表达</strong>——比&quot;事后扣成本&quot;更有效，因为它在求解时就放弃了低价值的高换手调仓；</li>
+<li><strong>协方差矩阵必须正则化</strong>：n 只股票的样本协方差在 n 大时病态（秩不足/噪声主导）。标准处理：收缩估计（Ledoit &amp; Wolf 2004 的 shrinkage：向&quot;常数相关&quot;或&quot;单位方差&quot;目标收缩）或因子模型协方差（§4）；</li>
+<li><strong>约束之间会打架</strong>：单票 10% × 20 只 ≤ 100% 意味着组合必须 ≥ 20 只——约束系统不可行时优化器报错而不是提示哪条冲突，排查要有准备；</li>
+<li><strong>解的稳定性检查</strong>：把 μ 加扰动 ±10% 重解——<strong>最优权重剧烈翻转 = 这个优化器在放大噪声</strong>，回到收缩/简化。</li>
+</ol>
+<h2 id="3-black-litterman给观点一个贝叶斯框架"><a class="markdownIt-Anchor" href="#3-black-litterman给观点一个贝叶斯框架"></a> 3. Black-Litterman：给&quot;观点&quot;一个贝叶斯框架</h2>
+<h3 id="31-解决的问题"><a class="markdownIt-Anchor" href="#31-解决的问题"></a> 3.1 解决的问题</h3>
+<p>MVO 需要 μ（预期收益），而 μ 几乎不可估。Black-Litterman（1992，高盛）的思路：<strong>不从零估 μ，而是从市场均衡出发，把主观观点当作对均衡的贝叶斯修正</strong>。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">市场隐含收益：μ_eq = δΣw_mkt        （δ 风险厌恶系数、Σ 协方差、w_mkt 市值权重）</span><br><span class="line">              —— 反解：若市场组合是最优的，市场权重&quot;隐含&quot;的预期收益是多少</span><br><span class="line">观点融合：   μ_posterior ∝ 融合（μ_eq 均衡先验, PΩP 观点似然）</span><br><span class="line">              P：观点矩阵（&quot;股票A将跑赢股票B 2%&quot;），Ω：观点置信度</span><br><span class="line">再优化：     把 μ_posterior 喂给 MVO</span><br></pre></td></tr></table></figure>
+<h3 id="32-为什么它有效以及局限"><a class="markdownIt-Anchor" href="#32-为什么它有效以及局限"></a> 3.2 为什么它有效（以及局限）</h3>
+<ul>
+<li><strong>自动得率的改善</strong>：观点只影响与观点相关的资产（贝叶斯收缩的自然结果），不再出现&quot;一个观点 → 全组合重排&quot;的 MVO 病态；</li>
+<li><strong>观点可以稀疏</strong>：对没观点的资产，就留在均衡（等价于&quot;我不知道&quot;的诚实表达）；</li>
+<li><strong>局限</strong>：观点矩阵 P 与置信度 Ω 仍是人工输入——<strong>BL 把&quot;估 μ&quot;的难题转换成&quot;表达观点置信度&quot;的难题</strong>，没有消灭主观，只是给了主观一个有纪律的位置。</li>
+</ul>
+<p>对个人学习者的务实建议：BL 的完整实现依赖风险模型与市场组合定义，工程量不小；<strong>其思想（先验=均衡、观点=修正、置信度=显式参数）比完整实现更值得先掌握</strong>——它能立刻改善你对&quot;该给一个观点多大仓位&quot;的直觉（与 07 篇凯利半仓的精神同源：观点越弱，仓位越向均衡退）。</p>
+<h2 id="4-风险模型协方差的工业化估计"><a class="markdownIt-Anchor" href="#4-风险模型协方差的工业化估计"></a> 4. 风险模型：协方差的工业化估计</h2>
+<p>大组合的 Σ 估计是独立课题，行业标准是<strong>因子风险模型</strong>（Barra 式，11 篇已提）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">r_i = Σ_k f_ik × F_k + ε_i        （股票收益 = 因子暴露×因子收益 + 特异残差）</span><br><span class="line">Σ = B Φ Bᵀ + Δ                    （因子协方差 + 特异方差对角阵）</span><br></pre></td></tr></table></figure>
+<p>好处：协方差从 n(n+1)/2 个自由参数压缩到&quot;因子数 × 因子数 + n 个特异方差&quot;——估计稳定、正定性有保证、且<strong>风险可归因</strong>（“这个组合 60% 的风险来自市值因子”）。行业公开方法论见 Grinold &amp; Kahn 与 MSCI Barra 公开文献；开源实现有 sklearn 的 FactorAnalysis 类思路与国内社区的风险模型项目（以各自文档为准）。</p>
+<h2 id="5-风险平价与波动率目标的优化器视角"><a class="markdownIt-Anchor" href="#5-风险平价与波动率目标的优化器视角"></a> 5. 风险平价与波动率目标的优化器视角</h2>
+<p>07 篇给了风险平价直觉，此处补其优化形式：<strong>最小化各资产风险贡献的方差</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">risk_parity_objective</span>(<span class="params">w, cov</span>):</span><br><span class="line">    mrc = cov @ w / np.sqrt(w @ cov @ w)      <span class="comment"># 边际风险贡献</span></span><br><span class="line">    rc = w * mrc / np.sqrt(w @ cov @ w)       <span class="comment"># 风险贡献占比（和为 1）</span></span><br><span class="line">    <span class="keyword">return</span> np.<span class="built_in">sum</span>((rc - <span class="number">1</span>/n) ** <span class="number">2</span>)            <span class="comment"># 等风险贡献的目标</span></span><br></pre></td></tr></table></figure>
+<p>要点：风险平价<strong>只用协方差、不用 μ</strong>——绕开了 MVO 的最大噪声源，代价是完全放弃预期收益信息（牛市里跑输进攻型组合是特性不是缺陷）。它与波动率目标（07 篇）可叠加：风险平价管&quot;内部怎么分&quot;，波动率目标管&quot;总杠杆多大&quot;。</p>
+<h2 id="6-决策树你需要哪种优化"><a class="markdownIt-Anchor" href="#6-决策树你需要哪种优化"></a> 6. 决策树：你需要哪种优化</h2>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">持仓 &lt; 20 只、无杠杆 → 等权 + 单票上限，不需要优化器（07 篇结论依然成立）</span><br><span class="line">指数增强/对标基准     → 带跟踪误差与换手约束的 MVO（§2）+ 因子风险模型（§4）</span><br><span class="line">有明确观点、多资产配置 → BL 思想（§3）或等权 + 主动偏离额度</span><br><span class="line">不做择时、只管风险    → 风险平价（§5）</span><br></pre></td></tr></table></figure>
+<p><strong>任何优化器落地前，先跑&quot;扰动检验&quot;（§2.4）</strong>：μ 加 10% 噪声、Σ 用收缩前后各解一次——解的漂移量就是优化器里噪声的含量。</p>
+<h2 id="自测"><a class="markdownIt-Anchor" href="#自测"></a> 自测</h2>
+<ol>
+<li>裸 MVO 三宗罪分别是什么？各自对应的拯救手段？</li>
+<li>换手约束为什么要在优化器内表达而不是事后扣成本？</li>
+<li>BL 的&quot;市场隐含收益&quot;反解的是什么？观点稀疏时会发生什么？</li>
+<li>因子风险模型把协方差的参数量从什么量级压缩到什么量级？额外获得什么能力？</li>
+<li>风险平价绕开了哪个噪声源？放弃了什么？</li>
+<li>扰动检验怎么做、检查什么？</li>
+</ol>
+<h2 id="下一篇"><a class="markdownIt-Anchor" href="#下一篇"></a> 下一篇</h2>
+<p>13 - 进阶：从回测到实盘工程化——策略系统的生产化与运行监控。</p>
+<h2 id="参考来源"><a class="markdownIt-Anchor" href="#参考来源"></a> 参考来源</h2>
+<ul>
+<li>Richard Grinold &amp; Ronald Kahn, <em>Active Portfolio Management</em>, 2nd ed., McGraw-Hill, 2000（IR/IC 框架与风险模型方法论的行业原典）</li>
+<li>Olivier Ledoit &amp; Michael Wolf, <em>A Well-Conditioned Estimator for Large-Dimensional Covariance Matrices</em>, Journal of Multivariate Analysis, 2004（协方差收缩）</li>
+<li>Fischer Black &amp; Robert Litterman, <em>Global Portfolio Optimization</em>, Financial Analysts Journal, 1992</li>
+<li>idzorek 对 BL 观点置信度校准的扩展（“A Step-By-Step Guide to the Black-Litterman Model”，公开工作论文）</li>
+<li>cvxpy 文档（凸优化组合问题的工程实现）: <a target="_blank" rel="noopener" href="https://www.cvxpy.org/">https://www.cvxpy.org/</a></li>
+<li>Marcos López de Prado, <em>Machine Learning for Asset Managers</em>, Cambridge University Press, 2020（协方差噪声与结构估计的补充视角）</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E9%87%8F%E5%8C%96%E6%8A%95%E8%B5%84/" rel="tag"># 量化投资</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/10/11-%E8%BF%9B%E9%98%B6-%E5%9B%A0%E5%AD%90%E5%B7%A5%E7%A8%8B%E8%BF%9B%E9%98%B6/" rel="prev" title="11-进阶-因子工程进阶">
+                  <i class="fa fa-angle-left"></i> 11-进阶-因子工程进阶
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/10/13-%E8%BF%9B%E9%98%B6-%E4%BB%8E%E5%9B%9E%E6%B5%8B%E5%88%B0%E5%AE%9E%E7%9B%98%E5%B7%A5%E7%A8%8B%E5%8C%96/" rel="next" title="13-进阶-从回测到实盘工程化">
+                  13-进阶-从回测到实盘工程化 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

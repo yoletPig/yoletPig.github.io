@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 逐项辨析 ACID 四个字母的实际含义（尤其 I：隔离性是一整个谱系而非开关）。 - 复现三类并发异常（脏读&#x2F;不可重复读&#x2F;幻读），配时序图，建立&#39;异常 × 隔离级别&#39;的完整映射。 - 讲清两阶段锁（2PL）与快照隔离（SI）&#x2F;可串行化快…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="07-事务与隔离级别">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/07-%E4%BA%8B%E5%8A%A1%E4%B8%8E%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 逐项辨析 ACID 四个字母的实际含义（尤其 I：隔离性是一整个谱系而非开关）。 - 复现三类并发异常（脏读&#x2F;不可重复读&#x2F;幻读），配时序图，建立&#39;异常 × 隔离级别&#39;的完整映射。 - 讲清两阶段锁（2PL）与快照隔离（SI）&#x2F;可串行化快…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T06:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.550Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/07-%E4%BA%8B%E5%8A%A1%E4%B8%8E%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/07-%E4%BA%8B%E5%8A%A1%E4%B8%8E%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB/","path":"2026/09/03/07-事务与隔离级别/","title":"07-事务与隔离级别"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>07-事务与隔离级别 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#07-%E4%BA%8B%E5%8A%A1%E4%B8%8E%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB"><span class="nav-number">1.</span> <span class="nav-text"> 07 - 事务与隔离级别</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-acid-%E9%80%90%E9%A1%B9%E8%BE%A8%E6%9E%90"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. ACID 逐项辨析</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-sql-%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB%E4%B8%8E%E4%B8%89%E7%B1%BB%E5%BC%82%E5%B8%B8"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. SQL 隔离级别与三类异常</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E4%B8%A4%E9%98%B6%E6%AE%B5%E9%94%812pl"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 两阶段锁（2PL）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%BF%AB%E7%85%A7%E9%9A%94%E7%A6%BBsi%E4%B8%8E%E5%8F%AF%E4%B8%B2%E8%A1%8C%E5%8C%96%E5%BF%AB%E7%85%A7%E9%9A%94%E7%A6%BBssi"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 快照隔离（SI）与可串行化快照隔离（SSI）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1%E7%9A%84%E9%9A%BE%E7%82%B9"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 分布式事务的难点</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.9.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/07-%E4%BA%8B%E5%8A%A1%E4%B8%8E%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="07-事务与隔离级别 | Yoleen的博客">
+      <meta itemprop="description" content="- 逐项辨析 ACID 四个字母的实际含义（尤其 I：隔离性是一整个谱系而非开关）。 - 复现三类并发异常（脏读&#x2F;不可重复读&#x2F;幻读），配时序图，建立&#39;异常 × 隔离级别&#39;的完整映射。 - 讲清两阶段锁（2PL）与快照隔离（SI）&#x2F;可串行化快…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          07-事务与隔离级别
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 14:00:00" itemprop="dateCreated datePublished" datetime="2026-09-03T14:00:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">分布式系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.3k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 逐项辨析 ACID 四个字母的实际含义（尤其 I：隔离性是一整个谱系而非开关）。 - 复现三类并发异常（脏读/不可重复读/幻读），配时序图，建立'异常 × 隔离级别'的完整映射。 - 讲清两阶段锁（2PL）与快照隔离（SI）/可串行化快…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="07-事务与隔离级别"><a class="markdownIt-Anchor" href="#07-事务与隔离级别"></a> 07 - 事务与隔离级别</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>逐项辨析 ACID 四个字母的实际含义（尤其 I：隔离性是一整个谱系而非开关）。</li>
+<li>复现三类并发异常（脏读/不可重复读/幻读），配时序图，建立&quot;异常 × 隔离级别&quot;的完整映射。</li>
+<li>讲清两阶段锁（2PL）与快照隔离（SI）/可串行化快照隔离（SSI）的实现思路与取舍。</li>
+<li>指出分布式环境下事务的新难点，为第 08 章的分布式事务铺路。</li>
+</ul>
+<h2 id="1-acid-逐项辨析"><a class="markdownIt-Anchor" href="#1-acid-逐项辨析"></a> 1. ACID 逐项辨析</h2>
+<p>ACID 是 Härder 与 Reuter 1983 年提出的缩写（<em>Principles of Transaction-Oriented Database Recovery</em>, ACM Computing Surveys）。四个字母的实际工程含义远比口号复杂：</p>
+<ul>
+<li><strong>A（Atomicity，原子性）</strong>：“要么全做要么全不做”。实现靠 <strong>undo log / 回滚段</strong>：事务中断时把已做的改动撤销。注意与&quot;隔离性&quot;无关——它是&quot;失败时的行为契约&quot;。另一个常见混淆：ACID 的原子性与&quot;原子操作&quot;（如 CPU 的原子指令，OS 11 篇）不是一回事：前者是&quot;全有或全无的多步组合&quot;，后者是&quot;不可分割的单步&quot;。</li>
+<li><strong>C（Consistency，一致性）</strong>：最含糊的一个——指&quot;事务把数据库从一个合法状态带到另一个合法状态&quot;（应用层不变量，如&quot;转账前后总额不变&quot;）。<strong>C 主要靠应用保证</strong>，A/I/D 只是提供工具。这也是为什么 CAP 的 C（线性一致）与 ACID 的 C 毫无关系——同名不同物。</li>
+<li><strong>I（Isolation，隔离性）</strong>：并发事务互不干扰。<strong>它是一个谱系</strong>（第 3 节），从&quot;互相看不见任何中间态&quot;（串行化）到&quot;几乎随便看&quot;（读未提交），成本差一个数量级。SQL 标准定义了四级，见第 2 节。</li>
+<li><strong>D（Durability，持久性）</strong>：提交了就不能丢。实现靠 <strong>WAL（预写日志）+ fsync</strong>：提交先落日志盘，数据页可以后写（OS 08 篇崩溃一致性的延续）。分布式里 D 变得更微妙——单机落盘成功≠副本已同步（第 04 章半同步的动机）。</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># acid_durability.py —— 持久性的最小实验：fsync 的代价与&quot;不 fsync 的丢失窗口&quot;</span></span><br><span class="line"><span class="keyword">import</span> os, time</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">durability_bench</span>(<span class="params">path=<span class="string">&quot;/tmp/wal_demo.log&quot;</span>, n=<span class="number">1000</span></span>):</span><br><span class="line">    <span class="comment"># 1) 写但不同步：数据在内核 page cache，机器断电即丢（应用崩溃不丢，因为内核还活着）</span></span><br><span class="line">    t0 = time.monotonic()</span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(path, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n):</span><br><span class="line">            f.write(<span class="string">f&quot;tx-<span class="subst">&#123;i&#125;</span>\n&quot;</span>)</span><br><span class="line">    t_write = time.monotonic() - t0</span><br><span class="line"></span><br><span class="line">    <span class="comment"># 2) 每条都 fsync：强制落盘，崩溃（连断电）都不丢，但每条付出一次磁盘寻道/刷盘</span></span><br><span class="line">    t0 = time.monotonic()</span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(path, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n):</span><br><span class="line">            f.write(<span class="string">f&quot;tx-<span class="subst">&#123;i&#125;</span>\n&quot;</span>)</span><br><span class="line">            f.flush()</span><br><span class="line">            os.fsync(f.fileno())          <span class="comment"># 真正的持久点（D 的实现代价）</span></span><br><span class="line">    t_fsync = time.monotonic() - t0</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;写<span class="subst">&#123;n&#125;</span>条: 无fsync <span class="subst">&#123;t_write*<span class="number">1000</span>:<span class="number">.1</span>f&#125;</span> ms | 每条fsync <span class="subst">&#123;t_fsync*<span class="number">1000</span>:<span class="number">.1</span>f&#125;</span> ms &quot;</span></span><br><span class="line">          <span class="string">f&quot;(x<span class="subst">&#123;t_fsync/<span class="built_in">max</span>(t_write,<span class="number">1e-9</span>):<span class="number">.0</span>f&#125;</span>)&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;结论：D 不是免费的 —— 数据库的 group commit、WAL 都是给 fsync 省钱的设计&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    durability_bench()</span><br></pre></td></tr></table></figure>
+<h2 id="2-sql-隔离级别与三类异常"><a class="markdownIt-Anchor" href="#2-sql-隔离级别与三类异常"></a> 2. SQL 隔离级别与三类异常</h2>
+<p>并发事务的读写在无隔离时互相踩踏。三个经典异常（时序图里 T1/T2 是并发事务，x 初始 0）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">脏读（读到别人未提交的数据）：</span><br><span class="line"> T1: BEGIN; x = x + 10;      （还没提交）</span><br><span class="line"> T2:            read(x) → 10  ← 读到未提交值；若 T1 回滚，T2 基于幻影数据行动</span><br><span class="line"> T1: ROLLBACK;</span><br><span class="line"></span><br><span class="line">不可重复读（同一事务两次读同一行，值变了）：</span><br><span class="line"> T1: read(x) → 0;  ...其他事...</span><br><span class="line"> T2:            x = x + 10; COMMIT;</span><br><span class="line"> T1:                              read(x) → 10  ← 同一事务内两次读不一致</span><br><span class="line"></span><br><span class="line">幻读（同一事务两次按同一条件查询，行数变了）：</span><br><span class="line"> T1: SELECT COUNT(*) WHERE age&gt;18 → 100</span><br><span class="line"> T2:                 INSERT 一条 age=20 的行; COMMIT;</span><br><span class="line"> T1:                                 SELECT COUNT(*) WHERE age&gt;18 → 101 ← 多出&quot;幽灵行&quot;</span><br></pre></td></tr></table></figure>
+<p>脏读 vs 不可重复读的区别一句话：前者读到<strong>未提交</strong>的中间态，后者读到<strong>已提交</strong>的新值但破坏了自己事务内的视图一致性。幻读与不可重复读的区别：后者针对<strong>同一行</strong>的值变化，前者针对<strong>满足条件的行集合</strong>变化。</p>
+<p>SQL-92 标准定义的四级隔离（完整理论见 Berenson et al., <em>A Critique of ANSI SQL Isolation Levels</em>, SIGMOD 1995——这篇论文指出 ANSI 标准定义的漏洞并补充了更多异常）：</p>
+<table>
+<thead>
+<tr>
+<th>隔离级别</th>
+<th>脏读</th>
+<th>不可重复读</th>
+<th>幻读</th>
+<th>实现手段</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>读未提交（RU）</td>
+<td>可能</td>
+<td>可能</td>
+<td>可能</td>
+<td>什么都不做</td>
+</tr>
+<tr>
+<td>读已提交（RC）</td>
+<td>不可能</td>
+<td>可能</td>
+<td>可能</td>
+<td>行锁 / MVCC 每语句快照</td>
+</tr>
+<tr>
+<td>可重复读（RR）</td>
+<td>不可能</td>
+<td>不可能</td>
+<td>标准说可能*</td>
+<td>MVCC 每事务快照</td>
+</tr>
+<tr>
+<td>串行化（SER）</td>
+<td>不可能</td>
+<td>不可能</td>
+<td>不可能</td>
+<td>2PL / SSI</td>
+</tr>
+</tbody>
+</table>
+<p>*注：标准把 RR 定义为&quot;不许不可重复读&quot;，幻读在 RR 是否被禁止存在数据库实现差异：<strong>PostgreSQL 的 RR（快照隔离）会出幻读（写偏斜异常），MySQL InnoDB 的 RR 用间隙锁（next-key locking）基本挡住了幻读</strong>。面试说&quot;RR 是否有幻阅读实现&quot;比背标准分更准。</p>
+<h2 id="3-两阶段锁2pl"><a class="markdownIt-Anchor" href="#3-两阶段锁2pl"></a> 3. 两阶段锁（2PL）</h2>
+<p>实现串行化的经典方案：<strong>两阶段锁（Two-Phase Locking）</strong>（起源：Gray et al. 1970 年代 System R；教材定义见任何数据库系统教科书）：</p>
+<ol>
+<li><strong>增长阶段</strong>：事务按需获取锁（读锁/写锁），不释放。</li>
+<li><strong>收缩阶段</strong>：一旦释放任何锁，就<strong>不能再获取新锁</strong>。</li>
+</ol>
+<p>“两阶段&quot;的必要性：若允许&quot;用完即放、用时再取”，两个事务可以交错成&quot;读到对方回滚前的中间态&quot;——收缩阶段禁止新锁，保证了一个事务持有的所有锁存在重叠区间，从而可串行化。</p>
+<p>代价与死结：</p>
+<ul>
+<li><strong>性能</strong>：读读不冲突但读写全冲突，热点行上事务排队，吞吐暴跌。</li>
+<li><strong>死锁</strong>：T1 锁 A 等 B，T2 锁 B 等 A。数据库靠死锁检测（等待图找环）或超时打破，牺牲一个事务回滚。</li>
+<li><strong>2PL 是悲观并发控制</strong>：冲突概率高时它反而好（冲突都在锁上排队，没有白干的回滚）；冲突少时 MVCC 更好（读者永不阻塞）。</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># two_phase_lock.py —— 用一把锁模拟 2PL 的事务分组，演示&quot;提前放锁&quot;导致的脏序列</span></span><br><span class="line"><span class="keyword">import</span> threading, time</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">TwoPhaseLockDB</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="variable language_">self</span>.grow = threading.Lock()   <span class="comment"># 简化：用一把事务级锁模拟&quot;增长阶段持锁&quot;</span></span><br><span class="line">        <span class="variable language_">self</span>.data = &#123;<span class="string">&quot;x&quot;</span>: <span class="number">0</span>&#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">tx_correct</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="string">&quot;&quot;&quot;正确 2PL：增长阶段拿住锁做完所有事，最后统一释放（收缩=释放点）&quot;&quot;&quot;</span></span><br><span class="line">        <span class="keyword">with</span> <span class="variable language_">self</span>.grow:                          <span class="comment"># 增长阶段</span></span><br><span class="line">            <span class="variable language_">self</span>.data[<span class="string">&quot;x&quot;</span>] += <span class="number">10</span></span><br><span class="line">            time.sleep(<span class="number">0.05</span>)                     <span class="comment"># 模拟事务内其他工作</span></span><br><span class="line">            v1 = <span class="variable language_">self</span>.data[<span class="string">&quot;x&quot;</span>]                  <span class="comment"># 整个事务持锁 → 其他事务看不到中间态</span></span><br><span class="line">            <span class="variable language_">self</span>.data[<span class="string">&quot;x&quot;</span>] += <span class="number">5</span></span><br><span class="line">            <span class="keyword">return</span> v1, <span class="variable language_">self</span>.data[<span class="string">&quot;x&quot;</span>]            <span class="comment"># 收缩阶段（with 退出统一放锁）</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">demo_early_release</span>():</span><br><span class="line">    <span class="string">&quot;&quot;&quot;反例：提前放锁再取锁（违反两阶段），会让别人读到中间态&quot;&quot;&quot;</span></span><br><span class="line">    db = TwoPhaseLockDB()</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">bad_tx</span>():</span><br><span class="line">        <span class="keyword">with</span> db.grow:</span><br><span class="line">            db.data[<span class="string">&quot;x&quot;</span>] += <span class="number">10</span></span><br><span class="line">        <span class="comment"># ↑ 在这里提前释放（收缩），又去取新锁 → 违反两阶段</span></span><br><span class="line">        time.sleep(<span class="number">0.05</span>)      <span class="comment"># 这个空窗让 T2 挤进来读</span></span><br><span class="line">        <span class="keyword">with</span> db.grow:</span><br><span class="line">            db.data[<span class="string">&quot;x&quot;</span>] += <span class="number">5</span></span><br><span class="line">    t = threading.Thread(target=bad_tx); t.start()</span><br><span class="line">    time.sleep(<span class="number">0.01</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;中间态被读到:&quot;</span>, db.data[<span class="string">&quot;x&quot;</span>])   <span class="comment"># 可能输出 10（未提交的中间值）</span></span><br><span class="line">    t.join()</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;正确2PL结果:&quot;</span>, TwoPhaseLockDB().tx_correct())</span><br><span class="line">    demo_early_release()</span><br></pre></td></tr></table></figure>
+<h2 id="4-快照隔离si与可串行化快照隔离ssi"><a class="markdownIt-Anchor" href="#4-快照隔离si与可串行化快照隔离ssi"></a> 4. 快照隔离（SI）与可串行化快照隔离（SSI）</h2>
+<p><strong>多版本并发控制（MVCC）+ 快照隔离</strong>：每行保留多个版本；事务开始时拍一个快照，<strong>整个事务读这个一致的旧快照</strong>，写依然加锁。效果：</p>
+<ul>
+<li>读不加锁、不阻塞写；写不阻塞读 → 并发性能远好于 2PL。</li>
+<li>天然消灭脏读（快照里只有已提交版本）与不可重复读（快照固定）。</li>
+<li>但引入新异常：<strong>写偏斜（write skew）</strong>——两个事务各写不相关的行，但都依赖对方会改变的前提。经典例：值班系统要求&quot;至少一名医生在线&quot;，T1 看到 Alice 在 → 删除 Bob；T2 同时看到 Bob 在 → 删除 Alice；结果无人值班，但两者无写冲突（写的行不同），快照隔离放行。<strong>这是 SI 不是可串行化的证据</strong>（Fekete et al., <em>Proving Snapshot Isolation Serializable…</em> 相关论文序列，以及 Cahill et al. 2008 的 SSI 论文）。</li>
+</ul>
+<p><strong>可串行化快照隔离（SSI）</strong>（Cahill, Röhm, Fekete, <em>Serializable Isolation for Snapshot Databases</em>, SIGMOD 2008，PostgreSQL 9.1 起采用）：在 SI 基础上检测两个危险模式，发现就中止其中一个事务：</p>
+<ol>
+<li><strong>读写依赖环</strong>：T1 读的行被 T2 修改并提交（T1 的决策依据失效），且形成依赖环。</li>
+<li><strong>谓词写偏斜</strong>：T1 的读取影响了 T2 的写入判断且交织成环（用范围锁/SIREAD 锁标记&quot;我读过这个范围&quot;）。</li>
+</ol>
+<p>取舍（经验做法）：SSI 冲突检测的误报会多回滚一些事务，适合<strong>冲突率低</strong>的 OLTP 负载；冲突极高（同一行狂竞争）的负载，悲观 2PL 或干脆上队列串行化反而稳。PostgreSQL 的 <code>SERIALIZABLE</code> 就是 SSI，用它时应用要准备重试逻辑（错误码 40001）。</p>
+<h2 id="5-分布式事务的难点"><a class="markdownIt-Anchor" href="#5-分布式事务的难点"></a> 5. 分布式事务的难点</h2>
+<p>单机事务靠&quot;一个锁管理器 + 一个日志&quot;闭环。数据一分区（第 06 章），一个事务的读写可能横跨多个分片甚至多种存储，难点全部来自&quot;没有单一闭环&quot;：</p>
+<ol>
+<li><strong>原子提交问题</strong>：多个分片要&quot;全提交或全中止&quot;，但协调者自己也可能崩——这就是第 08 章 2PC 要解决的问题（两将军问题的近亲）。</li>
+<li><strong>跨节点锁与死锁</strong>：死锁检测需要全局等待图，分区各自检测看不到跨片环。Spanner/Percolator 等用全局时间戳排序 + 等待超时兜底。</li>
+<li><strong>隔离级别跨节点语义</strong>：快照要&quot;全局一致&quot;（所有分片同一版本线），需要全局时钟（Spanner TrueTime）或 HLC（CockroachDB），否则分片间快照错位又出跨片异常。</li>
+<li><strong>性能悬崖</strong>：跨片事务的延迟 = 最慢分片的延迟；可用性 = 所有参与分片的可用性之积（3 个 99.9% 的分片串一个事务 → 99.7%）。</li>
+</ol>
+<p>一句话方向（经验做法）：<strong>能设计成单分片事务就单分片</strong>（分区 key 选得好，80% 事务只碰一个分片，如按 user_id 分区后用户事务天然单片）；跨片事务是奢侈品，用前先想清楚第 08 章的补偿方案。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“隔离级别越高一定越好”</strong>：隔离级别是性能与正确性的标价交换。把全站默认 RR/SERIALIZABLE 会牺牲一个数量级吞吐；正确姿势是按业务分级——余额/库存串行化或乐观重试，展示类数据 RC 足够（经验做法）。</li>
+<li><strong>“MVCC 解决了幻读”</strong>：MVCC 只保证&quot;读快照&quot;的一致性；写-写冲突与写偏斜照样存在。SI 有写偏斜，PostgreSQL RR 下 SELECT 看不到新行但随后写入可能制造依赖环——需要 SSI 才堵上。</li>
+<li><strong>“ACID 的 C 与 CAP 的 C 是一回事”</strong>：完全不同。ACID-C 是应用不变量，CAP-C 是线性一致。混淆会直接导致架构评审中说外行话。</li>
+<li><strong>“自动提交就是事务”</strong>：<code>autocommit=1</code> 下每条语句一个事务，多条语句之间没有隔离保证。需要&quot;多次读保持一致视图&quot;时必须显式开事务（BEGIN/COMMIT），否则 RR/RC 都救不了你。</li>
+<li><strong>“死锁了数据库会自动优化掉”</strong>：数据库只会检测并<strong>牺牲</strong>一个事务（回滚报错），你的代码要处理死锁异常并重试。无重试逻辑的死锁处理等于&quot;偶尔随机失败&quot;。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>ACID 各有实现支撑：A 靠 undo、I 靠锁/MVCC、D 靠 WAL+fsync，C 靠应用；fsync 是持久性的物理代价。</li>
+<li>三类异常（脏读/不可重复读/幻读）+ 写偏斜构成&quot;异常清单&quot;，与四级隔离级别一一对应；RR 是否有幻阅读实现（PG 出、MySQL 基本不出）。</li>
+<li>2PL 串行化但吞吐差、有死锁；MVCC/SI 读性能好但有写偏斜；SSI 在 SI 上加危险结构检测，兼顾大部分正确性与性能。</li>
+<li>分布式事务 = 原子提交 + 全局隔离 + 性能悬崖三个新难题；首选把事务设计进单分片。</li>
+<li>异常 × 级别 × 实现的映射表是本章的随身工具，第 08 章把&quot;原子提交&quot;单独拉出来讲。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>跑通 acid_durability.py，记录你机器上 fsync 与不 fsync 的倍数；用 <code>dd</code> 写 1GB 文件时对比 <code>oflag=direct</code> 与否，把&quot;每条 fsync&quot;的代价换算成&quot;数据库每秒事务上限&quot;的直觉。</li>
+<li>用 two_phase_lock.py 构造完整死锁：两个线程分别以 A→B 与 B→A 的顺序加锁（需要把单锁改成 dict 管理的两把锁），运行观察卡死；然后加&quot;获取第二个锁失败就释放第一个并重试&quot;的规避逻辑。</li>
+<li>时序图作业：画出&quot;两个事务删除值班医生&quot;的写偏斜完整时序（含各自的快照读取、写、提交时刻），并标注 SSI 的 SIREAD 锁会在哪个时刻报警。</li>
+<li>用 sqlite3（Python 自带）实验隔离级别：两个连接并发操作，构造不可重复读（需要把 journal_mode 设置正确），再改用 <code>BEGIN IMMEDIATE</code> 观察变化，写下 SQLite 的并发模型与 MVCC 数据库的差异。</li>
+<li>设计题：转账业务（A 扣 100、B 加 100）在&quot;按 user_id 分区&quot;的分布式库上如何保证不丢钱？给出分片设计、原子提交方案（预告 08 章）、以及冲突重试策略三层答案。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/06-%E5%88%86%E5%8C%BA%E4%B8%8E%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/" rel="prev" title="06-分区与一致性哈希">
+                  <i class="fa fa-angle-left"></i> 06-分区与一致性哈希
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/08-%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/" rel="next" title="08-分布式事务">
+                  08-分布式事务 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

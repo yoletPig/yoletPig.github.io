@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 给出数据竞争的标准定义，理解&#39;竞争 &#x3D; 未定义行为&#39;而不是&#39;结果不确定&#39;。 - 逐个理解六种 memoryorder 的语义与适用场景，能对每一处原子操作说出&#39;为什么是这个序&#39;。 - 用 release-acquire 配对实验 + T…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="04-内存模型与原子操作进阶">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/04-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C%E8%BF%9B%E9%98%B6/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 给出数据竞争的标准定义，理解&#39;竞争 &#x3D; 未定义行为&#39;而不是&#39;结果不确定&#39;。 - 逐个理解六种 memoryorder 的语义与适用场景，能对每一处原子操作说出&#39;为什么是这个序&#39;。 - 用 release-acquire 配对实验 + T…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-04T14:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.590Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="C++">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/04-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C%E8%BF%9B%E9%98%B6/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/04-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C%E8%BF%9B%E9%98%B6/","path":"2026/09/04/04-内存模型与原子操作进阶/","title":"04-内存模型与原子操作进阶"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>04-内存模型与原子操作进阶 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#04-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C%E8%BF%9B%E9%98%B6"><span class="nav-number">1.</span> <span class="nav-text"> 04 - 内存模型与原子操作进阶</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E6%95%B0%E6%8D%AE%E7%AB%9E%E4%BA%89%E7%9A%84%E4%B8%A5%E6%A0%BC%E5%AE%9A%E4%B9%89"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 数据竞争的严格定义</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%85%AD%E7%A7%8D-memory_order-%E9%80%90%E4%B8%AA%E8%AF%AD%E4%B9%89"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 六种 memory_order 逐个语义</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-release-acquire-%E9%85%8D%E5%AF%B9%E5%AE%9E%E9%AA%8C"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. release-acquire 配对实验</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-happens-before-%E5%85%B3%E7%B3%BB%E5%9B%BE%E8%A7%A3"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. happens-before 关系图解</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-aba-%E9%97%AE%E9%A2%98%E5%80%BC%E4%B8%80%E6%A0%B7%E4%B8%96%E7%95%8C%E5%B7%B2%E7%BB%8F%E5%8F%98%E4%BA%86"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. ABA 问题：值一样，世界已经变了</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E4%BC%AA%E5%85%B1%E4%BA%AB%E5%AE%9E%E6%B5%8Balignas64-%E5%A1%AB%E5%85%85"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 伪共享实测：alignas(64) 填充</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-stdatomic-%E6%AD%A3%E7%A1%AE%E7%94%A8%E6%B3%95%E6%B8%85%E5%8D%95"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. std::atomic 正确用法清单</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/04-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C%E8%BF%9B%E9%98%B6/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="04-内存模型与原子操作进阶 | Yoleen的博客">
+      <meta itemprop="description" content="- 给出数据竞争的标准定义，理解&#39;竞争 &#x3D; 未定义行为&#39;而不是&#39;结果不确定&#39;。 - 逐个理解六种 memoryorder 的语义与适用场景，能对每一处原子操作说出&#39;为什么是这个序&#39;。 - 用 release-acquire 配对实验 + T…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          04-内存模型与原子操作进阶
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 22:00:00" itemprop="dateCreated datePublished" datetime="2026-09-04T22:00:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/C-%E8%BF%9B%E9%98%B6/" itemprop="url" rel="index"><span itemprop="name">C++进阶</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 给出数据竞争的标准定义，理解'竞争 = 未定义行为'而不是'结果不确定'。 - 逐个理解六种 memoryorder 的语义与适用场景，能对每一处原子操作说出'为什么是这个序'。 - 用 release-acquire 配对实验 + T…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="04-内存模型与原子操作进阶"><a class="markdownIt-Anchor" href="#04-内存模型与原子操作进阶"></a> 04 - 内存模型与原子操作进阶</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>给出数据竞争的<strong>标准定义</strong>，理解&quot;竞争 = 未定义行为&quot;而不是&quot;结果不确定&quot;。</li>
+<li>逐个理解六种 <code>memory_order</code> 的语义与适用场景，能对每一处原子操作说出&quot;为什么是这个序&quot;。</li>
+<li>用 release-acquire 配对实验 + TSan 验证正确的同步，看懂 happens-before 关系图。</li>
+<li>认识 ABA 问题与带版本号解法；复现并修复伪共享（衔接《计算机系统与网络》03 的缓存行概念）。</li>
+</ul>
+<p>前置：《C++》系列 12（并发编程）——本篇默认你会用 <code>std::thread</code>、<code>std::mutex</code>、<code>std::atomic</code> 的基本 API。</p>
+<h2 id="1-数据竞争的严格定义"><a class="markdownIt-Anchor" href="#1-数据竞争的严格定义"></a> 1. 数据竞争的严格定义</h2>
+<p>《C++》系列 12 说&quot;两个线程同时写同一个变量是数据竞争&quot;，标准里的定义更精确（[intro.races]，N4861 §6.9.2）：</p>
+<blockquote>
+<p>两个<strong>冲突动作</strong>（conflicting actions）指：访问同一内存位置、至少一个是写。若它们<strong>发生在不同线程</strong>（或同一线程内不按程序序），且<strong>没有先后关系（happens-before）</strong>，则程序包含数据竞争。<strong>含数据竞争的 C++ 程序（用非原子操作时）是未定义行为</strong>——不是&quot;结果可能是旧值&quot;，是标准不再保证任何事。</p>
+</blockquote>
+<p>三个关键词逐个过：</p>
+<ul>
+<li><strong>同一内存位置</strong>：一个 <code>int</code> 是一个位置；一个 <code>struct {int a; int b;}</code> 是两个位置（成员各自独立），但位域可能共享位置。</li>
+<li><strong>happens-before</strong>：同步建立的&quot;可见性边&quot;。有这条边，一个线程的写对另一个线程的读<strong>保证可见且有序</strong>；没有这条边，硬件/优化器可以乱序、缓存、复用寄存器，读到的可以是任何历史值甚至&quot;既新又旧&quot;的混合。</li>
+<li><strong>UB 的含义</strong>：编译器有权假设无竞争，据此把看似无关的代码重排/删除。下面这个例子（标准 [intro.progress] 相关讨论的常见教学变体）在 <code>-O2</code> 下可能死循环：</li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// spin_ub.cpp —— 演示：非原子忙等可能被优化成死循环（UB 的实际危害）</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;thread&gt;</span></span></span><br><span class="line"><span class="type">bool</span> ready = <span class="literal">false</span>;                 <span class="comment">// 非原子！</span></span><br><span class="line"><span class="type">int</span>  data  = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">producer</span><span class="params">()</span> </span>&#123; data = <span class="number">42</span>; ready = <span class="literal">true</span>; &#125;   <span class="comment">// 两行写</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">consumer</span><span class="params">()</span> </span>&#123; <span class="keyword">while</span> (!ready) &#123;&#125; std::cout &lt;&lt; data &lt;&lt; <span class="string">&#x27;\n&#x27;</span>; &#125;</span><br><span class="line"><span class="comment">// 优化器假设无竞争 → consumer 里 ready 不会&quot;自己变 true&quot; → 循环体可能被提升成 while(true)&#123;&#125;</span></span><br></pre></td></tr></table></figure>
+<p>修法不是加锁（这里没有临界区），而是把 <code>ready</code> 换成 <code>std::atomic&lt;bool&gt;</code> 并选对内存序——这就是接下来两节的内容。</p>
+<h2 id="2-六种-memory_order-逐个语义"><a class="markdownIt-Anchor" href="#2-六种-memory_order-逐个语义"></a> 2. 六种 memory_order 逐个语义</h2>
+<p><code>memory_order</code> 控制的是&quot;这条原子操作周围的其他访存可以乱序到什么程度&quot;。六种按强度排列：</p>
+<table>
+<thead>
+<tr>
+<th>memory_order</th>
+<th>语义</th>
+<th>典型场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>relaxed</code></td>
+<td>只保证本操作原子，<strong>不约束</strong>其他访存的顺序</td>
+<td>计数器（统计）、无同步意义的标志</td>
+</tr>
+<tr>
+<td><code>acquire</code></td>
+<td>本读之后的其他访存<strong>不得上移</strong>到它之前；能看见配对 release 之前的所有写</td>
+<td>消费者读标志/游标</td>
+</tr>
+<tr>
+<td><code>release</code></td>
+<td>本写之前的其他访存<strong>不得下移</strong>到它之后；写入对配对 acquire 可见</td>
+<td>生产者写完数据后置标志</td>
+</tr>
+<tr>
+<td><code>acq_rel</code></td>
+<td>对一个读-改-写操作同时施加 acquire + release</td>
+<td>CAS/<code>fetch_add</code> 既是读又是写时</td>
+</tr>
+<tr>
+<td><code>seq_cst</code></td>
+<td>acquire + release，<strong>且所有 seq_cst 操作构成全序</strong>（默认值）</td>
+<td>多变量同步、不想想清楚时</td>
+</tr>
+<tr>
+<td><code>consume</code></td>
+<td>理论上的&quot;依赖序 acquire&quot;；<strong>实践中被实现为 acquire</strong>，标准委员会建议别用（[atomics.order] 明确鼓励改为 acquire）</td>
+<td>几乎没有（历史遗留）</td>
+</tr>
+</tbody>
+</table>
+<p>记忆骨架（经验做法）：<strong>&quot;release 发布，acquire 接收&quot;是一对；<code>fetch_*</code>/CAS 这类读改写用 <code>acq_rel</code>；纯计数用 <code>relaxed</code>；拿不准用 <code>seq_cst</code>（默认），先对再快</strong>。<code>consume</code> 只在两个地方还会遇到：旧代码和面试题。</p>
+<p>默认值陷阱：<code>store(v)</code> 不写内存序就是 <code>seq_cst</code>，在某些架构（尤其 ARM）上比 <code>release</code> 贵——但<strong>贵的不是 store 本身，是它要求的全序栅栏</strong>。所以&quot;先写对（seq_cst），剖析证明热点后再收紧&quot;是可行路径。</p>
+<h2 id="3-release-acquire-配对实验"><a class="markdownIt-Anchor" href="#3-release-acquire-配对实验"></a> 3. release-acquire 配对实验</h2>
+<p>经典的&quot;生产者写数据 → 消费者看标志再读数据&quot;：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ra_pair.cpp —— release-acquire 正确配对</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;atomic&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cassert&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;thread&gt;</span></span></span><br><span class="line"></span><br><span class="line">std::atomic&lt;<span class="type">bool</span>&gt; ready&#123;<span class="literal">false</span>&#125;;</span><br><span class="line"><span class="type">int</span> payload = <span class="number">0</span>;                              <span class="comment">// 普通变量，靠 atomic 建立可见性</span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">producer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    payload = <span class="number">42</span>;                             <span class="comment">// (1) 普通写</span></span><br><span class="line">    ready.<span class="built_in">store</span>(<span class="literal">true</span>, std::memory_order_release);   <span class="comment">// (2) release：之前的写(1)不许下沉到它之后</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">consumer</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">while</span> (!ready.<span class="built_in">load</span>(std::memory_order_acquire)) &#123;&#125;  <span class="comment">// (3) acquire：之后的读不许上移到它之前</span></span><br><span class="line">    <span class="built_in">assert</span>(payload == <span class="number">42</span>);                    <span class="comment">// (4) 保证看到 42——(2)与(3)配对建立 happens-before</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="function">std::thread <span class="title">t1</span><span class="params">(producer)</span>, <span class="title">t2</span><span class="params">(consumer)</span></span>;</span><br><span class="line">    t1.<span class="built_in">join</span>(); t2.<span class="built_in">join</span>();</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;payload = &quot;</span> &lt;&lt; payload &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O2 -Wall -Wextra -pthread ra_pair.cpp -o ra_pair &amp;&amp; ./ra_pair</span><br><span class="line"><span class="comment"># 输出：payload = 42</span></span><br></pre></td></tr></table></figure>
+<p><strong>验证工具 TSan</strong>（ThreadSanitizer）能把&quot;有没有竞争&quot;从猜变成查。故意把 <code>acquire/release</code> 都改成 <code>relaxed</code>，让 (1)(4) 失去同步边：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">$ g++ -std=c++20 -O1 -g -fsanitize=thread -pthread ra_bad.cpp -o ra_bad &amp;&amp; ./ra_bad</span><br><span class="line">==================</span><br><span class="line">WARNING: ThreadSanitizer: data race (pid=12345)</span><br><span class="line">  Read of size 4 at 0x7ffc... by thread T2:</span><br><span class="line">    #0 consumer() ra_bad.cpp:14 (ra_bad+0x...)</span><br><span class="line">  Previous write of size 4 at 0x7ffc... by thread T1:</span><br><span class="line">    #1 producer() ra_bad.cpp:9 (ra_bad+0x...)</span><br><span class="line">...</span><br><span class="line">SUMMARY: ThreadSanitizer: data race ra_bad.cpp:9 in producer()</span><br><span class="line">==================</span><br></pre></td></tr></table></figure>
+<p>TSan 报出 <code>data race</code>——尽管程序&quot;看起来&quot;能跑对（assert 大多数时候不炸）。规则：<strong><code>relaxed</code> 只保证&quot;读到的是某个原子写过的值&quot;，不保证&quot;读到的是最新的一次写&quot;，更不传递其他变量的可见性</strong>。改回 release/acquire 再跑 TSan，输出干净。TSan 只能在&quot;竞争被实际触发&quot;时报告，是检测器不是证明器；无竞争的正确性要靠第 4 节的推理。</p>
+<h2 id="4-happens-before-关系图解"><a class="markdownIt-Anchor" href="#4-happens-before-关系图解"></a> 4. happens-before 关系图解</h2>
+<p>happens-before（先行发生）是上述一切的形式化骨架。三种边（[intro.races]/13-15）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1. 程序序（sequenced-before）：单线程内，按语句顺序。</span><br><span class="line">2. 同步（synchronizes-with）：配对的 release 写 → acquire 读。</span><br><span class="line">3. happens-before = 1、2 的传递闭包。</span><br></pre></td></tr></table></figure>
+<p>把第 3 节的实验画成图：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">producer 线程                                consumer 线程</span><br><span class="line">─────────────                                ─────────────</span><br><span class="line">payload = 42  ──sequenced-before──┐</span><br><span class="line">                                  │</span><br><span class="line">ready.store(release) ─────────────┼──synchronizes-with────→ ready.load(acquire)</span><br><span class="line">                                  │                            │</span><br><span class="line">                                  │                    sequenced-before</span><br><span class="line">                                  │                            ↓</span><br><span class="line">                                  └───happens-before──→   读 payload（看到 42）</span><br></pre></td></tr></table></figure>
+<p>顺带把其他同步点映射进来，建立全局地图：<code>mutex.unlock() → 后续 lock()</code> 是 synchronizes-with；<code>thread t(f)</code> 的构造 happens-before <code>f</code> 的执行，<code>t.join()</code> 的返回 happens-after <code>f</code> 的全部动作；<code>std::atomic</code> 的 RMW 读到的是&quot;最新值链&quot;上的值（[intro.races]/20 的 read-modify-write 特殊规则）。<strong>竞争的定义 = 冲突动作间没有 happens-before 边</strong>——检查并发代码就是画这张图，画不出边的全都有问题。</p>
+<h2 id="5-aba-问题值一样世界已经变了"><a class="markdownIt-Anchor" href="#5-aba-问题值一样世界已经变了"></a> 5. ABA 问题：值一样，世界已经变了</h2>
+<p>CAS 的语义是&quot;期望值等于当前值才写&quot;。但&quot;值相等&quot;不等于&quot;没被改过&quot;：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">时刻 1：线程 A 读到指针 p（指向节点 X）</span><br><span class="line">时刻 2：线程 B 把 X 弹出，free 掉，后来又 push 回一个&quot;恰好地址还是 X&quot;的新节点</span><br><span class="line">时刻 3：线程 A CAS(p, X, ...) —— 成功！但 X 已经不是当年那个 X</span><br></pre></td></tr></table></figure>
+<p>无锁栈/队列在内存可复用时都会踩到。最常用的解法是<strong>带版本号的 CAS</strong>：把&quot;指针 + 计数器&quot;打包成一个 128 位值，每次修改计数器 +1，A/B 两次操作即使地址相同、版本号也不同：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// aba.cpp —— 版本号化解 ABA（教学版：单机 128 位 CAS）</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;atomic&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdint&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Tagged</span> &#123;          <span class="comment">// 64 位指针 + 16 位版本号，打进 80 位；x86-64 可用 __int128 做一次 CAS</span></span><br><span class="line">    std::<span class="type">uint64_t</span> ptr;</span><br><span class="line">    std::<span class="type">uint16_t</span> ver;</span><br><span class="line">&#125;;</span><br><span class="line"><span class="keyword">static_assert</span>(<span class="keyword">sizeof</span>(Tagged) &lt;= <span class="number">16</span>);</span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Slot</span> &#123; Tagged t; &#125;;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">AtomicTagged</span> &#123;</span><br><span class="line">    <span class="comment">// 生产实现：x86-64 用 cmpxchg16b（lock cmpxchg16b）；这里用 std::atomic&lt;Tagged&gt; 示意</span></span><br><span class="line">    std::atomic&lt;Tagged&gt; a&#123;&#123;<span class="number">0</span>, <span class="number">0</span>&#125;&#125;;</span><br><span class="line">    <span class="function"><span class="type">bool</span> <span class="title">cas</span><span class="params">(Tagged expect, Tagged next)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">return</span> a.<span class="built_in">compare_exchange_strong</span>(expect, next);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    AtomicTagged s;</span><br><span class="line">    Tagged cur = s.a.<span class="built_in">load</span>();</span><br><span class="line">    Tagged next&#123;cur.ptr + <span class="number">8</span>, <span class="keyword">static_cast</span>&lt;std::<span class="type">uint16_t</span>&gt;(cur.ver + <span class="number">1</span>)&#125;;  <span class="comment">// 每次改动版本号变</span></span><br><span class="line">    <span class="type">bool</span> ok = s.<span class="built_in">cas</span>(cur, next);</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;CAS &quot;</span> &lt;&lt; (ok ? <span class="string">&quot;成功&quot;</span> : <span class="string">&quot;失败&quot;</span>)</span><br><span class="line">              &lt;&lt; <span class="string">&quot;，ver: &quot;</span> &lt;&lt; cur.ver &lt;&lt; <span class="string">&quot; -&gt; &quot;</span> &lt;&lt; next.ver &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O2 aba.cpp -o aba &amp;&amp; ./aba</span><br><span class="line"><span class="comment"># 输出：CAS 成功，ver: 0 -&gt; 1</span></span><br></pre></td></tr></table></figure>
+<p>另外两条路：<strong>延迟回收</strong>（hazard pointer/epoch，见第 05 章——节点退出链表后不 free，等所有读者确认不再引用再回收，“地址复用&quot;就无从发生）；<strong>干脆不回收</strong>（epoll 式：节点从池里借、用完还池，池内存永不 free，ABA 退化为&quot;值相同即可”）。标准库实践：<code>std::shared_ptr</code> 原子操作有引用计数兜底，但慢；C++20 的 <code>std::atomic&lt;std::shared_ptr&lt;T&gt;&gt;</code> 与 <code>atomic_ref</code> 提供了更直接的方案。</p>
+<h2 id="6-伪共享实测alignas64-填充"><a class="markdownIt-Anchor" href="#6-伪共享实测alignas64-填充"></a> 6. 伪共享实测：alignas(64) 填充</h2>
+<p>《计算机系统与网络》03 讲过缓存行（64 字节）与 MESI：<strong>缓存一致性以缓存行为单位</strong>。两个线程各自写两个&quot;逻辑无关&quot;的变量，若它们落在同一条缓存行上，每次写都让对方的缓存行失效——这就是伪共享（false sharing）：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// falsesharing.cpp —— 两个线程各写各的计数器</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;atomic&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;chrono&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;thread&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;vector&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">CountersBad</span>  &#123; std::atomic&lt;<span class="type">long</span>&gt; a; std::atomic&lt;<span class="type">long</span>&gt; b; &#125;;   <span class="comment">// 16 字节：同一条缓存行</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">CountersGood</span> &#123; <span class="keyword">alignas</span>(<span class="number">64</span>) std::atomic&lt;<span class="type">long</span>&gt; a;</span><br><span class="line">                      <span class="keyword">alignas</span>(<span class="number">64</span>) std::atomic&lt;<span class="type">long</span>&gt; b; &#125;;            <span class="comment">// 各占一条缓存行</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> C&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">run</span><span class="params">(<span class="type">const</span> <span class="type">char</span>* name)</span> </span>&#123;</span><br><span class="line">    C c&#123;&#125;; c.a = <span class="number">0</span>; c.b = <span class="number">0</span>;</span><br><span class="line">    std::vector&lt;std::thread&gt; ts;</span><br><span class="line">    <span class="keyword">auto</span> t0 = std::chrono::steady_clock::<span class="built_in">now</span>();</span><br><span class="line">    ts.<span class="built_in">emplace_back</span>([&amp;]&#123; <span class="keyword">for</span> (<span class="type">long</span> i = <span class="number">0</span>; i &lt; <span class="number">50&#x27;000&#x27;000</span>; ++i) c.a.<span class="built_in">fetch_add</span>(<span class="number">1</span>, std::memory_order_relaxed); &#125;);</span><br><span class="line">    ts.<span class="built_in">emplace_back</span>([&amp;]&#123; <span class="keyword">for</span> (<span class="type">long</span> i = <span class="number">0</span>; i &lt; <span class="number">50&#x27;000&#x27;000</span>; ++i) c.b.<span class="built_in">fetch_add</span>(<span class="number">1</span>, std::memory_order_relaxed); &#125;);</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">auto</span>&amp; t : ts) t.<span class="built_in">join</span>();</span><br><span class="line">    <span class="keyword">auto</span> t1 = std::chrono::steady_clock::<span class="built_in">now</span>();</span><br><span class="line">    std::cout &lt;&lt; name &lt;&lt; <span class="string">&quot;: &quot;</span> &lt;&lt; std::chrono::<span class="built_in">duration</span>&lt;<span class="type">double</span>, std::milli&gt;(t1 - t0).<span class="built_in">count</span>()</span><br><span class="line">              &lt;&lt; <span class="string">&quot; ms  (a+b=&quot;</span> &lt;&lt; (c.a.<span class="built_in">load</span>() + c.b.<span class="built_in">load</span>()) &lt;&lt; <span class="string">&quot;)\n&quot;</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123; <span class="built_in">run</span>&lt;CountersBad&gt;(<span class="string">&quot;伪共享     &quot;</span>); <span class="built_in">run</span>&lt;CountersGood&gt;(<span class="string">&quot;缓存行隔离 &quot;</span>); &#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O2 -pthread falsesharing.cpp -o falsesharing &amp;&amp; ./falsesharing &amp;&amp; ./falsesharing</span><br><span class="line"><span class="comment"># 输出（i5-12600K 实测两次）：</span></span><br><span class="line"><span class="comment"># 伪共享     : 904.404 ms  (a+b=100000000)</span></span><br><span class="line"><span class="comment"># 缓存行隔离 : 246.061 ms  (a+b=100000000)</span></span><br><span class="line"><span class="comment"># 伪共享     : 855.977 ms  (a+b=100000000)</span></span><br><span class="line"><span class="comment"># 缓存行隔离 : 246.061 → 213.85 ms（第二次）</span></span><br></pre></td></tr></table></figure>
+<p>隔离后快 <strong>3.7 倍</strong>——没有改任何逻辑，只把两个变量分开 64 字节。诊断工具：<code>perf c2c</code>（cache-to-cache 冲突检测，见《Linux 性能工程》10）或看 <code>perf stat -e cache-misses</code> 的异常比例。工程规则（经验做法）：<strong>被不同线程高频写的变量，一个变量一条缓存行</strong>：<code>alignas(64)</code>，或 <code>std::hardware_destructive_interference_size</code>（C++17，GCC 需手动 <code>__GCC_DESTRUCTIVE_SIZE</code>，值即 64）。注意方向别搞反：<strong>被同一线程一起读的一组变量反而要挤在一条行内</strong>。</p>
+<h2 id="7-stdatomic-正确用法清单"><a class="markdownIt-Anchor" href="#7-stdatomic-正确用法清单"></a> 7. std::atomic 正确用法清单</h2>
+<ul>
+<li><strong>能不用就不用</strong>：复合逻辑（两个变量的不变式）用 <code>mutex</code>；单变量计数/标志/游标才轮到 atomic（见《C++》系列 12 的选择标准）。</li>
+<li><strong>内存序按&quot;最小够用&quot;标理由</strong>：每个 <code>atomic</code> 操作旁边写注释说明选它的原因；写不出理由就用默认 <code>seq_cst</code>（经验做法）。</li>
+<li><strong>RMW 一律 <code>acq_rel</code></strong> 起步：<code>fetch_add</code>/<code>compare_exchange</code> 本身既读又写，单边序（只 release 或只 acquire）语义不完整。</li>
+<li><strong>CAS 循环用 <code>compare_exchange_weak</code></strong>：允许伪失败、循环里自动重试；只在&quot;不循环、单次尝试&quot;时用 strong。</li>
+<li><strong>别用 atomic 数组解决伪共享后忘对齐</strong>：<code>std::atomic&lt;T&gt;</code> 的对齐跟随 <code>T</code>，热数组手动 <code>alignas(64)</code>。</li>
+<li><strong><code>volatile</code> 不是 atomic</strong>：<code>volatile</code> 只禁止编译器优化访存，不提供原子性、不建立 happens-before（[intro.progress] 与 cppreference 明确区分）；把 <code>volatile int</code> 当线程标志是经典错误。</li>
+<li><strong>验证</strong>：并发代码合入前跑 TSan（CI 里固定跑），性能敏感路径用 <code>perf c2c</code>/false-sharing 检查。</li>
+</ul>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>把数据竞争理解成&quot;读到的值可能旧&quot;</strong>：UB 意味着优化器可以基于&quot;无竞争&quot;假设删掉整段逻辑（第 1 节的死循环就是实证），不是&quot;偶尔读到旧值&quot;那么温和。</li>
+<li><strong>relaxed 当&quot;更快版 seq_cst&quot;随便用</strong>：<code>relaxed</code> 不传递任何可见性，两个 relaxed 变量之间没有顺序；只有&quot;计数、不参与同步&quot;的场合才能用它。</li>
+<li><strong>以为 <code>release</code> store 会让数据立刻对其他线程可见</strong>：可见性只在<strong>配对的 acquire 读到这个 store 的值</strong>时才沿边传播；没人 acquire，什么也不保证。</li>
+<li><strong><code>compare_exchange_strong</code> 忘了它会改写 <code>expected</code></strong>：失败时 <code>expected</code> 被更新为当前值，循环写法必须接着用这个新值，否则白转。</li>
+<li><strong>伪共享只想到 atomic 数组</strong>：两个非原子变量被不同线程写同样是伪共享（顺便还是 UB）；<code>alignas(64)</code> 对两者都需要。</li>
+<li><strong>用 <code>std::atomic&lt;double&gt;</code>/结构体当万能药</strong>：<code>atomic&lt;T&gt;</code> 要求 T 可平凡拷贝才基本可用，大结构体会退化成内部锁（<code>is_lock_free()</code> 为 false），性能不升反降；先用 <code>atomic&lt;T*&gt;</code> 指向不可变对象（copy-on-write 思想）。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>数据竞争的标准定义：不同线程的冲突动作 + 无 happens-before → UB；后果包括死循环、被删除的代码，不只是&quot;旧值&quot;。</li>
+<li>六种内存序记骨架：release 发布 / acquire 接收、RMW 用 acq_rel、计数 relaxed、默认 seq_cst、consume 别用。</li>
+<li>happens-before = 程序序 + 同步边的传递闭包；检查并发代码 = 画图找缺失的边；TSan 能查实际触发的竞争。</li>
+<li>ABA 用版本号 CAS、延迟回收或对象池解决；伪共享用 <code>alignas(64)</code> 隔离，实测 3.7x。</li>
+<li>atomic 清单：先锁后原子、内存序写理由、CAS 用 weak + 接住 expected、volatile 不是 atomic。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>用 TSan 复现第 3 节的 <code>ra_bad</code>（relaxed 版）报告，再把 <code>payload</code> 的写在 store 之前挪到之后，思考并验证：这时 assert 还保证成立吗？（提示：程序序的方向）</li>
+<li>把第 6 节 <code>CountersGood</code> 的 <code>alignas(64)</code> 改成 <code>alignas(16)</code>，测量并解释为什么仍可能出现部分伪共享（两个 long 仍可能同行）。</li>
+<li>写一个 <code>std::atomic&lt;int&gt;</code> 的 <code>max</code> 函数（CAS 循环实现），内存序选 <code>acq_rel</code>，并用注释写明每一处为什么。</li>
+<li>画出第 3 节实验的 happens-before 图，然后回答：如果 consumer 用 <code>relaxed</code> 读、producer 用 <code>release</code> 写，边还在吗？断言还成立吗？</li>
+<li>实现 <code>spinlock</code>（<code>atomic_flag::test_and_set(acquire)</code> / <code>clear(release)</code>），与 <code>std::mutex</code> 对比单线程与 4 线程争抢下的性能，解释为什么本机实测&quot;4 线程争抢时朴素自旋锁比 mutex 还慢&quot;（提示：缓存行在两核间来回弹跳 + 纺线烧 CPU）。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/C/" rel="tag"># C++</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/03-SIMD%E4%B8%8E%E5%90%91%E9%87%8F%E5%8C%96/" rel="prev" title="03-SIMD与向量化">
+                  <i class="fa fa-angle-left"></i> 03-SIMD与向量化
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/05-%E6%97%A0%E9%94%81%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/" rel="next" title="05-无锁数据结构">
+                  05-无锁数据结构 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

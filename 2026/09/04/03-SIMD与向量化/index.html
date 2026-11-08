@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 建立&#39;数据并行&#39;思维：一条指令处理多个数据，理解它为什么快、什么情况下快不起来。 - 认识 x86 指令集族（SSE&#x2F;AVX&#x2F;AVX2&#x2F;AVX-512）与 ARM NEON 的事实参数，会用 AVX2 intrinsics 手写 flo…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="03-SIMD与向量化">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/03-SIMD%E4%B8%8E%E5%90%91%E9%87%8F%E5%8C%96/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 建立&#39;数据并行&#39;思维：一条指令处理多个数据，理解它为什么快、什么情况下快不起来。 - 认识 x86 指令集族（SSE&#x2F;AVX&#x2F;AVX2&#x2F;AVX-512）与 ARM NEON 的事实参数，会用 AVX2 intrinsics 手写 flo…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-04T13:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.590Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="C++">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/03-SIMD%E4%B8%8E%E5%90%91%E9%87%8F%E5%8C%96/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/03-SIMD%E4%B8%8E%E5%90%91%E9%87%8F%E5%8C%96/","path":"2026/09/04/03-SIMD与向量化/","title":"03-SIMD与向量化"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>03-SIMD与向量化 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#03-simd-%E4%B8%8E%E5%90%91%E9%87%8F%E5%8C%96"><span class="nav-number">1.</span> <span class="nav-text"> 03 - SIMD 与向量化</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E6%95%B0%E6%8D%AE%E5%B9%B6%E8%A1%8C%E6%80%9D%E6%83%B3"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 数据并行思想</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-x86-%E6%8C%87%E4%BB%A4%E9%9B%86%E6%97%8F%E4%BA%8B%E5%AE%9E%E8%A1%A8"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. x86 指令集族事实表</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-intrinsics-%E5%85%A5%E9%97%A8avx2-%E6%B1%82%E5%92%8C%E5%AE%9E%E6%B5%8B"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. intrinsics 入门：AVX2 求和实测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%AF%B9%E9%BD%90alignas-aligned_alloc-%E4%B8%8E%E6%AE%B5%E9%94%99%E8%AF%AF%E7%8E%B0%E5%9C%BA"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 对齐：alignas、aligned_alloc 与段错误现场</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E8%87%AA%E5%8A%A8%E5%90%91%E9%87%8F%E5%8C%96%E6%80%8E%E4%B9%88%E5%86%99%E7%BC%96%E8%AF%91%E5%99%A8%E6%89%8D%E4%BC%9A%E5%90%91%E9%87%8F%E5%8C%96"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 自动向量化：怎么写编译器才会向量化</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-gather-scatter%E4%B8%8D%E8%BF%9E%E7%BB%AD%E8%AE%BF%E9%97%AE%E6%80%8E%E4%B9%88%E5%8A%9E"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. gather &#x2F; scatter：不连续访问怎么办</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E8%B7%A8%E5%B9%B3%E5%8F%B0%E6%80%8E%E4%B9%88%E5%8A%9E%E5%BA%93%E4%B8%8E%E8%BF%90%E8%A1%8C%E6%97%B6%E6%B4%BE%E5%8F%91"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 跨平台怎么办：库与运行时派发</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#8-%E4%B8%8E-gpu-%E7%9A%84%E5%85%B3%E7%B3%BB%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99-cpu-simd-%E8%BF%98%E5%A4%9F%E7%94%A8"><span class="nav-number">1.9.</span> <span class="nav-text"> 8. 与 GPU 的关系：什么时候 CPU SIMD 还够用</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.10.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.11.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.12.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/03-SIMD%E4%B8%8E%E5%90%91%E9%87%8F%E5%8C%96/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="03-SIMD与向量化 | Yoleen的博客">
+      <meta itemprop="description" content="- 建立&#39;数据并行&#39;思维：一条指令处理多个数据，理解它为什么快、什么情况下快不起来。 - 认识 x86 指令集族（SSE&#x2F;AVX&#x2F;AVX2&#x2F;AVX-512）与 ARM NEON 的事实参数，会用 AVX2 intrinsics 手写 flo…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          03-SIMD与向量化
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 21:30:00" itemprop="dateCreated datePublished" datetime="2026-09-04T21:30:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/C-%E8%BF%9B%E9%98%B6/" itemprop="url" rel="index"><span itemprop="name">C++进阶</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 建立'数据并行'思维：一条指令处理多个数据，理解它为什么快、什么情况下快不起来。 - 认识 x86 指令集族（SSE/AVX/AVX2/AVX-512）与 ARM NEON 的事实参数，会用 AVX2 intrinsics 手写 flo…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="03-simd-与向量化"><a class="markdownIt-Anchor" href="#03-simd-与向量化"></a> 03 - SIMD 与向量化</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>建立&quot;数据并行&quot;思维：一条指令处理多个数据，理解它为什么快、什么情况下快不起来。</li>
+<li>认识 x86 指令集族（SSE/AVX/AVX2/AVX-512）与 ARM NEON 的事实参数，会用 AVX2 intrinsics 手写 float 求和并实测加速比。</li>
+<li>掌握对齐（<code>alignas</code>/<code>aligned_alloc</code>）与未对齐访问的崩溃现场，学会用 <code>-fopt-info-vec</code> 验证自动向量化。</li>
+<li>知道跨平台的工程出路（Highway/Xsimd、运行时派发），以及&quot;什么时候 CPU SIMD 还够用、该上 GPU&quot;。</li>
+</ul>
+<p>前置：《计算机系统与网络》03（缓存层级与局部性）。</p>
+<h2 id="1-数据并行思想"><a class="markdownIt-Anchor" href="#1-数据并行思想"></a> 1. 数据并行思想</h2>
+<p>普通代码是 SISD：一条指令处理一个数据。SIMD（Single Instruction, Multiple Data）让一条指令同时对 N 个数据做同样的运算——CPU 里叫向量化，GPU 里这个思想被推到极致（几千个&quot;线程&quot;锁步执行同一条指令，见《模型性能优化》Stage 3）。</p>
+<p>对 <code>a[i] = b[i] + c[i]</code> 这样的循环，标量执行每轮要做：取指 → 一次加法 → 下一轮。向量化后一次加 8 个 float（256 位），取指和分支开销摊薄到 1/8，浮点吞吐理论上 ×8。这就是 GEMM、卷积、量化、音频重采样这类&quot;规整的批量算术&quot;能被加速的本质。</p>
+<p>两个先决条件同样重要：<strong>数据在内存里要连续</strong>（一次 load 取到的是一整段连续地址），<strong>控制流要规整</strong>（<code>if</code> 分支会让不同 lane 走不同路，得靠掩码模拟）。这一章的所有技巧本质上都在伺候这两条。</p>
+<h2 id="2-x86-指令集族事实表"><a class="markdownIt-Anchor" href="#2-x86-指令集族事实表"></a> 2. x86 指令集族事实表</h2>
+<table>
+<thead>
+<tr>
+<th>指令集</th>
+<th>年代</th>
+<th>向量宽度</th>
+<th>寄存器</th>
+<th>代表能力</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>MMX</td>
+<td>1996</td>
+<td>64 bit</td>
+<td>复用 FPU 栈 8 个</td>
+<td>整数打包运算，已淘汰</td>
+</tr>
+<tr>
+<td>SSE</td>
+<td>1999</td>
+<td>128 bit</td>
+<td>XMM0–XMM7（64 位模式 16 个）</td>
+<td>float 打包、<code>movaps/movups</code></td>
+</tr>
+<tr>
+<td>AVX</td>
+<td>2011</td>
+<td>256 bit</td>
+<td>16 个 YMM（XMM 是低 128 位）</td>
+<td>float/double 打包，VEX 编码</td>
+</tr>
+<tr>
+<td>AVX2</td>
+<td>2013</td>
+<td>256 bit</td>
+<td>同上</td>
+<td>整数打包用满 256 位，gather</td>
+</tr>
+<tr>
+<td>AVX-512</td>
+<td>2017</td>
+<td>512 bit</td>
+<td>32 个 ZMM + 8 个掩码寄存器</td>
+<td>掩码掩蔽、逐 lane 条件</td>
+</tr>
+<tr>
+<td>NEON（ARM）</td>
+<td>2008–</td>
+<td>128 bit</td>
+<td>32 个 V 寄存器</td>
+<td>ARM 服务器/手机基线，RK3588 即 NEON</td>
+</tr>
+</tbody>
+</table>
+<p>事实要点：<strong>x86-64 基线自带 SSE2</strong>（所以 <code>#include &lt;immintrin.h&gt;</code> 的 SSE2 代码无需任何编译选项）；AVX2 于 2013 年随 Haswell 普及，2020 年后的 x86 服务器/桌面几乎都有；AVX-512 在消费级上仍不齐（Intel 12/13 代酷睿小核甚至砍掉），这也是&quot;运行时派发&quot;存在的理由。本机（i5-12600K）实测 <code>/proc/cpuinfo</code> 含 <code>avx2</code>、不含 <code>avx512f</code>。宽度不等于免费加速：AVX-512 降频问题、寄存器数量、load 端口压力都会咬掉理论值。</p>
+<h2 id="3-intrinsics-入门avx2-求和实测"><a class="markdownIt-Anchor" href="#3-intrinsics-入门avx2-求和实测"></a> 3. intrinsics 入门：AVX2 求和实测</h2>
+<p>intrinsics 是&quot;看着像函数调用的汇编助记符&quot;：<code>_mm256_add_ps(a, b)</code> 编译成一条 <code>vaddps</code>。命名规则：<code>_mm</code> 前缀 + 寄存器宽度（<code>128</code>=SSE、<code>256</code>=AVX、<code>512</code>=AVX-512）+ 操作 + 数据类型后缀（<code>ps</code>=packed single 精度，<code>epi32</code>=packed int32）。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// simdsum.cpp —— 标量 vs AVX2 的 float 数组求和</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;immintrin.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;chrono&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdint&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;vector&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">float</span> <span class="title">sum_scalar</span><span class="params">(<span class="type">const</span> <span class="type">float</span>* a, <span class="type">size_t</span> n)</span> </span>&#123;</span><br><span class="line">    <span class="type">float</span> s = <span class="number">0.0f</span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; n; ++i) s += a[i];   <span class="comment">// 注意：依赖链，一轮等上一轮</span></span><br><span class="line">    <span class="keyword">return</span> s;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">float</span> <span class="title">sum_avx2</span><span class="params">(<span class="type">const</span> <span class="type">float</span>* a, <span class="type">size_t</span> n)</span> </span>&#123;</span><br><span class="line">    __m256 acc = _mm256_setzero_ps();            <span class="comment">// 8 个 float 全 0</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; n; i += <span class="number">8</span>) &#123;</span><br><span class="line">        __m256 v = _mm256_loadu_ps(a + i);       <span class="comment">// u = unaligned：不要求 32 字节对齐</span></span><br><span class="line">        acc = _mm256_add_ps(acc, v);             <span class="comment">// 8 个加法一条指令</span></span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 水平归约：把 8 个 lane 加成一个数（4 步）</span></span><br><span class="line">    __m128 lo = _mm256_castps256_ps128(acc);     <span class="comment">// 低 128 位（零代价重解释）</span></span><br><span class="line">    __m128 hi = _mm256_extractf128_ps(acc, <span class="number">1</span>);   <span class="comment">// 高 128 位</span></span><br><span class="line">    __m128 s  = _mm_add_ps(lo, hi);</span><br><span class="line">    s = _mm_hadd_ps(s, s);                       <span class="comment">// 4+4 → 2+2</span></span><br><span class="line">    s = _mm_hadd_ps(s, s);                       <span class="comment">// → 1</span></span><br><span class="line">    <span class="keyword">return</span> _mm_cvtss_f32(s);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">const</span> <span class="type">size_t</span> n = <span class="number">8</span> * <span class="number">1024</span> * <span class="number">1024</span>;            <span class="comment">// 8M float = 32 MB</span></span><br><span class="line">    <span class="function">std::vector&lt;<span class="type">float</span>&gt; <span class="title">a</span><span class="params">(n, <span class="number">1.0f</span>)</span></span>;</span><br><span class="line">    <span class="keyword">using</span> clk = std::chrono::steady_clock;</span><br><span class="line">    <span class="type">float</span> s1 = <span class="number">0</span>, s2 = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">auto</span> t0 = clk::<span class="built_in">now</span>();</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> r = <span class="number">0</span>; r &lt; <span class="number">20</span>; ++r) s1 += <span class="built_in">sum_scalar</span>(a.<span class="built_in">data</span>(), n);</span><br><span class="line">    <span class="keyword">auto</span> t1 = clk::<span class="built_in">now</span>();</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> r = <span class="number">0</span>; r &lt; <span class="number">20</span>; ++r) s2 += <span class="built_in">sum_avx2</span>(a.<span class="built_in">data</span>(), n);</span><br><span class="line">    <span class="keyword">auto</span> t2 = clk::<span class="built_in">now</span>();</span><br><span class="line">    <span class="type">double</span> t_s = std::chrono::<span class="built_in">duration</span>&lt;<span class="type">double</span>, std::milli&gt;(t1 - t0).<span class="built_in">count</span>() / <span class="number">20</span>;</span><br><span class="line">    <span class="type">double</span> t_v = std::chrono::<span class="built_in">duration</span>&lt;<span class="type">double</span>, std::milli&gt;(t2 - t1).<span class="built_in">count</span>() / <span class="number">20</span>;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;标量: &quot;</span> &lt;&lt; s1 &lt;&lt; <span class="string">&quot;  &quot;</span> &lt;&lt; t_s &lt;&lt; <span class="string">&quot; ms/轮\n&quot;</span>;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;AVX2: &quot;</span> &lt;&lt; s2 &lt;&lt; <span class="string">&quot;  &quot;</span> &lt;&lt; t_v &lt;&lt; <span class="string">&quot; ms/轮\n&quot;</span>;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;加速比: &quot;</span> &lt;&lt; t_s / t_v &lt;&lt; <span class="string">&quot;x\n&quot;</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O2 -mavx2 simdsum.cpp -o simdsum &amp;&amp; ./simdsum</span><br><span class="line"><span class="comment"># 输出（i5-12600K 实测）：</span></span><br><span class="line"><span class="comment"># 标量: 1.67772e+08  4.43545 ms/轮</span></span><br><span class="line"><span class="comment"># AVX2: 1.67772e+08  1.22329 ms/轮</span></span><br><span class="line"><span class="comment"># 加速比: 3.62584x</span></span><br></pre></td></tr></table></figure>
+<p>三个观察：加速比 3.6x 而不是 8x——标量版浮点加法约 4 周期延迟形成依赖链，AVX2 版同样有链，双方都被延迟而非吞吐卡住；<strong>真正的大加速要拆多条独立累加链</strong>（4 个 acc 寄存器轮转，可逼近带宽极限）；<code>-mavx2</code> 让编译器&quot;可以生成 AVX2 指令&quot;，本例手写 intrinsics 的部分总是 AVX2，但主程序其他代码也受益。<code>loadu</code>（不对齐 load）在 AVX 之后基本无惩罚（拆成两条对齐 load 的代价已被硬件吸收），所以新代码不必强求 <code>load</code> 的对齐——但对齐仍是硬需求的场合见下一节。</p>
+<h2 id="4-对齐alignas-aligned_alloc-与段错误现场"><a class="markdownIt-Anchor" href="#4-对齐alignas-aligned_alloc-与段错误现场"></a> 4. 对齐：alignas、aligned_alloc 与段错误现场</h2>
+<p>SIMD 数据类型有硬性对齐要求的历史（SSE 时代 <code>movaps</code> 对未对齐地址直接 #GP 异常）。现代写法用 <code>alignas</code> 声明、用对齐分配器拿内存：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// align_demo.cpp</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;aligned_alloc&gt;</span>  <span class="comment">// C++17 起在 &lt;cstdlib&gt;，这里示意</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdlib&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">alignas</span>(<span class="number">32</span>) Vec8 &#123;      <span class="comment">// 强制 32 字节对齐（一个 YMM 寄存器宽）</span></span><br><span class="line">    <span class="type">float</span> v[<span class="number">8</span>];</span><br><span class="line">&#125;;</span><br><span class="line"><span class="keyword">static_assert</span>(<span class="keyword">alignof</span>(Vec8) == <span class="number">32</span> &amp;&amp; <span class="keyword">sizeof</span>(Vec8) == <span class="number">32</span>);</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="comment">// malloc 保证 max_align_t（一般 16）对齐；要 32 对齐得用 aligned_alloc</span></span><br><span class="line">    <span class="type">float</span>* p = <span class="keyword">static_cast</span>&lt;<span class="type">float</span>*&gt;(std::<span class="built_in">aligned_alloc</span>(<span class="number">32</span>, <span class="number">32</span> * <span class="keyword">sizeof</span>(<span class="type">float</span>)));</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;地址 % 32 = &quot;</span> &lt;&lt; <span class="keyword">reinterpret_cast</span>&lt;<span class="type">uintptr_t</span>&gt;(p) % <span class="number">32</span> &lt;&lt; <span class="string">&#x27;\n&#x27;</span>;  <span class="comment">// 0</span></span><br><span class="line">    std::<span class="built_in">free</span>(p);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -Wall align_demo.cpp -o align_demo &amp;&amp; ./align_demo</span><br><span class="line"><span class="comment"># 输出：地址 % 32 = 0</span></span><br></pre></td></tr></table></figure>
+<p>段错误现场（真实复现方法，别在生产环境试）：<strong>用 <code>new</code>/<code>malloc</code> 的默认 16 字节对齐拿内存，再喂给要求 32/64 字节对齐的 <code>movaps/vmovaps</code></strong>。典型症状是 SIGSEGV 且 <code>%rip</code> 指向一条 <code>vmovaps</code>/<code>movaps</code> 指令，<code>addr2line</code> 定位后多半是 <code>load</code> 写成了 <code>load</code>（aligned 版）而不是 <code>loadu</code>，或结构体忘加 <code>alignas</code> 导致数组里隔元素跨了边界。另一个日常坑：<code>std::vector&lt;Vec8&gt;</code> 在 C<ins>17 前 allocator 不感知对齐、会静默降级，C</ins>17 起标准库按 <code>alignof</code> 正确对齐——老代码迁移时注意。</p>
+<h2 id="5-自动向量化怎么写编译器才会向量化"><a class="markdownIt-Anchor" href="#5-自动向量化怎么写编译器才会向量化"></a> 5. 自动向量化：怎么写编译器才会向量化</h2>
+<p>手写 intrinsics 是重武器；第一选择永远是<strong>让编译器自动向量化</strong>（vectorizer），它生成的代码可移植、可维护。条件归纳成一句话：<strong>循环次数可数、无循环间依赖、内存访问可证明不重叠、分支可化为掩码</strong>。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// av.cpp</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">scale</span><span class="params">(<span class="type">float</span>* __restrict a, <span class="type">const</span> <span class="type">float</span>* __restrict b, <span class="type">float</span> k, <span class="type">size_t</span> n)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; n; ++i) a[i] = b[i] * k;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O2 -ftree-vectorize -fopt-info-vec-optimized -c av.cpp -o av.o</span><br><span class="line"><span class="comment"># 输出：</span></span><br><span class="line"><span class="comment"># av.cpp:3:26: optimized: loop vectorized using 16 byte vectors</span></span><br><span class="line"><span class="comment"># av.cpp:3:26: optimized: loop vectorized using 8 byte vectors</span></span><br></pre></td></tr></table></figure>
+<p>（GCC 11 的 <code>-O2</code> 默认不开向量化，需要 <code>-O3</code> 或显式 <code>-ftree-vectorize</code>；GCC 12 起 <code>-O2</code> 启用了保守版向量化——同一份代码跨编译器版本性能会自己变，这也是性能测试要锁工具链版本的原因。）反过来，<strong>写出会阻止向量化的循环</strong>，让 <code>-fopt-info-vec-missed</code> 告诉你原因：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// av2.cpp —— 前缀和式依赖</span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">accum</span><span class="params">(<span class="type">float</span>* a, <span class="type">size_t</span> n)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">1</span>; i &lt; n; ++i) a[i] += a[i<span class="number">-1</span>] * <span class="number">0.5f</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O3 -fopt-info-vec-missed -c av2.cpp -o av2.o</span><br><span class="line"><span class="comment"># 输出：</span></span><br><span class="line"><span class="comment"># av2.cpp:3:26: missed: couldn&#x27;t vectorize loop</span></span><br><span class="line"><span class="comment"># av2.cpp:3:49: missed: not vectorized, possible dependence between data-refs *_5 and *_2</span></span><br></pre></td></tr></table></figure>
+<p>编译器直接点名&quot;data-refs 之间存在依赖&quot;。让自动向量化更常成功的清单（经验做法）：数组参数加 <code>__restrict</code> 声明不重叠（否则编译器必须为 a、b 可能互指生成保护代码）；内层循环用 <code>size_t i</code> 从 0 到 n（计数可证明）；循环体保持 <code>a[i] = f(b[i])</code> 形状，把分支改成 <code>select</code>（<code>d[i] = c ? x : y</code> 或 <code>std::min/max</code>）；热点循环的步长固定、避免函数调用（内联后向量器才看得见整体）。</p>
+<h2 id="6-gather-scatter不连续访问怎么办"><a class="markdownIt-Anchor" href="#6-gather-scatter不连续访问怎么办"></a> 6. gather / scatter：不连续访问怎么办</h2>
+<p>规整连续内存一 load 搞定；<strong>步长不为 1</strong>（取 <code>a[i*4]</code>）或<strong>随机下标</strong>（<code>a[idx[i]]</code>）就得 gather/scatter：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// AVX2 gather：按 8 个 int32 下标从 float 数组各取一个</span></span><br><span class="line">__m256i idx = _mm256_loadu_si256(...);        <span class="comment">// 8 个下标</span></span><br><span class="line">__m256 v = _mm256_i32gather_ps(a, idx, <span class="number">4</span>);    <span class="comment">// 4 = sizeof(float)</span></span><br></pre></td></tr></table></figure>
+<p>gather 把 8 次 load 压成一条指令，但<strong>硬件逐 lane 执行</strong>，吞吐远低于连续 load（早期实现一个周期只处理 1–2 个 lane）；AVX-512 才有对应 scatter。经验做法：<strong>下标规整（固定步长）→ 手动拆成多个连续 load + 重排（shuffle）更快；真随机 → 先考虑数据重排（排序/分桶）把随机变局部</strong>。GPU 上 gather/scatter 是一等公民（显存随机访问天然支持），这是&quot;该上 GPU&quot;的信号之一。</p>
+<h2 id="7-跨平台怎么办库与运行时派发"><a class="markdownIt-Anchor" href="#7-跨平台怎么办库与运行时派发"></a> 7. 跨平台怎么办：库与运行时派发</h2>
+<p>三重困境：RK3588 是 ARM NEON，x86 服务器是 AVX2，老机器只有 SSE2。出路按投入排序：</p>
+<ol>
+<li><strong>先靠自动向量化</strong>（第 5 节）：源代码不写任何 ISA，<code>-march</code> 交给部署方。这是 80% 场景的正解。</li>
+<li><strong>运行时 CPU 派发</strong>：同一算法写 2–3 个实现，启动时探测 CPU 支持，选一条。GCC 的函数多版本（FMV）可以自动生成派发壳：</li>
+</ol>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">__attribute__((<span class="built_in">target_clones</span>(<span class="string">&quot;avx2&quot;</span>, <span class="string">&quot;sse4.2&quot;</span>, <span class="string">&quot;default&quot;</span>)))</span><br><span class="line"><span class="function"><span class="type">float</span> <span class="title">dot</span><span class="params">(<span class="type">const</span> <span class="type">float</span>* a, <span class="type">const</span> <span class="type">float</span>* b, <span class="type">size_t</span> n)</span> </span>&#123; <span class="comment">/* 朴素循环 */</span> &#125;</span><br><span class="line"><span class="comment">// 链接器为每个 ISA 生成一份 + ifunc 派发；运行时首次调用自动选最优实现</span></span><br></pre></td></tr></table></figure>
+<p>手写探测用 <code>__builtin_cpu_supports(&quot;avx2&quot;)</code> 或 cpuid。分发判断放程序启动一次完成，别在热循环里每次判断（经验做法）。<br />
+3. <strong>抽象库</strong>：Google Highway、Xsimd 用一套 API 编译到 x86/ARM 各 ISA，派发与 fallback 内建。代价是依赖与构建复杂度；收益是&quot;写一次、处处向量化&quot;。simdjson、llama.cpp 内部正是这一路（llama.cpp 的 ggml 对 x86 手写 AVX2/AVX-512 分支 + ARM NEON 分支 + 运行时选择，可作为&quot;派发 + 手写热点&quot;的活标本）。</p>
+<h2 id="8-与-gpu-的关系什么时候-cpu-simd-还够用"><a class="markdownIt-Anchor" href="#8-与-gpu-的关系什么时候-cpu-simd-还够用"></a> 8. 与 GPU 的关系：什么时候 CPU SIMD 还够用</h2>
+<p>CPU SIMD 与 GPU 都是数据并行，但分工不同（衔接《模型性能优化》Stage 3）：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>CPU SIMD</th>
+<th>GPU</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>数据规模</td>
+<td>小批量（KB–MB）</td>
+<td>大批量（MB–GB）</td>
+</tr>
+<tr>
+<td>启动开销</td>
+<td>无（函数调用级）</td>
+<td>有（kernel launch，μs 级）</td>
+</tr>
+<tr>
+<td>适合</td>
+<td>延迟敏感、分支多、吞吐低</td>
+<td>规整稠密、吞吐优先</td>
+</tr>
+<tr>
+<td>典型</td>
+<td>预处理、量化/反量化、重采样、CRF</td>
+<td>矩阵乘、注意力、训练</td>
+</tr>
+</tbody>
+</table>
+<p>经验做法：<strong>单次计算量在几十 μs 以下、数据在 L2/L3 里、或输入输出需要频繁与标量控制流交织——CPU SIMD 是对的选择</strong>；一次要算几百 MB 的稠密矩阵/整层注意力，别用 AVX2 硬磨。llama.cpp 的 CPU 路径把每个算子都 SIMD 化，但跑大模型时 GPU 版本仍快一个数量级——分工明确。端侧（RK3588）则是第三条路：CPU NEON 做预处理/后处理，NPU 做推理，CPU SIMD 与 NPU 各管一段（见第 10 章）。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>理论加速比 8x 当成实际值</strong>：被内存带宽、依赖链、shuffle 开销稀释。先测，再谈优化（本章实测 3.6x）。</li>
+<li><strong><code>-mavx2</code> 发布通用二进制</strong>：在无 AVX2 机器上直接 SIGILL（非法指令）。分发二进制用 <code>-march=x86-64-v2</code>（SSE4.2 基线）或运行时派发；AVX2 专属构建单独出包。</li>
+<li><strong>以为标量循环编译器总会向量化</strong>：依赖链、可能别名、内层分支都会静默阻止。<strong>必须用 <code>-fopt-info-vec</code>（GCC）/ <code>-Rpass=loop-vectorize</code>（Clang）验证</strong>，&quot;应该向量化了&quot;不算数。</li>
+<li><strong>对齐随机踩坑</strong>：结构体没 <code>alignas</code>、<code>new</code> 默认 16 字节对齐、<code>movaps</code> 炸 SIGSEGV。所有 SIMD 类型成员数组统一 <code>alignas(32/64)</code>，分配用 <code>aligned_alloc</code>/C++17 对齐感知 allocator。</li>
+<li><strong>gather 当连续 load 用</strong>：随机 gather 吞吐只有连续 load 的几分之一，热点路径的随机访问先想数据布局。</li>
+<li><strong>微基准忘了看 <code>sum</code> 结果</strong>：整个循环被优化器删掉，测出 0.0001ms 的&quot;超光速&quot;。结果必须被消费（打印/累加到全局），或用 benchmark 库的 <code>DoNotOptimize</code>（第 6 章展开）。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>SIMD = 一条指令 N 个数据；收益来自规整控制流 + 连续内存，两者缺一不可。</li>
+<li>x86 事实：x86-64 基线 SSE2、AVX2（256bit）已普及、AVX-512 不齐；ARM 是 NEON（128bit，RK3588）。</li>
+<li>intrinsics 入门套路：<code>loadu → add → storeu</code> + 水平归约；实测 3.6x，想更高拆独立累加链。</li>
+<li>对齐：<code>alignas</code> 声明、<code>aligned_alloc</code> 分配；<code>movaps</code> 对未对齐地址是 SIGSEGV 现场而不是警告。</li>
+<li>自动向量化优先于手写：<code>__restrict</code> + 可数循环 + 无依赖 + 无分支，用 <code>-fopt-info-vec</code> 验证；missed 信息会直接点名原因。</li>
+<li>跨平台：自动向量化 → 运行时派发（FMV/cpuid）→ Highway/Xsimd；与 GPU 的分工看数据规模与启动开销。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>把第 3 节 <code>sum_avx2</code> 改成 4 条独立累加链（<code>acc0..acc3</code> 轮转），实测加速比从 3.6x 提升到多少？再解释为什么没有到 8x（提示：内存带宽 ~40 GB/s vs 数据量）。</li>
+<li>用 <code>-fopt-info-vec-missed</code> 找出下面循环不能向量化的原因并修好：<code>for (size_t i = 0; i &lt; n; ++i) a[i] = (b[i] &gt; 0 ? b[i] : 0) * c[i];</code></li>
+<li>写一个 <code>struct alignas(64) Counter { long v; };</code> 数组，用 <code>_mm256_load_ps</code> 读第一个元素验证对齐；再把数组换成普通 <code>new</code>，用 gdb（或直接看 core）复现 SIGSEGV。</li>
+<li><code>target_clones(&quot;avx2&quot;,&quot;default&quot;)</code> 编译一个点积函数，用 <code>objdump -d</code> 找出派发桩（<code>*ABS*+0x...@plt</code>/resolver），说明运行时怎么选实现。</li>
+<li>在 RK3588（或任意 ARM）上把第 3 节程序改用 NEON intrinsics（<code>vld1q_f32</code>/<code>vaddq_f32</code>/<code>vaddvq_f32</code>）重写，对比 x86 上的 API 差异；没有 ARM 机器时，说出两者的三处不同即可。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/C/" rel="tag"># C++</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/02-%E6%A8%A1%E6%9D%BF%E6%B7%B1%E6%B0%B4%E5%8C%BA/" rel="prev" title="02-模板深水区">
+                  <i class="fa fa-angle-left"></i> 02-模板深水区
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/04-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C%E8%BF%9B%E9%98%B6/" rel="next" title="04-内存模型与原子操作进阶">
+                  04-内存模型与原子操作进阶 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

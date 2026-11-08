@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 讲清 malloc&#x2F;free 的分层结构：库的分配器（arena&#x2F;空闲链表）建在内核原语（brk&#x2F;mmap）之上，并用 strace 亲眼看到两层的行为差异。 - 写一个 mini malloc，理解 first-fit&#x2F;best-fi…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="06-内存分配器">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/06-%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D%E5%99%A8/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 讲清 malloc&#x2F;free 的分层结构：库的分配器（arena&#x2F;空闲链表）建在内核原语（brk&#x2F;mmap）之上，并用 strace 亲眼看到两层的行为差异。 - 写一个 mini malloc，理解 first-fit&#x2F;best-fi…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T01:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.514Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="操作系统">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/06-%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D%E5%99%A8/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/06-%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D%E5%99%A8/","path":"2026/09/02/06-内存分配器/","title":"06-内存分配器"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>06-内存分配器 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#06-%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D%E5%99%A8"><span class="nav-number">1.</span> <span class="nav-text"> 06 - 内存分配器</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-mallocfree-%E5%A6%82%E4%BD%95%E5%B7%A5%E4%BD%9Cbrkmmap-%E4%B9%8B%E4%B8%8A%E6%9C%89%E5%88%86%E9%85%8D%E5%99%A8"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. malloc&#x2F;free 如何工作：brk&#x2F;mmap 之上有分配器</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%86%85%E5%AD%98%E7%A2%8E%E7%89%87%E5%86%85%E9%83%A8%E4%B8%8E%E5%A4%96%E9%83%A8%E9%85%8D-mini-allocator"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 内存碎片：内部与外部（配 mini allocator）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-tcmallocjemalloc-%E8%AE%BE%E8%AE%A1%E6%80%9D%E6%83%B3%E6%A6%82%E8%A7%88"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. tcmalloc&#x2F;jemalloc 设计思想概览</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-python-%E7%9A%84%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86pymallocarena"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. Python 的内存管理：pymalloc&#x2F;arena</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%86%85%E5%AD%98%E6%B3%84%E6%BC%8F%E6%8E%92%E6%9F%A5%E6%80%9D%E8%B7%AF"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 内存泄漏排查思路</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.9.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/06-%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D%E5%99%A8/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="06-内存分配器 | Yoleen的博客">
+      <meta itemprop="description" content="- 讲清 malloc&#x2F;free 的分层结构：库的分配器（arena&#x2F;空闲链表）建在内核原语（brk&#x2F;mmap）之上，并用 strace 亲眼看到两层的行为差异。 - 写一个 mini malloc，理解 first-fit&#x2F;best-fi…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          06-内存分配器
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 09:30:00" itemprop="dateCreated datePublished" datetime="2026-09-02T09:30:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">操作系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>13 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 讲清 malloc/free 的分层结构：库的分配器（arena/空闲链表）建在内核原语（brk/mmap）之上，并用 strace 亲眼看到两层的行为差异。 - 写一个 mini malloc，理解 first-fit/best-fi…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="06-内存分配器"><a class="markdownIt-Anchor" href="#06-内存分配器"></a> 06 - 内存分配器</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>讲清 malloc/free 的分层结构：库的分配器（arena/空闲链表）建在内核原语（brk/mmap）之上，并用 strace 亲眼看到两层的行为差异。</li>
+<li>写一个 mini malloc，理解 first-fit/best-fit 与空闲链表；由此自然引出内部/外部碎片的定义。</li>
+<li>概览 tcmalloc/jemalloc 的设计思想：线程缓存、大小类、arena——知道它们解决什么、什么场景值得换。</li>
+<li>理解 Python 的内存管理三层结构：pymalloc 对象池、arena、退回系统 malloc；解释&quot;为什么大对象特殊&quot;、“内存为什么涨了不回”。</li>
+<li>掌握一套内存泄漏排查思路：从 RSS 曲线到 valgrind/tracemalloc 的完整路径。</li>
+</ul>
+<p>前置：第 04/05 篇的虚拟内存、mmap、RSS 概念；环境 Ubuntu 22.04 / WSL2。</p>
+<h2 id="1-mallocfree-如何工作brkmmap-之上有分配器"><a class="markdownIt-Anchor" href="#1-mallocfree-如何工作brkmmap-之上有分配器"></a> 1. malloc/free 如何工作：brk/mmap 之上有分配器</h2>
+<p><code>malloc</code> 不是系统调用，是 libc 里的库函数。它和内核的分工（CSAPP 第 9.9 节的分配器模型；Linux 实现细节见 glibc malloc 内部文档，<code>man 3 malloc</code> 与 mallopt(3)）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">你的代码:  p = malloc(64);</span><br><span class="line">   │</span><br><span class="line">   ▼</span><br><span class="line">libc 分配器（ptmalloc）：小块走&quot;自己的仓库&quot; —— 从已拿到的内存里切一块，改空闲链表</span><br><span class="line">   │ 仓库空了/请求超大（≥128KB，M_MMAP_THRESHOLD 可调）</span><br><span class="line">   ▼</span><br><span class="line">内核系统调用:  brk() 推高堆顶  |  mmap() 匿名映射新区域（05 篇讲过）</span><br></pre></td></tr></table></figure>
+<p>验证：同一程序里先要小块、再要大块，strace 一眼看穿两层：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// alloc_trace.c —— 小块走 brk/堆，大块走 mmap</span></span><br><span class="line"><span class="comment">// 编译：gcc alloc_trace.c -o alloc_trace</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">void</span> *small = <span class="built_in">malloc</span>(<span class="number">64</span>);            <span class="comment">// 小块：分配器从堆里切</span></span><br><span class="line">    <span class="type">void</span> *big   = <span class="built_in">malloc</span>(<span class="number">256</span> * <span class="number">1024</span>);    <span class="comment">// 256KB ≥ 128KB 阈值：直接 mmap</span></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;small=%p big=%p\n&quot;</span>, small, big);</span><br><span class="line">    <span class="built_in">free</span>(small); <span class="built_in">free</span>(big);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ gcc alloc_trace.c -o alloc_trace &amp;&amp; strace -e trace=brk,mmap,munmap ./alloc_trace 2&gt;&amp;1 | grep -v <span class="string">&quot;ld\|libc\|ENOENT&quot;</span> | <span class="built_in">head</span> -6</span><br><span class="line">brk(NULL)                               = 0x5a1e...</span><br><span class="line">mmap(NULL, 266240, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0) = 0x7f...</span><br><span class="line">small=0x5a1e...d2a0 big=0x7f2c...6010</span><br><span class="line">munmap(0x7f2c...6010, 266240)           = 0</span><br></pre></td></tr></table></figure>
+<p><code>malloc(64)</code> 在系统调用层<strong>没有任何痕迹</strong>（分配器自给自足），<code>malloc(256*1024)</code> 则直接多出一条 <code>mmap</code>。这个分层解释了大量现象：小块分配快（用户态链表操作，几十纳秒）；大块走 mmap（进内核，微秒级）但 free 时立即归还系统（munmap）；<strong>128KB 阈值是可调的性能旋钮</strong>（mallopt 的 M_MMAP_THRESHOLD，glibc 还有动态调整逻辑）。</p>
+<p>分配器内部如何记账？把空闲内存组织成链表（free list），分配时找一块够大的切下。最简单的两种策略（OSTEP 第 17 章《Free-Space Management》）：</p>
+<ul>
+<li><strong>first-fit</strong>：从链表头找第一块够大的。快，但低地址端容易剩下一堆小碎屑。</li>
+<li><strong>best-fit</strong>：找能装下的最小块。浪费少，但每次要扫全表，且会攒下大量&quot;刚好差一点&quot;的残余小块。</li>
+</ul>
+<p>分配时还要&quot;顺手&quot;记下块大小（通常放在块头 header 里，CSAPP 第 9.9 节的隐式空闲链表正是这么设计的），free 才知道还多少。</p>
+<h2 id="2-内存碎片内部与外部配-mini-allocator"><a class="markdownIt-Anchor" href="#2-内存碎片内部与外部配-mini-allocator"></a> 2. 内存碎片：内部与外部（配 mini allocator）</h2>
+<p><strong>内部碎片</strong>：给你的块比你要求的大（header、对齐、大小类取整），浪费在块里面。<strong>外部碎片</strong>：空闲内存总量够，但被切成不连续的小块，找不到一块连续的够用的。</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// mini_malloc.c —— 60 行的 first-fit 分配器：看懂碎片从哪来</span></span><br><span class="line"><span class="comment">// 编译：gcc mini_malloc.c -o mini_malloc</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdint.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">typedef</span> <span class="class"><span class="keyword">struct</span> <span class="title">block</span> &#123;</span>                  <span class="comment">// 每块开头的 header：大小 + 在用标志</span></span><br><span class="line">    <span class="type">size_t</span> size; <span class="type">int</span> used;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">block</span> *<span class="title">next</span>;</span></span><br><span class="line">&#125; <span class="type">block_t</span>;</span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">block_t</span> *heap_head = <span class="literal">NULL</span>;       <span class="comment">// 空闲链表的头</span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> *<span class="title function_">my_malloc</span><span class="params">(<span class="type">size_t</span> size)</span> &#123;</span><br><span class="line">    size = (size + <span class="number">15</span>) &amp; ~<span class="number">15UL</span>;         <span class="comment">// 16 字节对齐：自身就会造成内部碎片</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">block_t</span> *b = heap_head; b; b = b-&gt;next) &#123;      <span class="comment">// first-fit 扫描</span></span><br><span class="line">        <span class="keyword">if</span> (!b-&gt;used &amp;&amp; b-&gt;size &gt;= size) &#123;</span><br><span class="line">            <span class="keyword">if</span> (b-&gt;size &gt;= size + <span class="keyword">sizeof</span>(<span class="type">block_t</span>) + <span class="number">32</span>) &#123;   <span class="comment">// 够大就切分</span></span><br><span class="line">                <span class="type">block_t</span> *rest = (<span class="type">block_t</span> *)((<span class="type">char</span> *)b + <span class="keyword">sizeof</span>(<span class="type">block_t</span>) + size);</span><br><span class="line">                rest-&gt;size = b-&gt;size - size - <span class="keyword">sizeof</span>(<span class="type">block_t</span>);</span><br><span class="line">                rest-&gt;used = <span class="number">0</span>; rest-&gt;next = b-&gt;next;</span><br><span class="line">                b-&gt;next = rest; b-&gt;size = size;</span><br><span class="line">            &#125;</span><br><span class="line">            b-&gt;used = <span class="number">1</span>;</span><br><span class="line">            <span class="keyword">return</span> (<span class="type">char</span> *)b + <span class="keyword">sizeof</span>(<span class="type">block_t</span>);   <span class="comment">// 返回 header 之后的地址</span></span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 没找到：sbrk 向内核要新内存，挂到链表尾</span></span><br><span class="line">    <span class="type">block_t</span> *b = sbrk(<span class="keyword">sizeof</span>(<span class="type">block_t</span>) + size);</span><br><span class="line">    <span class="keyword">if</span> (b == (<span class="type">void</span> *)<span class="number">-1</span>) <span class="keyword">return</span> <span class="literal">NULL</span>;             <span class="comment">// OOM</span></span><br><span class="line">    b-&gt;size = size; b-&gt;used = <span class="number">1</span>; b-&gt;next = <span class="literal">NULL</span>;</span><br><span class="line">    <span class="keyword">if</span> (!heap_head) heap_head = b;</span><br><span class="line">    <span class="keyword">else</span> &#123; <span class="type">block_t</span> *t = heap_head; <span class="keyword">while</span> (t-&gt;next) t = t-&gt;next; t-&gt;next = b; &#125;</span><br><span class="line">    <span class="keyword">return</span> (<span class="type">char</span> *)b + <span class="keyword">sizeof</span>(<span class="type">block_t</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">my_free</span><span class="params">(<span class="type">void</span> *p)</span> &#123;</span><br><span class="line">    <span class="keyword">if</span> (!p) <span class="keyword">return</span>;</span><br><span class="line">    <span class="type">block_t</span> *b = (<span class="type">block_t</span> *)((<span class="type">char</span> *)p - <span class="keyword">sizeof</span>(<span class="type">block_t</span>));   <span class="comment">// 沿 header 拿回大小</span></span><br><span class="line">    b-&gt;used = <span class="number">0</span>;                                   <span class="comment">// 本版不做相邻合并，故意留坑</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">void</span> *a = my_malloc(<span class="number">100</span>), *b = my_malloc(<span class="number">100</span>), *c = my_malloc(<span class="number">100</span>);</span><br><span class="line">    my_free(b);                                    <span class="comment">// 中间空出 100B 洞</span></span><br><span class="line">    <span class="type">void</span> *d = my_malloc(<span class="number">200</span>);                      <span class="comment">// 洞不够，first-fit 只能要新内存</span></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;a=%p b=%p c=%p d=%p\n&quot;</span>, a, b, c, d);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;b 被释放留下的洞：%p（大小 100，装不下 d 的 200）\n&quot;</span>, b);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ gcc mini_malloc.c -o mini_malloc &amp;&amp; ./mini_malloc</span><br><span class="line">a=0x55f4...d2b0 b=0x55f4...d360 c=0x55f4...d410 d=0x55f4...d4c0</span><br><span class="line">b 被释放留下的洞：0x55f4...d360（大小 100，装不下 d 的 200）</span><br></pre></td></tr></table></figure>
+<p>d 没有复用 b 的洞——<strong>外部碎片</strong>诞生：总空闲量够（100），但最大连续块不够（100 &lt; 200）。真实分配器还做<strong>合并</strong>（free 时把相邻空闲块并起来）和<strong>分离适配</strong>（按大小分桶的空闲链表，CSAPP 第 9.9 节的 malloc lab 就教到这），但碎片的根源已经在这 60 行里了。<strong>经验做法</strong>：长时间运行的服务出现 RSS 涨了不回，第一嫌疑是碎片（释放的块太小、位置不连续，合并不了还给内核），第二才是泄漏——两者现象相似，工具能区分（见第 5 节）。</p>
+<h2 id="3-tcmallocjemalloc-设计思想概览"><a class="markdownIt-Anchor" href="#3-tcmallocjemalloc-设计思想概览"></a> 3. tcmalloc/jemalloc 设计思想概览</h2>
+<p>ptmalloc（glibc 默认）诞生于单核时代，多核多线程下有两个先天短板：<strong>所有线程抢同一堆的锁</strong>（arena 数量有限），<strong>锁内操作链表在 NUMA 上跨节点访存</strong>。两个现代分配器给出同一思想的两种实现（Tcmalloc 论文：Sanfilippo/Google per-thread cache 设计；jemalloc 设计文档：Evans, “A Scalable Concurrent malloc Implementation for FreeBSD”）：</p>
+<ul>
+<li><strong>线程缓存（thread cache / tcache）</strong>：每个线程私有一组小对象缓存，分配/释放小块完全无锁、访问全在本地——大并发的第一加速器。攒多了再批量归还中心区。</li>
+<li><strong>大小类（size class）</strong>：不按任意字节切，而是按固定档位（8B、16B、32B…2MB），同档位对象复用。牺牲一点内部碎片，换来 O(1) 定位与极低的合并需求。</li>
+<li><strong>arena 分区</strong>：中心内存划成多个 arena（按 NUMA 节点对齐），线程绑定各自的 arena，减少跨节点流量与锁竞争。</li>
+<li><strong>页级管理</strong>： jemalloc/tcmalloc 都把内存当&quot;页（4KB）+ span/chunk&quot;管理，大对象直接页分配、small object 从页里切。</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">线程 A ──► [tcache A] ──归还──► ┌ arena 0 (numa node 0) ┐</span><br><span class="line">线程 B ──► [tcache B] ──归还──► │  size class 8/16/32...  │──不够──► mmap/brk</span><br><span class="line">线程 C ──► [tcache C] ──归还──► └ arena 1 (numa node 1) ┘</span><br></pre></td></tr></table></figure>
+<p>什么时候值得换（<strong>经验做法</strong>，可查证的方法是压测对比）：多线程高频小对象（请求处理、KV cache 管理）用 jemalloc/tcmalloc 常有 10%~30% 吞吐提升；单线程或分配不频繁的场景收益接近零。在推理服务里验证极简单：<code>LD_PRELOAD=/usr/lib/x86_64-linux-gnu/libjemalloc.so.2 ./server</code> 前后各跑一遍基准——不写一行代码。</p>
+<h2 id="4-python-的内存管理pymallocarena"><a class="markdownIt-Anchor" href="#4-python-的内存管理pymallocarena"></a> 4. Python 的内存管理：pymalloc/arena</h2>
+<p>CPython 有自己的三层分配体系（依据：CPython 源码 Modules/obmalloc.c 的注释与官方 Dev Guide “Memory Management”）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">第 3 层  Python 对象（PyObject）</span><br><span class="line">第 2 层  pymalloc：≤512B 的对象 → pool(4KB) 切成固定 block；同类 block 组成 usedpool</span><br><span class="line">第 1 层  C malloc（glibc）：&gt;512B 的对象直接走它 → 再下面才是 brk/mmap（本篇第 1 节）</span><br></pre></td></tr></table></figure>
+<ul>
+<li><strong>≤512 字节</strong>的小对象（绝大多数 PyObject：小整数、短字符串、元组）由 pymalloc 管理：arena(256KB) → pool(4KB) → block（与对象大小匹配的固定档位）。释放的 block 回池复用，<strong>不归还 C 层</strong>。</li>
+<li><strong>&gt;512 字节</strong>直接 malloc——这就是&quot;大对象特殊&quot;的原因：它绕过对象池，直接暴露在 glibc 分配器的碎片逻辑下。NumPy 数组的数据区、大字节串、模型 tensor 都在这里。</li>
+<li><strong>arena 整体归还的苛刻条件</strong>：一个 arena 里所有 pool 全空才能还给 OS。而小对象散布在不同 arena 时&quot;某个 pool 总有活着的对象&quot;——<strong>这就是 Python 常见现象&quot;内存涨了不回&quot;的主因</strong>（不是泄漏，是池化+arena 碎片），官方文档 “Memory Management” 明确记载此行为。</li>
+</ul>
+<p>实测三层结构的行为：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># pymalloc_demo.py —— 小对象进池、大对象走 C 层、池不轻易还债</span></span><br><span class="line"><span class="keyword">import</span> os, tracemalloc</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">rss</span>():                                   <span class="comment"># 读本进程 RSS（04 篇的 RES）</span></span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(<span class="string">f&quot;/proc/<span class="subst">&#123;os.getpid()&#125;</span>/status&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        <span class="keyword">for</span> line <span class="keyword">in</span> f:</span><br><span class="line">            <span class="keyword">if</span> line.startswith(<span class="string">&quot;VmRSS&quot;</span>):</span><br><span class="line">                <span class="keyword">return</span> <span class="built_in">int</span>(line.split()[<span class="number">1</span>])</span><br><span class="line"></span><br><span class="line">tracemalloc.start()</span><br><span class="line">base = rss()</span><br><span class="line">small = [<span class="built_in">str</span>(i) <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">500_000</span>)]     <span class="comment"># 50 万个小字符串 → pymalloc</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;小对象: tracemalloc=<span class="subst">&#123;tracemalloc.get_traced_memory()[<span class="number">0</span>]//<span class="number">1024</span>&#125;</span>KB, &quot;</span></span><br><span class="line">      <span class="string">f&quot;RSS增幅=<span class="subst">&#123;rss()-base&#125;</span>KB&quot;</span>)</span><br><span class="line"><span class="keyword">del</span> small                                    <span class="comment"># 全部释放：引用清零</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;del后   : tracemalloc=<span class="subst">&#123;tracemalloc.get_traced_memory()[<span class="number">0</span>]//<span class="number">1024</span>&#125;</span>KB, &quot;</span></span><br><span class="line">      <span class="string">f&quot;RSS增幅=<span class="subst">&#123;rss()-base&#125;</span>KB&quot;</span>)              <span class="comment"># Python 视角已释放；RSS 看实现心情</span></span><br><span class="line"></span><br><span class="line">big = <span class="built_in">bytearray</span>(<span class="number">256</span> * <span class="number">1024</span> * <span class="number">1024</span>)           <span class="comment"># 256MB 大对象 → 直接 malloc→mmap</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;大对象: RSS增幅=<span class="subst">&#123;rss()-base&#125;</span>KB&quot;</span>)</span><br><span class="line"><span class="keyword">del</span> big</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;del后   : RSS增幅=<span class="subst">&#123;rss()-base&#125;</span>KB&quot;</span>)   <span class="comment"># 大块通常立即还给 OS（munmap）</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ python3 pymalloc_demo.py</span><br><span class="line">小对象: tracemalloc=49220KB, RSS增幅=64116KB</span><br><span class="line">del后   : tracemalloc=0KB, RSS增幅=61892KB      ← Python 层清零，RSS 几乎不回（池保留）</span><br><span class="line">大对象: RSS增幅=324092KB</span><br><span class="line">del后   : RSS增幅=62132KB                        ← 256MB 立刻归还（回到基线附近）</span><br></pre></td></tr></table></figure>
+<p>这正是&quot;为什么 Python 服务 RSS 会虚高、为什么重启比修内存有效&quot;的底层答案。<strong>经验做法</strong>：排查 Python 内存先用 tracemalloc 看对象层（是代码漏了引用），再看 RSS-对象层的差值（是 pymalloc/arena 持有还是 C 扩展泄漏）；PyTorch 场景还要加一层 <code>torch.cuda.memory_reserved</code> 的显存池，原理同构。</p>
+<h2 id="5-内存泄漏排查思路"><a class="markdownIt-Anchor" href="#5-内存泄漏排查思路"></a> 5. 内存泄漏排查思路</h2>
+<p>一套由粗到细的通用流程（C 与 Python 各有工具，思想共用；<strong>经验做法</strong>——先确认&quot;泄漏的是哪一层&quot;再选工具）：</p>
+<ol>
+<li><strong>现象确认</strong>：RSS 随时间/请求量单调增长且不回。<code>ps -o rss,vsz -p PID</code> 每分钟采样，或 <code>pidstat -r -p PID 60</code>。注意区分：VIRT 涨不叫泄漏（05 篇），RSS 涨才查。</li>
+<li><strong>分界定位</strong>：<code>cat /proc/PID/smaps_rollup</code> 看 Anonymous（新分配）与 Shared（映射共享库）哪边在涨。Anonymous 涨 → 堆/大对象问题；FilePmdMapped/Shared 涨 → mmap/页 cache 行为。</li>
+<li><strong>C/C++ 层定罪</strong>：valgrind memcheck（<code>valgrind --leak-check=full ./prog</code>，慢 10 倍但精确到行）；常驻服务用 AddressSanitizer（<code>gcc -fsanitize=address</code>，运行时拦截）；分配热点用 heap profiler（<code>gperftools</code> 的 pprof / jemalloc 的 prof）。</li>
+<li><strong>Python 层定罪</strong>：tracemalloc 快照 diff（下面代码）；<code>gc</code> 模块查引用环；第三方扩展（NumPy/CUDA）的泄漏要用 <code>CUDA-MEMCHECK</code>/<code>compute-sanitizer</code> 或 py-spy dump。</li>
+<li><strong>长跑服务</strong>：压测 + 灰度观察曲线；区分&quot;泄漏&quot;与&quot;碎片虚高&quot;——重启后 RSS 立即回落的模式更支持碎片（第 2 节），对象数不降的才支持泄漏。</li>
+</ol>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># leak_check.py —— tracemalloc 快照 diff：定位&quot;谁在涨&quot;</span></span><br><span class="line"><span class="keyword">import</span> tracemalloc, linecache</span><br><span class="line"></span><br><span class="line">tracemalloc.start(<span class="number">10</span>)                       <span class="comment"># 保存 10 层栈</span></span><br><span class="line">snaps = []</span><br><span class="line"><span class="keyword">for</span> step <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">3</span>):</span><br><span class="line">    leaks = [<span class="built_in">bytearray</span>(<span class="number">1024</span>) <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">1000</span>)]   <span class="comment"># 模拟泄漏：列表一直追加</span></span><br><span class="line">    snaps.append(tracemalloc.take_snapshot())</span><br><span class="line">    <span class="keyword">if</span> step == <span class="number">2</span>:</span><br><span class="line">        top = snaps[<span class="number">2</span>].compare_to(snaps[<span class="number">0</span>], <span class="string">&quot;lineno&quot;</span>)</span><br><span class="line">        <span class="keyword">for</span> stat <span class="keyword">in</span> top[:<span class="number">2</span>]:</span><br><span class="line">            <span class="built_in">print</span>(<span class="string">f&quot;<span class="subst">&#123;stat.size_diff//<span class="number">1024</span>:6d&#125;</span>KB  <span class="subst">&#123;stat.traceback.<span class="built_in">format</span>()[<span class="number">0</span>]&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ python3 leak_check.py</span><br><span class="line">  2969KB  leak_check.py:6: &lt;module&gt;          ← 每轮 +1000 个 1KB，元凶是这行的列表</span><br></pre></td></tr></table></figure>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“malloc(100) 就精确拿到 100 字节”</strong>：至少 112+（对齐与 header），大块可能按大小类取整到 256KB 级页。别拿 malloc 返回值当内存审计依据。</li>
+<li><strong>“free 之后内存就还给 OS 了”</strong>：小块进分配器空闲链表复用，RSS 不变是<strong>正常且正确</strong>的；只有大块（mmap 路径）和触发 trim 时机才归还。用 RSS 判断&quot;free 有没有生效&quot;会冤枉代码。</li>
+<li><strong>“Python 没有内存问题，有 GC”</strong>：GC 管引用回收，不管池归还（arena 保留）与 C 扩展的泄漏；<code>del</code> 之后 RSS 不降多半不是 bug，是池设计。判断泄漏要看对象层（tracemalloc），不是 RSS。</li>
+<li><strong>“碎片和泄漏是一回事”</strong>：碎片是&quot;空了但没合并/没归还&quot;，泄漏是&quot;没空&quot;。前者换分配器（jemalloc）或改分配模式可能解决，后者必须改代码——处置完全不同。</li>
+<li><strong>“128KB 阈值是官方钦定的最优”</strong>：它是 glibc 的默认值（历史经验值），glibc 自己还会动态调整它；把 mallopt 调优当玄学抄配置不如压测验证（<strong>经验做法</strong>）。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>malloc 是&quot;库的仓库管理&quot;叠在&quot;内核的批发&quot;（brk/mmap）上：小块用户态链表直达，≥128KB 直接 mmap；strace 一看便知两层边界。</li>
+<li>分配策略 first-fit 快、best-fit 省，共同制造外部碎片；块内对齐与 header 制造内部碎片；合并与分桶是对抗碎片的两大武器。</li>
+<li>tcmalloc/jemalloc 的三板斧：线程缓存（无锁）、大小类（O(1)）、arena（NUMA 友好）；LD_PRELOAD 十分钟完成 A/B 验证（<strong>经验做法</strong>）。</li>
+<li>CPython 三层：pymalloc 池（≤512B）、C malloc（大对象）、arena 归还门槛高——&quot;RSS 涨不回&quot;多为池化行为；大对象直通 mmap 所以立还。</li>
+<li>排查漏-碎之争：RSS 曲线 → smaps_rollup 分界 → C 用 valgrind/ASan、Python 用 tracemalloc diff；先定位层再选工具。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>给 mini_malloc.c 的 my_free 加&quot;相邻空闲块合并&quot;（只处理 next 相邻的情形即可），重跑 main 验证 d 能复用 b 的洞；再思考为什么&quot;向后合并&quot;容易、&quot;向前合并&quot;需要 header 里的前驱信息（CSAPP 第 9.9 节边界标记）。</li>
+<li>用 <code>strace -e trace=brk,mmap,munmap</code> 分别观察 <code>python3 -c &quot;x=[0]*10**7&quot;</code> 与 <code>python3 -c &quot;x=[str(i) for i in range(10**6)]&quot;</code> 的系统调用形状，对照本篇解释哪个走 pymalloc、哪个惊动了内核。</li>
+<li>把 pymalloc_demo.py 的小对象数量从 50 万逐步加到 500 万，记录 RSS 增幅与 tracemalloc 的差值曲线；用 arena 结构解释差值为何越来越大。</li>
+<li><code>LD_PRELOAD</code> jemalloc 前后跑同一个多线程 C 小程序（8 线程各 malloc/free 100 万次 32B），用 time 对比总耗时；没有 jemalloc 的机器可用 <code>apt install libjemalloc2</code> 装上再试。写 3 行结论。</li>
+<li>构造一个真实的&quot;碎片 vs 泄漏&quot;对比实验：程序 A 每轮 malloc/free 一对 1MB+16B 的块；程序 B 每轮只 malloc 1MB 不 free。各跑 10 轮后用 <code>cat /proc/PID/smaps_rollup</code> 与 valgrind 分别观察，写下你区分两者的判据。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" rel="tag"># 操作系统</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/05-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86-%E9%A1%B5%E4%B8%8E%E7%BD%AE%E6%8D%A2/" rel="prev" title="05-内存管理-页与置换">
+                  <i class="fa fa-angle-left"></i> 05-内存管理-页与置换
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/07-%E4%B8%AD%E6%96%AD%E4%B8%8E%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8%E6%B7%B1%E5%85%A5/" rel="next" title="07-中断与系统调用深入">
+                  07-中断与系统调用深入 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

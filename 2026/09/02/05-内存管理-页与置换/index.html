@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 讲清多级页表为什么存在：48 位地址空间的页表如果只有一级会有多大，四级怎么省下来。 - 手写页面置换模拟器：FIFO、LRU、Clock 三种算法 + Belady 异常，把&#39;缺页率&#39;变成可计算的数字。 - 建立工作集直觉：程序为什么…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="05-内存管理-页与置换">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/05-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86-%E9%A1%B5%E4%B8%8E%E7%BD%AE%E6%8D%A2/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 讲清多级页表为什么存在：48 位地址空间的页表如果只有一级会有多大，四级怎么省下来。 - 手写页面置换模拟器：FIFO、LRU、Clock 三种算法 + Belady 异常，把&#39;缺页率&#39;变成可计算的数字。 - 建立工作集直觉：程序为什么…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T01:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.514Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="操作系统">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/05-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86-%E9%A1%B5%E4%B8%8E%E7%BD%AE%E6%8D%A2/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/05-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86-%E9%A1%B5%E4%B8%8E%E7%BD%AE%E6%8D%A2/","path":"2026/09/02/05-内存管理-页与置换/","title":"05-内存管理-页与置换"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>05-内存管理-页与置换 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#05-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86-%E9%A1%B5%E4%B8%8E%E7%BD%AE%E6%8D%A2"><span class="nav-number">1.</span> <span class="nav-text"> 05 - 内存管理-页与置换</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E9%A1%B5%E8%A1%A8%E4%B8%8E%E5%A4%9A%E7%BA%A7%E9%A1%B5%E8%A1%A8%E4%B8%BA%E4%BB%80%E4%B9%88-48-%E4%BD%8D%E8%A6%81%E5%9B%9B%E7%BA%A7"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 页表与多级页表：为什么 48 位要四级</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E9%A1%B5%E9%9D%A2%E7%BD%AE%E6%8D%A2%E7%AE%97%E6%B3%95fifo-lru-clock"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 页面置换算法：FIFO &#x2F; LRU &#x2F; Clock</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E7%BC%BA%E9%A1%B5%E7%8E%87%E4%B8%8E%E5%B7%A5%E4%BD%9C%E9%9B%86belady-%E4%B9%8B%E5%A4%96%E7%9A%84%E6%95%85%E4%BA%8B"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 缺页率与工作集：Belady 之外的故事</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-linux-%E7%9A%84%E5%86%85%E5%AD%98%E5%9B%9E%E6%94%B6swappiness-%E4%B8%8E-oom-killer%E5%AE%9E%E6%B5%8B"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. Linux 的内存回收：swappiness 与 OOM killer（实测）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-mmap%E6%96%87%E4%BB%B6%E6%98%A0%E5%B0%84%E4%B8%8E%E5%8C%BF%E5%90%8D%E6%98%A0%E5%B0%84"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. mmap：文件映射与匿名映射</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.9.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/05-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86-%E9%A1%B5%E4%B8%8E%E7%BD%AE%E6%8D%A2/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="05-内存管理-页与置换 | Yoleen的博客">
+      <meta itemprop="description" content="- 讲清多级页表为什么存在：48 位地址空间的页表如果只有一级会有多大，四级怎么省下来。 - 手写页面置换模拟器：FIFO、LRU、Clock 三种算法 + Belady 异常，把&#39;缺页率&#39;变成可计算的数字。 - 建立工作集直觉：程序为什么…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          05-内存管理-页与置换
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 09:00:00" itemprop="dateCreated datePublished" datetime="2026-09-02T09:00:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">操作系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 讲清多级页表为什么存在：48 位地址空间的页表如果只有一级会有多大，四级怎么省下来。 - 手写页面置换模拟器：FIFO、LRU、Clock 三种算法 + Belady 异常，把'缺页率'变成可计算的数字。 - 建立工作集直觉：程序为什么…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="05-内存管理-页与置换"><a class="markdownIt-Anchor" href="#05-内存管理-页与置换"></a> 05 - 内存管理-页与置换</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>讲清多级页表为什么存在：48 位地址空间的页表如果只有一级会有多大，四级怎么省下来。</li>
+<li>手写页面置换模拟器：FIFO、LRU、Clock 三种算法 + Belady 异常，把&quot;缺页率&quot;变成可计算的数字。</li>
+<li>建立工作集直觉：程序为什么&quot;跑着跑着突然变慢&quot;，以及缓存/内存容量与它无关时的表现。</li>
+<li>实测 Linux 的内存压力反应链：page cache → 回收 → swap → OOM killer，会看现场、会读日志。</li>
+<li>会用 mmap 的两种形态：文件映射（含 llama.cpp 加载模型的原理）与匿名映射。</li>
+</ul>
+<p>前置：第 04 篇的分页与缺页概念；环境 Ubuntu 22.04 / WSL2。</p>
+<h2 id="1-页表与多级页表为什么-48-位要四级"><a class="markdownIt-Anchor" href="#1-页表与多级页表为什么-48-位要四级"></a> 1. 页表与多级页表：为什么 48 位要四级</h2>
+<p>第 04 篇说&quot;MMU 查页表把虚拟页号换成物理帧号&quot;。单级页表的账很吓人：x86-64 常用 48 位虚拟地址、4KB 页 → 页内偏移 12 位、页号 36 位 → 每个进程的页表要 2^36 个 PTE；PTE 8 字节 → <strong>每进程 512GB 页表</strong>。比物理内存本身还大，显然不能这么存。</p>
+<p>多级页表的解法：<strong>把页号切段，逐级索引，没有用到的高位部分整棵子树不建</strong>（OSTEP 第 20 章《Smaller Page Tables》；CSAPP 第 9.3 节用 32 位例子推演同一思想）。x86-64 Linux 标准四级（新内核支持五级 la57）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">48 位虚拟地址：[47:39] [38:30] [29:21] [20:12] [11:0]</span><br><span class="line">                 PGD     PUD     PMD     PTE   页内偏移</span><br><span class="line">                  9bit    9bit    9bit    9bit   12bit</span><br><span class="line">                  │       │       │       │</span><br><span class="line"> CR3 ─► PGD表(512项) ► PUD表 ► PMD表 ► PTE表 ─► 物理帧号 + 偏移</span><br></pre></td></tr></table></figure>
+<p>每级表恰好 512 项 × 8 字节 = 4KB，正好占一个页框，方便分配和回收。省内存的关键：<strong>大多数进程根本用不满 47 位空间</strong>——堆、栈、库中间都是大空洞，页表只需覆盖实际映射的区域，空洞部分各级表项直接为空、不建下级表。一个只映射 100MB 的进程，页表总量是几十 KB 量级，而不是 512GB。<strong>代价</strong>：一次访存最多查 4 次表（内存里），TLB 的价值因此更大（04 篇的账在这里兑现）。</p>
+<p>Linux 给每个进程一套独立页表（<code>task_struct</code> 里的 <code>mm-&gt;pgd</code>，02 篇档案表的 mm 栏）；上下文切换时换 CR3 寄存器指向新进程的页表根——这也是进程切换比线程切换贵的根本原因：<strong>换 CR3 后 TLB 大量失效</strong>（内核用 PCID/ASID 技巧缓解，07 篇讲切换成本时回收这个话题）。</p>
+<h2 id="2-页面置换算法fifo-lru-clock"><a class="markdownIt-Anchor" href="#2-页面置换算法fifo-lru-clock"></a> 2. 页面置换算法：FIFO / LRU / Clock</h2>
+<p>物理内存满了、还要调页进来，就有人要被换出去（或直接丢弃干净页）。算法只关心一件事：<strong>猜谁不会再被用</strong>（OSTEP 第 22 章《Beyond Physical Memory: Policies》）。用 Python 写一个统一的模拟器，输入访问序列，输出缺页次数：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># paging_sim.py —— FIFO / LRU / Clock(二次机会) 页面置换模拟器</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">simulate</span>(<span class="params">policy, refs, frames</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;refs: 页访问序列; frames: 页框数; 返回 (缺页次数, 每步是否缺页)&quot;&quot;&quot;</span></span><br><span class="line">    mem, faults, trace = [], <span class="number">0</span>, []</span><br><span class="line">    <span class="keyword">if</span> policy == <span class="string">&quot;FIFO&quot;</span>:                          <span class="comment"># 先进先出：只记到来顺序</span></span><br><span class="line">        <span class="keyword">from</span> collections <span class="keyword">import</span> deque</span><br><span class="line">        order = deque()</span><br><span class="line">        <span class="keyword">for</span> r <span class="keyword">in</span> refs:</span><br><span class="line">            <span class="keyword">if</span> r <span class="keyword">not</span> <span class="keyword">in</span> mem:</span><br><span class="line">                faults += <span class="number">1</span>; trace.append(<span class="number">1</span>)</span><br><span class="line">                <span class="keyword">if</span> <span class="built_in">len</span>(mem) == frames:</span><br><span class="line">                    old = order.popleft(); mem.remove(old)</span><br><span class="line">                mem.append(r); order.append(r)</span><br><span class="line">            <span class="keyword">else</span>: trace.append(<span class="number">0</span>)</span><br><span class="line">    <span class="keyword">elif</span> policy == <span class="string">&quot;LRU&quot;</span>:                         <span class="comment"># 最久未使用：按最近访问时间淘汰</span></span><br><span class="line">        last = &#123;&#125;</span><br><span class="line">        <span class="keyword">for</span> t, r <span class="keyword">in</span> <span class="built_in">enumerate</span>(refs):</span><br><span class="line">            <span class="keyword">if</span> r <span class="keyword">not</span> <span class="keyword">in</span> mem:</span><br><span class="line">                faults += <span class="number">1</span>; trace.append(<span class="number">1</span>)</span><br><span class="line">                <span class="keyword">if</span> <span class="built_in">len</span>(mem) == frames:</span><br><span class="line">                    victim = <span class="built_in">min</span>(mem, key=<span class="keyword">lambda</span> p: last[p])</span><br><span class="line">                    mem.remove(victim)</span><br><span class="line">                mem.append(r)</span><br><span class="line">            <span class="keyword">else</span>: trace.append(<span class="number">0</span>)</span><br><span class="line">            last[r] = t</span><br><span class="line">    <span class="keyword">elif</span> policy == <span class="string">&quot;CLOCK&quot;</span>:                       <span class="comment"># 二次机会：近似 LRU，只多用 1 个引用位</span></span><br><span class="line">        refbit, hand = &#123;&#125;, <span class="number">0</span></span><br><span class="line">        <span class="keyword">for</span> r <span class="keyword">in</span> refs:</span><br><span class="line">            <span class="keyword">if</span> r <span class="keyword">in</span> mem:</span><br><span class="line">                refbit[r] = <span class="number">1</span>; trace.append(<span class="number">0</span>); <span class="keyword">continue</span></span><br><span class="line">            faults += <span class="number">1</span>; trace.append(<span class="number">1</span>)</span><br><span class="line">            <span class="keyword">if</span> <span class="built_in">len</span>(mem) == frames:</span><br><span class="line">                <span class="keyword">while</span> refbit[mem[hand]] == <span class="number">1</span>:     <span class="comment"># 扫描：引用位 1 → 清零跳过</span></span><br><span class="line">                    refbit[mem[hand]] = <span class="number">0</span></span><br><span class="line">                    hand = (hand + <span class="number">1</span>) % frames</span><br><span class="line">                victim = mem[hand]                <span class="comment"># 指针停下的第一个 0 页被淘汰</span></span><br><span class="line">                mem[hand] = r</span><br><span class="line">                hand = (hand + <span class="number">1</span>) % frames</span><br><span class="line">            <span class="keyword">else</span>:</span><br><span class="line">                mem.append(r)</span><br><span class="line">            refbit[r] = <span class="number">0</span></span><br><span class="line">    <span class="keyword">return</span> faults, trace</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    refs = [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">5</span>, <span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>, <span class="number">5</span>]   <span class="comment"># 经典 Belady 序列</span></span><br><span class="line">    <span class="keyword">for</span> f <span class="keyword">in</span> (<span class="number">3</span>, <span class="number">4</span>):</span><br><span class="line">        row = [<span class="string">f&quot;<span class="subst">&#123;p&#125;</span>: <span class="subst">&#123;simulate(p, refs, f)[<span class="number">0</span>]:2d&#125;</span> 次缺页&quot;</span> <span class="keyword">for</span> p <span class="keyword">in</span> (<span class="string">&quot;FIFO&quot;</span>, <span class="string">&quot;LRU&quot;</span>, <span class="string">&quot;CLOCK&quot;</span>)]</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;页框=<span class="subst">&#123;f&#125;</span>  &quot;</span> + <span class="string">&quot;   &quot;</span>.join(row))</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ python3 paging_sim.py</span><br><span class="line">页框=3  FIFO:  9 次缺页   LRU: 10 次缺页   CLOCK: 10 次缺页</span><br><span class="line">页框=4  FIFO: 10 次缺页   LRU:  8 次缺页   CLOCK:  8 次缺页</span><br></pre></td></tr></table></figure>
+<p>三个必读结论：</p>
+<ul>
+<li><strong>FIFO 的 Belady 异常</strong>：页框从 3 加到 4，缺页反而从 9 升到 10（这就是上面的经典序列，OSTEP 第 22 章引用的 Belady 1966 实验）。FIFO 与&quot;程序将来用不用&quot;毫无关联，加内存都可能更糟——面试常客。</li>
+<li><strong>LRU 看过去猜未来</strong>：“很久没用 ⇒ 大概不会再用”，对局部性敏感的负载效果好；理论最优是&quot;淘汰将来最久不用&quot;的 OPT 算法（需要预知未来，仅作标尺，OSTEP 第 22 章用它给所有实际算法定上限）。</li>
+<li><strong>Clock 是 LRU 的工程替身</strong>：真硬件不提供&quot;访问时间戳&quot;，只提供 PTE 里的一个引用位（访问置 1）。Clock/二次机会用&quot;引用位 0 就淘汰、1 就清零再给一次机会&quot;模拟 LRU，成本 O(1) 摊还。<strong>Linux 实际用的 active/inactive 双链表 + 引用位，思想同源</strong>（LKD 第 16 章《The Page Cache and Page Writeback》；近年多代 LRU gen LRU 是其演进）。<strong>经验做法</strong>：面试答&quot;页面置换&quot;时先讲 LRU 原理，再补一句&quot;硬件只有引用位，所以实际系统都是 Clock 近似&quot;，立刻显出工程味。</li>
+</ul>
+<h2 id="3-缺页率与工作集belady-之外的故事"><a class="markdownIt-Anchor" href="#3-缺页率与工作集belady-之外的故事"></a> 3. 缺页率与工作集：Belady 之外的故事</h2>
+<p><strong>工作集（working set）</strong>：进程在时间窗 T 内实际访问的页的集合（Denning 1968 的经典模型，OSTEP 第 23 章的 locality 引用）。它决定缺页率曲线的形状：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">缺页率</span><br><span class="line">  │＼</span><br><span class="line">  │  ＼</span><br><span class="line">  │    ＼___                          ← 分配页数 &gt;&gt; 工作集：缺页率≈0，再多给也没用</span><br><span class="line">  │        ＼＼</span><br><span class="line">  │           ＼＿ 崖壁区              ← 分配页数 ≈ 工作集：抖动（thrashing）</span><br><span class="line">  │                ＼                  系统忙于换页，CPU 几乎不干活</span><br><span class="line">  └──────────────────────► 分配给进程的页数</span><br></pre></td></tr></table></figure>
+<p>这解释了两个日常现象：<strong>内存刚好不够时性能不是线性下降而是断崖</strong>（工作集装不下，狂换页）；<strong>CPU 利用率突然掉到近零、磁盘 IO 打满</strong>是抖动的指纹（<code>vmstat</code> 看 <code>si/so</code> 列持续非零、<code>%idle</code> 高——<strong>经验做法</strong>：先查抖动再查代码）。推理服务的镜像知识：KV cache 的显存工作集超过显存就会疯狂换页（Stage 3 的统一内存实验就是这个曲线）。</p>
+<h2 id="4-linux-的内存回收swappiness-与-oom-killer实测"><a class="markdownIt-Anchor" href="#4-linux-的内存回收swappiness-与-oom-killer实测"></a> 4. Linux 的内存回收：swappiness 与 OOM killer（实测）</h2>
+<p>Linux 的内存压力反应链（LKD 第 12、16 章；<code>man proc</code> 的 /proc/sys/vm 节）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">内存紧张</span><br><span class="line">  → 1. 回收 page cache（干净页直接丢，脏页写回）     ← 无感知</span><br><span class="line">  → 2. 按 swappiness 权衡：回收匿名页（换出到 swap） vs 文件页</span><br><span class="line">  → 3. 还不够 → 触发 OOM killer：挑&quot;最该死&quot;的进程杀之</span><br></pre></td></tr></table></figure>
+<p><strong>swappiness</strong>（0~100，默认 60）：数值越大越倾向把匿名页换出到 swap，越小越倾向保留匿名页、只回收文件页。实测：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">$ <span class="built_in">cat</span> /proc/sys/vm/swappiness</span><br><span class="line">60</span><br><span class="line">$ <span class="built_in">sudo</span> sysctl vm.swappiness=10        <span class="comment"># 常见调法：服务器少换页</span></span><br><span class="line">vm.swappiness = 10</span><br><span class="line">$ free -h</span><br><span class="line">              total        used        free      shared  buff/cache   available</span><br><span class="line">Mem:           15Gi       3.1Gi       1.2Gi       384Mi        11Gi        12Gi</span><br><span class="line">Swap:         2.0Gi          0B       2.0Gi          ← WSL2 默认也给 swap（.wslconfig 可调）</span><br></pre></td></tr></table></figure>
+<p>经验定位（<strong>经验做法</strong>）：数据库/推理服务这类&quot;匿名页就是命根子&quot;的负载调低（10 左右）；桌面/大 cache 场景保持默认。看现场的三件套：<code>free -h</code>（available 才是&quot;还能分多少&quot;）、<code>vmstat 1</code>（si/so 换页流量）、<code>ps -eo pid,rss,comm --sort=-rss | head</code>（谁在吃）。</p>
+<p><strong>OOM killer</strong>：所有路都走不通时的最后一刀。选择标准是 oom_score（<code>/proc/PID/oom_score</code>，约等于 badness：占用大 + 不重要者优先，可手工调 <code>/proc/PID/oom_score_adj</code> ±1000 免死/必死）。被杀进程的死状是 <code>Killed</code>（信号 9, SIGKILL——10 篇讲信号时回收），dmesg 留下完整案发现场：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ dmesg | grep -i &quot;killed process&quot; | tail -2</span><br><span class="line">[86210.441] Out of memory: Killed process 24311 (python3) total-vm:9134204kB,</span><br><span class="line">anon-rss:8204112kB, file-rss:2048kB, shmem-rss:0kB, UID:1000 pgtables:16892kB</span><br><span class="line">oom_score_adj:0</span><br></pre></td></tr></table></figure>
+<p>读这条日志的方法：<code>anon-rss</code> 是它自己的匿名内存（真凶），<code>total-vm</code> 是虚拟地址空间（大不一定是罪），<code>oom_score_adj:0</code> 是没做保护。<strong>经验做法</strong>：跑大模型推理前，给关键进程设 <code>echo -500 &gt; /proc/$$/oom_score_adj</code> 保命，并确保监控里盯 available 内存而不是 free（cache 占的 free 是健康不是病）。<strong>WSL2 注</strong>：WSL2 的内存上限在 <code>.wslconfig</code> 的 <code>memory=</code> 配置；超限表现是 VM 内 OOM killer 动手或 Windows 侧报错，dmesg 同样可查。</p>
+<h2 id="5-mmap文件映射与匿名映射"><a class="markdownIt-Anchor" href="#5-mmap文件映射与匿名映射"></a> 5. mmap：文件映射与匿名映射</h2>
+<p>mmap 把&quot;一段虚拟地址&quot;和&quot;一个文件（或一块匿名内存）&quot;接起来（<code>man 2 mmap</code>；OSTEP 第 23 章的 mmap I/O 一节）。第一次访问那页地址才真正分配/读入（demand paging），major/minor fault 由内核悄悄处理。两种用法一张表：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>文件映射</th>
+<th>匿名映射（MAP_ANONYMOUS）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>后备</td>
+<td>磁盘上的文件</td>
+<td>无（swap/物理内存）</td>
+</tr>
+<tr>
+<td>典型用途</td>
+<td>读模型权重、共享库、共享内存文件</td>
+<td>malloc 大块、线程栈、CUDA host pinned 类比</td>
+</tr>
+<tr>
+<td>优点</td>
+<td>免 read 拷贝、页 cache 直接共享、按需调入</td>
+<td>惰性分配、大块不占堆</td>
+</tr>
+<tr>
+<td>缺点</td>
+<td>缺页开销在访问路径上（抖动敏感）</td>
+<td>仍受物理内存约束</td>
+</tr>
+</tbody>
+</table>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// mmap_demo.c —— 文件映射读大文件：逐页访问，观察 major/minor 缺页</span></span><br><span class="line"><span class="comment">// 编译：gcc mmap_demo.c -o mmap_demo</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;fcntl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/mman.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/stat.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">const</span> <span class="type">char</span> *path = <span class="string">&quot;/tmp/bigfile&quot;</span>;           <span class="comment">// 04 篇练习造的 200MB 文件</span></span><br><span class="line">    <span class="type">int</span> fd = open(path, O_RDONLY);</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">stat</span> <span class="title">st</span>;</span> fstat(fd, &amp;st);</span><br><span class="line"></span><br><span class="line">    <span class="type">char</span> *p = mmap(<span class="literal">NULL</span>, st.st_size, PROT_READ, MAP_PRIVATE, fd, <span class="number">0</span>);</span><br><span class="line">    <span class="keyword">if</span> (p == MAP_FAILED) &#123; perror(<span class="string">&quot;mmap&quot;</span>); <span class="keyword">return</span> <span class="number">1</span>; &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">volatile</span> <span class="type">long</span> sum = <span class="number">0</span>;                        <span class="comment">// volatile 防止编译器把读优化掉</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; st.st_size; i += <span class="number">4096</span>) <span class="comment">// 每页读 1 字节 → 每页一次缺页</span></span><br><span class="line">        sum += p[i];</span><br><span class="line"></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;sum=%ld\n&quot;</span>, sum);</span><br><span class="line">    munmap(p, st.st_size); close(fd);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ /usr/bin/time -v ./mmap_demo 2&gt;&amp;1 | grep -E <span class="string">&quot;Minor|Major|Maximum resident&quot;</span></span><br><span class="line">        Minor (reclaiming a frame) page faults: 20489    ← 每页一次 minor（页在 cache）</span><br><span class="line">        Major (requiring I/O) page faults:     0         ← 文件已在 page cache 里</span><br><span class="line">        Maximum resident <span class="built_in">set</span> size (kbytes):    4816     ← 程序自己只用了 4.8MB！</span><br></pre></td></tr></table></figure>
+<p>最后那行是 mmap 的灵魂：<strong>RSS 只有几 MB，却&quot;读&quot;完了 200MB</strong>——数据住在 page cache，通过映射直接访问，<code>read()</code> 那种&quot;从内核拷到用户缓冲区&quot;的复制整个消失了（零拷贝视角，10 篇 IPC 对比时会再次用到）。llama.cpp 默认 <code>mmap</code> 加载 GGUF 权重、多进程共享同一份模型页，正是这个机制的直接应用（Stage 4 对接）。什么时候不用 mmap：随机访问小文件（read 更简单）、需要稳定延迟的实时路径（缺页抖动不可控）。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“swap 关了就万事大吉”</strong>：关 swap 后内存回收只剩 page cache 一条路，匿名页一旦分配就钉死，OOM 更早到来；swappiness=0 也不是&quot;不换页&quot;，而是&quot;万不得已才换&quot;（语义见内核文档 Documentation/admin-guide/sysctl/vm.rst）。</li>
+<li><strong>“free 显示 free 很少 = 内存不够”</strong>：Linux 把空闲内存拿去当 page cache，free 少是设计使然；看 available 列。<strong>这条是新手性能误判第一名</strong>。</li>
+<li><strong>“LRU 是 Linux 的页面置换算法”</strong>：LRU 是思想，Linux 用双链表(active/inactive)+引用位的近似实现，从未真做过 O(n) 时间戳扫描；面试时答&quot;近似 LRU&quot;才准确。</li>
+<li><strong>“mmap 一定比 read 快”</strong>：顺序读一次的场景 read 走预读（readahead）可能更稳；mmap 的优势在重复访问、共享、零拷贝场景。<strong>经验做法</strong>：大文件反复读用 mmap，一次性顺序读 read 足够。</li>
+<li><strong>“OOM killer 杀内存最大的进程”</strong>：粗略如此，但实际按 oom_badness 综合评分（RSS 换算 + oom_score_adj 调整），大 RSS 但 adj=-500 的进程可以豁免。生产服务必须主动设置保护而不是赌评分。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>多级页表用&quot;稀疏不建子树&quot;把每进程页表从 512GB 压到几十 KB 级；代价是 TLB miss 的查表次数增加——内存账与性能账永远一起算。</li>
+<li>置换算法的谱系：FIFO（Belady 异常）→ LRU（局部性好但硬件不友好）→ Clock/引用位近似；Linux 用 active/inactive 双链表落地，gen LRU 是现代演进。</li>
+<li>工作集决定缺页率曲线：内存恰好不足时是断崖不是斜坡；<code>vmstat</code> 的 si/so + 低 CPU 是抖动指纹。</li>
+<li>内存压力反应链：回收 cache → swap → OOM killer；free 看 available、OOM 现场 dmesg 找 anon-rss、关键进程设 oom_score_adj 保命（<strong>经验做法</strong>）。</li>
+<li>mmap 文件映射 = 零拷贝 + 页级共享（llama.cpp 加载权重的原理）；匿名映射 = 大块惰性分配（malloc 大对象的后台）。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>给 paging_sim.py 加 OPT 算法（用&quot;未来最久不用&quot;模拟），对同一序列输出 OPT/LRU/CLOCK/FIFO 四列；验证 OPT ≤ LRU ≤ FIFO 的期望关系在 Belady 序列上是否严格成立（LRU=10 vs FIFO=9 的反例说明了什么？）。</li>
+<li>把模拟器的 frames 从 3 逐步加到 6，画出 FIFO 缺页数曲线，确认/打破 Belady 异常；再对 LRU 证明（或用实验说明）Belady 异常不会发生。</li>
+<li>实测你的系统：<code>free -h</code> 记录 available；写一个逐步分配内存的 Python 循环（每次 <code>bytearray(64*1024*1024)</code> 并触摸），每轮打印 free/available 与 swap used，观察回收链在第几轮开始动；结束后用 <code>dmesg | tail</code> 检查是否触发了 OOM（<strong>小心</strong>：在虚拟机/WSL2 里做，分配上限控制在机器一半以内）。</li>
+<li>用 mmap_demo 读 200MB 文件，再改成每页写一个字节（改 MAP_SHARED + PROT_WRITE），对比 /usr/bin/time -v 的缺页数；解释为什么写比读多一类脏页回写成本（对接 08 篇的 page cache 与 fsync）。</li>
+<li>用 <code>cat /proc/self/smaps_rollup</code> 查看当前 shell 的内存构成（Rss/Anonymous/FilePmdMapped 等字段），回答：为什么&quot;程序分配了但没写过的内存&quot;既不计入 Anonymous 也不占 RSS？这段解释要引用按需调页（demand paging）。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" rel="tag"># 操作系统</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/04-%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98-%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/" rel="prev" title="04-虚拟内存-地址空间">
+                  <i class="fa fa-angle-left"></i> 04-虚拟内存-地址空间
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/06-%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D%E5%99%A8/" rel="next" title="06-内存分配器">
+                  06-内存分配器 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

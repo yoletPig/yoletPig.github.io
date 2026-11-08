@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 说清为什么单副本扛不住后还要分区，以及范围分区与哈希分区的取舍。 - 推导普通哈希取模在扩容时的灾难（几乎全量数据搬家），理解一致性哈希环的解题思路。 - 手写一致性哈希 + 虚拟节点，实测数据分布的改善，并掌握 rendezvous …">
+<meta property="og:type" content="article">
+<meta property="og:title" content="06-分区与一致性哈希">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/06-%E5%88%86%E5%8C%BA%E4%B8%8E%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 说清为什么单副本扛不住后还要分区，以及范围分区与哈希分区的取舍。 - 推导普通哈希取模在扩容时的灾难（几乎全量数据搬家），理解一致性哈希环的解题思路。 - 手写一致性哈希 + 虚拟节点，实测数据分布的改善，并掌握 rendezvous …">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T05:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.546Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/06-%E5%88%86%E5%8C%BA%E4%B8%8E%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/06-%E5%88%86%E5%8C%BA%E4%B8%8E%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/","path":"2026/09/03/06-分区与一致性哈希/","title":"06-分区与一致性哈希"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>06-分区与一致性哈希 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#06-%E5%88%86%E5%8C%BA%E4%B8%8E%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C"><span class="nav-number">1.</span> <span class="nav-text"> 06 - 分区与一致性哈希</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%88%86%E5%8C%BA"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 为什么要分区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E8%8C%83%E5%9B%B4%E5%88%86%E5%8C%BA-vs-%E5%93%88%E5%B8%8C%E5%88%86%E5%8C%BA"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 范围分区 vs 哈希分区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%99%AE%E9%80%9A%E5%93%88%E5%B8%8C%E7%9A%84%E9%97%AE%E9%A2%98%E6%89%A9%E5%AE%B9-%E5%A4%A7%E6%90%AC%E5%AE%B6"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 普通哈希的问题：扩容 &#x3D; 大搬家</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C%E7%8E%AF-%E8%99%9A%E6%8B%9F%E8%8A%82%E7%82%B9%E6%89%8B%E5%86%99-%E5%AE%9E%E6%B5%8B"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 一致性哈希环 + 虚拟节点（手写 + 实测）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E8%B7%B3%E8%B7%83%E5%93%88%E5%B8%8C%E4%B8%8E-rendezvous-hashing%E7%AE%80%E8%BF%B0"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 跳跃哈希与 rendezvous hashing（简述）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E7%83%AD%E5%88%86%E5%8C%BA%E4%B8%8E%E5%86%8D%E5%B9%B3%E8%A1%A1%E7%AD%96%E7%95%A5"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 热分区与再平衡策略</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E4%B8%8E%E7%BC%93%E5%AD%98%E9%9B%86%E7%BE%A4%E7%9A%84%E8%A1%94%E6%8E%A5"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 与缓存集群的衔接</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/06-%E5%88%86%E5%8C%BA%E4%B8%8E%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="06-分区与一致性哈希 | Yoleen的博客">
+      <meta itemprop="description" content="- 说清为什么单副本扛不住后还要分区，以及范围分区与哈希分区的取舍。 - 推导普通哈希取模在扩容时的灾难（几乎全量数据搬家），理解一致性哈希环的解题思路。 - 手写一致性哈希 + 虚拟节点，实测数据分布的改善，并掌握 rendezvous …">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          06-分区与一致性哈希
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 13:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T13:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">分布式系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.6k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>13 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 说清为什么单副本扛不住后还要分区，以及范围分区与哈希分区的取舍。 - 推导普通哈希取模在扩容时的灾难（几乎全量数据搬家），理解一致性哈希环的解题思路。 - 手写一致性哈希 + 虚拟节点，实测数据分布的改善，并掌握 rendezvous …</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="06-分区与一致性哈希"><a class="markdownIt-Anchor" href="#06-分区与一致性哈希"></a> 06 - 分区与一致性哈希</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>说清为什么单副本扛不住后还要分区，以及范围分区与哈希分区的取舍。</li>
+<li>推导普通哈希取模在扩容时的灾难（几乎全量数据搬家），理解一致性哈希环的解题思路。</li>
+<li>手写一致性哈希 + 虚拟节点，实测数据分布的改善，并掌握 rendezvous hashing 的替代思路。</li>
+<li>识别热分区的成因与治理手段，梳理再平衡策略与缓存集群的衔接。</li>
+</ul>
+<h2 id="1-为什么要分区"><a class="markdownIt-Anchor" href="#1-为什么要分区"></a> 1. 为什么要分区</h2>
+<p>复制（第 04 章）解决的是<strong>可用性与读扩展</strong>；当数据量或写入量超出单机（第 01 章的天花板），就必须<strong>分区（partition/shard）</strong>：把数据切成小块分到不同节点，每片独立服务。分区与复制通常组合：每个分片内部再做 3 副本复制（如 Kafka 的 partition + ISR、Redis Cluster 的 16384 slot + 主从）。</p>
+<p>分区的核心问题三连：</p>
+<ol>
+<li><strong>切分</strong>：按什么规则把数据映射到分片？（本篇主角）</li>
+<li><strong>路由</strong>：请求来了怎么找到目标分片？（client 直查 / 代理层 / gossip 广播）</li>
+<li><strong>再平衡</strong>：节点增减时怎么搬家最小、负载最均？（本篇第 3~5 节）</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">                     ┌── 路由层三种形态 ──┐</span><br><span class="line">client → [代理: Proxy/Coordinator] → 分片节点（如 Redis Cluster 的任意节点可转发）</span><br><span class="line">client → [任意节点 gossip 全集群路由表]（Cassandra：任意节点可协调）</span><br><span class="line">client → [自己算路由]（Dynamo：客户端库内置 hash 环）</span><br></pre></td></tr></table></figure>
+<h2 id="2-范围分区-vs-哈希分区"><a class="markdownIt-Anchor" href="#2-范围分区-vs-哈希分区"></a> 2. 范围分区 vs 哈希分区</h2>
+<p><strong>范围分区</strong>：按 key 的区间切，user1~user1000 → 分片1，1001~2000 → 分片2。</p>
+<ul>
+<li>优点：<strong>范围查询天然高效</strong>（&quot;查 8 点到 9 点的所有订单&quot;只打一个分片）；分片边界即数据语义。</li>
+<li>缺点：<strong>热点</strong>。连续 key 常有访问倾斜（最新时间戳的分片被狂写）；时序数据按时间分区时，&quot;当前时间&quot;永远落在最后一个分片。</li>
+</ul>
+<p><strong>哈希分区</strong>：hash(key) → 分片。打散热点（相邻 key 飞向不同节点），但<strong>范围查询要扫全部分片</strong>。</p>
+<ul>
+<li>变体技巧：复合 key——先按&quot;日期&quot;范围分区、区内再按&quot;用户&quot;哈希，兼得两者（DDIA 第 6.2 节给出此模式）。热点 key 进一步拆解：给超级热点 key 加随机后缀（key.1 ~ key.100）再哈希，写入摊开，代价是读要聚合（salting）。</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>范围分区</th>
+<th>哈希分区</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>点查</td>
+<td>先查路由表（需区间元数据）</td>
+<td>直接算</td>
+</tr>
+<tr>
+<td>范围扫描</td>
+<td>一个分片</td>
+<td>全分片</td>
+</tr>
+<tr>
+<td>热点风险</td>
+<td>高（时序/递增 key）</td>
+<td>低（仍可能单 key 热点）</td>
+</tr>
+<tr>
+<td>再平衡</td>
+<td>区间分裂/合并，可渐进</td>
+<td>需哈希环/槽位机制</td>
+</tr>
+<tr>
+<td>代表</td>
+<td>HBase、TiDB、CockroachDB</td>
+<td>Redis Cluster、Dynamo/Cassandra</td>
+</tr>
+</tbody>
+</table>
+<h2 id="3-普通哈希的问题扩容-大搬家"><a class="markdownIt-Anchor" href="#3-普通哈希的问题扩容-大搬家"></a> 3. 普通哈希的问题：扩容 = 大搬家</h2>
+<p>朴素方案 <code>shard = hash(key) % N</code>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">N=3:  key→hash%3 ∈ &#123;0,1,2&#125;</span><br><span class="line">N=4:  hash%4 —— 除了 hash%12==0 的 key（1/4 概率命中同分片），</span><br><span class="line">      其余 3/4 的 key 全部换了分片！</span><br></pre></td></tr></table></figure>
+<p><strong>N 从 3 到 4，约 75% 的数据要搬家</strong>。对缓存集群这是灾难：搬家期间缓存全 miss，数据库瞬间被穿透（缓存雪崩，第 10 章弹性模式的经典诱因）。对存储集群则是 75% 的数据迁移带宽。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">取模扩容的 key 迁移率（N=3 → M）</span><br><span class="line">M=4 → 75%    M=5 → 80%    M=6 → 83.3%    通式：1 - 1/M · gcd(N,M)/N 的近似直觉</span><br></pre></td></tr></table></figure>
+<p>一致性哈希（David Karger et al., <em>Consistent Hashing and Random Trees</em>, STOC 1997；工程普及文 <em>Web Caching with Consistent Hashing</em>, Computer Networks 1999）的目标：<strong>扩容/缩容时只迁移 K/N 的数据</strong>（K=数据量，N=节点数），即平均每节点只搬出自己 1/N 的份额。</p>
+<h2 id="4-一致性哈希环-虚拟节点手写-实测"><a class="markdownIt-Anchor" href="#4-一致性哈希环-虚拟节点手写-实测"></a> 4. 一致性哈希环 + 虚拟节点（手写 + 实测）</h2>
+<p><strong>环的定义</strong>：把哈希空间想象成一个 0~2^64 的圆环。节点用同一哈希函数映射到环上；每个 key 顺时针找到的第一个节点负责它。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">         节点A</span><br><span class="line">     ╱          ╲</span><br><span class="line">节点D            key1 ──┐</span><br><span class="line">     ╲          ╱        │ 顺时针找到的</span><br><span class="line">       ●───●───●          │ 第一个节点 = A</span><br><span class="line">     节点C  key2  节点B</span><br></pre></td></tr></table></figure>
+<ul>
+<li><strong>增删节点只影响环上相邻弧段</strong>：加入节点 X，只有&quot;X 逆时针方向到前一个节点&quot;之间的 key 改归 X（约 K/N）。这解决了迁移率问题。</li>
+<li><strong>新问题——数据倾斜</strong>：节点少时，环上弧段长短随机（哈希不均匀），可能某节点分到 60% 的 key。**虚拟节点（vnode）**解决之：每个物理节点在环上放 100~200 个虚拟点，倾斜被大数定律抹平（Dynamo 论文/ Cassandra 的 vnode 均如此设计）。</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># consistent_hash.py —— 一致性哈希环 + 虚拟节点 + 迁移率/分布实测</span></span><br><span class="line"><span class="keyword">import</span> hashlib, bisect, random</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">md5_int</span>(<span class="params">s: <span class="built_in">str</span></span>) -&gt; <span class="built_in">int</span>:</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">int</span>(hashlib.md5(s.encode()).hexdigest(), <span class="number">16</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">HashRing</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, nodes, vnodes=<span class="number">100</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>.vnodes = vnodes</span><br><span class="line">        <span class="variable language_">self</span>.ring = []                 <span class="comment"># 排序的虚拟节点哈希值</span></span><br><span class="line">        <span class="variable language_">self</span>.node_map = &#123;&#125;             <span class="comment"># 虚拟哈希 -&gt; 物理节点名</span></span><br><span class="line">        <span class="keyword">for</span> n <span class="keyword">in</span> nodes:</span><br><span class="line">            <span class="variable language_">self</span>.add_node(n)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">add_node</span>(<span class="params">self, node</span>):</span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="variable language_">self</span>.vnodes):</span><br><span class="line">            h = md5_int(<span class="string">f&quot;<span class="subst">&#123;node&#125;</span>#vn<span class="subst">&#123;i&#125;</span>&quot;</span>)</span><br><span class="line">            <span class="variable language_">self</span>.node_map[h] = node</span><br><span class="line">            bisect.insort(<span class="variable language_">self</span>.ring, h)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">remove_node</span>(<span class="params">self, node</span>):</span><br><span class="line">        removed = &#123;md5_int(<span class="string">f&quot;<span class="subst">&#123;node&#125;</span>#vn<span class="subst">&#123;i&#125;</span>&quot;</span>) <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="variable language_">self</span>.vnodes)&#125;</span><br><span class="line">        <span class="variable language_">self</span>.ring = [h <span class="keyword">for</span> h <span class="keyword">in</span> <span class="variable language_">self</span>.ring <span class="keyword">if</span> h <span class="keyword">not</span> <span class="keyword">in</span> removed]</span><br><span class="line">        <span class="keyword">for</span> h <span class="keyword">in</span> removed:</span><br><span class="line">            <span class="variable language_">self</span>.node_map.pop(h, <span class="literal">None</span>)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">get_node</span>(<span class="params">self, key</span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">        h = md5_int(key)</span><br><span class="line">        i = bisect.bisect_right(<span class="variable language_">self</span>.ring, h) % <span class="built_in">len</span>(<span class="variable language_">self</span>.ring)   <span class="comment"># 顺时针第一个（环回绕）</span></span><br><span class="line">        <span class="keyword">return</span> <span class="variable language_">self</span>.node_map[<span class="variable language_">self</span>.ring[i]]</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">migrate_rate</span>(<span class="params">old: HashRing, new: HashRing, keys</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;统计加入节点后需要搬家的 key 比例&quot;&quot;&quot;</span></span><br><span class="line">    moved = <span class="built_in">sum</span>(<span class="number">1</span> <span class="keyword">for</span> k <span class="keyword">in</span> keys <span class="keyword">if</span> old.get_node(k) != new.get_node(k))</span><br><span class="line">    <span class="keyword">return</span> moved / <span class="built_in">len</span>(keys)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">distribution</span>(<span class="params">ring: HashRing, keys</span>):</span><br><span class="line">    <span class="keyword">from</span> collections <span class="keyword">import</span> Counter</span><br><span class="line">    c = Counter(ring.get_node(k) <span class="keyword">for</span> k <span class="keyword">in</span> keys)</span><br><span class="line">    total = <span class="built_in">sum</span>(c.values())</span><br><span class="line">    <span class="keyword">return</span> c, &#123;k: <span class="string">f&quot;<span class="subst">&#123;v&#125;</span> (<span class="subst">&#123;v/total:<span class="number">.1</span>%&#125;</span>)&quot;</span> <span class="keyword">for</span> k, v <span class="keyword">in</span> <span class="built_in">sorted</span>(c.items())&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    random.seed(<span class="number">1</span>)</span><br><span class="line">    keys = [<span class="string">f&quot;key-<span class="subst">&#123;i&#125;</span>&quot;</span> <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">100000</span>)]</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ==== 实验1：普通取模 vs 一致性哈希 的扩容迁移率 ====</span></span><br><span class="line">    N = <span class="number">3</span></span><br><span class="line">    mod_old = &#123;k: md5_int(k) % N <span class="keyword">for</span> k <span class="keyword">in</span> keys&#125;</span><br><span class="line">    mod_new = &#123;k: md5_int(k) % (N + <span class="number">1</span>) <span class="keyword">for</span> k <span class="keyword">in</span> keys&#125;</span><br><span class="line">    mod_moved = <span class="built_in">sum</span>(<span class="number">1</span> <span class="keyword">for</span> k <span class="keyword">in</span> keys <span class="keyword">if</span> mod_old[k] != mod_new[k]) / <span class="built_in">len</span>(keys)</span><br><span class="line"></span><br><span class="line">    ring_old = HashRing([<span class="string">&quot;A&quot;</span>, <span class="string">&quot;B&quot;</span>, <span class="string">&quot;C&quot;</span>], vnodes=<span class="number">100</span>)</span><br><span class="line">    ring_new = HashRing([<span class="string">&quot;A&quot;</span>, <span class="string">&quot;B&quot;</span>, <span class="string">&quot;C&quot;</span>, <span class="string">&quot;D&quot;</span>], vnodes=<span class="number">100</span>)   <span class="comment"># 加入 D</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;取模 %3→%4 迁移率      : <span class="subst">&#123;mod_moved:<span class="number">.1</span>%&#125;</span>&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;一致性哈希 +节点迁移率 : <span class="subst">&#123;migrate_rate(ring_old, ring_new, keys):<span class="number">.1</span>%&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ==== 实验2：虚拟节点数对分布均衡度的影响 ====</span></span><br><span class="line">    <span class="keyword">for</span> vn <span class="keyword">in</span> (<span class="number">1</span>, <span class="number">10</span>, <span class="number">100</span>, <span class="number">500</span>):</span><br><span class="line">        ring = HashRing([<span class="string">&quot;A&quot;</span>, <span class="string">&quot;B&quot;</span>, <span class="string">&quot;C&quot;</span>], vnodes=vn)</span><br><span class="line">        counts, pretty = distribution(ring, keys)   <span class="comment"># counts 是纯数字，直接算极差</span></span><br><span class="line">        spread = (<span class="built_in">max</span>(counts.values()) - <span class="built_in">min</span>(counts.values())) / <span class="built_in">sum</span>(counts.values())</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;vnodes=<span class="subst">&#123;vn:&lt;<span class="number">4</span>&#125;</span> 分布: <span class="subst">&#123;pretty&#125;</span>  极差: <span class="subst">&#123;spread:<span class="number">.1</span>%&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">典型输出（作者机器）：</span><br><span class="line">取模 %3→%4 迁移率      : 74.9%</span><br><span class="line">一致性哈希 +节点迁移率 : 25.1%        ← 正是理论值 1/4</span><br><span class="line">vnodes=1    分布: A 20.2% B 41.5% C 38.3%  极差: 21.3%   ← 裸环严重倾斜</span><br><span class="line">vnodes=10   分布: A 28.7% B 35.4% C 35.9%  极差:  7.2%</span><br><span class="line">vnodes=100  分布: A 33.4% B 33.6% C 33.0%  极差:  0.6%   ← 大数定律生效</span><br><span class="line">vnodes=500  分布: A 33.3% B 33.4% C 33.3%  极差:  0.2%</span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：vnodes 取 100~500 之间按集群规模调；节点越多单节点 vnode 可越少。跨机房部署时给 vnode 加&quot;机架感知权重&quot;，避免一个机房占了半个环。</p>
+<h2 id="5-跳跃哈希与-rendezvous-hashing简述"><a class="markdownIt-Anchor" href="#5-跳跃哈希与-rendezvous-hashing简述"></a> 5. 跳跃哈希与 rendezvous hashing（简述）</h2>
+<p>一致性哈希之外还有一族&quot;最小扰动&quot;哈希：</p>
+<p><strong>Rendezvous hashing（HRW，Highest Random Weight，Thaler &amp; Ravishankar, 1998）</strong>：对每个 key，算它和每个节点的 <code>score = hash(key + node)</code>，<strong>取 score 最大的节点</strong>。增删节点时，只有&quot;该节点恰好是某 key 最大 score&quot;的 key 会迁移——同样是 K/N。实现只有 5 行，无环、无 vnode、天然均匀，适合小集群（几十节点内），代价是每次路由 O(N) 计算（一致性哈希是 O(log V) 二分）。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># rendezvous.py —— 5 行实现的最小扰动哈希</span></span><br><span class="line"><span class="keyword">import</span> hashlib</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">md5_int</span>(<span class="params">s: <span class="built_in">str</span></span>) -&gt; <span class="built_in">int</span>:                       <span class="comment"># 与第 4 节同一哈希函数</span></span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">int</span>(hashlib.md5(s.encode()).hexdigest(), <span class="number">16</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">hrw_pick</span>(<span class="params">key: <span class="built_in">str</span>, nodes: <span class="built_in">list</span></span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">    <span class="keyword">return</span> <span class="built_in">max</span>(nodes, key=<span class="keyword">lambda</span> n: md5_int(<span class="string">f&quot;<span class="subst">&#123;key&#125;</span>|<span class="subst">&#123;n&#125;</span>&quot;</span>))</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    nodes = [<span class="string">&quot;A&quot;</span>, <span class="string">&quot;B&quot;</span>, <span class="string">&quot;C&quot;</span>]</span><br><span class="line">    keys = [<span class="string">f&quot;k<span class="subst">&#123;i&#125;</span>&quot;</span> <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">100000</span>)]</span><br><span class="line">    before = &#123;k: hrw_pick(k, nodes) <span class="keyword">for</span> k <span class="keyword">in</span> keys&#125;</span><br><span class="line">    after = &#123;k: hrw_pick(k, nodes + [<span class="string">&quot;D&quot;</span>]) <span class="keyword">for</span> k <span class="keyword">in</span> keys&#125;</span><br><span class="line">    moved = <span class="built_in">sum</span>(<span class="number">1</span> <span class="keyword">for</span> k <span class="keyword">in</span> keys <span class="keyword">if</span> before[k] != after[k]) / <span class="built_in">len</span>(keys)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;HRW 加入节点迁移率: <span class="subst">&#123;moved:<span class="number">.1</span>%&#125;</span>（理论 25%）&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>Jump Consistent Hash</strong>（Lamping &amp; Veach, <em>A Fast, Minimal Memory, Consistent Hash Algorithm</em>, 2014, Google）：只用 key 与桶数两个输入（即&quot;只支持 0…n-1 编号桶&quot;），O(1) 时间、零内存，扩容迁移率同样最优；局限是桶必须编号连续、不能按名字任意增删中间节点。Celery/Kafka 客户端的一些分片实现用它。选型直觉（经验做法）：节点少、要极致简单 → HRW；节点多、要 O(log V) 路由 → 环 + vnode；桶只增不删且以编号存在 → Jump。</p>
+<h2 id="6-热分区与再平衡策略"><a class="markdownIt-Anchor" href="#6-热分区与再平衡策略"></a> 6. 热分区与再平衡策略</h2>
+<p><strong>热分区（hot partition）</strong>：哈希打散了 key，但打不散&quot;单个超级 key&quot;或&quot;结构性热点&quot;：</p>
+<ul>
+<li>明星效应：某网红/爆品/热搜的 key QPS 独占 50%。</li>
+<li>时序写入：日志按时间分区，&quot;当前小时&quot;分片独扛写入。</li>
+<li>机器人：某客户端循环刷同一资源。</li>
+</ul>
+<p>治理手段（经验做法，按代价从低到高）：</p>
+<ol>
+<li><strong>热点 key 加盐</strong>：<code>key#1..#16</code> 写入 16 个子分片，读时聚合（适合计数器类可加数据）。</li>
+<li><strong>本地缓存/副本读</strong>：热点分片在每个节点放一份只读缓存，挡掉大部分读。</li>
+<li><strong>拆分分片</strong>：把热分片一分为二迁到更多节点（范围分区天然支持；哈希分区靠 vnode 上下线实现同效果）。</li>
+<li><strong>限流 + 排队</strong>：接受热点存在，用第 10 章的限流器保护分片自身不倒。</li>
+</ol>
+<p><strong>再平衡策略</strong>：节点增减后数据怎么挪？三种思路（DDIA 第 6.5 节）：</p>
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>做法</th>
+<th>问题</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>hash%N 取模</td>
+<td>节点数变则几乎全量搬</td>
+<td>已淘汰</td>
+</tr>
+<tr>
+<td>固定槽位</td>
+<td>预设远多于节点的槽（Redis Cluster 16384 slot），槽在节点间搬</td>
+<td>槽粒度决定迁移粒度；slot 数固定不可超</td>
+</tr>
+<tr>
+<td>一致性哈希环</td>
+<td>虚拟节点在物理节点间重新分配</td>
+<td>分布靠 vnode 数量调</td>
+</tr>
+</tbody>
+</table>
+<p>公平再平衡的目标：<strong>每个节点负责 ~K/N 且迁移量最小</strong>。Redis Cluster 的做法值得记住：slot 是搬运单位，16384 个 slot 平均分给 N 个主节点，扩容时用 <code>CLUSTER ADDSLOTS</code> + 在线 MIGRATE 逐 key 搬，期间该 slot 请求被 ASK 重定向。</p>
+<h2 id="7-与缓存集群的衔接"><a class="markdownIt-Anchor" href="#7-与缓存集群的衔接"></a> 7. 与缓存集群的衔接</h2>
+<p>一致性哈希最经典的落地是<strong>分布式缓存</strong>（memcached 集群、Redis Cluster 客户端分片模式）。三个工程要点：</p>
+<ol>
+<li><strong>迁移窗口防雪崩</strong>：扩容瞬间被搬走的 key 全部 miss，回源流量可能压垮数据库。经验做法：扩容选低峰、逐 vnode 灰度（搬一段预热一段）、客户端对 miss 加&quot;防击穿单飞&quot;（singleflight，同一 key 并发回源只放一个请求过去）。</li>
+<li><strong>客户端路由 vs 代理路由</strong>：客户端内置哈希环（少一跳，但升级客户端才能改拓扑）vs 中间代理（如 Codis/Twemproxy，拓扑对应用透明，多一跳延迟）。</li>
+<li><strong>与复制组合</strong>：分片只解决容量，每个分片仍需主从复制保可用（Redis Cluster：16384 slot × 主从）。分片+复制+路由三件套齐了，才是一个完整的分布式存储骨架——第 12 章的四个案例全是这三件套的不同组合。</li>
+</ol>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“一致性哈希 = 完全均匀”</strong>：裸环（无 vnode）在节点少时倾斜可达 20%+ 极差（实验 2 的 vnodes=1）；均匀性是买虚拟节点与哈希函数质量（md5/xxhash 而非内置 hash()——Python 的 <code>hash()</code> 对字符串有随机盐，跨进程不稳定，这是实验代码用 md5 的原因）换来的。</li>
+<li><strong>“迁移率 1/N 是精确保证”</strong>：1/N 是期望值；单次扩容实测会围绕它波动（实验输出 25.1%）。且&quot;只迁 1/N&quot;不等于&quot;零成本&quot;——迁移期间路由表切换、双写/双读的过渡协议仍有大量工程细节。</li>
+<li><strong>“哈希分区就不能范围查询”</strong>：可以付代价做——广播查询（Map-Reduce 式并行扫所有分片再归并），或用复合 key 设计（日期范围分区+区内哈希）。选择前先看业务查询形状，别被&quot;哈希分区&quot;四个字吓退。</li>
+<li><strong>“分区数越多越好”</strong>：每分片有固定开销（元数据、心跳、快照、后台线程）；几千个几乎空的小分片会拖垮协调层与运维。经验做法：单分片承载 1~10 GB / 数万 QPS 量级起步，按增长预留但不过度细分。</li>
+<li><strong>“加了 vnode 热点 key 就不怕了”</strong>：vnode 平滑的是<strong>节点间</strong>分布；单个超热 key 还是整片落在同一个分片上。热点 key 必须单独治理（加盐/本地缓存/限流），两者不是一回事。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>分区解决容量与写扩展，与复制正交组合；路由三形态（代理/节点转发/客户端）各有延迟与拓扑灵活性取舍。</li>
+<li>范围分区利于范围扫描但热点风险高；哈希分区打散热点但范围查询要跨片；复合 key 与加盐是两把常用手术刀。</li>
+<li>取模扩容迁移 1-1/M 的数据，一致性哈希只迁 K/N；倾斜靠 vnode 大数定律抹平（实测极差从 21% 压到 0.6%）。</li>
+<li>HRW 五行实现、天然均匀、O(N) 路由，小集群好选择；Jump 哈希零内存适合编号桶。</li>
+<li>热分区与节点倾斜是两个问题：vnode 治后者，加盐/缓存/限流治前者；再平衡首选&quot;固定槽位/一致性哈希&quot;两种最小迁移方案。</li>
+<li>缓存集群落地三件事：迁移窗口防雪崩、路由位置选择、分片+复制+路由组合成完整骨架。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>跑通 consistent_hash.py，把 vnode 改成 2 与 1000，记录极差；再给节点加权重（A 权重 2 = vnode×2），验证 A 承载 ~50% 数据——这是&quot;异构节点加权&quot;的标准实现。</li>
+<li>实现 HashRing.remove_node 并构造&quot;摘除 B&quot;场景，统计迁移率；对比&quot;摘除 B&quot;与&quot;加入 D&quot;的迁移量，说明两者理论值各是多少。</li>
+<li>用 <a target="_blank" rel="noopener" href="http://rendezvous.py">rendezvous.py</a> 与 consistent_hash.py（vnodes=100）做同规模对比实验：迁移率、单次路由耗时（10 万次 get_node 计时），写下什么集群规模下该选谁。</li>
+<li>设计题：全球排行榜（写多读少 + 范围查询 top-K + 明星用户热点）需要分区，给出你的分区 key 设计、热点治理方案、扩容策略，并指出每个选择放弃什么。</li>
+<li>思考题：Redis Cluster 为什么用 16384 个固定 slot 而不是一致性哈希环？（提示：从 Gossip 消息里要携带的路由表大小、slot→节点的映射维护成本、以及官方 FAQ 的回答三个角度想。）</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/05-%E5%85%B1%E8%AF%86-Raft%E8%AF%A6%E8%A7%A3/" rel="prev" title="05-共识-Raft详解">
+                  <i class="fa fa-angle-left"></i> 05-共识-Raft详解
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/07-%E4%BA%8B%E5%8A%A1%E4%B8%8E%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB/" rel="next" title="07-事务与隔离级别">
+                  07-事务与隔离级别 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 亲眼看见竞态条件：两个线程各加 100 万次计数器丢失更新，并用反汇编讲清&#39;一条语句不是一步操作&#39;。 - 理解互斥锁的实现演进：关中断 → 锁变量 → Peterson → CAS 自旋锁，最后落回 pthreadmutex 与 fut…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="11-并发同步">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/11-%E5%B9%B6%E5%8F%91%E5%90%8C%E6%AD%A5/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 亲眼看见竞态条件：两个线程各加 100 万次计数器丢失更新，并用反汇编讲清&#39;一条语句不是一步操作&#39;。 - 理解互斥锁的实现演进：关中断 → 锁变量 → Peterson → CAS 自旋锁，最后落回 pthreadmutex 与 fut…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T04:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.518Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="操作系统">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/11-%E5%B9%B6%E5%8F%91%E5%90%8C%E6%AD%A5/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/11-%E5%B9%B6%E5%8F%91%E5%90%8C%E6%AD%A5/","path":"2026/09/02/11-并发同步/","title":"11-并发同步"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>11-并发同步 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#11-%E5%B9%B6%E5%8F%91%E5%90%8C%E6%AD%A5"><span class="nav-number">1.</span> <span class="nav-text"> 11 - 并发同步</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AB%9E%E6%80%81%E6%9D%A1%E4%BB%B6%E4%B8%A4%E7%BA%BF%E7%A8%8B%E8%AE%A1%E6%95%B0%E5%99%A8%E5%8F%8D%E4%BE%8B%E5%AE%9E%E6%B5%8B"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 竞态条件：两线程计数器反例实测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E4%BA%92%E6%96%A5%E9%94%81%E7%9A%84%E5%AE%9E%E7%8E%B0%E6%80%9D%E6%83%B3%E4%BB%8E%E5%85%B3%E4%B8%AD%E6%96%AD%E5%88%B0-cas-%E8%87%AA%E6%97%8B%E9%94%81"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 互斥锁的实现思想：从关中断到 CAS 自旋锁</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%AD%BB%E9%94%81%E5%9B%9B%E6%9D%A1%E4%BB%B6%E4%B8%8E%E9%A2%84%E9%98%B2"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 死锁：四条件与预防</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E6%9D%A1%E4%BB%B6%E5%8F%98%E9%87%8F%E7%94%9F%E4%BA%A7%E8%80%85%E6%B6%88%E8%B4%B9%E8%80%85%E6%AD%A3%E7%A1%AE%E5%86%99%E6%B3%95"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 条件变量：生产者消费者正确写法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%86%85%E5%AD%98%E5%BA%8F%E5%B8%B8%E8%AF%86sequential-consistency-%E8%AF%AD%E4%B9%89"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 内存序常识：sequential consistency 语义</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-futex-%E6%80%9D%E6%83%B3"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. futex 思想</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/11-%E5%B9%B6%E5%8F%91%E5%90%8C%E6%AD%A5/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="11-并发同步 | Yoleen的博客">
+      <meta itemprop="description" content="- 亲眼看见竞态条件：两个线程各加 100 万次计数器丢失更新，并用反汇编讲清&#39;一条语句不是一步操作&#39;。 - 理解互斥锁的实现演进：关中断 → 锁变量 → Peterson → CAS 自旋锁，最后落回 pthreadmutex 与 fut…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          11-并发同步
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 12:00:00" itemprop="dateCreated datePublished" datetime="2026-09-02T12:00:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">操作系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.1k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>15 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 亲眼看见竞态条件：两个线程各加 100 万次计数器丢失更新，并用反汇编讲清'一条语句不是一步操作'。 - 理解互斥锁的实现演进：关中断 → 锁变量 → Peterson → CAS 自旋锁，最后落回 pthreadmutex 与 fut…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="11-并发同步"><a class="markdownIt-Anchor" href="#11-并发同步"></a> 11 - 并发同步</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>亲眼看见竞态条件：两个线程各加 100 万次计数器丢失更新，并用反汇编讲清&quot;一条语句不是一步操作&quot;。</li>
+<li>理解互斥锁的实现演进：关中断 → 锁变量 → Peterson → CAS 自旋锁，最后落回 pthread_mutex 与 futex 的分工。</li>
+<li>掌握死锁四条件与两条预防工程法（加锁顺序/一次性获取），亲手造一次死锁。</li>
+<li>写出不出错的生产者消费者（条件变量 + 谓词），说清虚假唤醒与通知丢失两颗雷的引信。</li>
+<li>建立 sequential consistency 的语义直觉（不深入 C++ memory_order），以及 futex&quot;快路径不出内核&quot;的设计思想。</li>
+</ul>
+<p>前置：第 02 篇的线程模型、第 07 篇的上下文切换；本篇 C 代码全部 <code>-pthread</code>，环境 Ubuntu 22.04 / WSL2。</p>
+<h2 id="1-竞态条件两线程计数器反例实测"><a class="markdownIt-Anchor" href="#1-竞态条件两线程计数器反例实测"></a> 1. 竞态条件：两线程计数器反例实测</h2>
+<p>竞态条件（race condition）：<strong>结果取决于线程交错顺序</strong>的程序缺陷。触发它只需要一个计数器（OSTEP 第 26 章《Concurrency: An Introduction》的经典实验）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// race.c —— 两个线程各加 100 万次，结果却不对</span></span><br><span class="line"><span class="comment">// 编译：gcc race.c -o race -pthread</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;pthread.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">volatile</span> <span class="type">long</span> counter = <span class="number">0</span>;              <span class="comment">// volatile 不解决竞态！只防编译器缓存</span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> *<span class="title function_">add_million</span><span class="params">(<span class="type">void</span> *arg)</span> &#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; <span class="number">1000000</span>; i++)</span><br><span class="line">        counter++;                      <span class="comment">// 三步：读 → 加 → 写</span></span><br><span class="line">    <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">pthread_t</span> t1, t2;</span><br><span class="line">    pthread_create(&amp;t1, <span class="literal">NULL</span>, add_million, <span class="literal">NULL</span>);</span><br><span class="line">    pthread_create(&amp;t2, <span class="literal">NULL</span>, add_million, <span class="literal">NULL</span>);</span><br><span class="line">    pthread_join(t1, <span class="literal">NULL</span>); pthread_join(t2, <span class="literal">NULL</span>);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;期望 2000000，实际 %ld\n&quot;</span>, counter);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ gcc race.c -o race -pthread &amp;&amp; ./race</span><br><span class="line">期望 2000000，实际 1157453</span><br><span class="line">$ ./race</span><br><span class="line">期望 2000000，实际 1077961</span><br></pre></td></tr></table></figure>
+<p>丢失更新的机制要用指令级视角看（<code>objdump -d race | grep -A3 add_million</code> 可自查）——<code>counter++</code> 编译成三条指令：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">mov  counter, %rax      ← 1. 读内存到寄存器</span><br><span class="line">add  $1, %rax           ← 2. 寄存器加 1</span><br><span class="line">mov  %rax, counter      ← 3. 写回内存</span><br></pre></td></tr></table></figure>
+<p>两个线程交错执行时：A 读到 5、B 读到 5、A 写 6、B 写 6——<strong>两次加法生效一次</strong>。交错发生在哪两条指令之间完全由调度决定（03 篇的时间片、07 篇的中断都可能插进来），所以结果是随机的、且和循环次数正相关（次数越多撞车概率越大）。两条重要推论：<code>volatile</code> 只保证&quot;每次都真读内存&quot;，不保证&quot;读-改-写不可分割&quot;，<strong>它不是同步原语</strong>（C++ 并发篇 12 章的结论在这里给出 OS 级解释）；测试通过不代表没竞态——只代表这次交错没踩中，这是并发 bug 的标准可怕之处。</p>
+<h2 id="2-互斥锁的实现思想从关中断到-cas-自旋锁"><a class="markdownIt-Anchor" href="#2-互斥锁的实现思想从关中断到-cas-自旋锁"></a> 2. 互斥锁的实现思想：从关中断到 CAS 自旋锁</h2>
+<p>临界区（critical section）问题：一段代码（访问 counter 的三条指令）同一时刻只能一个线程执行。解法按历史演进（OSTEP 第 28~30 章《Locks》；《The Art of Multiprocessor Programming》Herlihy &amp; Shavit 是理论参考）：</p>
+<p><strong>方案 1：关中断</strong>（单核时代的正确答案）。进入临界区前关中断，退出再开——没有中断就没有调度，交错不可能发生。单核完美，多核失效（别的核上的线程根本不理你这颗核的中断），且用户态根本没权关中断——它只配当<strong>内核内部</strong>的手法（LKD 第 9 章的 spin_lock_irqsave 正是这个思想的现代残留）。</p>
+<p><strong>方案 2：朴素锁变量</strong>（看起来对，实际错）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">while</span> (lock == <span class="number">1</span>) ;   <span class="comment">// 忙等：别人拿着就转圈</span></span><br><span class="line">lock = <span class="number">1</span>;             <span class="comment">// &quot;抢锁&quot;</span></span><br><span class="line"><span class="comment">/* 临界区 */</span></span><br><span class="line">lock = <span class="number">0</span>;             <span class="comment">// 释放</span></span><br></pre></td></tr></table></figure>
+<p>检查与设置是<strong>两条指令</strong>，交错照样发生：A 检查完 lock==0 还没写 1，B 检查也是 0，双双进入——锁形同虚设。<strong>教训：判断+行动不是原子的</strong>。</p>
+<p><strong>方案 3：Peterson 算法</strong>（1981，纯软件方案，两线程）：用 turn 与 flag[2] 两个变量的巧妙组合实现互斥（OSTEP 第 29 章有完整推导与正确性论证）。它在单核乱序之外的顺序机器上正确，但现代 CPU 的乱序执行/内存重排会让它失灵——它教育意义大于实用意义：<strong>正确的并发原语需要硬件同步指令兜底</strong>。</p>
+<p><strong>方案 4：CAS 自旋锁</strong>（现代方案的骨架）。硬件提供原子指令 x86 的 <code>lock cmpxchg</code>（比较并交换，CAS：如果变量等于期望值就换成新值并返回成功，否则失败——整个动作不可分割）。用它实现自旋锁：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// spinlock.c —— 用 GCC 内建 CAS 实现自旋锁，验证正确性</span></span><br><span class="line"><span class="comment">// 编译：gcc spinlock.c -o spinlock -pthread</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;pthread.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdatomic.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">atomic_int</span> lock = <span class="number">0</span>;                    <span class="comment">// 0=空闲 1=持有</span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">acquire</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">int</span> expected = <span class="number">0</span>;</span><br><span class="line">    <span class="comment">// CAS：lock 还是 0 时换成 1；失败则 expected 被更新为当前值，继续转</span></span><br><span class="line">    <span class="keyword">while</span> (!atomic_compare_exchange_weak(&amp;lock, &amp;expected, <span class="number">1</span>)) &#123;</span><br><span class="line">        expected = <span class="number">0</span>;                   <span class="comment">// 没抢到，带着新期望再转一圈</span></span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">release</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    atomic_store(&amp;lock, <span class="number">0</span>);             <span class="comment">// 释放：写 0 即可</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">atomic_long</span> counter = <span class="number">0</span>;                <span class="comment">// 受锁保护的计数器</span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> *<span class="title function_">worker</span><span class="params">(<span class="type">void</span> *arg)</span> &#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; <span class="number">1000000</span>; i++) &#123;</span><br><span class="line">        acquire();</span><br><span class="line">        counter++;                      <span class="comment">// 临界区：这次不会再丢</span></span><br><span class="line">        release();</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">pthread_t</span> t1, t2;</span><br><span class="line">    pthread_create(&amp;t1, <span class="literal">NULL</span>, worker, <span class="literal">NULL</span>);</span><br><span class="line">    pthread_create(&amp;t2, <span class="literal">NULL</span>, worker, <span class="literal">NULL</span>);</span><br><span class="line">    pthread_join(t1, <span class="literal">NULL</span>); pthread_join(t2, <span class="literal">NULL</span>);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;期望 2000000，实际 %ld\n&quot;</span>, (<span class="type">long</span>)counter);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ gcc spinlock.c -o spinlock -pthread &amp;&amp; ./spinlock</span><br><span class="line">期望 2000000，实际 2000000</span><br></pre></td></tr></table></figure>
+<p>自旋锁的适用边界：它<strong>忙等烧 CPU</strong>，适合临界区极短（纳秒~微秒级）、核数充足的场景；临界区长或线程数远超核数时，睡眠型锁（futex，第 6 节）才对。pthread_mutex 就是两者的合体——先自旋几圈，抢不到再睡（见第 6 节）。</p>
+<h2 id="3-死锁四条件与预防"><a class="markdownIt-Anchor" href="#3-死锁四条件与预防"></a> 3. 死锁：四条件与预防</h2>
+<p>死锁（deadlock）：一组线程互相等待对方手里的资源，全部永久卡死。四个<strong>缺一不可</strong>的条件（Coffman 1971 的经典表述；OSTEP 第 32 章《Common Concurrency Problems》）：</p>
+<ol>
+<li><strong>互斥</strong>：资源同一时刻只能一人持有（锁天生如此）；</li>
+<li><strong>持有并等待</strong>：拿着 A 还想要 B；</li>
+<li><strong>不可抢占</strong>：不能强行剥夺别人手里的锁；</li>
+<li><strong>循环等待</strong>：A 等 B 的、B 等 A 的，成环。</li>
+</ol>
+<p>四个条件打断任何一个死锁就散架。工程上可行的两条（<strong>经验做法</strong>）：</p>
+<ul>
+<li><strong>全局加锁顺序</strong>（打断条件 4）：所有代码按固定顺序拿锁（如按锁的地址排序、或按模块分层&quot;先配置锁后数据锁&quot;）。死锁预防的银弹没有，但顺序纪律覆盖 90% 场景。</li>
+<li><strong>一次性获取</strong>（打断条件 2）：需要多把锁时用 <code>pthread_mutex_lock</code> 逐把拿会留窗口；C++ 用 <code>std::scoped_lock(a, b)</code>、或自己写 try-lock 回退，一次成套。</li>
+</ul>
+<p>亲手造一个死锁，摸清它的现场：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// deadlock.c —— 经典 AB-BA 死锁</span></span><br><span class="line"><span class="comment">// 编译：gcc deadlock.c -o deadlock -pthread    （运行后 Ctrl-C 结束）</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;pthread.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">pthread_mutex_t</span> A = PTHREAD_MUTEX_INITIALIZER;</span><br><span class="line"><span class="type">pthread_mutex_t</span> B = PTHREAD_MUTEX_INITIALIZER;</span><br><span class="line"></span><br><span class="line"><span class="type">void</span> *<span class="title function_">t1_body</span><span class="params">(<span class="type">void</span> *x)</span> &#123;                    <span class="comment">// 线程 1：先 A 后 B</span></span><br><span class="line">    pthread_mutex_lock(&amp;A);</span><br><span class="line">    sleep(<span class="number">1</span>);                               <span class="comment">// 制造窗口，保证交错</span></span><br><span class="line">    pthread_mutex_lock(&amp;B);                 <span class="comment">// ← 永远卡在这</span></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;t1 拿到两把锁\n&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">void</span> *<span class="title function_">t2_body</span><span class="params">(<span class="type">void</span> *x)</span> &#123;                    <span class="comment">// 线程 2：先 B 后 A（顺序相反！）</span></span><br><span class="line">    pthread_mutex_lock(&amp;B);</span><br><span class="line">    sleep(<span class="number">1</span>);</span><br><span class="line">    pthread_mutex_lock(&amp;A);                 <span class="comment">// ← 永远卡在这</span></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;t2 拿到两把锁\n&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">pthread_t</span> a, b;</span><br><span class="line">    pthread_create(&amp;a, <span class="literal">NULL</span>, t1_body, <span class="literal">NULL</span>);</span><br><span class="line">    pthread_create(&amp;b, <span class="literal">NULL</span>, t2_body, <span class="literal">NULL</span>);</span><br><span class="line">    pthread_join(a, <span class="literal">NULL</span>); pthread_join(b, <span class="literal">NULL</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">$ gcc deadlock.c -o deadlock -pthread &amp;&amp; ./deadlock &amp;</span><br><span class="line">$ ps -T -p $(pgrep deadlock)               # ps -T 看线程级状态（02 篇的工具）</span><br><span class="line">   PID   SPID  STAT  COMMAND</span><br><span class="line">  24770  24770  Ssl  ./deadlock</span><br><span class="line">  24770  24771  Sl   ./deadlock</span><br><span class="line">  24770  24772  Sl   ./deadlock        ← 两个线程 Sl：睡眠中，且永不醒</span><br><span class="line">$ cat /proc/24770/task/24771/stack 2&gt;/dev/null | head -2   # WSL2 需 root；看卡在哪个内核函数</span><br><span class="line">[&lt;0&gt;] futex_wait_queue      ← 第 6 节的主角：睡在 futex 上等锁</span><br></pre></td></tr></table></figure>
+<p>诊断工具：gdb attach 后 <code>thread apply all bt</code> 看每个线程卡在哪把锁；生产环境用 <code>pstack</code>/<code>eu-stack</code> 采样对比两次调用栈是否纹丝不动。<strong>经验做法</strong>：疑死锁先看&quot;是不是真的死锁&quot;（状态 S 且 CPU 为 0 且永不结束），再用调用栈找出双方持锁顺序，把顺序统一即修复。</p>
+<h2 id="4-条件变量生产者消费者正确写法"><a class="markdownIt-Anchor" href="#4-条件变量生产者消费者正确写法"></a> 4. 条件变量：生产者消费者正确写法</h2>
+<p>互斥锁解决&quot;互斥&quot;，不解决&quot;等待&quot;——线程要等&quot;队列非空&quot;，转圈是浪费。条件变量（condition variable）是&quot;<strong>带着锁去睡觉、被叫醒时重新拿锁</strong>&quot;的机制（OSTEP 第 30 章《Condition Variables》）。生产者消费者的<strong>标准写法</strong>（谓词版，直接背下来）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// prodcons.c —— 生产者消费者：互斥锁 + 条件变量（正确版）</span></span><br><span class="line"><span class="comment">// 编译：gcc prodcons.c -o prodcons -pthread</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;pthread.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> QCAP 4</span></span><br><span class="line"><span class="type">int</span> <span class="built_in">queue</span>[QCAP];                     <span class="comment">// 简单循环队列</span></span><br><span class="line"><span class="type">int</span> head = <span class="number">0</span>, tail = <span class="number">0</span>, count = <span class="number">0</span>;</span><br><span class="line"><span class="type">pthread_mutex_t</span> mtx = PTHREAD_MUTEX_INITIALIZER;</span><br><span class="line"><span class="type">pthread_cond_t</span>  not_empty = PTHREAD_COND_INITIALIZER;</span><br><span class="line"><span class="type">pthread_cond_t</span>  not_full  = PTHREAD_COND_INITIALIZER;</span><br><span class="line"><span class="type">int</span> done = <span class="number">0</span>;                        <span class="comment">// 生产结束标志</span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> *<span class="title function_">producer</span><span class="params">(<span class="type">void</span> *x)</span> &#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">1</span>; i &lt;= <span class="number">10</span>; i++) &#123;</span><br><span class="line">        pthread_mutex_lock(&amp;mtx);</span><br><span class="line">        <span class="keyword">while</span> (count == QCAP)        <span class="comment">// 队列满：等&quot;非满&quot;（必须 while 不是 if！）</span></span><br><span class="line">            pthread_cond_wait(&amp;not_full, &amp;mtx);   <span class="comment">// 睡前原子地释放锁</span></span><br><span class="line">        <span class="built_in">queue</span>[tail] = i; tail = (tail + <span class="number">1</span>) % QCAP; count++;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;生产 %d\n&quot;</span>, i);</span><br><span class="line">        pthread_cond_signal(&amp;not_empty);          <span class="comment">// 唤醒一个等&quot;非空&quot;的消费者</span></span><br><span class="line">        pthread_mutex_unlock(&amp;mtx);</span><br><span class="line">        usleep(<span class="number">100000</span>);              <span class="comment">// 生产得慢一点，好观察</span></span><br><span class="line">    &#125;</span><br><span class="line">    pthread_mutex_lock(&amp;mtx);</span><br><span class="line">    done = <span class="number">1</span>;                        <span class="comment">// 打完工卡（在锁内改共享状态）</span></span><br><span class="line">    pthread_cond_broadcast(&amp;not_empty);           <span class="comment">// 广播：叫醒全部消费者去检查 done</span></span><br><span class="line">    pthread_mutex_unlock(&amp;mtx);</span><br><span class="line">    <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">void</span> *<span class="title function_">consumer</span><span class="params">(<span class="type">void</span> *x)</span> &#123;</span><br><span class="line">    <span class="keyword">for</span> (;;) &#123;</span><br><span class="line">        pthread_mutex_lock(&amp;mtx);</span><br><span class="line">        <span class="keyword">while</span> (count == <span class="number">0</span> &amp;&amp; !done)  <span class="comment">// 空且没收工：等&quot;非空&quot;</span></span><br><span class="line">            pthread_cond_wait(&amp;not_empty, &amp;mtx);</span><br><span class="line">        <span class="keyword">if</span> (count == <span class="number">0</span> &amp;&amp; done) &#123;    <span class="comment">// 空 + 收工 = 真正的退出条件</span></span><br><span class="line">            pthread_mutex_unlock(&amp;mtx);</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="type">int</span> v = <span class="built_in">queue</span>[head]; head = (head + <span class="number">1</span>) % QCAP; count--;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;      消费 %d\n&quot;</span>, v);</span><br><span class="line">        pthread_cond_signal(&amp;not_full);</span><br><span class="line">        pthread_mutex_unlock(&amp;mtx);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">pthread_t</span> p, c1, c2;</span><br><span class="line">    pthread_create(&amp;p, <span class="literal">NULL</span>, producer, <span class="literal">NULL</span>);</span><br><span class="line">    pthread_create(&amp;c1, <span class="literal">NULL</span>, consumer, <span class="literal">NULL</span>);</span><br><span class="line">    pthread_create(&amp;c2, <span class="literal">NULL</span>, consumer, <span class="literal">NULL</span>);</span><br><span class="line">    pthread_join(p, <span class="literal">NULL</span>); pthread_join(c1, <span class="literal">NULL</span>); pthread_join(c2, <span class="literal">NULL</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ gcc prodcons.c -o prodcons -pthread &amp;&amp; ./prodcons | head -8</span><br><span class="line">生产 1</span><br><span class="line">      消费 1</span><br><span class="line">生产 2</span><br><span class="line">      消费 2</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+<p>四个必守规矩（每条对应一颗真实的雷）：</p>
+<ol>
+<li><strong>永远用 <code>while</code> 检查条件</strong>，不用 if——<code>pthread_cond_wait</code> 被唤醒后条件可能已被别的线程改掉（<strong>虚假唤醒</strong>：OS 允许无通知醒来；且 signal 只保证&quot;有希望&quot;不保证&quot;轮到你&quot;）。</li>
+<li><strong>wait 必须持有锁</strong>进入——wait 内部&quot;原子地：释放锁 + 睡眠&quot;，醒来时自动重新持锁；这个原子性正是防止&quot;检查条件与睡眠之间通知溜进来&quot;的锁孔（C++ 并发篇的 wait(lock, pred) 是同一语义的库封装）。</li>
+<li><strong>改共享状态必须在锁内</strong>，signal 放锁内或锁尾皆可（现代实现放锁外略快，但状态变更本身绝不能在锁外）。</li>
+<li><strong>退出条件要进谓词</strong>（count==0 &amp;&amp; !done）并用 broadcast 收尾——否则收工信号落在&quot;正在睡&quot;的消费者身上就成死锁。</li>
+</ol>
+<h2 id="5-内存序常识sequential-consistency-语义"><a class="markdownIt-Anchor" href="#5-内存序常识sequential-consistency-语义"></a> 5. 内存序常识：sequential consistency 语义</h2>
+<p>最后一层迷雾：为什么有了原子操作和锁，还会有&quot;诡异结果&quot;？因为<strong>编译器和 CPU 都会重排指令</strong>（乱序执行、写缓冲、缓存一致性延迟），单线程看不见的重排在多线程的观察下全都会显形。为讨论正确性，需要一个理想模型：<strong>顺序一致性（sequential consistency, SC）</strong>（Lamport 1979 的定义；C++ 并发篇 12 章提过的 memory_order 的地基）：</p>
+<blockquote>
+<p>所有线程看到的<strong>所有</strong>线程的操作，按某个<strong>统一的全局顺序</strong>排列，且每个线程自己的操作顺序在这个全序中保持一致。</p>
+</blockquote>
+<p>直觉版：就好像所有线程的操作被&quot;洗进同一个牌堆&quot;，任何人抽出来看都是同一种顺序。真实硬件的 x86 提供的是较强保证（TSO：store 不重排到 load 前，单靠 CAS/锁默认带 acquire/release 语义），ARM 则弱得多（各种重排都可能）——<strong>写可移植并发代码的正确姿势是：要么全程用锁（锁的语义自动包含必要的内存屏障），要么用 C11/C++ 的默认顺序一致原子（seq_cst）</strong>；显式 memory_order 的精细调优属于性能工程系列，本系列只需记住：<strong>没有内存序意识时，不要手写无锁代码</strong>（Herlihy &amp; Shavit 的结论：无锁正确实现难度远超收益预期；<strong>经验做法</strong>：99% 的场景锁就够了，剩下 1% 先找现成的库）。</p>
+<p>C11 的 <code>atomic_compare_exchange_weak</code>/<code>atomic_store</code> 未指定内存序时默认 <code>memory_order_seq_cst</code>——本篇第 2 节的自旋锁因此正确。这就是&quot;sequential consistency 语义&quot;在代码里的落点：<strong>默认 seq_cst = 你按直觉想的顺序就是它执行的顺序</strong>（在原子变量之间）。</p>
+<h2 id="6-futex-思想"><a class="markdownIt-Anchor" href="#6-futex-思想"></a> 6. futex 思想</h2>
+<p>收束到 Linux 的真实锁。futex（fast userspace mutex，<code>man 2 futex</code>）回答一个问题：** uncontended 的锁为什么要进内核？** 抢锁 99% 的时间是无人竞争的——进内核（系统调用 + 切换）纯属浪费。futex 的设计：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">无竞争（快路径，99%+）:</span><br><span class="line">    用户态 CAS 一把抢到锁 —— 全程不出内核，几十纳秒</span><br><span class="line"></span><br><span class="line">有竞争（慢路径）:</span><br><span class="line">    CAS 失败 → futex(WAIT) 系统调用：把自己挂到内核等待队列睡觉</span><br><span class="line">释放时: futex(WAKE) 系统调用：叫醒一个等待者</span><br><span class="line"></span><br><span class="line">pthread_mutex = 自旋一小段 + futex 睡眠的合体</span><br></pre></td></tr></table></figure>
+<p>这解释了三个此前悬而未决的现象：pthread_mutex 为什么&quot;平时极快、竞争大时自动退化&quot;；07 篇死锁现场栈里的 <code>futex_wait_queue</code>（睡在慢路径上）；Go/Java 的锁、Python GIL 底层（pthread_mutex）为何共享同一套设计。<strong>fast path 用户态、slow path 内核态</strong>——这个分层思想在 vDSO（07 篇：常问的答案放用户态）、epoll（09 篇：注册一次等多次）、io_uring 里反复出现，是内核设计的母题之一。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“volatile 能替代锁”</strong>：volatile 只防编译器优化重读，不管原子性与可见性；race.c 加了 volatile 照样丢更新。原子性用 atomic/锁，可见性靠它们的内存序语义。</li>
+<li><strong>“竞态测试通过就安全”</strong>：交错是概率事件，测试只是采样；并发正确性靠推理（不变式）与工具（TSan：<code>gcc -fsanitize=thread</code>），不靠跑几次没炸。</li>
+<li><strong>“自旋锁比互斥锁快，全用自旋锁”</strong>：自旋锁在临界区长、线程多于核数时把 CPU 烧在转圈上（07 篇切换成本的反面教材）；pthread_mutex 的&quot;自旋片刻再睡&quot;才是默认正解。</li>
+<li><strong>“条件变量用 if 检查就够了”</strong>：虚假唤醒 + 多消费者抢跑会让 if 版漏判；while + 谓词是唯一安全写法。退出条件必须纳入谓词，否则收工时死锁。</li>
+<li><strong>“死锁只在复杂的库代码里发生”</strong>：AB-BA 四行代码就能造出来；跨模块调用（回调里再拿锁）是隐性加锁顺序破坏者。全局锁顺序文档化是团队纪律，不是可选风格（<strong>经验做法</strong>）。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>竞态条件的物理本质：counter++ 是读-改-写三条指令，交错即丢更新；volatile 与此无关；测试通过 ≠ 无竞态。</li>
+<li>锁的实现链：关中断（单核内核）→ 朴素锁变量（检查+设置不原子，错）→ Peterson（软件正确但怕重排）→ CAS 自旋锁（硬件原子指令兜底）；自旋锁适合短临界区。</li>
+<li>死锁四条件（互斥/持有并等待/不可抢占/循环等待）缺一不可；工程预防 = 全局锁顺序 + 一次性成套获取；ps -T 与调用栈是现场工具。</li>
+<li>生产者消费者四规矩：while 检查、wait 持锁、状态变更锁内、退出进谓词——每条对应虚假唤醒/通知丢失/竞态/死锁一颗雷。</li>
+<li>顺序一致性 = 所有线程共享一个统一操作全序；默认 seq_cst 的原子与锁自动带对；无内存序意识不写无锁代码；futex = 快路径用户态 CAS + 慢路径内核睡眠，pthread_mutex 的真实结构。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>跑 race.c 并把循环从 10 万加到 1000 万，记录丢失率变化；再用 <code>objdump -d race | grep -A5 add_million</code> 截出 counter++ 的三条指令，对照第 1 节的交错时序图写出一种具体交错。</li>
+<li>用 <code>gcc -fsanitize=thread race.c -o race_tsan -pthread</code> 重编译运行，阅读 TSan 的报告（数据竞争地址、两处冲突栈），再对 spinlock.c 跑一次确认零报告——把 TSan 写进你的并发代码 CI（<strong>经验做法</strong>）。</li>
+<li>把 prodcons.c 的队列容量改成 1 和 100 各跑一次，观察生产/消费的交错形状；然后把所有 <code>while</code> 改成 <code>if</code>，多跑几次直到出现死循环或崩溃，记录现象并解释。</li>
+<li>亲手修复 deadlock.c：把 t2_body 的加锁顺序改成与 t1 相同；再实现&quot;try-lock 回退版&quot;（先 trylock B，失败则释放 A 重试），对比两种修法的活性差异。</li>
+<li>写一个两线程的程序：线程 1 置 <code>ready=1; data=42;</code>（普通 int），线程 2 自旋等 ready 后读 data，多跑记录是否读到 data==0；再改成 C11 atomic + 默认序验证现象消失，用顺序一致性解释差异（ARM 机器上差异会更大，可注明）。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" rel="tag"># 操作系统</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/10-%E8%BF%9B%E7%A8%8B%E9%97%B4%E9%80%9A%E4%BF%A1/" rel="prev" title="10-进程间通信">
+                  <i class="fa fa-angle-left"></i> 10-进程间通信
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/12-%E7%BD%91%E7%BB%9C%E6%A0%88%E4%B8%8Esocket%E7%BC%96%E7%A8%8B/" rel="next" title="12-网络栈与socket编程">
+                  12-网络栈与socket编程 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

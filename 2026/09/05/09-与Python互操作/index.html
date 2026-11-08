@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 说清&#39;C++ 扩展 Python&#39;的两个动机：GIL 之内的真并行、复用现成 C++ 库。 - pybind11 完整上手：函数&#x2F;类绑定、STL 自动转换、numpy 零拷贝传递（含实时数据核对）。 - 用 py::gilscopedr…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="09-与Python互操作">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/05/09-%E4%B8%8EPython%E4%BA%92%E6%93%8D%E4%BD%9C/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 说清&#39;C++ 扩展 Python&#39;的两个动机：GIL 之内的真并行、复用现成 C++ 库。 - pybind11 完整上手：函数&#x2F;类绑定、STL 自动转换、numpy 零拷贝传递（含实时数据核对）。 - 用 py::gilscopedr…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-04T16:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.594Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="C++">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/05/09-%E4%B8%8EPython%E4%BA%92%E6%93%8D%E4%BD%9C/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/05/09-%E4%B8%8EPython%E4%BA%92%E6%93%8D%E4%BD%9C/","path":"2026/09/05/09-与Python互操作/","title":"09-与Python互操作"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>09-与Python互操作 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#09-%E4%B8%8E-python-%E4%BA%92%E6%93%8D%E4%BD%9C"><span class="nav-number">1.</span> <span class="nav-text"> 09 - 与 Python 互操作</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%B8%BA%E4%BB%80%E4%B9%88-c-%E6%89%A9%E5%B1%95-python"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 为什么 C++ 扩展 Python</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-pybind11-%E5%AE%8C%E6%95%B4%E4%B8%8A%E6%89%8B"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. pybind11 完整上手</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%B1%BB%E7%BB%91%E5%AE%9A%E4%B8%8E-stl-%E8%87%AA%E5%8A%A8%E8%BD%AC%E6%8D%A2"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 类绑定与 STL 自动转换</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-numpy-%E6%95%B0%E7%BB%84%E9%9B%B6%E6%8B%B7%E8%B4%9D%E4%BC%A0%E9%80%92%E5%AE%9E%E6%97%B6%E6%95%B0%E6%8D%AE%E6%A0%B8%E5%AF%B9"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. numpy 数组零拷贝传递（实时数据核对）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-gil-%E7%AE%A1%E7%90%86pygil_scoped_release"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. GIL 管理：py::gil_scoped_release</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E6%80%A7%E8%83%BD%E5%AF%B9%E6%AF%94%E5%AE%9E%E9%AA%8C%E5%AE%8C%E6%95%B4%E6%95%B0%E6%8D%AE"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 性能对比实验（完整数据）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E6%9E%84%E5%BB%BA%E9%9B%86%E6%88%90scikit-build-core-%E6%9C%80%E5%B0%8F%E9%85%8D%E7%BD%AE"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 构建集成：scikit-build-core 最小配置</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E8%B0%83%E7%94%A8%E7%BA%A6%E5%AE%9A%E4%B8%8E-abi-%E5%B8%B8%E8%AF%86"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 调用约定与 ABI 常识</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#8-%E6%9B%BF%E4%BB%A3%E6%96%B9%E6%A1%88%E5%AF%B9%E6%AF%94%E4%BA%8B%E5%AE%9E%E6%80%A7"><span class="nav-number">1.9.</span> <span class="nav-text"> 8. 替代方案对比（事实性）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#9-%E7%BB%99-pybind11-%E6%A8%A1%E5%9D%97%E5%86%99%E6%B5%8B%E8%AF%95"><span class="nav-number">1.10.</span> <span class="nav-text"> 9. 给 pybind11 模块写测试</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.11.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.12.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.13.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/05/09-%E4%B8%8EPython%E4%BA%92%E6%93%8D%E4%BD%9C/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="09-与Python互操作 | Yoleen的博客">
+      <meta itemprop="description" content="- 说清&#39;C++ 扩展 Python&#39;的两个动机：GIL 之内的真并行、复用现成 C++ 库。 - pybind11 完整上手：函数&#x2F;类绑定、STL 自动转换、numpy 零拷贝传递（含实时数据核对）。 - 用 py::gilscopedr…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          09-与Python互操作
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-05 00:30:00" itemprop="dateCreated datePublished" datetime="2026-09-05T00:30:00+08:00">2026-09-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/C-%E8%BF%9B%E9%98%B6/" itemprop="url" rel="index"><span itemprop="name">C++进阶</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 说清'C++ 扩展 Python'的两个动机：GIL 之内的真并行、复用现成 C++ 库。 - pybind11 完整上手：函数/类绑定、STL 自动转换、numpy 零拷贝传递（含实时数据核对）。 - 用 py::gilscopedr…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="09-与-python-互操作"><a class="markdownIt-Anchor" href="#09-与-python-互操作"></a> 09 - 与 Python 互操作</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>说清&quot;C++ 扩展 Python&quot;的两个动机：GIL 之内的真并行、复用现成 C++ 库。</li>
+<li>pybind11 完整上手：函数/类绑定、STL 自动转换、numpy 零拷贝传递（含实时数据核对）。</li>
+<li>用 <code>py::gil_scoped_release</code> 让长计算不阻塞 Python 线程，并用实验验证。</li>
+<li>打通构建集成（scikit-build-core）、认清 ABI 常识、做出方案选型对比、给模块写测试。</li>
+</ul>
+<p>本章全部数字来自真机构建实测（环境：Python 3.10 / numpy 1.26 / pybind11 3.x / g++ 11，i5-12600K）。</p>
+<h2 id="1-为什么-c-扩展-python"><a class="markdownIt-Anchor" href="#1-为什么-c-扩展-python"></a> 1. 为什么 C++ 扩展 Python</h2>
+<p>两个动机，优先级随场景不同：</p>
+<ol>
+<li><strong>GIL 内的真并行</strong>。Python（CPython，3.12 前）的 GIL 让同一进程内的多线程无法并行执行 Python 字节码。但 <strong>GIL 只护 Python 对象——纯 C++ 代码不受它管</strong>：在 C++ 扩展里释放 GIL（第 4 节），多个&quot;重计算&quot;就能真正跑满多核，这是 CPU 密集型任务留在 Python 进程内的关键手段（否则只能 multiprocessing + 进程间通信）。</li>
+<li><strong>复用 C++ 资产</strong>。RKNN runtime、ONNX Runtime、ffmpeg、自研算法库——重写不现实。给它们包一层 Python 接口，Python 做胶水与业务，C++ 做计算与 IO，是业界标准分工（torch、numpy 本身就是&quot;C 核心 + Python 皮&quot;）。</li>
+</ol>
+<p>反过来看 Python 侧的证据（本机实测，1000 万个 float 求和）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Python for 循环    : 290.7 ms</span><br><span class="line">Python 内置 sum()  :  26.4 ms</span><br></pre></td></tr></table></figure>
+<p>同一逻辑用 C++ 实现并经 pybind11 暴露后是 6ms（第 3 节实测）——<strong>约 48 倍</strong>。解释器逐条执行字节码 + 每个元素是完整 PyObject（浮点数带类型头、引用计数），是这 48 倍差距的全部来源。</p>
+<h2 id="2-pybind11-完整上手"><a class="markdownIt-Anchor" href="#2-pybind11-完整上手"></a> 2. pybind11 完整上手</h2>
+<p>pybind11 是 header-only 的 Python 绑定库（仅头文件 + 一条编译命令），用 C++ 模板在编译期生成 CPython 胶水。环境准备：<code>pip install pybind11</code>，编译时加它的 include 路径与 Python 头文件路径。</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// fastmod.cpp —— 模块名必须与 PYBIND11_MODULE 的第一个参数一致</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;pybind11/pybind11.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;pybind11/numpy.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;pybind11/stl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;chrono&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;vector&gt;</span></span></span><br><span class="line"><span class="keyword">namespace</span> py = pybind11;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">double</span> <span class="title">sum_loop</span><span class="params">(<span class="type">const</span> std::vector&lt;<span class="type">double</span>&gt;&amp; v)</span> </span>&#123;   <span class="comment">// Python list 自动转 vector&lt;double&gt;</span></span><br><span class="line">    <span class="type">double</span> s = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">double</span> x : v) s += x;</span><br><span class="line">    <span class="keyword">return</span> s;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">double</span> <span class="title">sum_np</span><span class="params">(py::<span class="type">array_t</span>&lt;<span class="type">double</span>, py::array::c_style | py::array::forcecast&gt; a)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">auto</span> buf = a.<span class="built_in">unchecked</span>&lt;<span class="number">1</span>&gt;();                  <span class="comment">// 一维视图；unchecked 免去逐元素开销</span></span><br><span class="line">    <span class="type">double</span> s = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (py::<span class="type">ssize_t</span> i = <span class="number">0</span>; i &lt; buf.<span class="built_in">size</span>(); ++i) s += buf[i];</span><br><span class="line">    <span class="keyword">return</span> s;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">scale_inplace</span><span class="params">(py::<span class="type">array_t</span>&lt;<span class="type">double</span>&gt; a, <span class="type">double</span> k)</span> </span>&#123;  <span class="comment">// 零拷贝：原地改写</span></span><br><span class="line">    <span class="keyword">auto</span> buf = a.mutable_unchecked&lt;<span class="number">1</span>&gt;();</span><br><span class="line">    <span class="keyword">for</span> (py::<span class="type">ssize_t</span> i = <span class="number">0</span>; i &lt; buf.<span class="built_in">size</span>(); ++i) <span class="built_in">buf</span>(i) *= k;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="built_in">PYBIND11_MODULE</span>(fastmod, m) &#123;</span><br><span class="line">    m.<span class="built_in">def</span>(<span class="string">&quot;sum_loop&quot;</span>, &amp;sum_loop);</span><br><span class="line">    m.<span class="built_in">def</span>(<span class="string">&quot;sum_np&quot;</span>, &amp;sum_np);</span><br><span class="line">    m.<span class="built_in">def</span>(<span class="string">&quot;scale_inplace&quot;</span>, &amp;scale_inplace);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">INC=$(python3 -c <span class="string">&quot;import pybind11; print(pybind11.get_include())&quot;</span>)</span><br><span class="line">NPINC=$(python3 -c <span class="string">&quot;import numpy; print(numpy.get_include())&quot;</span>)</span><br><span class="line">g++ -O2 -shared -std=c++20 -fPIC -I<span class="variable">$INC</span> -I<span class="variable">$NPINC</span> fastmod.cpp -o fastmod.so</span><br></pre></td></tr></table></figure>
+<p>（正式包的文件名要带 ABI 标签如 <code>fastmod.cpython-310-x86_64-linux-gnu.so</code>，本机实验直接叫 <code>fastmod.so</code> 也能 import；<code>-fPIC -shared</code> 是 Linux 动态库的必要条件。）</p>
+<h3 id="类绑定与-stl-自动转换"><a class="markdownIt-Anchor" href="#类绑定与-stl-自动转换"></a> 类绑定与 STL 自动转换</h3>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// clsmod.cpp（节选，已实测）</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;pybind11/stl.h&gt;</span>        <span class="comment">// 启用 vector/map/optional... 与 Python 容器互转</span></span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Tokenizer</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">Tokenizer</span><span class="params">(std::map&lt;std::string, <span class="type">int</span>&gt; vocab)</span> : vocab_(std::move(vocab)) &#123;</span>&#125;</span><br><span class="line">    <span class="function">std::vector&lt;<span class="type">int</span>&gt; <span class="title">encode</span><span class="params">(<span class="type">const</span> std::string&amp; text)</span> <span class="type">const</span> </span>&#123; <span class="comment">/* 查词典分词 */</span> &#125;</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">set_unk</span><span class="params">(<span class="type">int</span> id)</span> </span>&#123; unk_id_ = id; &#125;</span><br><span class="line">    <span class="function"><span class="type">int</span> <span class="title">unk</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> unk_id_; &#125;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    std::map&lt;std::string, <span class="type">int</span>&gt; vocab_;</span><br><span class="line">    <span class="type">int</span> unk_id_ = <span class="number">0</span>;</span><br><span class="line">&#125;;</span><br><span class="line"><span class="built_in">PYBIND11_MODULE</span>(clsmod, m) &#123;</span><br><span class="line">    py::class_&lt;Tokenizer&gt;(m, <span class="string">&quot;Tokenizer&quot;</span>)</span><br><span class="line">        .<span class="built_in">def</span>(py::init&lt;std::map&lt;std::string, <span class="type">int</span>&gt;&gt;())          <span class="comment">// dict -&gt; map 自动转</span></span><br><span class="line">        .<span class="built_in">def</span>(<span class="string">&quot;encode&quot;</span>, &amp;Tokenizer::encode)                    <span class="comment">// 返回值 vector&lt;int&gt; -&gt; list 自动转</span></span><br><span class="line">        .<span class="built_in">def_property</span>(<span class="string">&quot;unk_id&quot;</span>, &amp;Tokenizer::unk, &amp;Tokenizer::set_unk);  <span class="comment">// 属性语法糖</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">from</span> clsmod <span class="keyword">import</span> Tokenizer</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>t = Tokenizer(&#123;<span class="string">&quot;hello&quot;</span>: <span class="number">3</span>, <span class="string">&quot;world&quot;</span>: <span class="number">7</span>&#125;)</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>t.unk_id = <span class="number">99</span></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>t.encode(<span class="string">&quot;hello world 你好 world&quot;</span>)</span><br><span class="line">[<span class="number">3</span>, <span class="number">7</span>, <span class="number">99</span>, <span class="number">7</span>]</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>t.unk_id</span><br><span class="line"><span class="number">99</span></span><br></pre></td></tr></table></figure>
+<p>Python 的 dict/list 进出 C++ 都被自动转换。<strong>但要清醒：自动转换是拷贝语义</strong>——1000 万元素的 list 转成 <code>std::vector&lt;double&gt;</code> 要逐个解包 PyObject，本机实测这一个转换就花了 ~140ms（见第 5 节基准里 <code>sum_loop</code> 的构成）。<strong>批量数据走 numpy 数组，容器自动转换留给小对象</strong>（经验做法）。</p>
+<h2 id="3-numpy-数组零拷贝传递实时数据核对"><a class="markdownIt-Anchor" href="#3-numpy-数组零拷贝传递实时数据核对"></a> 3. numpy 数组零拷贝传递（实时数据核对）</h2>
+<p><code>py::array_t&lt;double&gt;</code> 直接持有 numpy 数组的底层缓冲。零拷贝的最硬核证据是<strong>C++ 侧原地改写、Python 侧立即看到</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">import</span> numpy <span class="keyword">as</span> np, fastmod</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>b = np.array([<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>])</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>fastmod.scale_inplace(b, <span class="number">10.0</span>)     <span class="comment"># C++ 侧 buf(i) *= k 直接写内存</span></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>b</span><br><span class="line">array([<span class="number">10.</span>, <span class="number">20.</span>, <span class="number">30.</span>])                 <span class="comment"># Python 侧立刻可见：同一块内存</span></span><br></pre></td></tr></table></figure>
+<p>保证零拷贝的四个条件：模板参数写 <code>py::array_t&lt;double, py::array::c_style | py::array::forcecast&gt;</code> 时——<code>c_style</code> 要求连续（不连续会自动拷贝一份），<code>forcecast</code> 强制类型一致（float32 进 double 扩展会拷贝）；Python 侧传入的是 <code>float64</code> 连续数组时不发生拷贝。核对方法（经验做法）：改写前 <code>b.__array_interface__['data'][0]</code> 记下地址，C++ 里把指针打出来对比；或像上面一样原地改写看可见性。跨进程/跨线程传 numpy 数组时同样只传&quot;视图&quot;不传数据，这正是 llama.cpp Python 绑定、RKNN Python API 处理输入张量的方式。</p>
+<h2 id="4-gil-管理pygil_scoped_release"><a class="markdownIt-Anchor" href="#4-gil-管理pygil_scoped_release"></a> 4. GIL 管理：py::gil_scoped_release</h2>
+<p>默认规则：<strong>pybind11 包装函数被 Python 调用时持有 GIL</strong>。纯 C++ 计算段应该主动释放，让其他 Python 线程并行推进：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;pybind11/pybind11.h&gt;</span></span></span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">heavy</span><span class="params">(<span class="type">int</span> ms)</span> </span>&#123;</span><br><span class="line">    &#123;</span><br><span class="line">        py::gil_scoped_release release;          <span class="comment">// 进入：解锁 GIL</span></span><br><span class="line">        <span class="comment">// ... 纯 C++ 计算，绝不能碰任何 Python API/PyObject ...</span></span><br><span class="line">        <span class="function"><span class="keyword">asm</span> <span class="title">volatile</span><span class="params">(<span class="string">&quot;&quot;</span> : : <span class="string">&quot;r&quot;</span>(sink) : <span class="string">&quot;memory&quot;</span>)</span></span>;</span><br><span class="line">    &#125;                                            <span class="comment">// 作用域结束：自动重新加锁</span></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>铁律：<strong>释放期间不得调用任何 Python C API、不得解引用 PyObject</strong>（numpy 数组的 <code>.unchecked()</code> 视图底层指针是裸指针可以继续用，但不能再摸 Python 对象）。验证实验：C++ 线程 <code>heavy(400ms)</code> 释放 GIL 期间，另一个纯 Python 线程能持续推进：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> threading, time, fastmod</span><br><span class="line">counter = &#123;<span class="string">&quot;n&quot;</span>: <span class="number">0</span>&#125;</span><br><span class="line"><span class="keyword">def</span> <span class="title function_">py_worker</span>():</span><br><span class="line">    end = time.perf_counter() + <span class="number">0.4</span></span><br><span class="line">    <span class="keyword">while</span> time.perf_counter() &lt; end:</span><br><span class="line">        counter[<span class="string">&quot;n&quot;</span>] += <span class="number">1</span></span><br><span class="line"></span><br><span class="line">th = threading.Thread(target=py_worker)</span><br><span class="line">t0 = time.perf_counter()</span><br><span class="line">th.start()</span><br><span class="line">fastmod.heavy(<span class="number">400</span>)          <span class="comment"># C++ 长计算（内部 gil_scoped_release）</span></span><br><span class="line">th.join()</span><br><span class="line">t1 = time.perf_counter()</span><br><span class="line"><span class="comment"># 本机实测输出：</span></span><br><span class="line"><span class="comment"># GIL 释放: heavy(400ms) 期间 Python 线程推进了 4550221 次循环, 总耗时 405 ms</span></span><br></pre></td></tr></table></figure>
+<p>400ms 的 C++ 计算与 Python 线程<strong>同时进行</strong>（总耗时 405ms ≈ max 而不是相加），455 万次 Python 循环证明 GIL 确实被释放。若去掉 <code>gil_scoped_release</code>，Python 线程几乎完全饿死（只会在 C++ 函数起止的间隙抢到几个时间片）。选 GIL 策略的口诀（经验做法）：<strong>进出 Python 世界的边界上拿/还 GIL，中间整段计算释放；调用方向是&quot;Python → C++&quot;时用 <code>gil_scoped_release</code>，&quot;C++ 回调 → Python&quot;时用 <code>py::gil_scoped_acquire</code></strong>。</p>
+<h2 id="5-性能对比实验完整数据"><a class="markdownIt-Anchor" href="#5-性能对比实验完整数据"></a> 5. 性能对比实验（完整数据）</h2>
+<p>1000 万元素求和，四种实现同机实测：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">Python for 循环     :  290.7 ms      基线</span><br><span class="line">Python 内置 sum()   :   26.4 ms      C 实现的迭代，快 11 倍</span><br><span class="line">pybind11 sum_loop   :  147.2 ms      其中 ~140ms 是 list-&gt;vector 的转换拷贝！</span><br><span class="line">pybind11 sum_np     :    6.0 ms      numpy 零拷贝，比 Python 循环快 48 倍</span><br><span class="line">numpy .sum()        :    3.5 ms      成熟库的 SIMD+归约优化（第 03/06 章）</span><br></pre></td></tr></table></figure>
+<p>三读数：Python 循环 48 倍慢于 C++，验证第 1 节的动机；<strong><code>sum_loop</code> 的 147ms 里转换占大头</strong>——传 list 给 C++ 再算，不如留在 Python 用内置函数，这是&quot;绑定不能无脑替代内置&quot;的实证；批量数据的最优路径是 numpy 视图直通 C++（6ms 里 2ms 是 Python 调用与检查开销，其余是 C++ 逐元素求和）。进一步的方向：把逐元素求和改成块处理/多线程（配合第 4 节 GIL 释放），或直接上 SIMD——推断链路与第 06 章完全一致。</p>
+<h2 id="6-构建集成scikit-build-core-最小配置"><a class="markdownIt-Anchor" href="#6-构建集成scikit-build-core-最小配置"></a> 6. 构建集成：scikit-build-core 最小配置</h2>
+<p>散装 <code>g++</code> 命令只适合实验；发布包需要&quot;pip install 就能装&quot;的构建。现代推荐 <strong>scikit-build-core</strong>（用 CMake 做 C++ 构建的 PEP 517 后端，替代老 scikit-build）：</p>
+<figure class="highlight toml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># pyproject.toml</span></span><br><span class="line"><span class="section">[build-system]</span></span><br><span class="line"><span class="attr">requires</span> = [<span class="string">&quot;scikit-build-core&quot;</span>, <span class="string">&quot;pybind11&quot;</span>]</span><br><span class="line"><span class="attr">build-backend</span> = <span class="string">&quot;scikit_build_core.build&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="section">[project]</span></span><br><span class="line"><span class="attr">name</span> = <span class="string">&quot;fastmod&quot;</span></span><br><span class="line"><span class="attr">version</span> = <span class="string">&quot;0.1.0&quot;</span></span><br><span class="line"><span class="attr">dependencies</span> = [<span class="string">&quot;numpy&quot;</span>]</span><br><span class="line"></span><br><span class="line"><span class="section">[tool.scikit-build]</span></span><br><span class="line"><span class="attr">wheel.packages</span> = []</span><br></pre></td></tr></table></figure>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># CMakeLists.txt</span></span><br><span class="line"><span class="keyword">cmake_minimum_required</span>(VERSION <span class="number">3.22</span>)</span><br><span class="line"><span class="keyword">project</span>(fastmod LANGUAGES CXX)</span><br><span class="line"><span class="keyword">find_package</span>(Python COMPONENTS Interpreter Development.Module REQUIRED)</span><br><span class="line"><span class="keyword">find_package</span>(pybind11 CONFIG REQUIRED)</span><br><span class="line">pybind11_add_module(fastmod fastmod.cpp)</span><br><span class="line"><span class="keyword">install</span>(TARGETS fastmod DESTINATION .)</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">pip install .          <span class="comment"># 自动：建隔离环境 → CMake 构建 → 打 wheel → 装好</span></span><br><span class="line">python -c <span class="string">&quot;import fastmod; print(&#x27;ok&#x27;)&quot;</span></span><br></pre></td></tr></table></figure>
+<p>pybind11 被声明为构建依赖后，scikit-build-core 会把它喂给 CMake（<code>find_package(pybind11 CONFIG)</code>），第 01 章的 target 中心思想原样适用。老的 <code>setup.py</code> + <code>setuptools</code> 手写 Extension 的方式仍能用，但新项目不再推荐（经验做法）。交叉编译到 ARM 安装包用 cibuildwheel，与本章机制正交。</p>
+<h2 id="7-调用约定与-abi-常识"><a class="markdownIt-Anchor" href="#7-调用约定与-abi-常识"></a> 7. 调用约定与 ABI 常识</h2>
+<p>衔接《计算机系统与网络》02（机器级表示）。扩展模块是 <code>.so</code> 动态库，Python 解释器用 <code>dlopen</code> 加载后<strong>按 C ABI 拿符号</strong>：CPython 定义了一组 C 函数指针（<code>PyMethodDef</code> 表），pybind11 在模块初始化时填好这张表。要点：</p>
+<ul>
+<li><strong>C++ 名字修饰（name mangling）</strong>：<code>extern &quot;C&quot;</code> 禁用修饰才能被 <code>ctypes</code>/<code>dlsym</code> 找到；pybind11 模块入口 <code>PyInit_fastmod</code> 本身就是 extern “C” 的，内部绑定则完全不走 C ABI。</li>
+<li><strong>调用约定</strong>：x86-64 System V ABI 前 6 个整型/指针参数走寄存器（rdi/rsi/rdx/rcx/r8/r9），浮点走 xmm——<strong>跨 Python/C++ 边界的每次调用都有真实成本</strong>（第 5 节 6ms 里的固定 2ms 主要是它），所以批量接口设计成&quot;一次传一整个数组&quot;而不是&quot;每元素调一次&quot;。</li>
+<li><strong>CPython 稳定 ABI</strong>：<code>Py_LIMITED_API</code> 让同一个 .so 兼容 3.x 多个小版本（文件名 <code>abi3.so</code>）；pybind11 对其支持有限（部分特性不可用），发布多版本 wheel 是更常见的现实选择。</li>
+</ul>
+<h2 id="8-替代方案对比事实性"><a class="markdownIt-Anchor" href="#8-替代方案对比事实性"></a> 8. 替代方案对比（事实性）</h2>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>形态</th>
+<th>C++ 支持</th>
+<th>性能</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>ctypes</td>
+<td>标准库，<code>dlopen</code> + 手写签名</td>
+<td>无（C ABI only），C++ 需 <code>extern &quot;C&quot;</code> 包装</td>
+<td>每次调用有解释器开销，小调用慢</td>
+<td>无依赖环境、只有 C 接口的库</td>
+</tr>
+<tr>
+<td>pybind11</td>
+<td>header-only，模板胶水</td>
+<td>完整（类/模板/STL/智能指针）</td>
+<td>与手写 C API 同级</td>
+<td>通用首选，C++11+</td>
+</tr>
+<tr>
+<td>nanobind</td>
+<td>pybind11 作者 2022 年重写</td>
+<td>完整</td>
+<td>官方基准：模块更小（~4 倍）、调用更快（多数场景快 1.5-4 倍），需 C++17、仅 CPython</td>
+<td>新项目优先（esp. 3.11+）</td>
+</tr>
+<tr>
+<td>Cython</td>
+<td>Python 超集 → C 编译</td>
+<td>通过 <code>cdef extern</code> 声明</td>
+<td>数值代码接近手写 C</td>
+<td>已有 Python 代码逐步加速</td>
+</tr>
+</tbody>
+</table>
+<p>选型口径（经验做法）：<strong>已有 C++ 库要包 Python → pybind11（存量代码）或 nanobind（新项目）；纯 C 接口临时调用 → ctypes；把 Python 热点改写 → Cython 或&quot;改写成 C++ + pybind11&quot;。</strong> 事实要点：nanobind 与 pybind11 同作者（Wenzel Jakob），API 刻意相似，迁移成本低；两者都不支持 PyPy 全部特性。</p>
+<h2 id="9-给-pybind11-模块写测试"><a class="markdownIt-Anchor" href="#9-给-pybind11-模块写测试"></a> 9. 给 pybind11 模块写测试</h2>
+<p>衔接《测试》系列 11。扩展模块的测试就是<strong>普通 pytest</strong>，测的是&quot;从 Python 看到的行为契约&quot;：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># tests/test_fastmod.py</span></span><br><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"><span class="keyword">import</span> pytest</span><br><span class="line"><span class="keyword">from</span> fastmod <span class="keyword">import</span> sum_np, scale_inplace</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_sum_np_basic</span>():</span><br><span class="line">    <span class="keyword">assert</span> sum_np(np.array([<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>])) == pytest.approx(<span class="number">6.0</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_sum_np_empty</span>():</span><br><span class="line">    <span class="keyword">assert</span> sum_np(np.array([], dtype=np.float64)) == <span class="number">0.0</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_zero_copy_inplace</span>():</span><br><span class="line">    b = np.array([<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>])</span><br><span class="line">    scale_inplace(b, <span class="number">10.0</span>)</span><br><span class="line">    np.testing.assert_allclose(b, [<span class="number">10.0</span>, <span class="number">20.0</span>, <span class="number">30.0</span>])   <span class="comment"># 原地语义：不改入参就失败</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_forcecast_copies_float32</span>():</span><br><span class="line">    a = np.array([<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>], dtype=np.float32)           <span class="comment"># 非 float64 → forcecast 拷贝</span></span><br><span class="line">    b = np.array([<span class="number">1.0</span>, <span class="number">2.0</span>, <span class="number">3.0</span>])</span><br><span class="line">    <span class="keyword">assert</span> sum_np(a) == pytest.approx(<span class="number">6.0</span>)              <span class="comment"># 结果仍正确</span></span><br><span class="line">    a[<span class="number">0</span>] = <span class="number">100</span>                                          <span class="comment"># 改 a 不影响任何 C++ 缓存视图</span></span><br></pre></td></tr></table></figure>
+<p>测试策略（经验做法）：<strong>契约测试在 Python 侧写（上面的形态）；内存错误类问题靠 C++ 侧的 ASan/TSan 构建 + valgrind</strong>——CI 里跑一个 <code>-fsanitize=address</code> 构建的扩展再跑 pytest，能把越界/UAF 在 Python 调用现场报出来。发布前再用 cibuildwheel 矩阵跑多 Python 版本。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>拿 list 灌 C++ 再逐元素算</strong>（第 5 节 <code>sum_loop</code> 147ms 的教训）：容器自动转换是逐 PyObject 解包的拷贝，批量数据永远走 <code>py::array_t</code>。</li>
+<li><strong>gil_scoped_release 期间摸 Python 对象</strong>：未持有 GIL 时调用 Python C API 是 UB，轻则崩溃重则静默损坏。释放段只碰裸数据；需要 Python 对象时先深拷贝成 C++ 数据再释放。</li>
+<li><strong>忘写 <code>-fPIC</code>/类型标注 <code>py::array::c_style</code></strong>：不连续/非 C 顺序的数组视图直接读会拿到错位数据——always 声明 c_style，让 pybind11 替你检查并拷贝。</li>
+<li><strong>返回大 vector 当 Python list</strong>：<code>std::vector</code> → list 的转换同样逐元素造 PyObject；返回 numpy（<code>py::array_t</code> 从堆数据构造 + <code>py::capsule</code> 管理生命周期）或让 Python 侧提供输出缓冲。</li>
+<li><strong>模块名与文件名不一致</strong>：<code>PYBIND11_MODULE(fastmod, ...)</code> 编译出的文件必须能让 <code>import fastmod</code> 找到；一个 .so 只能有一个模块初始化函数。</li>
+<li><strong>在无 GIL 状态抛 C++ 异常穿越边界</strong>：pybind11 会在函数边界把 C++ 异常翻译成 Python 异常，但翻译发生在&quot;重新持有 GIL 之后&quot;；自定义异常要用 <code>py::register_exception</code> 注册，别让未注册类型裸穿。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>动机 = GIL 内真并行（gil_scoped_release 实测 405ms 并行）+ 复用 C++ 资产；Python 循环与 C++ 的差距实测 48 倍。</li>
+<li>pybind11 三板斧：<code>m.def</code> 绑函数、<code>py::class_</code> 绑类、<code>&lt;pybind11/stl.h&gt;</code> 自动转容器——但自动转换是拷贝，批量数据走 <code>py::array_t</code>。</li>
+<li>numpy 零拷贝的验证法 = 原地改写看可见性 / 对比 data 指针；<code>c_style|forcecast</code> 声明避免踩不连续数据。</li>
+<li>构建走 scikit-build-core（pyproject.toml + CMakeLists 两文件），别再手写 <a target="_blank" rel="noopener" href="http://setup.py">setup.py</a>。</li>
+<li>ABI 常识：模块是 C ABI 的动态库，跨边界调用有固定成本，接口按&quot;整批&quot;设计；方案选型 pybind11（存量）/ nanobind（新项目）/ ctypes（纯 C 临时）/ Cython（Python 代码加速）。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>给 <code>fastmod</code> 加一个 <code>dot(a, b)</code>（numpy 点积，手写循环 + <code>gil_scoped_release</code>），对比 <code>np.dot</code> 的耗时，回答差距来自哪里（提示：SIMD 与多线程）。</li>
+<li>用 <code>__array_interface__['data'][0]</code> 打印 numpy 数组地址，同时在 C++ 侧打印 <code>py::array_t::data()</code> 地址，实证零拷贝；再传一个切片 <code>a[::2]</code> 观察地址与 c_style 拷贝行为。</li>
+<li>复现第 5 节 <code>sum_loop</code> 的&quot;转换开销&quot;：写一个 <code>noop(v: list)</code> 的 C++ 函数（什么都不做只收 <code>std::vector&lt;double&gt;</code>），测量 1000 万元素的调用耗时，解释它为什么接近 <code>sum_loop</code>。</li>
+<li>把 <code>Tokenizer</code> 扩展：加 <code>decode(ids: list[int]) -&gt; str</code> 与 <code>vocab_size</code> 属性，用 pytest 写 5 个用例（含空串、未知词、Unicode）。</li>
+<li>用 scikit-build-core 把 <code>fastmod</code> 打成 wheel（<code>pip install build &amp;&amp; python -m build --wheel</code>），解包看 .so 是否落在纯 lib 目录，并回答：为什么 wheel 里不需要带 pybind11 的头文件？</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/C/" rel="tag"># C++</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/05/08-%E5%8D%8F%E7%A8%8B/" rel="prev" title="08-协程">
+                  <i class="fa fa-angle-left"></i> 08-协程
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/05/10-%E7%AB%AF%E4%BE%A7%E4%B8%8E%E5%B5%8C%E5%85%A5%E5%BC%8FC++/" rel="next" title="10-端侧与嵌入式C++">
+                  10-端侧与嵌入式C++ <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="1. 画出属性查找顺序的完整规则（实例 dict → 类 MRO → 描述符&#x2F;钩子），解释 getattr&#x2F;getattribute&#x2F;setattr 的分工； 2. 理解描述符协议：@property 的本质，会手写数据校验描述符；">
+<meta property="og:type" content="article">
+<meta property="og:title" content="11-元类与描述符">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/11-%E5%85%83%E7%B1%BB%E4%B8%8E%E6%8F%8F%E8%BF%B0%E7%AC%A6/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="1. 画出属性查找顺序的完整规则（实例 dict → 类 MRO → 描述符&#x2F;钩子），解释 getattr&#x2F;getattribute&#x2F;setattr 的分工； 2. 理解描述符协议：@property 的本质，会手写数据校验描述符；">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-01T20:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.510Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Python">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/11-%E5%85%83%E7%B1%BB%E4%B8%8E%E6%8F%8F%E8%BF%B0%E7%AC%A6/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/11-%E5%85%83%E7%B1%BB%E4%B8%8E%E6%8F%8F%E8%BF%B0%E7%AC%A6/","path":"2026/09/02/11-元类与描述符/","title":"11-元类与描述符"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>11-元类与描述符 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#11-%E5%85%83%E7%B1%BB%E4%B8%8E%E6%8F%8F%E8%BF%B0%E7%AC%A6"><span class="nav-number">1.</span> <span class="nav-text"> 11 - 元类与描述符</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%B1%9E%E6%80%A7%E6%9F%A5%E6%89%BE%E9%A1%BA%E5%BA%8F%E4%B8%8E-mro"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 属性查找顺序与 MRO</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E6%8F%8F%E8%BF%B0%E7%AC%A6%E5%8D%8F%E8%AE%AEproperty-%E7%9A%84%E6%9C%AC%E8%B4%A8"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 描述符协议：@property 的本质</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%95%B0%E6%8D%AE%E6%A0%A1%E9%AA%8C%E6%8F%8F%E8%BF%B0%E7%AC%A6%E5%AE%9E%E6%88%98"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 数据校验描述符实战</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-type-%E5%8A%A8%E6%80%81%E5%88%9B%E5%BB%BA%E7%B1%BB%E4%B8%8E%E5%85%83%E7%B1%BB"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. type 动态创建类与元类</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E4%B8%8D%E8%AF%A5%E7%94%A8%E7%BB%8F%E9%AA%8C%E5%81%9A%E6%B3%95"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 什么时候不该用（经验做法）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E9%99%B7%E9%98%B1"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见陷阱</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.9.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/11-%E5%85%83%E7%B1%BB%E4%B8%8E%E6%8F%8F%E8%BF%B0%E7%AC%A6/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="11-元类与描述符 | Yoleen的博客">
+      <meta itemprop="description" content="1. 画出属性查找顺序的完整规则（实例 dict → 类 MRO → 描述符&#x2F;钩子），解释 getattr&#x2F;getattribute&#x2F;setattr 的分工； 2. 理解描述符协议：@property 的本质，会手写数据校验描述符；">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          11-元类与描述符
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 04:30:00" itemprop="dateCreated datePublished" datetime="2026-09-02T04:30:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Python/" itemprop="url" rel="index"><span itemprop="name">Python</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">1. 画出属性查找顺序的完整规则（实例 dict → 类 MRO → 描述符/钩子），解释 getattr/getattribute/setattr 的分工； 2. 理解描述符协议：@property 的本质，会手写数据校验描述符；</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="11-元类与描述符"><a class="markdownIt-Anchor" href="#11-元类与描述符"></a> 11 - 元类与描述符</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ol>
+<li>画出<strong>属性查找顺序</strong>的完整规则（实例 dict → 类 MRO → 描述符/钩子），解释 <code>__getattr__</code>/<code>__getattribute__</code>/<code>__setattr__</code> 的分工；</li>
+<li>理解<strong>描述符协议</strong>：<code>@property</code> 的本质，会手写数据校验描述符；</li>
+<li>会用 <code>type</code> 动态创建类，理解<strong>元类</strong>如何在类创建时介入（字段注册/自动注册——SQLAlchemy/pydantic 的原理）；</li>
+<li>建立&quot;什么时候不该用&quot;的判断力（经验做法）。</li>
+</ol>
+<h2 id="1-属性查找顺序与-mro"><a class="markdownIt-Anchor" href="#1-属性查找顺序与-mro"></a> 1. 属性查找顺序与 MRO</h2>
+<p>读属性 <code>obj.attr</code> 时，解释器的查找链（官方文档 Data Model → customizing attribute access，《Fluent Python》第 22 章有完整图）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">obj.attr 的查找顺序（data descriptor 参与在类层）：</span><br><span class="line">1. 类及基类的 MRO 中找 data descriptor（定义了 __set__ 或 __delete__ 的）→ 命中即用</span><br><span class="line">2. 实例的 __dict__                        → 命中即用</span><br><span class="line">3. 类及基类的 MRO 中找 非 data descriptor / 普通类属性     → 命中即用</span><br><span class="line">4. 都没有 → 调 __getattr__(self, name)（若定义）→ 否则 AttributeError</span><br></pre></td></tr></table></figure>
+<p>**MRO（Method Resolution Order）**是&quot;沿继承链查找的线性顺序&quot;，由 C3 线性化算法计算（Python 2.3 起固定，见官方文档 Python Tutorial 9.5 与 PEP 253 的背景材料），保证：子类先于父类、父类保持声明顺序、单调性（不会跳序）。菱形继承是理解 MRO 的钥匙：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">A</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">who</span>(<span class="params">self</span>): <span class="keyword">return</span> <span class="string">&quot;A&quot;</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">B</span>(<span class="title class_ inherited__">A</span>):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">who</span>(<span class="params">self</span>): <span class="keyword">return</span> <span class="string">&quot;B&quot;</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">C</span>(<span class="title class_ inherited__">A</span>):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">who</span>(<span class="params">self</span>): <span class="keyword">return</span> <span class="string">&quot;C&quot;</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">D</span>(B, C):        <span class="comment"># 菱形：D → B → C → A</span></span><br><span class="line">    <span class="keyword">pass</span></span><br><span class="line"></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>D.__mro__</span><br><span class="line">(&lt;<span class="keyword">class</span> <span class="string">&#x27;D&#x27;</span>&gt;, &lt;<span class="keyword">class</span> <span class="string">&#x27;B&#x27;</span>&gt;, &lt;<span class="keyword">class</span> <span class="string">&#x27;C&#x27;</span>&gt;, &lt;<span class="keyword">class</span> <span class="string">&#x27;A&#x27;</span>&gt;, &lt;<span class="keyword">class</span> <span class="string">&#x27;object&#x27;</span>&gt;)</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>D().who()         <span class="comment"># MRO 上第一个有 who 的：B</span></span><br><span class="line"><span class="string">&#x27;B&#x27;</span></span><br></pre></td></tr></table></figure>
+<p>为什么不是 A 先于 C？C3 要保证<strong>父类相对顺序</strong>（声明 <code>class D(B, C)</code>，则 B 系全部排在 C 系前面）且每个类只出现一次。<code>super()</code> 也不是&quot;调父类&quot;，而是<strong>沿 MRO 找下一个</strong>——协作式多重继承（mixin）的基础：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">LoggedMixin</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">who</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot;L(&quot;</span> + <span class="built_in">super</span>().who() + <span class="string">&quot;)&quot;</span>   <span class="comment"># super 沿 MRO 找下一个，不是&quot;父类&quot;</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Base</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">who</span>(<span class="params">self</span>): <span class="keyword">return</span> <span class="string">&quot;Base&quot;</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Service</span>(LoggedMixin, Base):</span><br><span class="line">    <span class="keyword">pass</span></span><br><span class="line"></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>Service().who()          <span class="comment"># MRO: Service → LoggedMixin → Base</span></span><br><span class="line"><span class="string">&#x27;L(Base)&#x27;</span></span><br></pre></td></tr></table></figure>
+<p><strong>钩子三兄弟</strong>的分工（Data Model 文档）：</p>
+<ul>
+<li><code>__getattribute__(self, name)</code>：<strong>所有</strong>属性读取的必经之路（先于上面整个查找链执行，默认实现就是那张查找图）。重写它等于接管一切属性访问，极易递归（内部必须用 <code>super().__getattribute__</code> 或 <code>object.__getattribute__</code>）；</li>
+<li><code>__getattr__(self, name)</code>：<strong>只在常规查找失败后</strong>才被调用的兜底钩子。安全的&quot;懒加载/代理/动态属性&quot;入口；</li>
+<li><code>__setattr__(self, name, value)</code>：所有赋值的必经之路（默认写入 <code>__dict__</code> 或触发 data descriptor 的 <code>__set__</code>）。</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">LazyAPI</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;__getattr__ 兜底：访问未定义属性时转发到远程 API（懒加载）。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, prefix: <span class="built_in">str</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>.prefix = prefix</span><br><span class="line">        <span class="variable language_">self</span>._cache: <span class="built_in">dict</span>[<span class="built_in">str</span>, <span class="built_in">str</span>] = &#123;&#125;</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__getattr__</span>(<span class="params">self, name: <span class="built_in">str</span></span>):          <span class="comment"># 只有 self.attr 找不到才进来</span></span><br><span class="line">        <span class="keyword">if</span> name.startswith(<span class="string">&quot;_&quot;</span>):</span><br><span class="line">            <span class="keyword">raise</span> AttributeError(name)         <span class="comment"># 内部属性别劫持</span></span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;  [fetch] <span class="subst">&#123;self.prefix&#125;</span>.<span class="subst">&#123;name&#125;</span>&quot;</span>)</span><br><span class="line">        <span class="variable language_">self</span>._cache[name] = <span class="string">f&quot;&lt;<span class="subst">&#123;self.prefix&#125;</span>.<span class="subst">&#123;name&#125;</span> 响应&gt;&quot;</span>   <span class="comment"># 写缓存（会触发 __setattr__）</span></span><br><span class="line">        <span class="keyword">return</span> <span class="variable language_">self</span>._cache[name]</span><br><span class="line"></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>api = LazyAPI(<span class="string">&quot;users&quot;</span>)</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>api.get_profile                 <span class="comment"># __dict__ 里没有 → __getattr__ 兜底</span></span><br><span class="line">  [fetch] users.get_profile</span><br><span class="line"><span class="string">&#x27;&lt;users.get_profile 响应&gt;&#x27;</span></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>api.get_profile                 <span class="comment"># 已缓存？不——缓存写入实例 __dict__ 后，第二次走常规查找</span></span><br><span class="line"><span class="string">&#x27;&lt;users.get_profile 响应&gt;&#x27;</span></span><br></pre></td></tr></table></figure>
+<p>注意最后两行的微妙之处：<strong><code>__getattr__</code> 里 <code>self._cache[...] = ...</code> 把名字写进了实例 <code>__dict__</code>，于是下次读取走常规路径不再进钩子</strong>——这是懒加载自动&quot;固化&quot;的标准手法。</p>
+<h2 id="2-描述符协议property-的本质"><a class="markdownIt-Anchor" href="#2-描述符协议property-的本质"></a> 2. 描述符协议：@property 的本质</h2>
+<p><strong>描述符</strong>：定义了 <code>__get__</code>/<code>__set__</code>/<code>__delete__</code> 之一、且<strong>放在类的层级</strong>的对象——它把&quot;某个属性的所有读写&quot;接管走。<code>@property</code> 就是一个内置的 data descriptor（Data Model 文档 → descriptors；PEP 252）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">class</span> <span class="title class_">Temp</span>:</span><br><span class="line"><span class="meta">... </span>    @<span class="built_in">property</span></span><br><span class="line"><span class="meta">... </span>    <span class="keyword">def</span> <span class="title function_">celsius</span>(<span class="params">self</span>): <span class="keyword">return</span> <span class="variable language_">self</span>._c</span><br><span class="line"><span class="meta">... </span>    @celsius.setter</span><br><span class="line"><span class="meta">... </span>    <span class="keyword">def</span> <span class="title function_">celsius</span>(<span class="params">self, v</span>): <span class="variable language_">self</span>._c = v</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>p = <span class="built_in">property</span>(Temp.celsius.fget, Temp.celsius.fset)</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="built_in">type</span>(Temp.celsius)          <span class="comment"># property 是描述符对象本身</span></span><br><span class="line">&lt;<span class="keyword">class</span> <span class="string">&#x27;property&#x27;</span>&gt;</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>Temp.celsius                <span class="comment"># 挂在类上（不是实例上！）</span></span><br><span class="line">&lt;<span class="built_in">property</span> <span class="built_in">object</span> at 0x...&gt;</span><br></pre></td></tr></table></figure>
+<p>手写一遍等价物，彻底看穿 <code>property</code> 的马甲：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Celsius</span>:                        <span class="comment"># data descriptor：定义了 __get__ 和 __set__</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__set_name__</span>(<span class="params">self, owner, name</span>):      <span class="comment"># 3.6+：类创建时自动告知&quot;我被命名为 celsius&quot;</span></span><br><span class="line">        <span class="variable language_">self</span>.public = name</span><br><span class="line">        <span class="variable language_">self</span>.private = <span class="string">&quot;_&quot;</span> + name</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__get__</span>(<span class="params">self, obj, objtype=<span class="literal">None</span></span>):</span><br><span class="line">        <span class="keyword">if</span> obj <span class="keyword">is</span> <span class="literal">None</span>:               <span class="comment"># 通过类访问（Temp.celsius）时 obj 为 None</span></span><br><span class="line">            <span class="keyword">return</span> <span class="variable language_">self</span></span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">getattr</span>(obj, <span class="variable language_">self</span>.private)</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__set__</span>(<span class="params">self, obj, value</span>):</span><br><span class="line">        <span class="keyword">if</span> <span class="keyword">not</span> -<span class="number">273.15</span> &lt;= value:</span><br><span class="line">            <span class="keyword">raise</span> ValueError(<span class="string">f&quot;<span class="subst">&#123;self.public&#125;</span> 低于绝对零度&quot;</span>)</span><br><span class="line">        <span class="built_in">setattr</span>(obj, <span class="variable language_">self</span>.private, value)</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Temp</span>:</span><br><span class="line">    celsius = Celsius()               <span class="comment"># ★ 描述符必须是类属性</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, c</span>): <span class="variable language_">self</span>.celsius = c    <span class="comment"># 这行赋值走 Celsius.__set__</span></span><br><span class="line"></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>t = Temp(<span class="number">25</span>)</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>t.celsius                         <span class="comment"># 走 Celsius.__get__</span></span><br><span class="line"><span class="number">25</span></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>t.celsius = -<span class="number">300</span></span><br><span class="line">Traceback (most recent call last):</span><br><span class="line">  ...</span><br><span class="line">ValueError: celsius 低于绝对零度</span><br></pre></td></tr></table></figure>
+<p>关键分类（《Fluent Python》第 23 章）：<strong>data descriptor</strong>（有 <code>__set__</code>）<strong>优先于实例 <code>__dict__</code></strong>；<strong>non-data descriptor</strong>（只有 <code>__get__</code>，如函数、classmethod、staticmethod）<strong>被实例 <code>__dict__</code> 遮蔽</strong>。这解释了两个日常现象：① 实例属性遮不住 <code>property</code>（数据校验永远生效）；② <strong>方法其实是 non-data descriptor</strong>——<code>obj.method</code> 返回的是绑定方法（<code>__get__(obj)</code> 的产物），这就是&quot;函数存在类里、调用时自动绑定 self&quot;的机制。</p>
+<h2 id="3-数据校验描述符实战"><a class="markdownIt-Anchor" href="#3-数据校验描述符实战"></a> 3. 数据校验描述符实战</h2>
+<p>描述符最大的工程价值：<strong>校验逻辑写一次，声明式复用</strong>——这就是 pydantic/attrs/SQLAlchemy 字段的实现内核：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Typed</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;类型校验描述符（基类）。&quot;&quot;&quot;</span></span><br><span class="line">    expected_type: <span class="built_in">type</span> = <span class="built_in">object</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__set_name__</span>(<span class="params">self, owner, name</span>):</span><br><span class="line">        <span class="variable language_">self</span>.name = name                       <span class="comment"># 记住字段名（报错信息用）</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__get__</span>(<span class="params">self, obj, objtype=<span class="literal">None</span></span>):</span><br><span class="line">        <span class="keyword">if</span> obj <span class="keyword">is</span> <span class="literal">None</span>: <span class="keyword">return</span> <span class="variable language_">self</span></span><br><span class="line">        <span class="keyword">return</span> obj.__dict__[<span class="variable language_">self</span>.name]         <span class="comment"># 数据其实存在实例 __dict__</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__set__</span>(<span class="params">self, obj, value</span>):</span><br><span class="line">        <span class="keyword">if</span> <span class="keyword">not</span> <span class="built_in">isinstance</span>(value, <span class="variable language_">self</span>.expected_type):</span><br><span class="line">            <span class="keyword">raise</span> TypeError(<span class="string">f&quot;<span class="subst">&#123;owner.__name__&#125;</span>.<span class="subst">&#123;self.name&#125;</span> 期望 &quot;</span></span><br><span class="line">                            <span class="string">f&quot;<span class="subst">&#123;self.expected_type.__name__&#125;</span>, 得到 <span class="subst">&#123;<span class="built_in">type</span>(value).__name__&#125;</span>&quot;</span>)</span><br><span class="line">        obj.__dict__[<span class="variable language_">self</span>.name] = value</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">IntField</span>(<span class="title class_ inherited__">Typed</span>):</span><br><span class="line">    expected_type = <span class="built_in">int</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, <span class="built_in">min</span>=<span class="literal">None</span>, <span class="built_in">max</span>=<span class="literal">None</span></span>):    <span class="comment"># 参数化：声明时可以带约束</span></span><br><span class="line">        <span class="variable language_">self</span>.<span class="built_in">min</span>, <span class="variable language_">self</span>.<span class="built_in">max</span> = <span class="built_in">min</span>, <span class="built_in">max</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__set__</span>(<span class="params">self, obj, value</span>):</span><br><span class="line">        <span class="built_in">super</span>().__set__(obj, value)            <span class="comment"># 先过类型关</span></span><br><span class="line">        <span class="keyword">if</span> <span class="variable language_">self</span>.<span class="built_in">min</span> <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span> <span class="keyword">and</span> value &lt; <span class="variable language_">self</span>.<span class="built_in">min</span>:</span><br><span class="line">            <span class="keyword">raise</span> ValueError(<span class="string">f&quot;<span class="subst">&#123;self.name&#125;</span> 不能小于 <span class="subst">&#123;self.<span class="built_in">min</span>&#125;</span>&quot;</span>)</span><br><span class="line">        obj.__dict__[<span class="variable language_">self</span>.name] = value</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">StrField</span>(<span class="title class_ inherited__">Typed</span>):</span><br><span class="line">    expected_type = <span class="built_in">str</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">AgentConfig</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;声明式配置类：字段=描述符实例。&quot;&quot;&quot;</span></span><br><span class="line">    max_turns = IntField(<span class="built_in">min</span>=<span class="number">1</span>, <span class="built_in">max</span>=<span class="number">100</span>)</span><br><span class="line">    model = StrField()</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, model: <span class="built_in">str</span>, max_turns: <span class="built_in">int</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>.model = model                     <span class="comment"># 触发 StrField.__set__</span></span><br><span class="line">        <span class="variable language_">self</span>.max_turns = max_turns             <span class="comment"># 触发 IntField.__set__</span></span><br><span class="line"></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>cfg = AgentConfig(<span class="string">&quot;gpt-4o&quot;</span>, <span class="number">20</span>)</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>cfg.model</span><br><span class="line"><span class="string">&#x27;gpt-4o&#x27;</span></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>cfg.max_turns = <span class="number">0</span></span><br><span class="line">Traceback (most recent call last):</span><br><span class="line">  ...</span><br><span class="line">ValueError: max_turns 不能小于 <span class="number">1</span></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>cfg.max_turns = <span class="string">&quot;20&quot;</span></span><br><span class="line">Traceback (most recent call last):</span><br><span class="line">  ...</span><br><span class="line">TypeError: AgentConfig.max_turns 期望 <span class="built_in">int</span>, 得到 <span class="built_in">str</span></span><br></pre></td></tr></table></figure>
+<p>对照 06 篇：<code>dataclass</code> 生成的是&quot;方法级&quot;样板（init/repr/eq），描述符生成的是&quot;属性级&quot;行为（校验/转换/依赖追踪）；pydantic v2 的 <code>Field(ge=1, le=100)</code> 与这里 <code>IntField(min=1, max=100)</code> 形状几乎一致——差别只在它用元类+<code>__set_name__</code> 收集字段再批量生成校验代码（下一步）。</p>
+<h2 id="4-type-动态创建类与元类"><a class="markdownIt-Anchor" href="#4-type-动态创建类与元类"></a> 4. type 动态创建类与元类</h2>
+<p><strong>类也是对象</strong>（01 篇&quot;一切皆对象&quot;的最后一环）：<code>class</code> 语句的幕后是——<strong>调用元类（默认 <code>type</code>）创建类对象</strong>。<code>type(name, bases, namespace)</code> 三参数形式可以直接手工建类：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&gt;&gt;&gt; </span>Dog = <span class="built_in">type</span>(<span class="string">&quot;Dog&quot;</span>, (<span class="built_in">object</span>,), &#123;<span class="string">&quot;sound&quot;</span>: <span class="string">&quot;汪&quot;</span>, <span class="string">&quot;bark&quot;</span>: <span class="keyword">lambda</span> <span class="variable language_">self</span>: <span class="variable language_">self</span>.sound * <span class="number">2</span>&#125;)</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>Dog</span><br><span class="line">&lt;<span class="keyword">class</span> <span class="string">&#x27;Dog&#x27;</span>&gt;</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>Dog().bark()</span><br><span class="line"><span class="string">&#x27;汪汪&#x27;</span></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>Dog.__mro__</span><br><span class="line">(&lt;<span class="keyword">class</span> <span class="string">&#x27;Dog&#x27;</span>&gt;, &lt;<span class="keyword">class</span> <span class="string">&#x27;object&#x27;</span>&gt;)</span><br></pre></td></tr></table></figure>
+<p>等价于 <code>class Dog: sound = &quot;汪&quot;</code> 加一个方法。<strong>元类</strong>则是&quot;类的类&quot;：<code>class Foo(metaclass=Meta)</code> 中，<code>Meta.__new__</code>/<code>__init__</code> 接管&quot;类对象被创建&quot;这件事，拿到三件套（名字、基类、命名空间）后可以为所欲为——扫描命名空间、注册类、改写方法、注入属性。时机上：<strong>元类在 <code>class</code> 语句执行时运行（导入时），实例创建时不再介入</strong>。</p>
+<p><strong>元类自动注册模式</strong>（03 篇类装饰器注册的类级版本；插件框架与 ORM 的共同祖先）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> abc</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">PluginMeta</span>(abc.ABCMeta):            <span class="comment"># 元类：所有 Plugin 子类创建时自动登记</span></span><br><span class="line">    registry: <span class="built_in">dict</span>[<span class="built_in">str</span>, <span class="built_in">type</span>] = &#123;&#125;</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__new__</span>(<span class="params">mcls, name, bases, namespace, **kw</span>):</span><br><span class="line">        cls = <span class="built_in">super</span>().__new__(mcls, name, bases, namespace, **kw)</span><br><span class="line">        <span class="keyword">if</span> bases:                          <span class="comment"># 跳过抽象基类自己</span></span><br><span class="line">            key = namespace.get(<span class="string">&quot;name&quot;</span>, name.lower())</span><br><span class="line">            mcls.registry[key] = cls       <span class="comment"># ★ 副作用：注册（导入即注册，12 篇接续）</span></span><br><span class="line">        <span class="keyword">return</span> cls</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Plugin</span>(abc.ABC, metaclass=PluginMeta):</span><br><span class="line">    name: <span class="built_in">str</span> = <span class="string">&quot;&quot;</span></span><br><span class="line"><span class="meta">    @abc.abstractmethod</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">run</span>(<span class="params">self, payload: <span class="built_in">dict</span></span>) -&gt; <span class="built_in">dict</span>: ...</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">SearchPlugin</span>(<span class="title class_ inherited__">Plugin</span>):</span><br><span class="line">    name = <span class="string">&quot;search&quot;</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">run</span>(<span class="params">self, payload</span>): <span class="keyword">return</span> &#123;<span class="string">&quot;results&quot;</span>: [...]&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">TranslatePlugin</span>(<span class="title class_ inherited__">Plugin</span>):</span><br><span class="line">    name = <span class="string">&quot;translate&quot;</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">run</span>(<span class="params">self, payload</span>): <span class="keyword">return</span> &#123;<span class="string">&quot;text&quot;</span>: <span class="string">&quot;...&quot;</span>&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>PluginMeta.registry</span><br><span class="line">&#123;<span class="string">&#x27;search&#x27;</span>: &lt;<span class="keyword">class</span> <span class="string">&#x27;SearchPlugin&#x27;</span>&gt;, <span class="string">&#x27;translate&#x27;</span>: &lt;<span class="keyword">class</span> <span class="string">&#x27;TranslatePlugin&#x27;</span>&gt;&#125;</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>PluginMeta.registry[<span class="string">&quot;search&quot;</span>]().run(&#123;&#125;)</span><br><span class="line">&#123;<span class="string">&#x27;results&#x27;</span>: [...]&#125;</span><br></pre></td></tr></table></figure>
+<p><strong>ORM 字段注册模式</strong>（SQLAlchemy declarative / 老 pydantic v1 的原理）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Field</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, column_type: <span class="built_in">str</span>, primary_key: <span class="built_in">bool</span> = <span class="literal">False</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>.column_type, <span class="variable language_">self</span>.primary_key = column_type, primary_key</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">ModelMeta</span>(<span class="title class_ inherited__">type</span>):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__new__</span>(<span class="params">mcls, name, bases, namespace</span>):</span><br><span class="line">        <span class="keyword">if</span> bases:                               <span class="comment"># 跳过 Model 基类</span></span><br><span class="line">            columns = &#123;k: v <span class="keyword">for</span> k, v <span class="keyword">in</span> namespace.items() <span class="keyword">if</span> <span class="built_in">isinstance</span>(v, Field)&#125;</span><br><span class="line">            <span class="keyword">if</span> <span class="keyword">not</span> columns:</span><br><span class="line">                <span class="keyword">raise</span> TypeError(<span class="string">f&quot;<span class="subst">&#123;name&#125;</span> 没有定义任何字段&quot;</span>)</span><br><span class="line">            namespace[<span class="string">&quot;_columns&quot;</span>] = columns     <span class="comment"># ★ 收集字段表，顺手注入类属性</span></span><br><span class="line">            namespace[<span class="string">&quot;_table&quot;</span>] = name.lower()  <span class="comment"># ★ 约定：表名 = 类名小写</span></span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">super</span>().__new__(mcls, name, bases, namespace)</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Model</span>(metaclass=ModelMeta):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">save_sql</span>(<span class="params">self</span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">        cols = <span class="string">&quot;, &quot;</span>.join(<span class="variable language_">self</span>._columns)</span><br><span class="line">        <span class="keyword">return</span> <span class="string">f&quot;INSERT INTO <span class="subst">&#123;self._table&#125;</span> (<span class="subst">&#123;cols&#125;</span>) VALUES (<span class="subst">&#123;<span class="string">&#x27;, ?&#x27;</span>*<span class="built_in">len</span>(self._columns)&#125;</span>)&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">User</span>(<span class="title class_ inherited__">Model</span>):</span><br><span class="line">    <span class="built_in">id</span> = Field(<span class="string">&quot;INTEGER&quot;</span>, primary_key=<span class="literal">True</span>)</span><br><span class="line">    name = Field(<span class="string">&quot;TEXT&quot;</span>)</span><br><span class="line">    email = Field(<span class="string">&quot;TEXT&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>User._columns, User._table</span><br><span class="line">(&#123;<span class="string">&#x27;id&#x27;</span>: &lt;Field ...&gt;, <span class="string">&#x27;name&#x27;</span>: &lt;Field ...&gt;, <span class="string">&#x27;email&#x27;</span>: &lt;Field ...&gt;&#125;, <span class="string">&#x27;user&#x27;</span>)</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>User(<span class="number">1</span>, <span class="string">&quot;a&quot;</span>, <span class="string">&quot;b&quot;</span>).save_sql()</span><br><span class="line"><span class="string">&#x27;INSERT INTO user (id, name, email) VALUES (?, ?, ?)&#x27;</span></span><br></pre></td></tr></table></figure>
+<p><code>type</code> 在这里只做了一件事：<strong>在类定义的那一刻</strong>扫描&quot;哪些类属性是 Field 实例&quot;，汇成表并注入 <code>_columns</code>——之后所有实例共享。pydantic v2 的提速秘诀就是把这类&quot;元类期收集&quot;换成编译期生成校验函数（<code>pydantic-core</code>，Rust），但<strong>收集字段、由声明生成行为</strong>的架构骨架与上面 20 行同构。</p>
+<h2 id="5-什么时候不该用经验做法"><a class="markdownIt-Anchor" href="#5-什么时候不该用经验做法"></a> 5. 什么时候不该用（经验做法）</h2>
+<p>元类与 <code>__getattribute__</code> 是 Python 里&quot;最重的锤子&quot;（官方文档 Data Model 原话：“99% of users should never think about this”——绝大多数用户永远不需要考虑元类；Tim Peters 的名言&quot;如果你不确定是否需要元类，你就不需要&quot;）。决策清单：</p>
+<ul>
+<li><strong>能用 <code>__init__</code>/<code>__getattr__</code>/描述符/类装饰器解决的，不要上元类</strong>。03 篇的注册器装饰器能覆盖大部分&quot;自动注册&quot;需求且更可读；<code>__init_subclass__</code>（3.6+，Data Model 文档）是元类最常见用途的<strong>官方平替</strong>——父类里定义，子类创建时收到回调，无需 metaclass 参数：</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Plugin</span>:</span><br><span class="line">    registry: <span class="built_in">dict</span>[<span class="built_in">str</span>, <span class="built_in">type</span>] = &#123;&#125;</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init_subclass__</span>(<span class="params">cls, **kw</span>):       <span class="comment"># ★ 元类的 99% 需求，一行替代</span></span><br><span class="line">        <span class="built_in">super</span>().__init_subclass__(**kw)</span><br><span class="line">        Plugin.registry[<span class="built_in">getattr</span>(cls, <span class="string">&quot;name&quot;</span>, cls.__name__.lower())] = cls</span><br></pre></td></tr></table></figure>
+<ul>
+<li><strong><code>__getattribute__</code> 几乎永远不该手写</strong>——它接管所有属性访问，性能与正确性双杀；<code>__getattr__</code>（失败兜底）能满足的都不该碰它；</li>
+<li><strong>读框架源码是&quot;必须懂&quot;的场景</strong>：pydantic（BaseModel 的元类收集字段）、SQLAlchemy（declarative）、Django ORM（ModelBase）、vLLM 的模型/配置注册（11 篇是模型性能优化系列 Stage 5 的门票）、各类 ABC/Protocol 底层（<code>abc.ABCMeta</code> 就是元类）。<strong>懂 ≠ 写</strong>：读懂它们，自己的代码用轻量替代；</li>
+<li>真需要元类时（类级协议强制、全命名空间扫描、修改类的继承结构），写清注释说明&quot;为什么类装饰器/<code>__init_subclass__</code> 不够&quot;。</li>
+</ul>
+<h2 id="常见陷阱"><a class="markdownIt-Anchor" href="#常见陷阱"></a> 常见陷阱</h2>
+<p><strong>陷阱一：重写 <code>__getattribute__</code> 不调 super</strong>——无限递归（<code>self.attr</code> 在钩子里又触发钩子）；必须 <code>super().__getattribute__(name)</code> 起手，且考虑性能（每次访问都过一遍你的代码）。</p>
+<p><strong>陷阱二：<code>__getattr__</code> 里访问 <code>self.xxx</code> 未定义属性又触发自己</strong>——递归到 <code>RecursionError</code>；内部一律用 <code>object.__getattribute__(self, &quot;_cache&quot;)</code> 或在 <code>__init__</code> 就初始化缓存，并对 <code>&quot;_xxx&quot;</code> 前缀直接抛 AttributeError。</p>
+<p><strong>陷阱三：描述符定义在实例上</strong>——描述符协议只对<strong>类属性</strong>生效（解释器只在类/MRO 上找描述符）；<code>self.field = Typed()</code> 是普通对象，<code>__get__</code> 不会被调。</p>
+<p><strong>陷阱四：元类冲突</strong>——<code>class C(A, B)</code> 而 A、B 的元类不是同一个（且互不为基）→ <code>metaclass conflict</code>；修法是让它们共享一个共同元类（如都基于 <code>abc.ABCMeta</code>）。</p>
+<p><strong>陷阱五：把&quot;需要运行时才知道&quot;的逻辑塞进元类</strong>——元类只在导入时跑一次，它不知道将来的实例；实例级状态用 <code>__init__</code>/描述符，类级静态信息才归元类管。</p>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>属性读取链：<code>__getattribute__</code> 总入口 → data descriptor（类 MRO）→ 实例 <code>__dict__</code> → 非 data descriptor/类属性 → <code>__getattr__</code> 兜底；MRO 是 C3 线性化的继承查找序，<code>super()</code> 是&quot;沿 MRO 下一个&quot;；</li>
+<li>描述符 = 挂在类上接管某属性读写的对象；<code>@property</code>/方法/classmethod 全是描述符；data 优先于实例 dict（校验不可绕），non-data 可被遮蔽（绑定方法的由来）；</li>
+<li>校验描述符（<code>__set_name__</code> + <code>__set__</code>）是声明式校验的内核，pydantic/attrs 字段的骨架；</li>
+<li><code>type(name, bases, ns)</code> 手工建类；元类在 class 语句时接管&quot;类的创建&quot;，用于字段收集与自动注册（ORM/pydantic/vLLM 注册原理）；</li>
+<li>99% 场景用 <code>__init_subclass__</code>/类装饰器替代元类；<code>__getattribute__</code> 慎碰；读懂框架源码是本篇的主要收益。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>手绘 <code>D(B, C)</code>（B、C 均继承 A，各自与 A 都定义 <code>who</code>）的 MRO，用 <code>D.__mro__</code> 验证；再把 D 声明改为 <code>(C, B)</code> 对比，解释 C3 的&quot;声明顺序优先&quot;。</li>
+<li>实现 <code>CachedProperty</code> 描述符：首次访问计算并存入实例（等价 <code>functools.cached_property</code> 的内核）；要求第二次访问<strong>不</strong>再进 <code>__get__</code>（提示：把结果写进 <code>obj.__dict__</code>，并想清楚为什么 non-data 描述符允许这种遮蔽）。</li>
+<li>扩展第 3 节：加 <code>FloatField</code>（含精度）与 <code>ListField</code>（元素类型校验），并让 <code>AgentConfig</code> 支持 <code>__init__</code> 全字段声明式生成（提示：<code>__init_subclass__</code> 扫描 <code>__annotations__</code>）。</li>
+<li>把第 4 节 <code>ModelMeta</code> 的功能用 <code>__init_subclass__</code> 重写一遍，对比两个版本的差异（何时必须元类？给出一句话判据）。</li>
+<li>读 pydantic（或 SQLAlchemy）源码中&quot;收集字段&quot;的那段（pydantic v1 在 <code>ModelMetaclass.__new__</code>，v2 在 <code>_model_construction.py</code>；SQLAlchemy 在 <code>declarative</code> 模块），对照本篇模式指出：字段从哪里扫出来、收集结果存在类的哪个属性、校验发生在什么时候。写 10 行以内的笔记。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/Python/" rel="tag"># Python</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/10-asyncio%E8%BF%9B%E9%98%B6%E4%B8%8E%E5%AE%9E%E6%88%98/" rel="prev" title="10-asyncio进阶与实战">
+                  <i class="fa fa-angle-left"></i> 10-asyncio进阶与实战
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/12-import%E7%B3%BB%E7%BB%9F%E4%B8%8E%E6%A8%A1%E5%9D%97%E5%B7%A5%E7%A8%8B/" rel="next" title="12-import系统与模块工程">
+                  12-import系统与模块工程 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

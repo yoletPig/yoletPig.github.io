@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="1. 建立&#39;不要猜要测&#39;的工作流：cProfile 定位热点、lineprofiler 拆到行、memoryprofiler&#x2F;tracemalloc 看内存； 2. 掌握 timeit 微基准规范：为什么它比手工计时可信、怎么避免常见坑；">
+<meta property="og:type" content="article">
+<meta property="og:title" content="13-性能剖析与优化">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/13-%E6%80%A7%E8%83%BD%E5%89%96%E6%9E%90%E4%B8%8E%E4%BC%98%E5%8C%96/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="1. 建立&#39;不要猜要测&#39;的工作流：cProfile 定位热点、lineprofiler 拆到行、memoryprofiler&#x2F;tracemalloc 看内存； 2. 掌握 timeit 微基准规范：为什么它比手工计时可信、怎么避免常见坑；">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-01T21:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.510Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Python">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/13-%E6%80%A7%E8%83%BD%E5%89%96%E6%9E%90%E4%B8%8E%E4%BC%98%E5%8C%96/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/13-%E6%80%A7%E8%83%BD%E5%89%96%E6%9E%90%E4%B8%8E%E4%BC%98%E5%8C%96/","path":"2026/09/02/13-性能剖析与优化/","title":"13-性能剖析与优化"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>13-性能剖析与优化 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#13-%E6%80%A7%E8%83%BD%E5%89%96%E6%9E%90%E4%B8%8E%E4%BC%98%E5%8C%96"><span class="nav-number">1.</span> <span class="nav-text"> 13 - 性能剖析与优化</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-cprofile%E5%85%88%E6%89%BE%E7%83%AD%E7%82%B9%E5%86%8D%E5%8A%A8%E6%89%8B"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. cProfile：先找热点再动手</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-timeit-%E5%BE%AE%E5%9F%BA%E5%87%86%E8%A7%84%E8%8C%83"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. timeit 微基准规范</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%B8%B8%E8%A7%81%E4%BC%98%E5%8C%96%E6%89%8B%E6%AE%B5%E5%AE%9E%E6%B5%8B%E6%94%B6%E7%9B%8A"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 常见优化手段：实测收益</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-pypy-cython-rust-%E6%89%A9%E5%B1%95%E6%A6%82%E8%A7%88"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. PyPy &#x2F; Cython &#x2F; Rust 扩展概览</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E4%BD%95%E6%97%B6%E4%BC%98%E5%8C%96%E7%BB%8F%E9%AA%8C%E5%81%9A%E6%B3%95"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 何时优化（经验做法）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E9%99%B7%E9%98%B1"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见陷阱</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.9.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/13-%E6%80%A7%E8%83%BD%E5%89%96%E6%9E%90%E4%B8%8E%E4%BC%98%E5%8C%96/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="13-性能剖析与优化 | Yoleen的博客">
+      <meta itemprop="description" content="1. 建立&#39;不要猜要测&#39;的工作流：cProfile 定位热点、lineprofiler 拆到行、memoryprofiler&#x2F;tracemalloc 看内存； 2. 掌握 timeit 微基准规范：为什么它比手工计时可信、怎么避免常见坑；">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          13-性能剖析与优化
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 05:30:00" itemprop="dateCreated datePublished" datetime="2026-09-02T05:30:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Python/" itemprop="url" rel="index"><span itemprop="name">Python</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>11 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">1. 建立'不要猜要测'的工作流：cProfile 定位热点、lineprofiler 拆到行、memoryprofiler/tracemalloc 看内存； 2. 掌握 timeit 微基准规范：为什么它比手工计时可信、怎么避免常见坑；</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="13-性能剖析与优化"><a class="markdownIt-Anchor" href="#13-性能剖析与优化"></a> 13 - 性能剖析与优化</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ol>
+<li>建立&quot;<strong>不要猜要测</strong>&quot;的工作流：cProfile 定位热点、line_profiler 拆到行、memory_profiler/tracemalloc 看内存；</li>
+<li>掌握 <strong>timeit 微基准规范</strong>：为什么它比手工计时可信、怎么避免常见坑；</li>
+<li>用实测数据检验常见优化手段（字符串 join、局部变量缓存、<code>__slots__</code>、生成器）的真实收益；</li>
+<li>了解 PyPy/Cython/Rust 扩展的定位，沉淀&quot;何时优化&quot;的决策纪律。</li>
+</ol>
+<h2 id="1-cprofile先找热点再动手"><a class="markdownIt-Anchor" href="#1-cprofile先找热点再动手"></a> 1. cProfile：先找热点再动手</h2>
+<p><code>cProfile</code>（标准库，确定性剖析器）统计每个函数的调用次数与耗时。工作流三步：跑剖析 → 按 <code>cumtime/tottime</code> 排序看热点 → 只优化头部：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;profile_demo.py：一个有&quot;隐藏热点&quot;的文本处理函数。&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">slow_transform</span>(<span class="params">words: <span class="built_in">list</span>[<span class="built_in">str</span>]</span>) -&gt; <span class="built_in">list</span>[<span class="built_in">str</span>]:</span><br><span class="line">    out = []</span><br><span class="line">    <span class="keyword">for</span> w <span class="keyword">in</span> words:</span><br><span class="line">        out.append(w.strip().lower().replace(<span class="string">&quot;-&quot;</span>, <span class="string">&quot;_&quot;</span>))</span><br><span class="line">    <span class="keyword">return</span> out</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">build_report</span>(<span class="params">n: <span class="built_in">int</span></span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">    words = [<span class="string">f&quot;Word-<span class="subst">&#123;i&#125;</span>&quot;</span> <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n)]</span><br><span class="line">    parts = []</span><br><span class="line">    <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">10</span>):                    <span class="comment"># 外层循环放大热点</span></span><br><span class="line">        parts.extend(slow_transform(words))</span><br><span class="line">    <span class="keyword">return</span> <span class="string">&quot; &quot;</span>.join(parts)                 <span class="comment"># ★ 反例伏笔：第 3 节改为 += 拼接看差异</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    <span class="keyword">import</span> cProfile, pstats, io</span><br><span class="line">    pr = cProfile.Profile()</span><br><span class="line">    pr.enable()</span><br><span class="line">    build_report(<span class="number">200_000</span>)</span><br><span class="line">    pr.disable()</span><br><span class="line">    buf = io.StringIO()</span><br><span class="line">    ps = pstats.Stats(pr, stream=buf).sort_stats(<span class="string">&quot;cumulative&quot;</span>)   <span class="comment"># 按累计耗时排序</span></span><br><span class="line">    ps.print_stats(<span class="number">8</span>)                                            <span class="comment"># 只看前 8 行</span></span><br><span class="line">    <span class="built_in">print</span>(buf.getvalue())</span><br></pre></td></tr></table></figure>
+<p>输出节选（数字因机器而异，比例关系稳定）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">       Ordered by: cumulative time</span><br><span class="line"> ncalls  tottime  percall  cumtime  percall filename:lineno(function)</span><br><span class="line">      1    0.031    0.031    2.855    2.855 profile_demo.py:12(build_report)</span><br><span class="line">2000000    1.913    0.000    2.517    0.000 profile_demo.py:5(slow_transform)</span><br><span class="line">6000000    0.604    0.000    0.604    0.000 &#123;built-in method builtins.isinstance&#125;</span><br><span class="line">...</span><br></pre></td></tr></table></figure>
+<p>读法（《Fluent Python》第 21 章同款工作流）：</p>
+<ul>
+<li><strong>tottime</strong>：函数自身耗时（不含子调用）——找&quot;哪段代码本身慢&quot;；</li>
+<li><strong>cumtime</strong>：含所有子调用——找&quot;哪条调用链慢&quot;；</li>
+<li><strong>ncalls</strong> 惊人的行（如上面的 200 万次）通常是算法层 bug：该缓存没缓存、该合并没合并。</li>
+</ul>
+<p><strong>经验做法</strong>：剖析要在<strong>接近生产的输入规模</strong>下跑（小输入的热点分布会骗人）；cProfile 本身有开销（每函数调用都记录），它回答&quot;谁最慢&quot;，不回答&quot;到底多快&quot;——后者交给 timeit（第 2 节）。命令行更省事：<code>python -m cProfile -s cumulative script.py</code>；只想要一行结论可用 <code>time -p</code> 配合（不剖析、纯墙钟）。</p>
+<p>热点定位到<strong>具体某一行</strong>用 line_profiler（第三方，<code>uv add --dev line_profiler</code>）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># @profile 装饰目标函数后：kernprof -l -v profile_demo.py</span></span><br><span class="line">Line <span class="comment">#      Hits         Time  Per Hit   % Time  Line Contents</span></span><br><span class="line">     <span class="number">5</span>                                           <span class="keyword">def</span> <span class="title function_">slow_transform</span>(<span class="params">words</span>):</span><br><span class="line">     <span class="number">6</span>         <span class="number">1</span>         <span class="number">42.0</span>     <span class="number">42.0</span>      <span class="number">0.1</span>      out = []</span><br><span class="line">     <span class="number">7</span>   <span class="number">2000000</span>    <span class="number">1204431.0</span>      <span class="number">0.6</span>     <span class="number">71.2</span>      <span class="keyword">for</span> w <span class="keyword">in</span> words:</span><br><span class="line">     <span class="number">8</span>   <span class="number">2000000</span>     <span class="number">484110.0</span>      <span class="number">0.2</span>     <span class="number">28.7</span>          out.append(w.strip().lower().replace(<span class="string">&quot;-&quot;</span>, <span class="string">&quot;_&quot;</span>))</span><br></pre></td></tr></table></figure>
+<p>71% 的时间在 for 循环本身——提示<strong>用向量化/批量操作替代逐元素 Python 循环</strong>（推导式、<code>str.translate</code>、pandas/numpy）。</p>
+<h2 id="2-timeit-微基准规范"><a class="markdownIt-Anchor" href="#2-timeit-微基准规范"></a> 2. timeit 微基准规范</h2>
+<p>手工 <code>time.time()</code> 计时的坑：单次运行受系统抖动影响、没有考虑&quot;第一次运行有冷启动&quot;、精确度不足。<code>timeit</code>（标准库）的规范做法：<strong>多次重复取最优 + 关闭 GC + 自动选择循环次数</strong>（官方文档 timeit 模块）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">import</span> timeit</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>timeit.timeit(<span class="string">&quot;&#x27;-&#x27;.join(str(n) for n in range(100))&quot;</span>, number=<span class="number">10000</span>)</span><br><span class="line"><span class="number">0.1352</span>...</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>timeit.timeit(<span class="string">&quot;&#x27;-&#x27;.join(map(str, range(100)))&quot;</span>, number=<span class="number">10000</span>)</span><br><span class="line"><span class="number">0.0961</span>...                      <span class="comment"># map 版更快（循环在 C 层）</span></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>timeit.repeat(..., repeat=<span class="number">5</span>, number=<span class="number">10000</span>)   <span class="comment"># 重复 5 轮，取最小值（min 才代表真实能力）</span></span><br></pre></td></tr></table></figure>
+<p>规范四条（经验做法）：</p>
+<ol>
+<li><strong>测&quot;微操作&quot;</strong>（一个函数、一个表达式），别测整个程序——timeit 回答&quot;这个改法快不快&quot;，cProfile 回答&quot;该不该改&quot;；</li>
+<li><strong>取 repeat 的最小值</strong>而不是平均值——最小值受系统干扰最小，最接近代码真实速度；</li>
+<li><strong>警惕常量折叠与作用域差异</strong>：<code>timeit</code> 默认在隔离命名空间执行，<code>setup</code> 参数负责准备数据；函数里的全局变量访问比局部慢（第 3 节实测），timeit 语句与真实代码的上下文要一致；</li>
+<li><strong>验证差异显著性</strong>：差异 &lt; 5% 的&quot;优化&quot;大概率是噪声，不值得改代码。</li>
+</ol>
+<p>内存视角用标准库 <code>tracemalloc</code>（0 篇 01 章埋的种子）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> tracemalloc</span><br><span class="line">tracemalloc.start()</span><br><span class="line">data = [x * x <span class="keyword">for</span> x <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">10_000_000</span>)]</span><br><span class="line">current, peak = tracemalloc.get_traced_memory()</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;峰值 <span class="subst">&#123;peak / <span class="number">1e6</span>:<span class="number">.0</span>f&#125;</span> MB&quot;</span>)            <span class="comment"># 约 400+ MB（int 对象+列表）</span></span><br><span class="line">tracemalloc.stop()</span><br></pre></td></tr></table></figure>
+<h2 id="3-常见优化手段实测收益"><a class="markdownIt-Anchor" href="#3-常见优化手段实测收益"></a> 3. 常见优化手段：实测收益</h2>
+<p>下面每个手段都给出<strong>可运行的对照实验</strong>——数字是你自己机器上的判决，不是我的结论。</p>
+<p><strong>手段一：字符串拼接用 join，不用 +=</strong>。<code>+=</code> 每次都可能创建新字符串对象（str 不可变，01 篇），O(n²) 风险；<code>join</code> 一次分配：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> timeit</span><br><span class="line">setup = <span class="string">&quot;parts = [&#x27;word-%d&#x27; % i for i in range(10_000)]&quot;</span></span><br><span class="line">t1 = timeit.timeit(<span class="string">&#x27;s = &quot;&quot;;  \nfor p in parts: s += p&#x27;</span>, setup, number=<span class="number">100</span>)</span><br><span class="line">t2 = timeit.timeit(<span class="string">&#x27;s = &quot;&quot;.join(parts)&#x27;</span>, setup, number=<span class="number">100</span>)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;+= 拼接: <span class="subst">&#123;t1:<span class="number">.3</span>f&#125;</span>s   join: <span class="subst">&#123;t2:<span class="number">.3</span>f&#125;</span>s&quot;</span>)</span><br><span class="line"><span class="comment"># 典型：+= 1.9s   join 0.02s —— 两个数量级，注意 CPython 对 += 有优化，仍不可靠（列表+join 才稳）</span></span><br></pre></td></tr></table></figure>
+<p><strong>手段二：局部变量缓存全局/属性查找</strong>。全局查找走字典（01 篇 LEGB），属性查找走 MRO——循环体内把它们绑成局部变量：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> timeit</span><br><span class="line">setup = <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">values = list(range(10_000))</span></span><br><span class="line"><span class="string">out = []</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line">t1 = timeit.timeit(<span class="string">&quot;for v in values: out.append(v)&quot;</span>, setup, number=<span class="number">100</span>)</span><br><span class="line">t2 = timeit.timeit(<span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">append = out.append                 # 方法查找提出来（绑定方法）</span></span><br><span class="line"><span class="string">for v in values: append(v)</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span>, setup, number=<span class="number">100</span>)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;属性查找: <span class="subst">&#123;t1:<span class="number">.3</span>f&#125;</span>s   局部缓存: <span class="subst">&#123;t2:<span class="number">.3</span>f&#125;</span>s&quot;</span>)</span><br><span class="line"><span class="comment"># 典型：0.42s vs 0.33s —— ~20% 收益；代价是可读性，热点确认后才值得</span></span><br></pre></td></tr></table></figure>
+<p><strong>手段三：<code>__slots__</code> 省内存提速实例创建</strong>。默认实例属性存 <code>__dict__</code>（01 篇），<code>__slots__</code> 用固定槽位替代——内存省、创建快，但<strong>不能再动态加属性</strong>（06 篇 dataclass 的 <code>slots=True</code> 即此机制，3.10+）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> tracemalloc, time</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">PointDict</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, x, y</span>): <span class="variable language_">self</span>.x, <span class="variable language_">self</span>.y = x, y</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">PointSlots</span>:</span><br><span class="line">    __slots__ = (<span class="string">&quot;x&quot;</span>, <span class="string">&quot;y&quot;</span>)</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, x, y</span>): <span class="variable language_">self</span>.x, <span class="variable language_">self</span>.y = x, y</span><br><span class="line"></span><br><span class="line">tracemalloc.start()</span><br><span class="line">pts = [PointDict(i, i) <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">1_000_000</span>)]</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;dict 实例 峰值: <span class="subst">&#123;tracemalloc.get_traced_memory()[<span class="number">1</span>]/<span class="number">1e6</span>:<span class="number">.0</span>f&#125;</span> MB&quot;</span>)   <span class="comment"># 典型 ~160MB</span></span><br><span class="line">tracemalloc.stop(); tracemalloc.start()</span><br><span class="line">pts = [PointSlots(i, i) <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">1_000_000</span>)]</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;slots 实例 峰值: <span class="subst">&#123;tracemalloc.get_traced_memory()[<span class="number">1</span>]/<span class="number">1e6</span>:<span class="number">.0</span>f&#125;</span> MB&quot;</span>)  <span class="comment"># 典型 ~76MB</span></span><br><span class="line"><span class="comment"># 经验做法：百万级小对象（图节点、token、消息体）值得 slots；业务对象不必</span></span><br></pre></td></tr></table></figure>
+<p><strong>手段四：生成器替代中间列表</strong>（04 篇实测的回归测试）：一次性流水线（读→过滤→聚合）内存 O(1)；需要多次遍历/随机访问才物化。</p>
+<p><strong>手段五：换对数据结构</strong>（收益常排第一）：<code>set</code>/<code>dict</code> 成员判断 O(1) vs <code>list</code> O(n)；<code>collections.deque</code> 两端操作 O(1) vs <code>list.pop(0)</code> O(n)；<code>functools.lru_cache</code> 消灭重复计算：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> timeit</span><br><span class="line">setup = <span class="string">&quot;data = list(range(100_000)); s = set(data)&quot;</span></span><br><span class="line"><span class="built_in">print</span>(timeit.timeit(<span class="string">&quot;99_999 in data&quot;</span>, setup, number=<span class="number">100</span>))   <span class="comment"># list: 每次都扫</span></span><br><span class="line"><span class="built_in">print</span>(timeit.timeit(<span class="string">&quot;99_999 in s&quot;</span>,    setup, number=<span class="number">100</span>))   <span class="comment"># set: 恒定哈希查找</span></span><br><span class="line"><span class="comment"># 典型：list 0.9s vs set 0.000003s —— 判断&quot;在不在&quot;永远先想 set/dict</span></span><br></pre></td></tr></table></figure>
+<h2 id="4-pypy-cython-rust-扩展概览"><a class="markdownIt-Anchor" href="#4-pypy-cython-rust-扩展概览"></a> 4. PyPy / Cython / Rust 扩展概览</h2>
+<p>纯 Python 优化到头（热点确认、算法正确、数据结构合适）仍不够时，三条升级路线：</p>
+<table>
+<thead>
+<tr>
+<th>路线</th>
+<th>是什么</th>
+<th>何时考虑</th>
+<th>代价</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>PyPy</strong></td>
+<td>替代解释器（JIT 编译）</td>
+<td>纯 Python 长跑 CPU 任务，懒得改代码</td>
+<td>启动慢、部分 C 扩展兼容问题、GIL 仍在</td>
+</tr>
+<tr>
+<td><strong>Cython</strong></td>
+<td>Python 超集编译为 C，可加静态类型</td>
+<td>数值循环、已有 C 库胶水</td>
+<td>需要构建链、代码侵入</td>
+</tr>
+<tr>
+<td><strong>Rust 扩展</strong>（pyo3/maturin，pydantic-core/vLLM 部分内核即此路线）</td>
+<td>原生扩展，释放 GIL 并行</td>
+<td>热点模块重写、追求极致</td>
+<td>开发成本最高，需 Rust 工具链</td>
+</tr>
+</tbody>
+</table>
+<p>判据链条（07 篇决策树的性能分支）：<strong>cProfile 确认热点在 Python 字节码 → 算法/数据结构无解 → numpy 等向量化库能否覆盖 → 不行再 Cython/Rust</strong>。注意&quot;热点在 C 层&quot;时（numpy 大矩阵）三者都帮不上忙，问题变成并行化（07 篇）。</p>
+<p><strong>经验做法</strong>：给优化加&quot;护栏&quot;——优化前先建立<strong>基准测试</strong>（pytest-benchmark 或 timeit 脚本入库），改完跑对比；<strong>优化只改热点，不顺手重构</strong>（否则 benchmark 报告说不清哪来的收益）；收益 &lt; 10% 且代码变难读的优化直接放弃。</p>
+<h2 id="5-何时优化经验做法"><a class="markdownIt-Anchor" href="#5-何时优化经验做法"></a> 5. 何时优化（经验做法）</h2>
+<p>优化纪律三条（Donald Knuth 的 “premature optimization is the root of all evil” 是行业共识，但常被误读——完整的观点是&quot;<strong>在关键路径上</strong>过早优化是万恶之源&quot;，不是&quot;永远不优化&quot;）：</p>
+<ol>
+<li><strong>先对，再快</strong>：正确性测试通过之前谈性能是负资产；剖析驱动的优化发生在&quot;功能稳定后、发布前&quot;；</li>
+<li><strong>度量优先</strong>：没有 cProfile/基准数据支持的&quot;我觉得这里慢&quot;一律不成立（本篇第一句话的执行版）；</li>
+<li><strong>热点集中度检查</strong>：80/20 规律——多数程序 80% 时间花在 20% 代码上，优化前 3 个热点函数通常就到顶了；改完重新剖析，<strong>验证收益</strong>，没有收益就回滚。</li>
+</ol>
+<p><strong>反面清单</strong>：为 1000 次调用的函数做 slots；把清晰代码改成一行推导式只为省 2%；在没测过 IO 占比的服务里并行化 CPU 段（07 篇）；用 <code>+=</code> 拼 10 个字符串的&quot;优化&quot;（可读性损失换不来可测收益）。<strong>正面模板</strong>：上线前跑一次 <code>python -m cProfile -s cumulative</code> → 头部三个函数逐一确认&quot;能缓存吗？能批量吗？能换结构吗？&quot; → 每项改动配基准数据进 PR。</p>
+<h2 id="常见陷阱"><a class="markdownIt-Anchor" href="#常见陷阱"></a> 常见陷阱</h2>
+<p><strong>陷阱一：用 cProfile 的数字当最终耗时</strong>——剖析器自身开销让绝对值失真；配对用法：cProfile 找热点 + timeit 出可信数字。</p>
+<p><strong>陷阱二：timeit 的语句与真实代码上下文不一致</strong>——测的是全局变量访问、真实路径是局部变量（反之亦然），结论失真；<code>setup</code> 尽量模拟真实上下文。</p>
+<p><strong>陷阱三：微基准结论直接外推</strong>——<code>join</code> 在&quot;字符串数多、单个短&quot;时优势最大，10 个长字符串 <code>+=</code> 无所谓；任何优化的适用范围跟着实验条件走，写进注释。</p>
+<p><strong>陷阱四：<code>__slots__</code> 破坏动态性而不自知</strong>——加了 slots 的类不能随便加属性、与某些序列化/依赖注入库冲突（它们靠 <code>__dict__</code>）；给第三方可能继承你的类的<strong>公共基类</strong>加 slots 前想清楚。</p>
+<p><strong>陷阱五：优化了非热点</strong>——把 2% 的函数快了 3 倍，整体没变化；每次优化前重看 cProfile 头部，确认这个函数的 cumtime 占比值得动手。</p>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>工作流：<strong>cProfile 找热点（cumtime/tottime/ncalls 三看）→ line_profiler 拆到行 → timeit 验证改法 → tracemalloc 看内存</strong>；</li>
+<li>timeit 规范：微操作、repeat 取 min、setup 模拟真实上下文、差异 &lt;5% 视为噪声；</li>
+<li>实测收益榜：set/dict 成员判断（数量级）&gt; join 拼接（数量级）&gt; slots 内存（~50%）&gt; 局部变量缓存（~20%）&gt; 生成器省内存（O(n)→O(1)）；</li>
+<li>升级路线：PyPy（不改码）→ Cython（数值循环）→ Rust 扩展（极致热点，pydantic-core/vLLM 路线）；前提都是&quot;热点在 Python 字节码&quot;；</li>
+<li>纪律：先对再快、度量优先、只改热点、每次优化配基准数据——没有数据的&quot;优化&quot;是风险不是收益。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>对本篇 profile_demo.py：先用 cProfile 找热点，再把 <code>build_report</code> 的结果拼接改为生成器 + join（04 篇）与 <code>str.translate</code> 批处理（替代逐字符 replace），用 timeit 给出改动前后的可信数字（repeat=5 取 min）。</li>
+<li>写基准脚本对比 <code>deque.appendleft</code> 与 <code>list.insert(0, x)</code> 插入 100_000 个元素；把&quot;什么规模下差异显著&quot;的结论写进注释（提示：deque O(1) vs list O(n)）。</li>
+<li>用 tracemalloc 对比&quot;列表推导收集 1 千万行日志 + 过滤&quot;与&quot;生成器管道过滤&quot;的峰值内存；再故意加一个 <code>list(...)</code> 物化看峰值回升，解释原因（04 篇）。</li>
+<li>给 06 篇的 <code>Message</code> dataclass 加 <code>slots=True</code> 与不加各创建 100 万个实例，用 tracemalloc 与 timeit 对比内存与创建耗时；写 3 行结论说明什么规模值得开 slots。</li>
+<li>（综合题）拿到一个&quot;处理 1GB CSV 统计每列均值&quot;的慢脚本：写出完整优化路线图——先剖析（贴你预期的 cProfile 头部形状）、列出 3 个候选优化（按预期收益排序）、说明每个的验证方法；最后说明什么情况下应直接换 pandas/numpy 而不是优化纯 Python 循环。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/Python/" rel="tag"># Python</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/12-import%E7%B3%BB%E7%BB%9F%E4%B8%8E%E6%A8%A1%E5%9D%97%E5%B7%A5%E7%A8%8B/" rel="prev" title="12-import系统与模块工程">
+                  <i class="fa fa-angle-left"></i> 12-import系统与模块工程
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/14-%E5%B8%B8%E8%A7%81%E9%99%B7%E9%98%B1%E4%B8%8E%E4%BB%A3%E7%A0%81%E8%A7%84%E8%8C%83/" rel="next" title="14-常见陷阱与代码规范">
+                  14-常见陷阱与代码规范 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

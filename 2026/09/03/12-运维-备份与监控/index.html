@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 会做容量规划：行大小估算到磁盘&#x2F;内存&#x2F;备份的换算。 - 配好慢查询日志与例行巡检，让问题在用户投诉前被发现。 - 建立监控指标分层（连接&#x2F;命中率&#x2F;延迟&#x2F;磁盘），知道每层指标异常说明什么。 - 跑通备份恢复演练（sqlite&#x2F;postgr…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="12-运维-备份与监控">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/12-%E8%BF%90%E7%BB%B4-%E5%A4%87%E4%BB%BD%E4%B8%8E%E7%9B%91%E6%8E%A7/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 会做容量规划：行大小估算到磁盘&#x2F;内存&#x2F;备份的换算。 - 配好慢查询日志与例行巡检，让问题在用户投诉前被发现。 - 建立监控指标分层（连接&#x2F;命中率&#x2F;延迟&#x2F;磁盘），知道每层指标异常说明什么。 - 跑通备份恢复演练（sqlite&#x2F;postgr…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T15:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.558Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Redis">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="数据库">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/12-%E8%BF%90%E7%BB%B4-%E5%A4%87%E4%BB%BD%E4%B8%8E%E7%9B%91%E6%8E%A7/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/12-%E8%BF%90%E7%BB%B4-%E5%A4%87%E4%BB%BD%E4%B8%8E%E7%9B%91%E6%8E%A7/","path":"2026/09/03/12-运维-备份与监控/","title":"12-运维-备份与监控"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>12-运维-备份与监控 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#12-%E8%BF%90%E7%BB%B4-%E5%A4%87%E4%BB%BD%E4%B8%8E%E7%9B%91%E6%8E%A7"><span class="nav-number">1.</span> <span class="nav-text"> 12 - 运维-备份与监控</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%AE%B9%E9%87%8F%E8%A7%84%E5%88%92%E4%B8%80%E5%BC%A0%E8%A1%A8%E5%88%B0%E5%BA%95%E5%8D%A0%E5%A4%9A%E5%B0%91%E7%A3%81%E7%9B%98"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 容量规划：一张表到底占多少磁盘</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E6%85%A2%E6%9F%A5%E8%AF%A2%E6%97%A5%E5%BF%97%E4%B8%8E%E4%BE%8B%E8%A1%8C%E5%B7%A1%E6%A3%80"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 慢查询日志与例行巡检</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E7%9B%91%E6%8E%A7%E6%8C%87%E6%A0%87%E5%88%86%E5%B1%82%E6%AF%8F%E5%B1%82%E5%BC%82%E5%B8%B8%E8%AF%B4%E6%98%8E%E4%BB%80%E4%B9%88"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 监控指标分层：每层异常说明什么</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%A4%87%E4%BB%BD%E6%81%A2%E5%A4%8D%E6%BC%94%E7%BB%83%E5%85%89%E5%A4%87%E4%BB%BD%E4%B8%8D%E6%81%A2%E5%A4%8D-%E6%B2%A1%E5%A4%87%E4%BB%BD"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 备份恢复演练：光备份不恢复 &#x3D; 没备份</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E8%BF%81%E7%A7%BB%E6%B5%81%E7%A8%8B%E5%8F%8C%E5%86%99%E4%B8%8E%E5%BD%B1%E5%AD%90%E8%A1%A8"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 迁移流程：双写与影子表</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E9%9D%A2%E8%AF%95%E9%AB%98%E9%A2%91%E9%97%AE%E9%A2%98%E6%B8%85%E5%8D%9525-%E9%A2%98%E5%B8%A6%E8%A6%81%E7%82%B9"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 面试高频问题清单（25 题带要点）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/12-%E8%BF%90%E7%BB%B4-%E5%A4%87%E4%BB%BD%E4%B8%8E%E7%9B%91%E6%8E%A7/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="12-运维-备份与监控 | Yoleen的博客">
+      <meta itemprop="description" content="- 会做容量规划：行大小估算到磁盘&#x2F;内存&#x2F;备份的换算。 - 配好慢查询日志与例行巡检，让问题在用户投诉前被发现。 - 建立监控指标分层（连接&#x2F;命中率&#x2F;延迟&#x2F;磁盘），知道每层指标异常说明什么。 - 跑通备份恢复演练（sqlite&#x2F;postgr…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          12-运维-备份与监控
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 23:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T23:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/" itemprop="url" rel="index"><span itemprop="name">数据库</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.7k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>13 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 会做容量规划：行大小估算到磁盘/内存/备份的换算。 - 配好慢查询日志与例行巡检，让问题在用户投诉前被发现。 - 建立监控指标分层（连接/命中率/延迟/磁盘），知道每层指标异常说明什么。 - 跑通备份恢复演练（sqlite/postgr…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="12-运维-备份与监控"><a class="markdownIt-Anchor" href="#12-运维-备份与监控"></a> 12 - 运维-备份与监控</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>会做容量规划：行大小估算到磁盘/内存/备份的换算。</li>
+<li>配好慢查询日志与例行巡检，让问题在用户投诉前被发现。</li>
+<li>建立监控指标分层（连接/命中率/延迟/磁盘），知道每层指标异常说明什么。</li>
+<li>跑通备份恢复演练（sqlite/postgres 实测&quot;备份→删库→恢复&quot;），掌握双写/影子表迁移流程，最后以 25 道面试高频题收束全系列。</li>
+</ul>
+<h2 id="1-容量规划一张表到底占多少磁盘"><a class="markdownIt-Anchor" href="#1-容量规划一张表到底占多少磁盘"></a> 1. 容量规划：一张表到底占多少磁盘</h2>
+<p>容量规划的起点是<strong>行大小估算</strong>——不是拍脑袋&quot;数据不大&quot;，而是算出数字（数字才能外推到备份窗口、内存配比）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">单行大小 ≈ Σ各列字节数 + 行头开销</span><br><span class="line">  数值: INT 4B, BIGINT 8B, NUMERIC(12,4) ~8-12B, TIMESTAMP 8B</span><br><span class="line">  文本: TEXT = 实际字节(UTF8 中文 ~3B/字) + 1B 长度前缀</span><br><span class="line">  PG 行头: ~23B 对齐到 24B + NULL 位图; SQLite: 每列 1-2B 变长头</span><br><span class="line"></span><br><span class="line">例: kline_1min(symbol TEXT 9B, ts 8B, 5×NUMERIC ~50B)</span><br><span class="line">   ≈ 9+8+50 + 24(行头) + 12(索引条目×1.2) ≈ 100B/行</span><br><span class="line">年数据: A股 5000 只 × 240 日 × 240 bar ≈ 2.9 亿行 ≈ 29 GB(表) + ~15 GB(主键索引)</span><br></pre></td></tr></table></figure>
+<p>外推三件套（经验做法）：</p>
+<ol>
+<li><strong>磁盘</strong>：表+索引+WAL（峰值写入 × 保窗时长）+ 临时空间（排序/hash 落盘）+ compaction 余量（LSM 引擎留 30-50%，06 章）。<strong>水位 70% 报警</strong>——文件系统在 90% 以上性能骤降且迁移无余地。</li>
+<li><strong>内存</strong>：shared_buffers（PG 惯例 25% 系统内存）+ 工作内存（sort/hash，每连接每操作）+ OS 页缓存（剩余大头，05 章 BUFFERS 命中率的来源）。</li>
+<li><strong>备份体积与窗口</strong>：全量 ≈ 数据体积 × 压缩比（PG dump -Fc 约 3-5x）；增量 = WAL 速率。<strong>备份窗口必须小于业务低峰时长</strong>，否则备份任务跨峰抢 IO。</li>
+</ol>
+<p>验证手段：建 100 万行样例表后 <code>pg_total_relation_size('表名')</code> 实测再线性外推——估算与实测偏差 &gt;20% 时说明行宽假设错了（通常是 TEXT 列没算够）。</p>
+<h2 id="2-慢查询日志与例行巡检"><a class="markdownIt-Anchor" href="#2-慢查询日志与例行巡检"></a> 2. 慢查询日志与例行巡检</h2>
+<p><strong>慢查询日志是第 05 章&quot;定位&quot;步的常开开关</strong>：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># PostgreSQL: postgresql.conf</span></span><br><span class="line">log_min_duration_statement = 500        <span class="comment"># 超500ms的语句入日志</span></span><br><span class="line">log_lock_waits = on                     <span class="comment"># 锁等待入日志</span></span><br><span class="line"><span class="comment"># MySQL: slow_query_log=ON; long_query_time=0.5; log_queries_not_using_indexes=ON(谨慎,噪声大)</span></span><br></pre></td></tr></table></figure>
+<p>例行巡检清单（经验做法：每天自动化跑，输出一屏，异常才细看）：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- PG 例行五连(逐条解释器: 看什么/阈值/异常说明什么)</span></span><br><span class="line"><span class="keyword">SELECT</span> <span class="built_in">count</span>(<span class="operator">*</span>) <span class="keyword">FILTER</span> (<span class="keyword">WHERE</span> state<span class="operator">=</span><span class="string">&#x27;idle in transaction&#x27;</span>) <span class="keyword">FROM</span> pg_stat_activity;</span><br><span class="line"><span class="comment">-- &gt;0 且持续: 长事务冻结 vacuum(04 章) → 找到 pid 杀掉并修应用</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">SELECT</span> relname, n_live_tup, n_dead_tup,</span><br><span class="line">       round(n_dead_tup<span class="operator">*</span><span class="number">100.0</span><span class="operator">/</span><span class="built_in">NULLIF</span>(n_live_tup<span class="operator">+</span>n_dead_tup,<span class="number">0</span>),<span class="number">1</span>) <span class="keyword">AS</span> dead_pct</span><br><span class="line"><span class="keyword">FROM</span> pg_stat_user_tables <span class="keyword">ORDER</span> <span class="keyword">BY</span> dead_pct <span class="keyword">DESC</span> LIMIT <span class="number">5</span>;</span><br><span class="line"><span class="comment">-- dead_pct &gt; 20%: 表膨胀, 检查 autovacuum 是否被长事务卡住</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">SELECT</span> total_exec_time, calls, query <span class="keyword">FROM</span> pg_stat_statements <span class="keyword">ORDER</span> <span class="keyword">BY</span> total_exec_time <span class="keyword">DESC</span> LIMIT <span class="number">5</span>;</span><br><span class="line"><span class="comment">-- TOP SQL 是否都是认识的? 冒出来的陌生大查询 = 事故前兆</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">SELECT</span> <span class="built_in">count</span>(<span class="operator">*</span>) <span class="keyword">FROM</span> pg_stat_activity <span class="keyword">WHERE</span> wait_event_type<span class="operator">=</span><span class="string">&#x27;Lock&#x27;</span>;</span><br><span class="line"><span class="comment">-- 锁等待队列 &gt;0: 查 pg_locks 找持锁者(DDL? 长事务?)</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">SELECT</span> pg_size_pretty(pg_database_size(current_database()));</span><br><span class="line"><span class="comment">-- 库体积趋势: 周环比暴涨 → 找失控表(往往是日志/事件表忘了分区滚动)</span></span><br></pre></td></tr></table></figure>
+<p>SQLite 的巡检极简版：<code>PRAGMA integrity_check;</code>（文件完整性）、<code>PRAGMA wal_checkpoint(PASSIVE);</code>（WAL 大小）、<code>PRAGMA optimize;</code>（顺手刷统计）——个人项目每周跑一次脚本即可（经验做法）。</p>
+<h2 id="3-监控指标分层每层异常说明什么"><a class="markdownIt-Anchor" href="#3-监控指标分层每层异常说明什么"></a> 3. 监控指标分层：每层异常说明什么</h2>
+<p>监控不是指标越多越好，而是<strong>分层定位</strong>（四层金字塔，从外到内）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">L4 业务层:   核心接口成功率/P99延迟              ← 用户视角, 报警最先响</span><br><span class="line">L3 应用层:   连接池等待数/获取连接耗时            ← 应用侧池(07章)排队=池太小或库慢</span><br><span class="line">L2 数据库层: 活跃连接数/长事务数/锁等待/缓存命中率/</span><br><span class="line">             主从复制延迟(repl lag 秒)            ← 数据库健康</span><br><span class="line">L1 资源层:   CPU/内存/磁盘空间/磁盘IO利用率       ← 兜底, 涨到边界前要扩容</span><br></pre></td></tr></table></figure>
+<p>逐层速查表（每行都是&quot;指标异常 → 第一嫌疑人&quot;的映射）：</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>健康区间（经验值）</th>
+<th>异常的第一嫌疑人</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>活跃连接数</td>
+<td>&lt; max_connections×70%</td>
+<td>连接池泄漏（应用忘还）；慢查询堆积</td>
+</tr>
+<tr>
+<td>缓存命中率（缓冲池）</td>
+<td>&gt; 95%</td>
+<td>突然下跌：新查询形态/大范围扫描/内存被挤</td>
+</tr>
+<tr>
+<td>主从延迟</td>
+<td>&lt; 秒级</td>
+<td>从库单线程回放追不上：大事务/DDL；网络</td>
+</tr>
+<tr>
+<td>磁盘 IO util</td>
+<td>&lt; 80%</td>
+<td>全表扫描潮（05 章）；compaction 风暴（06 章）</td>
+</tr>
+<tr>
+<td>死元组比例</td>
+<td>&lt; 20%</td>
+<td>长事务；autovacuum 调度不足</td>
+</tr>
+<tr>
+<td>WAL 产生速率</td>
+<td>平稳</td>
+<td>突增：批量任务未分批/未合并提交</td>
+</tr>
+</tbody>
+</table>
+<p>报警设计原则（经验做法）：<strong>L4 直接呼人（P0），L2/L3 工单处理（P1/P2），L1 趋势周报</strong>；每个报警必须带&quot;下一步看什么&quot;的 runbook 链接——没有处置动作的报警只是噪音发生器。</p>
+<h2 id="4-备份恢复演练光备份不恢复-没备份"><a class="markdownIt-Anchor" href="#4-备份恢复演练光备份不恢复-没备份"></a> 4. 备份恢复演练：光备份不恢复 = 没备份</h2>
+<p>原则先行（本系列重复三次的守则）：<strong>备份的可靠性由恢复演练定义</strong>。演练脚本化、定期跑、结果留档。</p>
+<p>SQLite 恢复演练（最简形态，30 秒跑完）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ① 备份(在线安全备份: 用 .backup 命令而非 cp, 避免拷到写一半的状态)</span></span><br><span class="line">sqlite3 /tmp/app.db <span class="string">&quot;.backup /tmp/app_backup.db&quot;</span></span><br><span class="line"><span class="comment"># ② 灾难: 主库损坏(模拟误删)</span></span><br><span class="line"><span class="built_in">mv</span> /tmp/app.db /tmp/app.db.broken</span><br><span class="line"><span class="comment"># ③ 恢复 + 验证(行数对账)</span></span><br><span class="line"><span class="built_in">cp</span> /tmp/app_backup.db /tmp/app.db</span><br><span class="line">sqlite3 /tmp/app.db <span class="string">&quot;PRAGMA integrity_check; SELECT count(*) FROM users;&quot;</span></span><br><span class="line"><span class="comment"># 输出: ok | 100  ← 演练通过的标准输出</span></span><br></pre></td></tr></table></figure>
+<p>PostgreSQL 恢复演练（逻辑备份路径，配合 07 章 pg_dump）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ① 全量备份</span></span><br><span class="line">pg_dump <span class="string">&quot;postgresql://yyl@localhost/dev&quot;</span> -Fc -f /backup/dev_$(<span class="built_in">date</span> +%F).dump</span><br><span class="line"><span class="comment"># ② 灾难模拟: 删表</span></span><br><span class="line">psql -c <span class="string">&quot;DROP TABLE kline_1min&quot;</span></span><br><span class="line"><span class="comment"># ③ 恢复到临时库对账(不直接覆盖生产, 先验证再切换)</span></span><br><span class="line">createdb dev_restore &amp;&amp; pg_restore -d dev_restore /backup/dev_*.dump</span><br><span class="line">psql -d dev_restore -c <span class="string">&quot;SELECT count(*) FROM kline_1min&quot;</span>      <span class="comment"># 与生产对账</span></span><br><span class="line"><span class="comment"># ④ 通过后换库/改连接串。物理备份+PITR 恢复(任意时间点)流程见 07 章 6 节,</span></span><br><span class="line"><span class="comment">#    演练要点: 在恢复机上起实例 → recovery_target_time 定到&quot;误删前 1 分钟&quot; → 验证数据</span></span><br></pre></td></tr></table></figure>
+<p>演练检查单（经验做法）：恢复耗时（算 RTO 是否达标）、对账 SQL（行数 + 抽样内容 + 关键聚合）、演练周期（月度）、<strong>演练记录归档</strong>（谁、何时、耗时、结果）——&quot;上次演练通过&quot;是事故夜唯一的镇静剂。</p>
+<h2 id="5-迁移流程双写与影子表"><a class="markdownIt-Anchor" href="#5-迁移流程双写与影子表"></a> 5. 迁移流程：双写与影子表</h2>
+<p>换库/改表结构的迁移，风险的根源是<strong>新旧两套系统在切换窗口内的行为差异</strong>。两套主流流程：</p>
+<p><strong>影子表（改表结构）</strong>——同一库内的 schema 迁移：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- ① 建新结构的影子表</span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> orders_new (<span class="keyword">LIKE</span> orders INCLUDING <span class="keyword">ALL</span>);</span><br><span class="line"><span class="comment">-- ② 双写: 应用同时写新旧两表(或触发器兜底)</span></span><br><span class="line"><span class="comment">-- ③ 回填历史: 分批 UPDATE/INSERT ... SELECT (每批 1万行, 避免长事务, 04 章)</span></span><br><span class="line"><span class="keyword">INSERT INTO</span> orders_new <span class="keyword">SELECT</span> <span class="operator">*</span> <span class="keyword">FROM</span> orders <span class="keyword">WHERE</span> id <span class="keyword">BETWEEN</span> <span class="number">1</span> <span class="keyword">AND</span> <span class="number">10000</span>;</span><br><span class="line"><span class="comment">-- ④ 对账: 行数+校验和</span></span><br><span class="line"><span class="keyword">SELECT</span> <span class="built_in">count</span>(<span class="operator">*</span>), <span class="built_in">sum</span>(hashtext(id::text<span class="operator">||</span>qty::text)) <span class="keyword">FROM</span> orders;      <span class="comment">-- 与 orders_new 对比</span></span><br><span class="line"><span class="comment">-- ⑤ 切读 → 观察期 → 改名换位(原子):</span></span><br><span class="line"><span class="keyword">ALTER TABLE</span> orders RENAME <span class="keyword">TO</span> orders_old;</span><br><span class="line"><span class="keyword">ALTER TABLE</span> orders_new RENAME <span class="keyword">TO</span> orders;</span><br><span class="line"><span class="comment">-- ⑥ 观察一周无回滚需求后 DROP orders_old</span></span><br></pre></td></tr></table></figure>
+<p><strong>双写（换存储引擎）</strong>——PG 迁 ClickHouse、加缓存层等跨系统迁移：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">① 写路径双写(先写老库成功为新真源, 新库失败只告警不阻断)</span><br><span class="line">② 历史数据批量搬迁(分批+限速, 不抢业务 IO)</span><br><span class="line">③ 双读比对: 灰度流量同时读两库, 日志记录差异(字段级 diff), 差异率→0 才继续</span><br><span class="line">④ 切读新库(可回滚: 读开关拨回老库)</span><br><span class="line">⑤ 停写老库, 老库转只读归档; 保留期后下线</span><br></pre></td></tr></table></figure>
+<p>两条铁律贯穿（经验做法）：<strong>每一步可回滚</strong>（切换点用开关/改名实现，不删任何东西）；<strong>对账先于切换</strong>（count/checksum/抽样 diff，数字不齐不切读）。时间换算：一次严肃迁移的 80% 工时在③④（比对与灰度），写迁移脚本只占 20%——预算别排反。</p>
+<h2 id="6-面试高频问题清单25-题带要点"><a class="markdownIt-Anchor" href="#6-面试高频问题清单25-题带要点"></a> 6. 面试高频问题清单（25 题带要点）</h2>
+<p>全系列浓缩成 25 题（标注所属章节，答案要点=答题骨架；展开能力靠前面章节的实验）：</p>
+<p><strong>索引与查询（03/05 章）</strong></p>
+<ol>
+<li>索引失效的场景有哪些？——函数包裹列/隐式转换/前导 %LIKE/跳过最左列/低选择性优化器放弃/统计过期；每条配一个改法。</li>
+<li>为什么 B+树而不是红黑树/哈希/跳表？——页对齐 IO（3-4 层摸到千万行）；哈希无范围；跳表内存友好（Redis zset）；答介质与服务形态。</li>
+<li>聚簇索引与二级索引的区别？回表是什么？——InnoDB 主键即数据；二级叶存主键→回表；覆盖索引消灭回表。</li>
+<li>最左前缀原则的原理？——联合索引按 (a,b) 排序=先姓后名；等值在前范围收尾；书写顺序无关。</li>
+<li>什么是覆盖索引？什么场景值得做？——查询列全在索引里（Index Only Scan）；高频+列少+回表热点才做。</li>
+<li>EXPLAIN 你看哪几个字段？——cost/rows(估算vs实际)/actual time×loops/扫描节点/Rows Removed；统计信息与 ANALYZE。</li>
+<li>三种 JOIN 算法与适用场景？——Nested Loop(小驱动大+索引)、Hash(大等值)、Merge(有序/范围)；驱动表选择。</li>
+</ol>
+<p><strong>事务与 MVCC（04 章 + 分布式 07 章）</strong></p>
+<ol start="8">
+<li>ACID 分别靠什么实现？——undo/redo(WAL)/锁+MVCC/应用不变量；C 常被误解为数据库保证。</li>
+<li>三大并发异常与隔离级别对应？——脏读/不可重复读/幻读 × RC/RR；RR 是否有幻阅读实现（PG 出写偏斜，MySQL 间隙锁基本挡住）。</li>
+<li>MVCC 的原理？——版本链/快照判定/读不加锁；PG xmin/xmax 堆内多版本 vs InnoDB undo 链。</li>
+<li>快照读和当前读的区别？——普通 SELECT 读快照；UPDATE/FOR UPDATE 读最新+加锁；丢更新的根源与修复。</li>
+<li>长事务有什么危害？——冻结旧版本回收：PG 膨胀+xid 回卷、InnoDB undo 膨胀；idle in transaction 监控。</li>
+<li>写偏斜是什么？怎么防？——两事务读对方要写的集合；SI 的残留异常；SSI/串行化+重试/应用层约束。</li>
+</ol>
+<p><strong>存储引擎（06/10 章）</strong></p>
+<ol start="14">
+<li>B+树 vs LSM-Tree 的取舍？——读放大/写放大/空间放大三角；RocksDB/Cassandra 选 LSM 的负载特征。</li>
+<li>WAL 的作用与流程？——先日志后数据、组提交、checkpoint；崩溃恢复=重放。</li>
+<li>为什么顺序写比随机写快？——寻道/页擦除；01 章存储层次数字；LSM 把随机写变顺序追加。</li>
+<li>SQLite 的 WAL 模式解决了什么？——读写不互斥；单写者模型不变；checkpoint 语义。</li>
+<li>页是什么？为什么按页管理？——最小 IO 单元；缓冲池的单位；B+树节点=页。</li>
+</ol>
+<p><strong>缓存与 Redis（08 章）</strong></p>
+<ol start="19">
+<li>缓存穿透/击穿/雪崩与对策？——空值+布隆/单飞互斥/错峰 TTL+多级+熔断；各自成因一句话。</li>
+<li>先更新库还是先更新缓存？——先更新库再删缓存；双写窗口分析；延迟双删与 binlog 订阅兜底。</li>
+<li>分布式锁怎么正确实现？——SETNX+EX+token+Lua 释放+看门狗续期；Redlock 争议：效率锁 vs 正确性锁（fencing/幂等）。</li>
+<li>Redis 持久化 RDB vs AOF？——checkpoint vs WAL 的内存版；everysec 丢 1s；混合持久化。</li>
+<li>zset 为什么用跳表？——内存介质上实现简单/范围查询不弱/并发友好；与 B+树的介质差异。</li>
+</ol>
+<p><strong>建模与运维（11/12 章）</strong></p>
+<ol start="24">
+<li>OLTP 与 OLAP 的区别？列存为什么快？——负载/事务模型；少列 IO+压缩+向量化；TP/AP 分库组合。</li>
+<li>线上数据库突然变慢，排查思路？——分层定位：业务监控→pg_stat_activity/slow log→EXPLAIN ANALYZE 三看→索引失效四因→资源层；带回滚预案与复盘文档。<strong>答的是流程不是知识点</strong>。</li>
+</ol>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“备份=复制一份文件”</strong>：在线库直接 cp 可能拷到写一半的页（SQLite 用 .backup、PG 用 pg_basebackup/dump）；更致命的是从不恢复验证——备份链路里唯一不可省的环节是演练。</li>
+<li><strong>“监控装上就完事”</strong>：没有 runbook 的报警=噪音发生器；指标异常要映射到&quot;第一嫌疑人+下一步动作&quot;（3 节速查表），否则值班只会关报警。</li>
+<li><strong>“迁移=导出导入”</strong>：迁移的难点在切换窗口的行为等价与可回滚，不在搬数据。没有对账与灰度读的迁移是赌博；每步开关化才谈得上流程。</li>
+<li><strong>“容量规划=现在够用”</strong>：要按增速外推到&quot;下一次扩容决策点&quot;（水位 70%），并给 WAL/compaction/备份留余量——磁盘打满的库连删除数据的操作都可能跑不动。</li>
+<li><strong>“巡检是 DBA 的事”</strong>：应用工程师写出的长事务、无索引大查询、忘分批的批量任务，都会在巡检指标上现形——指标异常的根因八成在应用代码里。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>容量规划从行大小估算开始，外推到表/索引/WAL/备份四本账；估算必须用实测校准（pg_total_relation_size）。</li>
+<li>慢查询日志常开 + 每日例行五连（长事务/死元组/TOP SQL/锁等待/库体积）——问题在投诉前被发现。</li>
+<li>监控四层（业务/应用/数据库/资源），每层异常有&quot;第一嫌疑人&quot;映射；报警必须带处置动作。</li>
+<li>备份恢复演练脚本化、月度化：sqlite .backup 与 pg_dump/pg_restore 全流程实测；“光备份不恢复=没备份”。</li>
+<li>迁移两套流程：影子表（改结构）与双写（换引擎）；每步可回滚、对账先于切换，80% 工时在比对与灰度。</li>
+<li>25 题清单是全系列的索引：每题要点都能在对应章节找到实验与出处——面试答的是&quot;做过&quot;而非&quot;背过&quot;。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>容量估算实操：给自己的业务表做 1 节的行大小估算，建 100 万行样例后用 <code>pg_total_relation_size</code> 校验，写下偏差与修正（TEXT 列、NULL 位图往往是偏差源）。</li>
+<li>把 2 节巡检五连写成每日 cron 脚本，输出汇总一屏；人为制造一个 <code>idle in transaction</code>（BEGIN 后 sleep）验证第一条 SQL 能抓到它。</li>
+<li>完整演练：对测试库执行&quot;pg_dump → DROP 表 → pg_restore 到新库 → count 对账 → 换连接串&quot;全流程并计时；把你的 RTO（恢复耗时）与数据规模写成一行记录，作为第一份演练档案。</li>
+<li>影子表迁移实战：给已有 100 万行的表&quot;新增一列并改主键&quot;——按 5 节六步流程走完（含对账 SQL 与改名切换），记录每步耗时；思考哪一步最容易出事故。</li>
+<li>用 25 题清单做自测：合上本系列，每题口述 60 秒答案并说出对应实验章节；答不上来的题目回到原章重跑实验——把&quot;背过&quot;升级成&quot;做过&quot;。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/" rel="tag"># 数据库</a>
+              <a href="/tags/Redis/" rel="tag"># Redis</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/11-%E6%95%B0%E6%8D%AE%E5%BB%BA%E6%A8%A1%E4%B8%8E%E9%80%89%E5%9E%8B/" rel="prev" title="11-数据建模与选型">
+                  <i class="fa fa-angle-left"></i> 11-数据建模与选型
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/%E6%B5%8B%E8%AF%95%E4%B8%8E%E8%BD%AF%E4%BB%B6%E8%B4%A8%E9%87%8F-README/" rel="next" title="测试与软件质量 · 学习路线总览">
+                  测试与软件质量 · 学习路线总览 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

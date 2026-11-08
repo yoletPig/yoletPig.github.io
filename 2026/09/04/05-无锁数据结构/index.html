@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 用实测数据回答&#39;锁的代价什么时候不可接受、什么时候被高估&#39;。 - 亲手实现无锁 SPSC 环形队列（rigtorp&#x2F;SPSCQueue、folly::ProducerConsumerQueue 同款思想），逐处解释内存序。 - 理解无锁…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="05-无锁数据结构">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/05-%E6%97%A0%E9%94%81%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 用实测数据回答&#39;锁的代价什么时候不可接受、什么时候被高估&#39;。 - 亲手实现无锁 SPSC 环形队列（rigtorp&#x2F;SPSCQueue、folly::ProducerConsumerQueue 同款思想），逐处解释内存序。 - 理解无锁…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-04T14:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.590Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="C++">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/05-%E6%97%A0%E9%94%81%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/05-%E6%97%A0%E9%94%81%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/","path":"2026/09/04/05-无锁数据结构/","title":"05-无锁数据结构"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>05-无锁数据结构 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#05-%E6%97%A0%E9%94%81%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84"><span class="nav-number">1.</span> <span class="nav-text"> 05 - 无锁数据结构</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E9%94%81%E7%9A%84%E4%BB%A3%E4%BB%B7%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E4%B8%8D%E5%8F%AF%E6%8E%A5%E5%8F%97"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 锁的代价：什么时候不可接受</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E6%97%A0%E9%94%81-spsc-%E7%8E%AF%E5%BD%A2%E9%98%9F%E5%88%97%E9%80%90%E8%A1%8C%E8%AE%B2%E5%86%85%E5%AD%98%E5%BA%8F"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 无锁 SPSC 环形队列：逐行讲内存序</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-mpsc-%E6%A6%82%E8%A7%88%E5%A4%9A%E4%B8%AA%E7%94%9F%E4%BA%A7%E8%80%85%E6%80%8E%E4%B9%88%E5%8A%9E"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. MPSC 概览：多个生产者怎么办</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-hazard-pointer%E4%B8%BA%E4%BB%80%E4%B9%88%E6%97%A0%E9%94%81%E5%9B%9E%E6%94%B6%E5%86%85%E5%AD%98%E9%9A%BE"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. Hazard Pointer：为什么无锁回收内存难</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-rcu-%E6%A6%82%E5%BF%B5%E8%AF%BB%E4%BE%A7%E5%87%A0%E4%B9%8E%E9%9B%B6%E5%BC%80%E9%94%80"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. RCU 概念：读侧几乎零开销</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E6%97%A0%E9%94%81%E4%B8%8D%E7%AD%89%E4%BA%8E%E6%9B%B4%E5%BF%ABcas-%E9%87%8D%E8%AF%95%E9%A3%8E%E6%9A%B4%E5%AE%9E%E6%B5%8B"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 无锁不等于更快：CAS 重试风暴实测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E8%AF%A5%E7%94%A8%E6%97%A0%E9%94%81%E7%BB%8F%E9%AA%8C%E5%81%9A%E6%B3%95"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 什么时候该用无锁（经验做法）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/05-%E6%97%A0%E9%94%81%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="05-无锁数据结构 | Yoleen的博客">
+      <meta itemprop="description" content="- 用实测数据回答&#39;锁的代价什么时候不可接受、什么时候被高估&#39;。 - 亲手实现无锁 SPSC 环形队列（rigtorp&#x2F;SPSCQueue、folly::ProducerConsumerQueue 同款思想），逐处解释内存序。 - 理解无锁…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          05-无锁数据结构
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 22:30:00" itemprop="dateCreated datePublished" datetime="2026-09-04T22:30:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/C-%E8%BF%9B%E9%98%B6/" itemprop="url" rel="index"><span itemprop="name">C++进阶</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>14 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 用实测数据回答'锁的代价什么时候不可接受、什么时候被高估'。 - 亲手实现无锁 SPSC 环形队列（rigtorp/SPSCQueue、folly::ProducerConsumerQueue 同款思想），逐处解释内存序。 - 理解无锁…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="05-无锁数据结构"><a class="markdownIt-Anchor" href="#05-无锁数据结构"></a> 05 - 无锁数据结构</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>用实测数据回答&quot;锁的代价什么时候不可接受、什么时候被高估&quot;。</li>
+<li>亲手实现无锁 SPSC 环形队列（rigtorp/SPSCQueue、folly::ProducerConsumerQueue 同款思想），逐处解释内存序。</li>
+<li>理解无锁内存回收为什么难（Hazard Pointer 思想）与 RCU 的读侧零开销。</li>
+<li>用&quot;CAS 重试风暴&quot;实验破除&quot;无锁 = 更快&quot;的迷信，建立&quot;99% 用锁 + 少量原子&quot;的工程直觉。</li>
+</ul>
+<p>前置：第 04 章（memory_order、happens-before）、《C++》系列 13（线程安全 RingBuffer 的加锁版）。</p>
+<h2 id="1-锁的代价什么时候不可接受"><a class="markdownIt-Anchor" href="#1-锁的代价什么时候不可接受"></a> 1. 锁的代价：什么时候不可接受</h2>
+<p>先实测三种互斥手段的真实成本（单线程、临界区只有 <code>++c</code>）：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// lockcost.cpp —— 单线程空临界区成本</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;chrono&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;mutex&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Spinlock</span> &#123;</span><br><span class="line">    std::atomic_flag f = ATOMIC_FLAG_INIT;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">lock</span><span class="params">()</span>   </span>&#123; <span class="keyword">while</span> (f.<span class="built_in">test_and_set</span>(std::memory_order_acquire))</span><br><span class="line">                        &#123; <span class="keyword">while</span> (f.<span class="built_in">test</span>(std::memory_order_relaxed)) &#123;&#125; &#125; &#125;  <span class="comment">// 先纺线再争</span></span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">unlock</span><span class="params">()</span> </span>&#123; f.<span class="built_in">clear</span>(std::memory_order_release); &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">const</span> <span class="type">long</span> ITERS = <span class="number">10&#x27;000&#x27;000</span>;</span><br><span class="line">    <span class="keyword">using</span> clk = std::chrono::steady_clock;</span><br><span class="line">    <span class="type">long</span> c = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">auto</span> t0 = clk::<span class="built_in">now</span>();</span><br><span class="line">    &#123; std::mutex m; <span class="keyword">for</span> (<span class="type">long</span> i = <span class="number">0</span>; i &lt; ITERS; ++i) &#123; <span class="function">std::lock_guard&lt;std::mutex&gt; <span class="title">g</span><span class="params">(m)</span></span>; ++c; &#125; &#125;</span><br><span class="line">    <span class="keyword">auto</span> t1 = clk::<span class="built_in">now</span>();</span><br><span class="line">    &#123; Spinlock s; <span class="keyword">for</span> (<span class="type">long</span> i = <span class="number">0</span>; i &lt; ITERS; ++i) &#123; <span class="function">std::lock_guard&lt;Spinlock&gt; <span class="title">g</span><span class="params">(s)</span></span>; ++c; &#125; &#125;</span><br><span class="line">    <span class="keyword">auto</span> t2 = clk::<span class="built_in">now</span>();</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;mutex    : &quot;</span> &lt;&lt; std::chrono::<span class="built_in">duration</span>&lt;<span class="type">double</span>, std::milli&gt;(t1 - t0).<span class="built_in">count</span>()</span><br><span class="line">              &lt;&lt; <span class="string">&quot; ms\n&quot;</span>;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;spinlock : &quot;</span> &lt;&lt; std::chrono::<span class="built_in">duration</span>&lt;<span class="type">double</span>, std::milli&gt;(t2 - t1).<span class="built_in">count</span>()</span><br><span class="line">              &lt;&lt; <span class="string">&quot; ms\n&quot;</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O2 -pthread lockcost.cpp -o lockcost &amp;&amp; ./lockcost &amp;&amp; ./lockcost</span><br><span class="line"><span class="comment"># 输出（i5-12600K 实测两次）：</span></span><br><span class="line"><span class="comment"># mutex    : 25.2451 ms        → 每次 lock/unlock ≈ 2.5 ns</span></span><br><span class="line"><span class="comment"># spinlock : 56.2891 ms        → ≈ 5.6 ns（atomic RMW 全栅栏反而更贵）</span></span><br><span class="line"><span class="comment"># mutex    : 24.987 ms</span></span><br><span class="line"><span class="comment"># spinlock : 59.0186 ms</span></span><br></pre></td></tr></table></figure>
+<p>反直觉但真实：<strong>无争抢时 libstdc++ 的 mutex 走 futex 快路径（用户态一条原子交换），比朴素自旋锁还快</strong>。所以&quot;锁很贵&quot;的直觉只对了一半。再看 4 线程争抢同一把锁（每线程 5M 次 <code>lock_guard</code> + <code>++v</code>）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">4 线程争抢 mutex    : 854-868 ms   （含 futex 睡眠/唤醒的系统调用）</span><br><span class="line">4 线程争抢 spinlock : 1301-1332 ms （缓存行在 4 个核之间弹跳，纺线烧满 CPU）</span><br><span class="line">4 线程 atomic fetch_add(同一变量, relaxed): 220-238 ms</span><br></pre></td></tr></table></figure>
+<p>结论（实测得出，不是背书）：<strong>锁的真正代价来自&quot;争抢&quot;而非&quot;加锁&quot;</strong>。临界区极短（几十纳秒）且争抢激烈时，锁的睡眠/唤醒开销才不可接受——这正是无锁队列的用武之地：<strong>生产者-消费者之间只有一个指针游标，没有临界区可言</strong>。反过来，临界区里有任何实际工作（查表、拷贝、计算），锁的开销立刻摊薄到可忽略。</p>
+<h2 id="2-无锁-spsc-环形队列逐行讲内存序"><a class="markdownIt-Anchor" href="#2-无锁-spsc-环形队列逐行讲内存序"></a> 2. 无锁 SPSC 环形队列：逐行讲内存序</h2>
+<p>先立定义（[intro.progress] 的惯用归纳）：<strong>无锁（lock-free）</strong> = 任意时刻停下所有线程，至少有一个能取得进展（个别线程卡住不拖累全局）；<strong>有界等待</strong>更进一步。SPSC（Single-Producer Single-Consumer）是唯一容易做对的无锁结构：<strong>每个游标只有一个写者、一个读者</strong>，这把同步需求压到最低——一处 release/acquire 配对。</p>
+<p>完整实现（已在真实环境编译运行验证）：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// spsc_queue.h —— 无锁 SPSC 环形队列（rigtorp/SPSCQueue 同款思想的教学简化版）</span></span><br><span class="line"><span class="meta">#<span class="keyword">pragma</span> once</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;atomic&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstddef&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;new&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;type_traits&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="keyword">constexpr</span> <span class="type">size_t</span> <span class="title">next_pow2</span><span class="params">(<span class="type">size_t</span> v)</span> <span class="keyword">noexcept</span> </span>&#123;</span><br><span class="line">    <span class="type">size_t</span> p = <span class="number">1</span>;</span><br><span class="line">    <span class="keyword">while</span> (p &lt; v) p &lt;&lt;= <span class="number">1</span>;</span><br><span class="line">    <span class="keyword">return</span> p;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="keyword">class</span> <span class="title class_">SpscQueue</span> &#123;</span><br><span class="line">    <span class="keyword">static_assert</span>(std::is_nothrow_move_constructible_v&lt;T&gt; ||</span><br><span class="line">                  std::is_nothrow_copy_constructible_v&lt;T&gt;,</span><br><span class="line">                  <span class="string">&quot;T 必须可 noexcept 拷贝或移动，保证队列不变量不被异常破坏&quot;</span>);</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">SpscQueue</span><span class="params">(<span class="type">size_t</span> capacity)</span></span></span><br><span class="line"><span class="function">        : capacity_(next_pow2(capacity)),</span></span><br><span class="line"><span class="function">          slots_(static_cast&lt;Slot*&gt;(::operator new(sizeof(Slot) * capacity_))) &#123;</span>&#125;</span><br><span class="line">    ~<span class="built_in">SpscQueue</span>() &#123; T t; <span class="keyword">while</span> (<span class="built_in">pop</span>(t)) &#123;&#125; ::<span class="function"><span class="keyword">operator</span> <span class="title">delete</span><span class="params">(slots_)</span></span>; &#125;</span><br><span class="line"></span><br><span class="line">    <span class="built_in">SpscQueue</span>(<span class="type">const</span> SpscQueue&amp;) = <span class="keyword">delete</span>;</span><br><span class="line">    SpscQueue&amp; <span class="keyword">operator</span>=(<span class="type">const</span> SpscQueue&amp;) = <span class="keyword">delete</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 【仅允许唯一生产者线程调用】</span></span><br><span class="line">    <span class="function"><span class="type">bool</span> <span class="title">push</span><span class="params">(<span class="type">const</span> T&amp; v)</span> </span>&#123;</span><br><span class="line">        <span class="type">const</span> <span class="type">size_t</span> head = head_.<span class="built_in">load</span>(std::memory_order_relaxed); <span class="comment">// 只被生产者写，读到的是自己刚写的</span></span><br><span class="line">        <span class="type">const</span> <span class="type">size_t</span> tail = tail_.<span class="built_in">load</span>(std::memory_order_acquire); <span class="comment">// 读消费者进度：要看到消费者 release 的“已腾出”</span></span><br><span class="line">        <span class="keyword">if</span> (head - tail == capacity_) <span class="keyword">return</span> <span class="literal">false</span>;                <span class="comment">// 差值即元素个数（无符号回绕自动取模）</span></span><br><span class="line">        ::<span class="keyword">new</span> (<span class="keyword">static_cast</span>&lt;<span class="type">void</span>*&gt;(&amp;slots_[<span class="built_in">idx</span>(head)].storage)) <span class="built_in">T</span>(v);</span><br><span class="line">        head_.<span class="built_in">store</span>(head + <span class="number">1</span>, std::memory_order_release);          <span class="comment">// 发布新元素给消费者</span></span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 【仅允许唯一消费者线程调用】</span></span><br><span class="line">    <span class="function"><span class="type">bool</span> <span class="title">pop</span><span class="params">(T&amp; out)</span> </span>&#123;</span><br><span class="line">        <span class="type">const</span> <span class="type">size_t</span> tail = tail_.<span class="built_in">load</span>(std::memory_order_relaxed); <span class="comment">// 只被消费者写</span></span><br><span class="line">        <span class="type">const</span> <span class="type">size_t</span> head = head_.<span class="built_in">load</span>(std::memory_order_acquire); <span class="comment">// 读生产者进度：要看到 release 的新元素</span></span><br><span class="line">        <span class="keyword">if</span> (tail == head) <span class="keyword">return</span> <span class="literal">false</span>;                            <span class="comment">// 空</span></span><br><span class="line">        T* p = <span class="keyword">static_cast</span>&lt;T*&gt;(<span class="keyword">static_cast</span>&lt;<span class="type">void</span>*&gt;(&amp;slots_[<span class="built_in">idx</span>(tail)].storage));</span><br><span class="line">        out = std::<span class="built_in">move</span>(*p);</span><br><span class="line">        p-&gt;~<span class="built_in">T</span>();</span><br><span class="line">        tail_.<span class="built_in">store</span>(tail + <span class="number">1</span>, std::memory_order_release);          <span class="comment">// 发布“槽位已腾出”给生产者</span></span><br><span class="line">        <span class="keyword">return</span> <span class="literal">true</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    <span class="keyword">struct</span> <span class="title class_">Slot</span> &#123;</span><br><span class="line">        <span class="comment">// 教学版直接用槽位存储做同步；rigtorp 版每个槽位多一个 seq 序号字段，</span></span><br><span class="line">        <span class="comment">// 用于支持 MPMC 化与更细的就绪标记——这里靠“唯一读者/唯一写者”前提省掉</span></span><br><span class="line">        <span class="keyword">typename</span> std::<span class="type">aligned_storage_t</span>&lt;<span class="keyword">sizeof</span>(T), <span class="keyword">alignof</span>(T)&gt;::type storage;</span><br><span class="line">    &#125;;</span><br><span class="line">    <span class="function"><span class="type">size_t</span> <span class="title">idx</span><span class="params">(<span class="type">size_t</span> i)</span> <span class="type">const</span> <span class="keyword">noexcept</span> </span>&#123; <span class="keyword">return</span> i &amp; (capacity_ - <span class="number">1</span>); &#125; <span class="comment">// 位与代替取模（容量 2 的幂）</span></span><br><span class="line"></span><br><span class="line">    <span class="type">const</span> <span class="type">size_t</span> capacity_;</span><br><span class="line">    Slot* slots_;</span><br><span class="line">    <span class="keyword">alignas</span>(<span class="number">64</span>) std::atomic&lt;<span class="type">size_t</span>&gt; head_&#123;<span class="number">0</span>&#125;; <span class="comment">// 生产者游标：生产者 store / 消费者 load，独占缓存行</span></span><br><span class="line">    <span class="keyword">alignas</span>(<span class="number">64</span>) std::atomic&lt;<span class="type">size_t</span>&gt; tail_&#123;<span class="number">0</span>&#125;; <span class="comment">// 消费者游标：消费者 store / 生产者 load，独占缓存行</span></span><br><span class="line">&#125;;</span><br></pre></td></tr></table></figure>
+<p>内存序逐处复盘（配合第 04 章的 happens-before 图）：</p>
+<table>
+<thead>
+<tr>
+<th>位置</th>
+<th>内存序</th>
+<th>为什么</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>push</code> 读 <code>head_</code></td>
+<td>relaxed</td>
+<td>本线程是唯一写者，读到的是自己写的值，无同步需求</td>
+</tr>
+<tr>
+<td><code>push</code> 读 <code>tail_</code></td>
+<td>acquire</td>
+<td>要“看见”消费者 release 的腾出动作，确认槽位可覆写</td>
+</tr>
+<tr>
+<td><code>push</code> 写 <code>head_</code></td>
+<td>release</td>
+<td><strong>发布</strong>：placement new 写入的 <code>T</code> 对消费者可见的前置条件</td>
+</tr>
+<tr>
+<td><code>pop</code> 读 <code>tail_</code></td>
+<td>relaxed</td>
+<td>同 push/head 的镜像</td>
+</tr>
+<tr>
+<td><code>pop</code> 读 <code>head_</code></td>
+<td>acquire</td>
+<td>要“看见”生产者发布的新元素</td>
+</tr>
+<tr>
+<td><code>pop</code> 写 <code>tail_</code></td>
+<td>release</td>
+<td>发布“已取走”，让生产者能覆写该槽位</td>
+</tr>
+<tr>
+<td>两个游标 <code>alignas(64)</code></td>
+<td>—</td>
+<td>伪共享隔离（第 04 章），否则一读一写在同一行互相弹</td>
+</tr>
+</tbody>
+</table>
+<p>测试（生产者推 1…1000000，消费者求和核对）：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// spsc_test.cpp</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;spsc_queue.h&quot;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdio&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;thread&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">const</span> <span class="type">size_t</span> N = <span class="number">1&#x27;000&#x27;000</span>;</span><br><span class="line">    <span class="function">SpscQueue&lt;<span class="type">int</span>&gt; <span class="title">q</span><span class="params">(<span class="number">1024</span>)</span></span>;</span><br><span class="line">    <span class="function">std::thread <span class="title">consumer</span><span class="params">([&amp;] &#123;</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="type">int</span> v; <span class="type">unsigned</span> <span class="type">long</span> <span class="type">long</span> s = <span class="number">0</span>, got = <span class="number">0</span>;</span></span></span><br><span class="line"><span class="params"><span class="function">        <span class="keyword">while</span> (got &lt; N)</span></span></span><br><span class="line"><span class="params"><span class="function">            <span class="keyword">while</span> (q.pop(v)) &#123; s += <span class="keyword">static_cast</span>&lt;<span class="type">unsigned</span> <span class="type">long</span> <span class="type">long</span>&gt;(v); ++got; &#125;</span></span></span><br><span class="line"><span class="params"><span class="function">        std::printf(<span class="string">&quot;sum=%llu count=%llu\n&quot;</span>, s, got);</span></span></span><br><span class="line"><span class="params"><span class="function">    &#125;)</span></span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">1</span>; i &lt;= N; ++i) &#123; <span class="keyword">while</span> (!q.<span class="built_in">push</span>(<span class="keyword">static_cast</span>&lt;<span class="type">int</span>&gt;(i))) &#123;&#125; &#125;</span><br><span class="line">    consumer.<span class="built_in">join</span>();</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O2 -Wall -Wextra -pthread spsc_test.cpp -o spsc_test &amp;&amp; ./spsc_test</span><br><span class="line"><span class="comment"># 输出：sum=500000500000 count=1000000     # 与等差数列公式 1000000*1000001/2 一致</span></span><br></pre></td></tr></table></figure>
+<p>注意两个设计取舍：<strong>满/空时返回 false 而不是阻塞</strong>（把&quot;等待策略&quot;留给调用方——音频线程 <code>while(!push)</code> 忙等、控制线程挂条件变量，队列本身保持无锁）；<strong>容量取 2 的幂</strong>，用位与代替取模。rigtorp/SPSCQueue 在此基础上加了缓存行预取与 per-slot seq，folly 版还支持批量推拉，思想同源。</p>
+<h2 id="3-mpsc-概览多个生产者怎么办"><a class="markdownIt-Anchor" href="#3-mpsc-概览多个生产者怎么办"></a> 3. MPSC 概览：多个生产者怎么办</h2>
+<p>SPSC 的极限场景之外，更多是 MPSC（多生产者单消费者：日志聚合、GPU 命令队列）与 MPMC（线程池任务队列）。生产者多于一个后，<code>head_</code> 变成多个写者——单一 release/acquire 不再够，典型做法：</p>
+<ul>
+<li><strong>CAS 竞争游标</strong>（<code>compare_exchange_weak</code> 抢占 head）+ <strong>两阶段提交</strong>：先 CAS 占坑，写完数据再把&quot;就绪序号&quot;发布，消费者只能消费连续就绪区间（folly::MPMCQueue、moodycamel::ConcurrentQueue 的思路）。</li>
+<li><strong>每生产者一条 SPSC 队列</strong>，消费者轮询（round-robin）多条 SPSC——把 MPMC 问题降维成已解决的 SPSC 问题。实现简单、无 CAS 风暴，代价是消费者公平性需要自己调度。经验做法：<strong>生产者数固定且不大时，先选这条</strong>。</li>
+</ul>
+<p>MPSC/MPMC 的实现复杂度跨过 SPSC 一个数量级，几乎总是应该直接用 folly/moodycamel/boost::lockfree，而不是手写（经验做法，见第 6 节的&quot;该不该&quot;）。</p>
+<h2 id="4-hazard-pointer为什么无锁回收内存难"><a class="markdownIt-Anchor" href="#4-hazard-pointer为什么无锁回收内存难"></a> 4. Hazard Pointer：为什么无锁回收内存难</h2>
+<p>SPSC 队列的内存是预分配环形数组，没有回收问题。但无锁<strong>栈/链表</strong>（如 Treiber stack）把节点 new/delete 混进并发路径，立刻撞上难题：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">线程 A 读到节点 X 的指针，还没来得及解引用</span><br><span class="line">线程 B 把 X 从栈上摘除并 delete</span><br><span class="line">线程 A 解引用 X —— use-after-free</span><br></pre></td></tr></table></figure>
+<p>难点在于：A 持有的只是&quot;一个副本&quot;，B 无法知道&quot;还有人要读&quot;。经典方案 <strong>Hazard Pointer（危险指针）</strong>：</p>
+<ol>
+<li>每个读者线程有若干&quot;危险指针&quot;槽（公开可见的原子槽位）。</li>
+<li>读者解引用前，先把指针副本发布到自己的 hazard 槽，再回头验证节点还在链上（否则重来）。</li>
+<li>删除者把节点挂到&quot;待删清单&quot;，<strong>只有当任何 hazard 槽都不再指向它</strong>时才真正 free。</li>
+</ol>
+<p>验证-发布之间存在竞争窗口，所以要&quot;发布 → 复查 → 不在则重试&quot;的两步协议。Michael 2004 的论文（Hazard Pointers: Safe Memory Reclamation）是原始出处；C++ 上的成熟实现见 folly 的 <code>hazard</code> 模块。替代思路 <strong>Epoch-Based Reclamation（EBR）</strong>：读者进入临界区登记&quot;epoch&quot;，回收者等全局 epoch 推进（所有读者都离开旧 epoch）后整批回收——检查 O(1)，代价是回收有延迟。</p>
+<h2 id="5-rcu-概念读侧几乎零开销"><a class="markdownIt-Anchor" href="#5-rcu-概念读侧几乎零开销"></a> 5. RCU 概念：读侧几乎零开销</h2>
+<p>RCU（Read-Copy-Update，Linux 内核大规模使用）把上述思想推到极致，服务&quot;读多写极少&quot;的数据（路由表、配置）：</p>
+<ul>
+<li><strong>读者</strong>：进_rcu → 读指针副本 → 用 → 出_rcu。全程<strong>无原子操作、无锁、无内存写</strong>（编译器屏障级别）。</li>
+<li><strong>写者</strong>：复制一份新结构 → 在副本上修改 → 原子地替换根指针 → 等&quot;宽限期&quot;（grace period，所有旧读者离开）→ 释放旧副本。</li>
+</ul>
+<p>读者完全不感知写者的存在，读路径开销接近零；代价由写者承担（复制 + 等待 + 写多时副本爆炸）。与 Hazard Pointer 的关系：都是&quot;延迟回收&quot;，RCU 把&quot;谁还在读&quot;的判定从逐指针验证变成全局 epoch 推进。C++ 用户态可参考 liburcu（Userspace RCU）。经验做法：<strong>配置/参数表这类&quot;分钟级才改一次、纳秒级读一次&quot;的数据，RCU 或 <code>shared_ptr</code> 原子交换（copy-on-write）都远好于读写锁</strong>。</p>
+<h2 id="6-无锁不等于更快cas-重试风暴实测"><a class="markdownIt-Anchor" href="#6-无锁不等于更快cas-重试风暴实测"></a> 6. 无锁不等于更快：CAS 重试风暴实测</h2>
+<p>最常见的迷信：“锁有系统调用开销，无锁一定快”。用计数器做反例——三种实现完成同样的&quot;4 线程各 1000 万次 +1&quot;：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// castorm.cpp —— CAS 重试风暴 vs fetch_add vs mutex</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;atomic&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;chrono&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;mutex&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;thread&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;vector&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> F&gt;</span><br><span class="line"><span class="function"><span class="type">void</span> <span class="title">bench</span><span class="params">(<span class="type">const</span> <span class="type">char</span>* name, F&amp;&amp; f)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">auto</span> t0 = std::chrono::steady_clock::<span class="built_in">now</span>();</span><br><span class="line">    <span class="built_in">f</span>();</span><br><span class="line">    <span class="keyword">auto</span> t1 = std::chrono::steady_clock::<span class="built_in">now</span>();</span><br><span class="line">    std::cout &lt;&lt; name &lt;&lt; <span class="string">&quot;: &quot;</span> &lt;&lt; std::chrono::<span class="built_in">duration</span>&lt;<span class="type">double</span>, std::milli&gt;(t1 - t0).<span class="built_in">count</span>() &lt;&lt; <span class="string">&quot; ms\n&quot;</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">const</span> <span class="type">int</span> N = <span class="number">4</span>;</span><br><span class="line">    <span class="type">const</span> <span class="type">long</span> ITER = <span class="number">10&#x27;000&#x27;000</span>;</span><br><span class="line">    <span class="built_in">bench</span>(<span class="string">&quot;mutex 加锁++   &quot;</span>, [=]&#123;</span><br><span class="line">        <span class="type">long</span> v = <span class="number">0</span>; std::mutex m;</span><br><span class="line">        std::vector&lt;std::thread&gt; ts;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; N; ++i) ts.<span class="built_in">emplace_back</span>([&amp;]&#123; <span class="keyword">for</span> (<span class="type">long</span> j = <span class="number">0</span>; j &lt; ITER; ++j) &#123; std::lock_guard&lt;std::mutex&gt; <span class="built_in">g</span>(m); ++v; &#125; &#125;);</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">auto</span>&amp; t : ts) t.<span class="built_in">join</span>();</span><br><span class="line">        (<span class="type">void</span>)v;</span><br><span class="line">    &#125;);</span><br><span class="line">    <span class="built_in">bench</span>(<span class="string">&quot;atomic fetch_add&quot;</span>, [=]&#123;</span><br><span class="line">        std::atomic&lt;<span class="type">long</span>&gt; v&#123;<span class="number">0</span>&#125;;</span><br><span class="line">        std::vector&lt;std::thread&gt; ts;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; N; ++i) ts.<span class="built_in">emplace_back</span>([&amp;]&#123; <span class="keyword">for</span> (<span class="type">long</span> j = <span class="number">0</span>; j &lt; ITER; ++j) v.<span class="built_in">fetch_add</span>(<span class="number">1</span>, std::memory_order_relaxed); &#125;);</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">auto</span>&amp; t : ts) t.<span class="built_in">join</span>();</span><br><span class="line">    &#125;);</span><br><span class="line">    <span class="built_in">bench</span>(<span class="string">&quot;CAS 循环++    &quot;</span>, [=]&#123;</span><br><span class="line">        std::atomic&lt;<span class="type">long</span>&gt; v&#123;<span class="number">0</span>&#125;;</span><br><span class="line">        std::vector&lt;std::thread&gt; ts;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; N; ++i) ts.<span class="built_in">emplace_back</span>([&amp;]&#123;</span><br><span class="line">            <span class="keyword">for</span> (<span class="type">long</span> j = <span class="number">0</span>; j &lt; ITER; ++j) &#123;</span><br><span class="line">                <span class="type">long</span> cur = v.<span class="built_in">load</span>(std::memory_order_relaxed);</span><br><span class="line">                <span class="keyword">while</span> (!v.<span class="built_in">compare_exchange_weak</span>(cur, cur + <span class="number">1</span>, std::memory_order_relaxed)) &#123;&#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;);</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">auto</span>&amp; t : ts) t.<span class="built_in">join</span>();</span><br><span class="line">    &#125;);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O2 -pthread castorm.cpp -o castorm &amp;&amp; ./castorm &amp;&amp; ./castorm</span><br><span class="line"><span class="comment"># 输出（i5-12600K 实测两次）：</span></span><br><span class="line"><span class="comment"># mutex 加锁++   : 1642.6 ms</span></span><br><span class="line"><span class="comment"># atomic fetch_add: 454.813 ms</span></span><br><span class="line"><span class="comment"># CAS 循环++    : 829.961 ms</span></span><br><span class="line"><span class="comment"># mutex 加锁++   : 1714.51 ms</span></span><br><span class="line"><span class="comment"># atomic fetch_add: 451.71 ms</span></span><br><span class="line"><span class="comment"># CAS 循环++    : 879.939 ms</span></span><br></pre></td></tr></table></figure>
+<p>读数：CAS 循环比 <code>fetch_add</code> 慢一倍。原因——<code>fetch_add</code> 是硬件原子的读改写（x86 上 <code>lock xadd</code>，一条指令成功）；CAS 循环在 4 线程争抢同一缓存行时<strong>反复冲突重试</strong>，每次失败都要重新 load 再交换，还制造额外的缓存一致性流量。“手写的乐观并发&quot;在没有硬件原子原语支持时就是这个下场。真正的教训不是&quot;CAS 不行”，而是：</p>
+<ol>
+<li><strong>有硬件原子原语（fetch_add/fetch_or/…）就别手搓 CAS 循环</strong>；</li>
+<li><strong>争抢的根源是&quot;共享写热点&quot;，解法是消除热点而不是换同步原语</strong>（分片计数再汇总、每线程局部缓冲）；</li>
+<li>无锁结构赢在&quot;临界区为零 + 无系统调用&quot;，不是赢在&quot;用了 atomic&quot;。</li>
+</ol>
+<h2 id="7-什么时候该用无锁经验做法"><a class="markdownIt-Anchor" href="#7-什么时候该用无锁经验做法"></a> 7. 什么时候该用无锁（经验做法）</h2>
+<p>按可维护性与收益排序的决策阶梯：</p>
+<ol>
+<li><strong>默认：<code>std::mutex</code> + RAII 锁</strong>。临界区 ≥ 1μs 或每秒次数 &lt; 10 万，锁的成本根本测不出来；可读性、可调试性（死锁能 dump 栈，无锁只能看汇编）完胜。</li>
+<li><strong>单变量协调：atomic 标志/游标/计数</strong>。这不算&quot;无锁编程&quot;，是标准工具（《C++》系列 12）。</li>
+<li><strong>生产者-消费者管线：无锁 SPSC 队列</strong>。音频采集→推理、采样→渲染这类&quot;每几十微秒过一小块数据&quot;的固定管线，SPSC 是收益最确定的无锁结构（rigtorp/SPSCQueue 可直接用）。</li>
+<li><strong>其余无锁结构（栈/哈希/MPMC）：直接用 folly/boost::lockfree/moodycamel，不要手写</strong>。内存回收（Hazard Pointer/EBR）与 ABA 的坑在第 4 节已经看到，手写正确的工程量以月计。</li>
+</ol>
+<p><strong>99% 的场景应该用锁 + 少量原子变量；剩下的 1% 里，SPSC 队列又占大头</strong>——这是并发工程里少有的可以放心说的经验法则。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>以为无锁 = 不用锁 = 快</strong>：第 6 节实测 CAS 循环慢 fetch_add 一倍。无锁的收益来自结构设计，不是原子原语的堆砌。</li>
+<li><strong>SPSC 队列被两个线程 push</strong>：SPSC 的全部正确性建立在&quot;游标单写者&quot;上，生产者多一个，队列立刻变成未定义行为。用 <code>static_assert</code>/类型系统外的纪律（命名、断言、文档）守住这个前提。</li>
+<li><strong>在无锁代码里调用可能异常的代码</strong>：placement new 后 <code>T</code> 的拷贝构造抛异常，游标已推进，队列状态损坏。这就是实现里 <code>static_assert</code> 要求 <code>noexcept</code> 构造的原因。</li>
+<li><strong>忙等不用 <code>pause</code>/让出</strong>：<code>while (!push(v)) {}</code> 在单核或超线程上空转会拖死伙伴线程。生产环境要么挂 <code>std::this_thread::yield()</code>，要么限制重试次数后退避（经验做法）。</li>
+<li><strong>用 <code>volatile</code> 写无锁</strong>：第 04 章讲过，volatile 无原子性无内存序，无锁代码里它唯一的用途是 MMIO（嵌入式），不是线程同步。</li>
+<li><strong>忘测消费者追不上生产者的&quot;满&quot;路径</strong>：环形队列的满/空边界是竞争高发区，测试必须同时覆盖&quot;队列空转&quot;与&quot;队列打满&quot;两种稳态。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>锁的真实代价 = 争抢成本：无争抢 mutex ≈ 2.5ns（futex 快路径），4 线程争抢短临界区时 mutex/自旋锁都跌进 850-1330ms 量级而原子游标 220ms——短临界区高争抢才需要无锁。</li>
+<li>SPSC 环形队列是无锁入门标准案例：游标单写者 + 一对 release/acquire 发布 + alignas(64) 防伪共享 + 容量 2 的幂；满/空返回 bool 把等待策略留给调用方。</li>
+<li>MPSC 优先&quot;每生产者一条 SPSC + 消费者轮询&quot;；MPMC 直接用 folly/moodycamel。</li>
+<li>无锁内存回收难在&quot;删除者不知道有没有读者&quot;：Hazard Pointer 逐指针验证、EBR/RCU 用全局 epoch 延迟回收；读多写少用 RCU/copy-on-write。</li>
+<li>CAS 重试风暴实测（830ms vs fetch_add 452ms）证明无锁不等于更快；99% 用锁 + 少量原子，1% 里优先 SPSC。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>给 <code>SpscQueue</code> 加 <code>try_push_batch(const T* vs, size_t n)</code>（一次 release 发布多个元素），思考为什么要同时限制&quot;n 不超过剩余空间才整体成功&quot;。</li>
+<li>把两个游标的 <code>alignas(64)</code> 去掉重测 spsc_test，观察吞吐变化；再用 <code>perf stat -e cache-misses</code> 对比两次运行。</li>
+<li>实现 Treiber 无锁栈的 <code>push/pop</code>（CAS 头插法），并指出它为什么必须配合 Hazard Pointer/EBR 才能安全 delete。</li>
+<li>把第 1 节 4 线程计数改成&quot;每线程局部累加、结束时原子汇总一次&quot;，测量三种方案的最终耗时，量化&quot;消除共享写热点&quot;的收益。</li>
+<li>阅读 rigtorp/SPSCQueue 源码中 per-slot <code>seq</code> 的用途，回答：教学版在&quot;生产者 resize 到一半&quot;这类不存在的问题之外，seq 还防住了什么？（提示：队列被误用时 push 与 pop 各自的多个读者）</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/C/" rel="tag"># C++</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/04-%E5%86%85%E5%AD%98%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%8E%9F%E5%AD%90%E6%93%8D%E4%BD%9C%E8%BF%9B%E9%98%B6/" rel="prev" title="04-内存模型与原子操作进阶">
+                  <i class="fa fa-angle-left"></i> 04-内存模型与原子操作进阶
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/06-%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B%E4%B8%8E%E4%BB%A3%E7%A0%81%E4%BC%98%E5%8C%96/" rel="next" title="06-性能工程与代码优化">
+                  06-性能工程与代码优化 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

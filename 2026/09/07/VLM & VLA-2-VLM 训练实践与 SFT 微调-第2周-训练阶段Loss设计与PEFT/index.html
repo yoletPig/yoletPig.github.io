@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的三个问题 1. 两阶段训练（对齐预训练 → 指令微调）各自在优化什么？为什么不能一步到位？ 2. Token 级交叉熵的梯度具体怎么流？为什么 Vision Token 不设 label？ 3. LoRA 该挂在 LLM 的 …">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第2周-训练阶段Loss设计与PEFT">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/07/VLM%20&%20VLA-2-VLM%20%E8%AE%AD%E7%BB%83%E5%AE%9E%E8%B7%B5%E4%B8%8E%20SFT%20%E5%BE%AE%E8%B0%83-%E7%AC%AC2%E5%91%A8-%E8%AE%AD%E7%BB%83%E9%98%B6%E6%AE%B5Loss%E8%AE%BE%E8%AE%A1%E4%B8%8EPEFT/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的三个问题 1. 两阶段训练（对齐预训练 → 指令微调）各自在优化什么？为什么不能一步到位？ 2. Token 级交叉熵的梯度具体怎么流？为什么 Vision Token 不设 label？ 3. LoRA 该挂在 LLM 的 …">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-06T20:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.686Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="多模态">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/07/VLM%20&%20VLA-2-VLM%20%E8%AE%AD%E7%BB%83%E5%AE%9E%E8%B7%B5%E4%B8%8E%20SFT%20%E5%BE%AE%E8%B0%83-%E7%AC%AC2%E5%91%A8-%E8%AE%AD%E7%BB%83%E9%98%B6%E6%AE%B5Loss%E8%AE%BE%E8%AE%A1%E4%B8%8EPEFT/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/07/VLM%20&%20VLA-2-VLM%20%E8%AE%AD%E7%BB%83%E5%AE%9E%E8%B7%B5%E4%B8%8E%20SFT%20%E5%BE%AE%E8%B0%83-%E7%AC%AC2%E5%91%A8-%E8%AE%AD%E7%BB%83%E9%98%B6%E6%AE%B5Loss%E8%AE%BE%E8%AE%A1%E4%B8%8EPEFT/","path":"2026/09/07/VLM & VLA-2-VLM 训练实践与 SFT 微调-第2周-训练阶段Loss设计与PEFT/","title":"第2周-训练阶段Loss设计与PEFT"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第2周-训练阶段Loss设计与PEFT | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-2-%E5%91%A8%E6%95%99%E7%A8%8B%E8%AE%AD%E7%BB%83%E9%98%B6%E6%AE%B5%E5%88%92%E5%88%86-loss-%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%8F%82%E6%95%B0%E6%95%88%E7%8E%87%E5%BE%AE%E8%B0%83"><span class="nav-number">1.</span> <span class="nav-text"> 第 2 周教程：训练阶段划分、Loss 设计与参数效率微调</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E4%B8%A4%E4%B8%AA%E9%98%B6%E6%AE%B5%E5%9C%A8%E8%A7%A3%E4%B8%A4%E4%B8%AA%E4%B8%8D%E5%90%8C%E7%9A%84%E4%BC%98%E5%8C%96%E9%97%AE%E9%A2%98"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：两个阶段在解两个不同的优化问题</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E6%A0%B9%E6%9C%AC%E7%9F%9B%E7%9B%BE"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 根本矛盾</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E4%B8%A4%E4%B8%AA%E9%98%B6%E6%AE%B5%E7%9A%84%E4%BC%98%E5%8C%96%E9%97%AE%E9%A2%98%E5%BD%A2%E5%BC%8F%E5%8C%96"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 两个阶段的优化问题形式化</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-token-%E7%BA%A7%E4%BA%A4%E5%8F%89%E7%86%B5%E4%B8%8E%E6%A2%AF%E5%BA%A6%E6%B5%81"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 Token 级交叉熵与梯度流</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#14-%E4%B8%BA%E4%BB%80%E4%B9%88-vision-token-%E9%BB%98%E8%AE%A4%E4%B8%8D%E7%AE%97-loss%E4%BD%95%E6%97%B6%E5%BC%80"><span class="nav-number">1.1.4.</span> <span class="nav-text"> 1.4 为什么 Vision Token 默认不算 Loss，何时开</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%8F%82%E6%95%B0%E6%95%88%E7%8E%87%E5%BE%AE%E8%B0%83%E6%98%BE%E5%AD%98%E8%B4%A6%E6%9C%AC%E4%B8%8E-lora-%E6%8C%82%E8%BD%BD%E4%BD%8D%E7%BD%AE"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 参数效率微调：显存账本与 LoRA 挂载位置</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E4%B8%89%E7%A7%8D%E6%96%B9%E6%A1%88%E7%9A%84%E6%98%BE%E5%AD%98%E8%B4%A6%E6%9C%AC7b-%E4%B8%BA%E4%BE%8B"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 三种方案的显存账本（7B 为例）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-lora-%E6%8C%82%E8%BD%BD%E4%BD%8D%E7%BD%AE%E7%9A%84%E7%B3%BB%E7%BB%9F%E5%88%86%E6%9E%90"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 LoRA 挂载位置的系统分析</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-%E5%AD%A6%E4%B9%A0%E7%8E%87%E7%9A%84%E9%80%82%E9%85%8D%E5%8E%9F%E5%88%99"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 学习率的适配原则</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81%E5%AF%B9%E7%85%A7%E5%AE%9E%E9%AA%8C-ab-%E8%AE%BE%E8%AE%A1"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 实现与验证：对照实验 A&#x2F;B 设计</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E5%AE%9E%E9%AA%8C%E7%9F%A9%E9%98%B5"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 实验矩阵</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E8%A7%82%E6%B5%8B%E6%8C%87%E6%A0%87%E4%B8%8E%E5%88%A4%E8%AF%BB"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 观测指标与判读</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-%E6%9C%80%E5%B0%8F%E9%AA%8C%E8%AF%81%E8%84%9A%E6%9C%AC%E7%A1%AE%E8%AE%A4%E4%B8%A4%E5%AE%9E%E9%AA%8C%E7%9A%84%E5%8F%AF%E8%AE%AD%E7%BB%83%E5%8F%82%E6%95%B0%E8%BE%B9%E7%95%8C"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 最小验证脚本：确认两实验的可训练参数边界</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#34-%E7%BB%93%E8%AE%BA%E6%A8%A1%E6%9D%BF%E5%86%99%E8%BF%9B%E4%BD%A0%E7%9A%84%E5%AE%9E%E9%AA%8C%E7%AC%94%E8%AE%B0"><span class="nav-number">1.3.4.</span> <span class="nav-text"> 3.4 结论模板（写进你的实验笔记）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E4%BD%95%E6%97%B6%E5%81%8F%E7%A6%BB%E6%A0%87%E5%87%86%E4%B8%A4%E9%98%B6%E6%AE%B5"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 何时偏离标准两阶段</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E4%B8%89%E4%B8%AA%E4%BB%A3%E8%A1%A8%E6%80%A7%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 三个代表性失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 延伸思考题</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/07/VLM%20&%20VLA-2-VLM%20%E8%AE%AD%E7%BB%83%E5%AE%9E%E8%B7%B5%E4%B8%8E%20SFT%20%E5%BE%AE%E8%B0%83-%E7%AC%AC2%E5%91%A8-%E8%AE%AD%E7%BB%83%E9%98%B6%E6%AE%B5Loss%E8%AE%BE%E8%AE%A1%E4%B8%8EPEFT/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第2周-训练阶段Loss设计与PEFT | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的三个问题 1. 两阶段训练（对齐预训练 → 指令微调）各自在优化什么？为什么不能一步到位？ 2. Token 级交叉熵的梯度具体怎么流？为什么 Vision Token 不设 label？ 3. LoRA 该挂在 LLM 的 …">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第2周-训练阶段Loss设计与PEFT
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-07 04:30:00" itemprop="dateCreated datePublished" datetime="2026-09-07T04:30:00+08:00">2026-09-07</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/" itemprop="url" rel="index"><span itemprop="name">VLM-VLA</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/VLM-VLA/Stage-2-VLM-%E8%AE%AD%E7%BB%83%E5%AE%9E%E8%B7%B5%E4%B8%8E-SFT-%E5%BE%AE%E8%B0%83/" itemprop="url" rel="index"><span itemprop="name">Stage 2-VLM 训练实践与 SFT 微调</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>17 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的三个问题 1. 两阶段训练（对齐预训练 → 指令微调）各自在优化什么？为什么不能一步到位？ 2. Token 级交叉熵的梯度具体怎么流？为什么 Vision Token 不设 label？ 3. LoRA 该挂在 LLM 的 …</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-2-周教程训练阶段划分-loss-设计与参数效率微调"><a class="markdownIt-Anchor" href="#第-2-周教程训练阶段划分-loss-设计与参数效率微调"></a> 第 2 周教程：训练阶段划分、Loss 设计与参数效率微调</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>两阶段训练（对齐预训练 → 指令微调）各自在优化什么？为什么不能一步到位？</li>
+<li>Token 级交叉熵的梯度具体怎么流？为什么 Vision Token 不设 label？</li>
+<li>LoRA 该挂在 LLM 的 Attention 上，还是也要挂到 Projector 和 Vision Tower？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 2 周。交付物：同一小批数据上的对照实验——实验 A（仅训 Projector）vs 实验 B（Projector + LLM LoRA），对比 Loss 降幅与输出连贯度。</p>
+<hr />
+<h2 id="1-第一性原理两个阶段在解两个不同的优化问题"><a class="markdownIt-Anchor" href="#1-第一性原理两个阶段在解两个不同的优化问题"></a> 1. 第一性原理：两个阶段在解两个不同的优化问题</h2>
+<h3 id="11-根本矛盾"><a class="markdownIt-Anchor" href="#11-根本矛盾"></a> 1.1 根本矛盾</h3>
+<p>&quot;让 LLM 看懂图&quot;实际上是<strong>两个性质不同的任务</strong>：</p>
+<ol>
+<li><strong>表示对齐</strong>：把视觉特征空间平移旋转到 LLM 的输入空间——这是一个<strong>几何/分布匹配</strong>问题，改动量小，需要大量图文对（百万级）来覆盖视觉语义的多样性，但对 LLM 本身的知识零要求。</li>
+<li><strong>指令泛化</strong>：教会模型&quot;看图回答问题&quot;的行为范式——这是一个<strong>行为学习</strong>问题，需要的是高质量的指令-回答对（几万条即可），且要求 LLM 保留其语言能力与知识。</li>
+</ol>
+<p>用一个优化目标同时解两个任务，会互相拖累：指令数据的视觉多样性不够支撑对齐，对齐数据的语言质量不足以支撑指令泛化。<strong>两阶段划分的本质是把一个病态的联合优化问题拆成两个良态的子问题。</strong></p>
+<h3 id="12-两个阶段的优化问题形式化"><a class="markdownIt-Anchor" href="#12-两个阶段的优化问题形式化"></a> 1.2 两个阶段的优化问题形式化</h3>
+<p><strong>Stage 1：Feature Alignment（对齐预训练）</strong></p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><munder><mo><mi>min</mi><mo>⁡</mo></mo><msub><mi>θ</mi><mtext>proj</mtext></msub></munder><mtext> </mtext><msub><mi mathvariant="double-struck">E</mi><mrow><mo stretchy="false">(</mo><mi>I</mi><mo separator="true">,</mo><mi>T</mi><mo stretchy="false">)</mo></mrow></msub><mrow><mo fence="true">[</mo><mo>−</mo><munder><mo>∑</mo><mi>i</mi></munder><mi>log</mi><mo>⁡</mo><msub><mi>P</mi><msub><mi>θ</mi><mtext>llm</mtext></msub></msub><mrow><mo fence="true">(</mo><msub><mi>x</mi><mi>i</mi></msub><mo>∣</mo><msub><mi>x</mi><mrow><mo>&lt;</mo><mi>i</mi></mrow></msub><mo separator="true">,</mo><msub><mi>f</mi><mtext>proj</mtext></msub><mo stretchy="false">(</mo><mi>g</mi><mo stretchy="false">(</mo><mi>I</mi><mo stretchy="false">)</mo><mo stretchy="false">)</mo><mo separator="true">;</mo><msub><mi>θ</mi><mtext>llm</mtext></msub><mo fence="true">)</mo></mrow><mo fence="true">]</mo></mrow></mrow><annotation encoding="application/x-tex">\min_{\theta_{\text{proj}}} \ \mathbb{E}_{(I, T)} \left[ -\sum_{i} \log P_{\theta_{\text{llm}}}\left( x_i \mid x_{&lt;i}, f_{\text{proj}}(g(I)) ; \theta_{\text{llm}} \right) \right]
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:3.027669em;vertical-align:-1.277669em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.66786em;"><span style="top:-2.347892em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.02778em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3340428571428571em;"><span style="top:-2.357em;margin-left:-0.02778em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">proj</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2818857142857143em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">min</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9494279999999999em;"><span></span></span></span></span></span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord"><span class="mord mathbb">E</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.34480000000000005em;"><span style="top:-2.5198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.07847em;">I</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight" style="margin-right:0.13889em;">T</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3551999999999999em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size4">[</span></span><span class="mord">−</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0500050000000003em;"><span style="top:-1.872331em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span style="top:-3.050005em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.277669em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop">lo<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999985em;"><span style="top:-2.55em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.02778em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3487714285714287em;margin-left:-0.02778em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">llm</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15122857142857138em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.25586em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mrel mtight">&lt;</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.17737em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.10764em;">f</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.317502em;"><span style="top:-2.5500000000000003em;margin-left:-0.10764em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">proj</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.03588em;">g</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="mclose">)</span><span class="mclose">)</span><span class="mpunct">;</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.02778em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">llm</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size4">]</span></span></span></span></span></span></span></p>
+<p>可训练参数只有 Projector 的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>θ</mi><mtext>proj</mtext></msub></mrow><annotation encoding="application/x-tex">\theta_{\text{proj}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.980548em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.317502em;"><span style="top:-2.5500000000000003em;margin-left:-0.02778em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">proj</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span>（约 20M）。Vision Tower <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>g</mi></mrow><annotation encoding="application/x-tex">g</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">g</span></span></span></span> 与 LLM <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>θ</mi><mtext>llm</mtext></msub></mrow><annotation encoding="application/x-tex">\theta_{\text{llm}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.02778em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">llm</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 完全冻结。数据形态通常是<strong>密集描述式 caption</strong>（LLaVA 用 GPT 生成的详细图注，558K 条）而非问答——目的是让 Projector 学会把视觉特征变成&quot;LLM 读了会觉得通顺&quot;的向量，caption 这种连续描述文本比问答更适合度量对齐质量。</p>
+<p><strong>Stage 2：Visual Instruction Tuning（SFT）</strong></p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><munder><mo><mi>min</mi><mo>⁡</mo></mo><mrow><msub><mi>θ</mi><mtext>proj</mtext></msub><mo separator="true">,</mo><mtext> </mtext><mi mathvariant="normal">Δ</mi><msub><mi>θ</mi><mtext>llm</mtext></msub></mrow></munder><mtext> </mtext><msub><mi mathvariant="double-struck">E</mi><mrow><mo stretchy="false">(</mo><mi>I</mi><mo separator="true">,</mo><mi>Q</mi><mo separator="true">,</mo><mi>A</mi><mo stretchy="false">)</mo></mrow></msub><mrow><mo fence="true">[</mo><mo>−</mo><munder><mo>∑</mo><mrow><mi>i</mi><mo>∈</mo><mi>A</mi></mrow></munder><mi>log</mi><mo>⁡</mo><mi>P</mi><mrow><mo fence="true">(</mo><msub><mi>a</mi><mi>i</mi></msub><mo>∣</mo><mi>q</mi><mo separator="true">,</mo><msub><mi>x</mi><mrow><mo>&lt;</mo><mi>i</mi></mrow></msub><mo separator="true">,</mo><mi>g</mi><mo stretchy="false">(</mo><mi>I</mi><mo stretchy="false">)</mo><mo fence="true">)</mo></mrow><mo fence="true">]</mo></mrow></mrow><annotation encoding="application/x-tex">\min_{\theta_{\text{proj}},\ \Delta\theta_{\text{llm}}} \ \mathbb{E}_{(I, Q, A)} \left[ -\sum_{i \in A} \log P\left( a_i \mid q, x_{&lt;i}, g(I) \right) \right]
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:3.071706em;vertical-align:-1.321706em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.66786em;"><span style="top:-2.347892em;margin-left:0em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.02778em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3340428571428571em;"><span style="top:-2.357em;margin-left:-0.02778em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">proj</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2818857142857143em;"><span></span></span></span></span></span></span><span class="mpunct mtight">,</span><span class="mspace mtight"><span class="mtight"> </span></span><span class="mord mtight">Δ</span><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.02778em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3487714285714287em;margin-left:-0.02778em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">llm</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15122857142857138em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-3em;"><span class="pstrut" style="height:3em;"></span><span><span class="mop">min</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9494279999999999em;"><span></span></span></span></span></span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord"><span class="mord mathbb">E</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.34480000000000005em;"><span style="top:-2.5198em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathnormal mtight" style="margin-right:0.07847em;">I</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">Q</span><span class="mpunct mtight">,</span><span class="mord mathnormal mtight">A</span><span class="mclose mtight">)</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.3551999999999999em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size4">[</span></span><span class="mord">−</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.050005em;"><span style="top:-1.8556639999999998em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mrel mtight">∈</span><span class="mord mathnormal mtight">A</span></span></span></span><span style="top:-3.0500049999999996em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.321706em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop">lo<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord mathnormal">a</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">q</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal">x</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mrel mtight">&lt;</span><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.17737em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">g</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.07847em;">I</span><span class="mclose">)</span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size4">]</span></span></span></span></span></span></span></p>
+<p>解冻 Projector + LLM（全量或 LoRA 的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="normal">Δ</mi><msub><mi>θ</mi><mtext>llm</mtext></msub></mrow><annotation encoding="application/x-tex">\Delta\theta_{\text{llm}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord">Δ</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.02778em;">θ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.02778em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">llm</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span>），Vision Tower 通常继续冻结。注意 loss 只对回答 Token <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi><mo>∈</mo><mi>A</mi></mrow><annotation encoding="application/x-tex">i \in A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.69862em;vertical-align:-0.0391em;"></span><span class="mord mathnormal">i</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal">A</span></span></span></span> 求和（第 1 周的掩码机制）。数据形态是多任务指令集（对话、VQA、推理、定位混合）。</p>
+<p><strong>为什么 Stage 1 不能省</strong>：跳过对齐直接 SFT（相当于随机初始化 Projector 后立刻训指令），Projector 需要在&quot;学会对齐&quot;和&quot;拟合指令行为&quot;之间分摊有限的梯度信号，小数据下两头都做不好。LLaVA 论文的消融显示：仅 558K caption 数据的 Stage 1 之后，即使不经过大规模 SFT，模型已能产生连贯的图像描述——对齐是&quot;听懂语言&quot;的前提，指令是&quot;学会应答&quot;的叠加。</p>
+<h3 id="13-token-级交叉熵与梯度流"><a class="markdownIt-Anchor" href="#13-token-级交叉熵与梯度流"></a> 1.3 Token 级交叉熵与梯度流</h3>
+<p>SFT 的损失在 Token 级展开（结合第 1 周的掩码）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="script">L</mi><mo>=</mo><mo>−</mo><mfrac><mn>1</mn><mrow><mi mathvariant="normal">∣</mi><mi>A</mi><mi mathvariant="normal">∣</mi></mrow></mfrac><munder><mo>∑</mo><mrow><mi>i</mi><mo>∈</mo><mi>A</mi></mrow></munder><mi>log</mi><mo>⁡</mo><mfrac><mrow><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><msubsup><mi>h</mi><mi>i</mi><mi mathvariant="normal">⊤</mi></msubsup><msub><mi>W</mi><mtext>lm</mtext></msub><mo stretchy="false">[</mo><msub><mi>y</mi><mi>i</mi></msub><mo stretchy="false">]</mo><mo stretchy="false">)</mo></mrow><mrow><munder><mo>∑</mo><mrow><mi>v</mi><mo>∈</mo><mi>V</mi></mrow></munder><mi>exp</mi><mo>⁡</mo><mo stretchy="false">(</mo><msubsup><mi>h</mi><mi>i</mi><mi mathvariant="normal">⊤</mi></msubsup><msub><mi>W</mi><mtext>lm</mtext></msub><mo stretchy="false">[</mo><mi>v</mi><mo stretchy="false">]</mo><mo stretchy="false">)</mo></mrow></mfrac></mrow><annotation encoding="application/x-tex">\mathcal{L} = -\frac{1}{|A|} \sum_{i \in A} \log \frac{\exp(h_i^\top W_{\text{lm}}[y_i])}{\sum_{v \in V} \exp(h_i^\top W_{\text{lm}}[v])}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord"><span class="mord mathcal">L</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.847814em;vertical-align:-1.321706em;"></span><span class="mord">−</span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.32144em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">∣</span><span class="mord mathnormal">A</span><span class="mord">∣</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.936em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.050005em;"><span style="top:-1.8556639999999998em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mrel mtight">∈</span><span class="mord mathnormal mtight">A</span></span></span></span><span style="top:-3.0500049999999996em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.321706em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop">lo<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.526108em;"><span style="top:-2.279092em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:-0.0000050000000000050004em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.17862099999999992em;"><span style="top:-2.40029em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03588em;">v</span><span class="mrel mtight">∈</span><span class="mord mathnormal mtight" style="margin-right:0.22222em;">V</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.32708000000000004em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop">exp</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.830908em;"><span style="top:-2.4231360000000004em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.0448000000000004em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.27686399999999994em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">lm</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">[</span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span><span class="mclose">]</span><span class="mclose">)</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mop">exp</span><span class="mopen">(</span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.849108em;"><span style="top:-2.441336em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">⊤</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.258664em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">lm</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">[</span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose">]</span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.0479880000000001em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p>其中 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>h</mi><mi>i</mi></msub></mrow><annotation encoding="application/x-tex">h_i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">h</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 是第 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>i</mi></mrow><annotation encoding="application/x-tex">i</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.65952em;vertical-align:0em;"></span><span class="mord mathnormal">i</span></span></span></span> 位置的 LLM 隐状态，<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>W</mi><mtext>lm</mtext></msub></mrow><annotation encoding="application/x-tex">W_{\text{lm}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">lm</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span> 是 LM head（词表投影），<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>A</mi></mrow><annotation encoding="application/x-tex">A</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord mathnormal">A</span></span></span></span> 是回答 Token 位置集合，归一化在<strong>整个词表</strong>上进行。</p>
+<p><strong>梯度回传路径</strong>（这正是&quot;训练谁&quot;的物理含义）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi mathvariant="script">L</mi><mo>→</mo><msub><mi>W</mi><mtext>lm</mtext></msub><mo>→</mo><mtext>LLM 各层</mtext><mo>→</mo><mtext>视觉 Token 位置的隐状态</mtext><mo>→</mo><mtext>Projector</mtext><mo>→</mo><mtext>Vision Tower</mtext></mrow><annotation encoding="application/x-tex">\mathcal{L} \to W_{\text{lm}} \to \text{LLM 各层} \to \text{视觉 Token 位置的隐状态} \to \text{Projector} \to \text{Vision Tower}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord"><span class="mord mathcal">L</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.83333em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.13889em;">W</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.13889em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">lm</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord">LLM </span><span class="mord cjk_fallback">各层</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">视觉</span><span class="mord"> Token </span><span class="mord cjk_fallback">位置的隐状态</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8777699999999999em;vertical-align:-0.19444em;"></span><span class="mord text"><span class="mord">Projector</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">→</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord">Vision Tower</span></span></span></span></span></span></p>
+<p>三个推论：</p>
+<ol>
+<li><strong>Projector 有梯度，当且仅当回答的预测依赖了视觉信息</strong>。若一个样本的回答纯靠语言先验（如&quot;天空是什么颜色&quot;不需要看图），梯度对 Projector 的贡献接近零——这解释了为什么 Stage 1 要用&quot;必须看图才能写对&quot;的密集 caption。</li>
+<li><strong>Vision Token 位置的 label 为 -100，不影响 Projector 接收梯度</strong>：loss 在回答位置计算，但回答位置的注意力学虑了视觉 Token，梯度沿注意力路径流回视觉 embedding，再到 Projector。<strong>“不算 loss&quot;不等于&quot;不传梯度”</strong>——这两件事经常被混淆。</li>
+<li><strong>Vision Tower 是否有梯度，取决于它是否被冻结</strong>：冻结时 <code>requires_grad=False</code>，梯度到它的输入 embedding 就停了；解冻时继续向 ViT 内部回传。</li>
+</ol>
+<h3 id="14-为什么-vision-token-默认不算-loss何时开"><a class="markdownIt-Anchor" href="#14-为什么-vision-token-默认不算-loss何时开"></a> 1.4 为什么 Vision Token 默认不算 Loss，何时开</h3>
+<p><strong>默认不算的三层原因</strong>：</p>
+<ol>
+<li><strong>任务定义</strong>：SFT 的目标是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mo stretchy="false">(</mo><mtext>文本</mtext><mo>∣</mo><mtext>图文上下文</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">P(\text{文本} \mid \text{图文上下文})</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal" style="margin-right:0.13889em;">P</span><span class="mopen">(</span><span class="mord text"><span class="mord cjk_fallback">文本</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord text"><span class="mord cjk_fallback">图文上下文</span></span><span class="mclose">)</span></span></span></span>，视觉 Token 是条件不是目标。模型的自回归解码只生成文本 Token，视觉 Token 永远不会出现在输出分布的采样空间里。</li>
+<li><strong>预训练与 SFT 的差异</strong>（自测清单考点）：纯文本 LLM 预训练对<strong>所有</strong> Token 计算 loss（next token prediction），因为整条序列都是&quot;语言&quot;，模型需要学会生成语言的每个部分。VLM 的 SFT 中，视觉 Token 是<strong>外来的条件信号</strong>——它不来自词表、无法被 LM head 参数化、也没有&quot;预测下一个视觉 patch&quot;的任务需求。</li>
+<li><strong>信号稀释</strong>：一张图的视觉 Token 数（数百）常超过回答长度（数十）。若参与 loss，交叉熵会被&quot;预测视觉 Token&quot;这种低质量目标淹没，文本能力反而退化。</li>
+</ol>
+<p><strong>什么时候会开视觉 Token 的 loss</strong>（加分量论点）：</p>
+<ul>
+<li><strong>视觉生成模型</strong>（如统一理解+生成的 Chameleon/Emu 系）：输出侧本身包含图像 Token，自然参与 loss——那是另一个任务范式；</li>
+<li><strong>MEGAFLOW 式的视觉-文本联合预训练</strong>：某些多模态预训练会对视觉 Token 做辅助预测任务（如 patch 顺序、掩码重建），作为表征学习的辅助目标；</li>
+<li><strong>SFT 阶段几乎从不开启</strong>——工程上的默认共识。</li>
+</ul>
+<hr />
+<h2 id="2-参数效率微调显存账本与-lora-挂载位置"><a class="markdownIt-Anchor" href="#2-参数效率微调显存账本与-lora-挂载位置"></a> 2. 参数效率微调：显存账本与 LoRA 挂载位置</h2>
+<h3 id="21-三种方案的显存账本7b-为例"><a class="markdownIt-Anchor" href="#21-三种方案的显存账本7b-为例"></a> 2.1 三种方案的显存账本（7B 为例）</h3>
+<p>延续 Stage 1 的核算，这里补全&quot;为什么&quot;的每一项：</p>
+<table>
+<thead>
+<tr>
+<th>组成项</th>
+<th>公式</th>
+<th>Full FT</th>
+<th>LoRA</th>
+<th>QLoRA</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>权重</td>
+<td>参数量 × 精度字节</td>
+<td>14 GB (fp16)</td>
+<td>14 GB (fp16)</td>
+<td><strong>3.5 GB (NF4)</strong></td>
+</tr>
+<tr>
+<td>权重梯度</td>
+<td>同权重精度</td>
+<td>14 GB</td>
+<td>≈ 0（冻结）</td>
+<td>≈ 0</td>
+</tr>
+<tr>
+<td>Adam 一阶矩 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi></mrow><annotation encoding="application/x-tex">m</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">m</span></span></span></span></td>
+<td>参数量 × 4 B (fp32)</td>
+<td>28 GB</td>
+<td>适配器量级</td>
+<td>适配器量级</td>
+</tr>
+<tr>
+<td>Adam 二阶矩 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>v</mi></mrow><annotation encoding="application/x-tex">v</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span></span></span></span></td>
+<td>参数量 × 4 B (fp32)</td>
+<td>28 GB</td>
+<td>适配器量级</td>
+<td>适配器量级</td>
+</tr>
+<tr>
+<td><strong>合计（不含激活）</strong></td>
+<td></td>
+<td><strong>84 GB</strong></td>
+<td><strong>≈ 14.5 GB</strong></td>
+<td><strong>≈ 4 GB</strong></td>
+</tr>
+</tbody>
+</table>
+<p>要点：</p>
+<ul>
+<li><strong>优化器状态是大头</strong>：AdamW 每个可训练参数要维护 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi><mo separator="true">,</mo><mi>v</mi></mrow><annotation encoding="application/x-tex">m, v</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord mathnormal">m</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span></span></span></span> 两个 fp32 副本（8 字节/参数）。84GB 里优化器占了 56GB。这解释了为什么&quot;减少可训练参数&quot;（LoRA）比&quot;压缩权重精度&quot;（量化）对显存更敏感——两者兼得就是 QLoRA。</li>
+<li><strong>梯度精度</strong>：混合精度训练下梯度通常与权重同精度（fp16/bf16），但 LoRA 场景下常直接以 fp32 维护 A/B 矩阵（量小，不在乎），数值更稳。</li>
+<li><strong>激活显存另算</strong>：与 batch × 序列长 × 隐藏维 × 层数成正比，gradient checkpointing 可将其压到约 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msqrt><msub><mi>L</mi><mtext>depth</mtext></msub></msqrt></mrow><annotation encoding="application/x-tex">\sqrt{L_{\text{depth}}}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.24em;vertical-align:-0.35638900000000007em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.8836109999999999em;"><span class="svg-align" style="top:-3.2em;"><span class="pstrut" style="height:3.2em;"></span><span class="mord" style="padding-left:1em;"><span class="mord"><span class="mord mathnormal">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361079999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">depth</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span><span style="top:-2.843611em;"><span class="pstrut" style="height:3.2em;"></span><span class="hide-tail" style="min-width:1.02em;height:1.28em;"><svg width='400em' height='1.28em' viewBox='0 0 400000 1296' preserveAspectRatio='xMinYMin slice'><path d='M263,681c0.7,0,18,39.7,52,119
+c34,79.3,68.167,158.7,102.5,238c34.3,79.3,51.8,119.3,52.5,120
+c340,-704.7,510.7,-1060.3,512,-1067
+l0 -0
+c4.7,-7.3,11,-11,19,-11
+H40000v40H1012.3
+s-271.3,567,-271.3,567c-38.7,80.7,-84,175,-136,283c-52,108,-89.167,185.3,-111.5,232
+c-22.3,46.7,-33.8,70.3,-34.5,71c-4.7,4.7,-12.3,7,-23,7s-12,-1,-12,-1
+s-109,-253,-109,-253c-72.7,-168,-109.3,-252,-110,-252c-10.7,8,-22,16.7,-34,26
+c-22,17.3,-33.3,26,-34,26s-26,-26,-26,-26s76,-59,76,-59s76,-60,76,-60z
+M1001 80h400000v40h-400000z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.35638900000000007em;"><span></span></span></span></span></span></span></span></span> 量级（第 4 周展开）。</li>
+</ul>
+<h3 id="22-lora-挂载位置的系统分析"><a class="markdownIt-Anchor" href="#22-lora-挂载位置的系统分析"></a> 2.2 LoRA 挂载位置的系统分析</h3>
+<p>学习计划提出的思考题值得展开成一个决策表。LoRA 注射点的选择本质是问：<strong>“这个任务需要的权重改动，分布在哪些模块的低秩子空间里？”</strong></p>
+<table>
+<thead>
+<tr>
+<th>挂载位置</th>
+<th>参数量</th>
+<th>效果</th>
+<th>何时选</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>仅 LLM Attention 的 q_proj, v_proj（原版 LoRA 默认）</td>
+<td>最小</td>
+<td>指令跟随足够</td>
+<td>数据 &lt;1k，任务偏语言风格</td>
+</tr>
+<tr>
+<td><strong>LLM 全部 Linear（<code>lora_target: all</code>，含 MLP up/down/gate）</strong></td>
+<td>中</td>
+<td><strong>SFT 标准选择</strong></td>
+<td>绝大多数 VLM SFT</td>
+</tr>
+<tr>
+<td>+ Projector</td>
+<td>极小增量</td>
+<td>对齐强化</td>
+<td>视觉任务定制强（如坐标输出）</td>
+</tr>
+<tr>
+<td>+ Vision Tower 顶层</td>
+<td>中</td>
+<td>视觉表征适配</td>
+<td>域差距大（医学/遥感影像）</td>
+</tr>
+</tbody>
+</table>
+<p>三个关键论断：</p>
+<ol>
+<li><strong>LLM 的 MLP 值得挂</strong>：早期 LoRA 论文只挂 q/v 是在 GLUE 小任务上的结论；后续工作（如 QLoRA 论文的消融）显示对 SFT 类任务，挂上 MLP 的收益显著。现代框架默认 <code>lora_target: all</code> 不是偷懒，是消融后的共识。</li>
+<li><strong>Projector 要不要挂</strong>：SFT 阶段 Projector 本来就是解冻全训的（量级仅 10~20M：LLaVA-1.5 约 20M、Qwen2-VL-2B 的 merger 约 9M，直接全量更新，不值得用 LoRA 包裹）。&quot;给 Projector 挂 LoRA&quot;是个伪需求——除非你的 Pipeline 把 Projector 也冻结了（某些只调 LLM 的场景，此时挂上 LoRA 以小幅校准对齐）。</li>
+<li><strong>Vision Tower 的默认答案是不挂</strong>（Stage 1 第 6 周已论证冻结理由），例外是<strong>域差距大</strong>时挂顶部若干层的 LoRA——注意是&quot;顶层&quot;，因为 ViT 浅层是通用的边缘/纹理特征，深层才是语义特征；域适配只需要动语义层。</li>
+</ol>
+<h3 id="23-学习率的适配原则"><a class="markdownIt-Anchor" href="#23-学习率的适配原则"></a> 2.3 学习率的适配原则</h3>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mtext>lr</mtext><mtext>LoRA</mtext></msub><mo>≈</mo><mn>10</mn><mo>×</mo><msub><mtext>lr</mtext><mtext>Full</mtext></msub><mo>≈</mo><mn>100</mn><mo>×</mo><msub><mtext>lr</mtext><mtext>预训练</mtext></msub></mrow><annotation encoding="application/x-tex">\text{lr}_{\text{LoRA}} \approx 10 \times \text{lr}_{\text{Full}} \approx 100 \times \text{lr}_{\text{预训练}}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord text"><span class="mord">lr</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">LoRA</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mord">0</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord text"><span class="mord">lr</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord mtight">Full</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mord">0</span><span class="mord">0</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord text"><span class="mord">lr</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">预训练</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span></span></p>
+<ul>
+<li>全量 SFT：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mo>∼</mo><mn>2</mn><mo>×</mo><mn>1</mn><msup><mn>0</mn><mrow><mo>−</mo><mn>5</mn></mrow></msup></mrow><annotation encoding="application/x-tex">1 \sim 2 \times 10^{-5}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">5</span></span></span></span></span></span></span></span></span></span></span></span>；LoRA：<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mo>×</mo><mn>1</mn><msup><mn>0</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">1 \times 10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span>；QLoRA 论文发现 4-bit 下可稍大（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mo>∼</mo><mn>2</mn><mo>×</mo><mn>1</mn><msup><mn>0</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">1 \sim 2 \times 10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span>）。</li>
+<li>不同模块可异构：Projector 是从零/随机初始化的模块（若 Stage 1 未做），需要比 LoRA 更大的 lr（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><mo>×</mo><mn>1</mn><msup><mn>0</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup><mo>∼</mo><mn>1</mn><msup><mn>0</mn><mrow><mo>−</mo><mn>3</mn></mrow></msup></mrow><annotation encoding="application/x-tex">1 \times 10^{-4} \sim 10^{-3}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">3</span></span></span></span></span></span></span></span></span></span></span></span>）；LLM LoRA 用 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><msup><mn>0</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span>。分组学习率方面，ms-swift 提供 <code>vit_lr</code> / <code>aligner_lr</code> 参数（视觉塔/对齐模块独立学习率）；LLaMA-Factory 目前是单一 <code>learning_rate</code>，需要分组时可分两次训练或自行按参数组拆分。</li>
+</ul>
+<hr />
+<h2 id="3-实现与验证对照实验-ab-设计"><a class="markdownIt-Anchor" href="#3-实现与验证对照实验-ab-设计"></a> 3. 实现与验证：对照实验 A/B 设计</h2>
+<h3 id="31-实验矩阵"><a class="markdownIt-Anchor" href="#31-实验矩阵"></a> 3.1 实验矩阵</h3>
+<p>同一数据集（建议 200~500 条图文指令，构造方法见第 1 周教程）、同一超参（lr <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><msup><mn>0</mn><mrow><mo>−</mo><mn>4</mn></mrow></msup></mrow><annotation encoding="application/x-tex">10^{-4}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">4</span></span></span></span></span></span></span></span></span></span></span></span>、3 epoch、bf16、batch 8），仅改可训练参数集合：</p>
+<table>
+<thead>
+<tr>
+<th>实验</th>
+<th>可训练参数</th>
+<th>实现方式（LLaMA-Factory，底座 Qwen2-VL-2B）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>A：仅 Projector</td>
+<td>Merger/Projector（约 9M）</td>
+<td><code>finetuning_type: freeze</code> + <code>freeze_vision_tower: true</code>（Qwen2-VL 的 Projector 在权重里叫 <code>visual.merger</code>，freeze 模式下默认可训；LLaVA 系模块名为 <code>multi_modal_projector</code>）</td>
+</tr>
+<tr>
+<td>B：Projector + LLM LoRA</td>
+<td>Projector + LoRA(r=8)（合计约 19M）</td>
+<td><code>finetuning_type: lora</code> + <code>lora_target: all</code>（Projector 默认解冻）</td>
+</tr>
+</tbody>
+</table>
+<h3 id="32-观测指标与判读"><a class="markdownIt-Anchor" href="#32-观测指标与判读"></a> 3.2 观测指标与判读</h3>
+<p><strong>训练动力学对比</strong>（记录到 WandB）：</p>
+<table>
+<thead>
+<tr>
+<th>指标</th>
+<th>实验 A 预期</th>
+<th>实验 B 预期</th>
+<th>原因</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>初始 loss</td>
+<td>明显偏高（如 3~5）</td>
+<td>相近</td>
+<td>Projector 未对齐时 LLM 读到&quot;乱码&quot;视觉 Token</td>
+</tr>
+<tr>
+<td>loss 下降斜率</td>
+<td>前 100 步快降后<strong>迅速平台</strong></td>
+<td>持续下降到更低水位</td>
+<td>A 只有 20M 参数可调，拟合容量是瓶颈</td>
+</tr>
+<tr>
+<td>收敛 loss</td>
+<td>停在较高水位（如 1.5+）</td>
+<td>0.5~0.8</td>
+<td>LLM 的语言适配能力在 B 中被释放</td>
+</tr>
+<tr>
+<td>梯度范数</td>
+<td>波动大（小参数量+大 lr）</td>
+<td>平稳</td>
+<td>参数越多，优化景观越平滑</td>
+</tr>
+</tbody>
+</table>
+<p><strong>推理输出对比</strong>（同 5 张测试图、同 prompt）：</p>
+<ul>
+<li><strong>A 的典型表现</strong>：输出&quot;通顺但空洞&quot;——语法正确、风格正常（LLM 没动，语言能力完好），但对图的描述泛泛（“一张图片，上面有一些东西”），细节问题（数量、位置、颜色）常答错。<strong>Projector 独训只能让 LLM&quot;大概感觉到图里有什么&quot;，改变不了 LLM 的应答行为。</strong></li>
+<li><strong>B 的典型表现</strong>：输出&quot;具体且可辨&quot;——能说出物体数量/颜色/空间关系，回答风格向训练数据的规范收敛。代价是需要监控域外能力（灾难性遗忘，第 3 周展开）。</li>
+</ul>
+<h3 id="33-最小验证脚本确认两实验的可训练参数边界"><a class="markdownIt-Anchor" href="#33-最小验证脚本确认两实验的可训练参数边界"></a> 3.3 最小验证脚本：确认两实验的可训练参数边界</h3>
+<p>在启动昂贵的真实训练前，先用 1 分钟验证参数冻结配置是否真的生效：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">验证两种微调策略的可训练参数集合与显存差异。</span></span><br><span class="line"><span class="string">运行方式: python stage2_week2_freeze_check.py</span></span><br><span class="line"><span class="string">依赖: torch, transformers (仅加载 config, 不下权重)</span></span><br><span class="line"><span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">from</span> transformers <span class="keyword">import</span> Qwen2VLForConditionalGeneration, AutoConfig</span><br><span class="line"></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">report</span>(<span class="params">model, tag</span>):</span><br><span class="line">    trainable, total = <span class="number">0</span>, <span class="number">0</span></span><br><span class="line">    groups = &#123;&#125;</span><br><span class="line">    <span class="keyword">for</span> n, p <span class="keyword">in</span> model.named_parameters():</span><br><span class="line">        total += p.numel()</span><br><span class="line">        <span class="keyword">if</span> p.requires_grad:</span><br><span class="line">            trainable += p.numel()</span><br><span class="line">            key = n.split(<span class="string">&quot;.&quot;</span>)[<span class="number">1</span>] <span class="keyword">if</span> <span class="string">&quot;.&quot;</span> <span class="keyword">in</span> n <span class="keyword">else</span> n      <span class="comment"># 顶层模块名</span></span><br><span class="line">            groups[key] = groups.get(key, <span class="number">0</span>) + p.numel()</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;[<span class="subst">&#123;tag&#125;</span>] 可训练 <span class="subst">&#123;trainable/<span class="number">1e6</span>:<span class="number">.1</span>f&#125;</span>M / 全部 <span class="subst">&#123;total/<span class="number">1e6</span>:<span class="number">.0</span>f&#125;</span>M &quot;</span></span><br><span class="line">          <span class="string">f&quot;(<span class="subst">&#123;trainable/total:<span class="number">.2</span>%&#125;</span>)  模块分布: <span class="subst">&#123; &#123;k: <span class="string">f&#x27;<span class="subst">&#123;v/<span class="number">1e6</span>:<span class="number">.1</span>f&#125;</span>M&#x27;</span> <span class="keyword">for</span> k, v <span class="keyword">in</span> groups.items()&#125;</span> &#125;&quot;</span>)</span><br><span class="line">    <span class="keyword">return</span> trainable</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">MODEL_ID = <span class="string">&quot;Qwen/Qwen2-VL-2B-Instruct&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 实验 A: 仅 Projector (Qwen2-VL 中 Projector/Merger 位于 visual.merger) ----</span></span><br><span class="line"><span class="comment"># from_config 只构建随机初始化的骨架, 不下载权重</span></span><br><span class="line">model = Qwen2VLForConditionalGeneration.from_config(</span><br><span class="line">    AutoConfig.from_pretrained(MODEL_ID))</span><br><span class="line"><span class="keyword">for</span> p <span class="keyword">in</span> model.parameters():</span><br><span class="line">    p.requires_grad_(<span class="literal">False</span>)</span><br><span class="line"><span class="keyword">for</span> n, p <span class="keyword">in</span> model.named_parameters():</span><br><span class="line">    <span class="keyword">if</span> <span class="string">&quot;visual.merger&quot;</span> <span class="keyword">in</span> n:</span><br><span class="line">        p.requires_grad_(<span class="literal">True</span>)</span><br><span class="line">ta = report(model, <span class="string">&quot;A: 仅 Projector&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 实验 B: Projector + LLM LoRA (用 r=8 估算) ----</span></span><br><span class="line"><span class="comment"># LoRA 参数量估算: 每个被注入的 Linear 增加两个 r×d 矩阵</span></span><br><span class="line">r = <span class="number">8</span></span><br><span class="line">lora_params = <span class="number">0</span></span><br><span class="line"><span class="keyword">for</span> name, module <span class="keyword">in</span> model.named_modules():</span><br><span class="line">    <span class="keyword">if</span> <span class="string">&quot;model.layers&quot;</span> <span class="keyword">in</span> name <span class="keyword">and</span> <span class="built_in">isinstance</span>(module, torch.nn.Linear):</span><br><span class="line">        d_in, d_out = module.in_features, module.out_features</span><br><span class="line">        lora_params += r * (d_in + d_out)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;[B: Projector + LoRA] LoRA 注入量估算 ≈ <span class="subst">&#123;lora_params/<span class="number">1e6</span>:<span class="number">.1</span>f&#125;</span>M &quot;</span></span><br><span class="line">      <span class="string">f&quot;(r=<span class="subst">&#123;r&#125;</span>, LLM 侧全部 Linear); 加上 Projector ≈ <span class="subst">&#123;(lora_params+ta)/<span class="number">1e6</span>:<span class="number">.1</span>f&#125;</span>M&quot;</span>)</span><br><span class="line"><span class="keyword">assert</span> ta &lt; <span class="number">30e6</span>, <span class="string">&quot;实验 A 的可训练参数应只有 Projector 量级 (~9M)&quot;</span></span><br><span class="line"><span class="keyword">assert</span> <span class="number">5e6</span> &lt; lora_params &lt; <span class="number">20e6</span>, <span class="string">&quot;LoRA 注入量应约 9M (2B 底座, 28 层)&quot;</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;✅ 两种策略的参数边界符合预期&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出</strong>（估算值，用于规模核对；Qwen2-VL-2B 的 merger = Linear(4×1152→1536)+GELU+Linear(1536→1536) ≈ 9.4M）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[A: 仅 Projector] 可训练 ~9.4M / 全部 ~2210M (0.4%)  模块分布: &#123;&#x27;visual.merger&#x27;: 9.4M&#125;</span><br><span class="line">[B: Projector + LoRA] LoRA 注入量估算 ≈ 9.2M (r=8, LLM 侧全部 Linear); 加上 Projector ≈ 18.6M</span><br><span class="line">✅ 两种策略的参数边界符合预期</span><br></pre></td></tr></table></figure>
+<p>关键断言是 <code>ta &lt; 30M</code>：如果实验 A 的可训练参数达到几十亿，说明冻结配置写错了（这是对照实验最常见的静默失败——A/B 实际训了同样的东西，对比结论作废）。<strong>做任何消融实验前，先打印可训练参数清单</strong>，这条纪律能省掉大部分无效 GPU 小时。</p>
+<h3 id="34-结论模板写进你的实验笔记"><a class="markdownIt-Anchor" href="#34-结论模板写进你的实验笔记"></a> 3.4 结论模板（写进你的实验笔记）</h3>
+<blockquote>
+<p>仅训 Projector（实验 A）：loss 快速平台、输出通顺但视觉细节差——它只解决&quot;LLM 能读到视觉信息&quot;，解决不了&quot;LLM 会用视觉信息回答&quot;。<br />
+Projector + LLM LoRA（实验 B）：loss 更低、回答具体且风格对齐——指令行为由 LLM 侧的适配承载。<br />
+两阶段设计（Stage 1 = A 的大数据版 → Stage 2 = B）正是把两个正交的子任务分配给各自最经济的参数集合。</p>
+</blockquote>
+<hr />
+<h2 id="4-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#4-工程权衡与失效模式"></a> 4. 工程权衡与失效模式</h2>
+<h3 id="41-何时偏离标准两阶段"><a class="markdownIt-Anchor" href="#41-何时偏离标准两阶段"></a> 4.1 何时偏离标准两阶段</h3>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>策略调整</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>底座 VLM 已对齐（如 Qwen2-VL 官方权重）</td>
+<td><strong>跳过 Stage 1</strong>，直接 SFT</td>
+<td>别人已替你完成对齐，重做浪费且可能退步</td>
+</tr>
+<tr>
+<td>视觉域差距大（医学/遥感）</td>
+<td>Stage 1 升级：解冻 Vision Tower 顶部 + 大规模域内 caption</td>
+<td>通用视觉特征失效，需先适配表征</td>
+</tr>
+<tr>
+<td>数据 &lt;1k 且任务为风格/格式</td>
+<td>仅实验 A 或轻量 LoRA，防遗忘</td>
+<td>动 LLM 的收益低于遗忘风险</td>
+</tr>
+<tr>
+<td>需要 OCR/坐标等精细输出</td>
+<td>Stage 2 中挂 MLP + 提高 r</td>
+<td>格式约束需要更高秩的权重改动空间</td>
+</tr>
+</tbody>
+</table>
+<h3 id="42-三个代表性失效模式"><a class="markdownIt-Anchor" href="#42-三个代表性失效模式"></a> 4.2 三个代表性失效模式</h3>
+<p><strong>失效 1：Stage 1 数据用了问答而非 caption，对齐质量差</strong></p>
+<ul>
+<li><strong>症状</strong>：Stage 1 loss 收敛良好，但 Stage 2 初期 loss 异常高、视觉相关问题仍差。</li>
+<li><strong>根因</strong>：短答案的问答数据监督信号太少（一条样本十几个 Token），Projector 拿到的对齐梯度不足；LLM 还学会了走捷径（靠语言先验答题，视觉通道形同虚设——&quot;语言先验捷径&quot;是多模态训练的经典陷阱，hallucination 的重要来源，Stage 3 会正面处理）。</li>
+<li><strong>定位</strong>：做一个探针测试：输入纯噪声图片问&quot;描述图片&quot;，若输出依然流畅具体，说明模型在靠先验答题。</li>
+<li><strong>修复</strong>：Stage 1 换密集 caption 数据（每条回答 50+ Token，且必须看图才能写对）。</li>
+</ul>
+<p><strong>失效 2：LoRA 的 <code>modules_to_save</code> 漏配导致 Projector 没训</strong></p>
+<ul>
+<li><strong>症状</strong>：实验 B 的效果与预期差距大，接近实验 A。</li>
+<li><strong>根因</strong>：某些框架版本中 <code>finetuning_type: lora</code> 默认<strong>冻结除 LoRA 外的一切</strong>，Projector 若未被加入 <code>additional_trainable_parameters</code>，则实际只训了 LLM 适配器，视觉通道的适配没发生。</li>
+<li><strong>定位</strong>：训练日志开头会打印 trainable params 数量——对照 3.3 节的估算值（2B 底座下&quot;约 19M（含 Projector）vs 约 9M（纯 LoRA）&quot;），差一个 Projector 就能看出来。</li>
+<li><strong>修复</strong>：显式配置 Projector 可训（LLaMA-Factory 的 <code>freeze_multi_modal_projector: false</code>）。</li>
+</ul>
+<p><strong>失效 3：两阶段学习率没重置，Stage 2 沿用过大的 lr</strong></p>
+<ul>
+<li><strong>症状</strong>：Stage 2 初期 loss 剧烈震荡甚至短暂上升。</li>
+<li><strong>根因</strong>：Stage 1 常用较大 lr（<span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>1</mn><msup><mn>0</mn><mrow><mo>−</mo><mn>3</mn></mrow></msup></mrow><annotation encoding="application/x-tex">10^{-3}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">3</span></span></span></span></span></span></span></span></span></span></span></span> 量级，小参数量需要大步长），Stage 2 涉及 LLM 权重（全量或 LoRA），需要小一个量级以上的 lr。沿用旧配置等于对 7B 权重做激进更新。</li>
+<li><strong>定位</strong>：对比两阶段的 lr 配置与 loss 曲线开局形态。</li>
+<li><strong>修复</strong>：阶段切换时显式重置 lr 并保留 warmup；用 cosine scheduler 时确认 <code>warmup_ratio</code> 在新阶段重新生效。</li>
+</ul>
+<hr />
+<h2 id="5-延伸思考题"><a class="markdownIt-Anchor" href="#5-延伸思考题"></a> 5. 延伸思考题</h2>
+<ol>
+<li><strong>梯度流向推演</strong>：假设把 Vision Token 的 label 打开（不设 -100），用 2.1 节的显存账本推演：可训练参数量不变的前提下，显存会变吗？梯度范数统计会发生什么变化？（提示：激活不变、loss 计算的中间量不变，显存几乎不变；但视觉 Token 的 loss 梯度会通过 Projector 反向涌入，Projector 梯度范数可能放大一个量级，需重调 lr——&quot;loss 口径&quot;不只是监督问题，还是优化动力学问题。）</li>
+<li><strong>反事实实验设计</strong>：如果让你设计实验证明&quot;Stage 1 是必要的&quot;，你会控制哪些变量？至少给出四组对照（提示：{Stage1 有/无} × {Stage1 数据量 1%/100%} × {评估域内/域外}，并注意两组实验要共享同一个 Stage 2 配置与随机种子）。</li>
+<li><strong>秩的分配问题</strong>：总 LoRA 参数预算固定为 50M，方案一是 LLM 全层挂 r=8，方案二是只挂 q/v 但 r=64。对&quot;图表数据提取&quot;任务，你赌哪个好？说明你的优化景观直觉（开放题：MLP 参与格式/知识型改动的证据 vs 高秩单模块的表达力，两者都有文献支持；关键是训练前想清楚任务改动的&quot;分布维度&quot;）。</li>
+</ol>
+<hr />
+<p><em>下一篇：第 3 周：数据配方与多任务消融实验</em></p>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%A4%9A%E6%A8%A1%E6%80%81/" rel="tag"># 多模态</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/07/VLM%20&%20VLA-2-VLM%20%E8%AE%AD%E7%BB%83%E5%AE%9E%E8%B7%B5%E4%B8%8E%20SFT%20%E5%BE%AE%E8%B0%83-%E7%AC%AC1%E5%91%A8-%E5%A4%9A%E6%A8%A1%E6%80%81%E6%95%B0%E6%8D%AEPipeline%E4%B8%8ECollator/" rel="prev" title="第1周-多模态数据Pipeline与Collator">
+                  <i class="fa fa-angle-left"></i> 第1周-多模态数据Pipeline与Collator
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/07/VLM%20&%20VLA-2-VLM%20%E8%AE%AD%E7%BB%83%E5%AE%9E%E8%B7%B5%E4%B8%8E%20SFT%20%E5%BE%AE%E8%B0%83-%E7%AC%AC3%E5%91%A8-%E6%95%B0%E6%8D%AE%E9%85%8D%E6%96%B9%E4%B8%8E%E6%B6%88%E8%9E%8D%E5%AE%9E%E9%AA%8C/" rel="next" title="第3周-数据配方与消融实验">
+                  第3周-数据配方与消融实验 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

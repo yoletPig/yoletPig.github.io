@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="进阶篇第 4 章（架构系列完结篇）。学了 14 章的概念，最好的练习是读真实系统。本章选四个公开资料充分、风格迥异的系统——Redis、Kafka、PostgreSQL、SQLite——用本系列的眼光拆解：它们的架构风格是什么、关键取舍是…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="14-进阶-大型系统风格案例剖析">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/05/14-%E8%BF%9B%E9%98%B6-%E5%A4%A7%E5%9E%8B%E7%B3%BB%E7%BB%9F%E9%A3%8E%E6%A0%BC%E6%A1%88%E4%BE%8B%E5%89%96%E6%9E%90/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="进阶篇第 4 章（架构系列完结篇）。学了 14 章的概念，最好的练习是读真实系统。本章选四个公开资料充分、风格迥异的系统——Redis、Kafka、PostgreSQL、SQLite——用本系列的眼光拆解：它们的架构风格是什么、关键取舍是…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-05T11:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.618Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="架构">
+<meta property="article:tag" content="设计模式">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/05/14-%E8%BF%9B%E9%98%B6-%E5%A4%A7%E5%9E%8B%E7%B3%BB%E7%BB%9F%E9%A3%8E%E6%A0%BC%E6%A1%88%E4%BE%8B%E5%89%96%E6%9E%90/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/05/14-%E8%BF%9B%E9%98%B6-%E5%A4%A7%E5%9E%8B%E7%B3%BB%E7%BB%9F%E9%A3%8E%E6%A0%BC%E6%A1%88%E4%BE%8B%E5%89%96%E6%9E%90/","path":"2026/09/05/14-进阶-大型系统风格案例剖析/","title":"14-进阶-大型系统风格案例剖析"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>14-进阶-大型系统风格案例剖析 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#14-%E8%BF%9B%E9%98%B6%E5%A4%A7%E5%9E%8B%E7%B3%BB%E7%BB%9F%E9%A3%8E%E6%A0%BC%E6%A1%88%E4%BE%8B%E5%89%96%E6%9E%90"><span class="nav-number">1.</span> <span class="nav-text"> 14 - 进阶：大型系统风格案例剖析</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-redis%E7%BA%A6%E6%9D%9F%E9%A9%B1%E5%8A%A8%E7%9A%84%E6%9E%81%E7%AE%80%E4%B8%BB%E4%B9%89"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. Redis：约束驱动的极简主义</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%AC%E8%AE%A4%E7%9A%84%E8%AE%BE%E8%AE%A1%E8%A6%81%E7%82%B9%E6%9D%A5%E6%BA%90redis-%E5%AE%98%E6%96%B9%E6%96%87%E6%A1%A3%E4%B8%8E%E4%BD%9C%E8%80%85-antirez-%E7%9A%84%E5%8D%9A%E5%AE%A2"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 公认的设计要点（来源：Redis 官方文档与作者 antirez 的博客）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%94%A8%E6%9C%AC%E7%B3%BB%E5%88%97%E7%9A%84%E7%9C%BC%E5%85%89%E8%A7%A3%E8%AF%BB"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 用本系列的眼光解读</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-kafka%E6%8A%8A%E6%97%A5%E5%BF%97%E6%8F%90%E5%8D%87%E4%B8%BA%E4%B8%80%E7%AD%89%E6%8A%BD%E8%B1%A1"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. Kafka：把&quot;日志&quot;提升为一等抽象</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%AC%E8%AE%A4%E7%9A%84%E8%AE%BE%E8%AE%A1%E8%A6%81%E7%82%B9%E6%9D%A5%E6%BA%90kafka-%E5%AE%98%E6%96%B9%E6%96%87%E6%A1%A3%E4%B8%8E%E5%8E%9F%E5%A7%8B%E8%AE%BA%E6%96%87-kreps-et-al-2011"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 公认的设计要点（来源：Kafka 官方文档与原始论文 Kreps et al. 2011）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%94%A8%E6%9C%AC%E7%B3%BB%E5%88%97%E7%9A%84%E7%9C%BC%E5%85%89%E8%A7%A3%E8%AF%BB-2"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 用本系列的眼光解读</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-postgresql%E4%BB%A5%E6%AD%A3%E7%A1%AE%E6%80%A7%E4%B8%BA%E9%94%9A%E7%82%B9%E7%9A%84%E5%88%86%E5%B1%82%E5%8D%95%E4%BD%93"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. PostgreSQL：以&quot;正确性&quot;为锚点的分层单体</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%AC%E8%AE%A4%E7%9A%84%E8%AE%BE%E8%AE%A1%E8%A6%81%E7%82%B9%E6%9D%A5%E6%BA%90postgresql-%E5%AE%98%E6%96%B9%E6%96%87%E6%A1%A3"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 公认的设计要点（来源：PostgreSQL 官方文档）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%94%A8%E6%9C%AC%E7%B3%BB%E5%88%97%E7%9A%84%E7%9C%BC%E5%85%89%E8%A7%A3%E8%AF%BB-3"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 用本系列的眼光解读</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-sqlite%E6%B5%81%E7%A8%8B%E4%B8%8E%E7%BA%AA%E5%BE%8B%E5%8D%B3%E6%9E%B6%E6%9E%84"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. SQLite：流程与纪律即架构</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%85%AC%E8%AE%A4%E7%9A%84%E8%AE%BE%E8%AE%A1%E8%A6%81%E7%82%B9%E6%9D%A5%E6%BA%90sqlite-%E5%AE%98%E6%96%B9%E6%96%87%E6%A1%A3-how-sqlite-is-tested-most-widely-deployed-%E7%AD%89%E9%A1%B5%E9%9D%A2"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 公认的设计要点（来源：SQLite 官方文档 “How SQLite Is Tested”、“Most Widely Deployed” 等页面）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E7%94%A8%E6%9C%AC%E7%B3%BB%E5%88%97%E7%9A%84%E7%9C%BC%E5%85%89%E8%A7%A3%E8%AF%BB-4"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 用本系列的眼光解读</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E6%A8%AA%E5%90%91%E5%AF%B9%E7%85%A7%E5%9B%9B%E4%B8%AA%E7%B3%BB%E7%BB%9F%E5%9B%9E%E7%AD%94%E5%90%8C%E4%B8%80%E7%BB%84%E9%97%AE%E9%A2%98"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 横向对照：四个系统回答同一组问题</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%87%AA%E6%B5%8B"><span class="nav-number">1.6.</span> <span class="nav-text"> 自测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%B3%BB%E5%88%97%E6%94%B6%E5%AE%98"><span class="nav-number">1.7.</span> <span class="nav-text"> 系列收官</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8F%82%E8%80%83%E6%9D%A5%E6%BA%90"><span class="nav-number">1.8.</span> <span class="nav-text"> 参考来源</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/05/14-%E8%BF%9B%E9%98%B6-%E5%A4%A7%E5%9E%8B%E7%B3%BB%E7%BB%9F%E9%A3%8E%E6%A0%BC%E6%A1%88%E4%BE%8B%E5%89%96%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="14-进阶-大型系统风格案例剖析 | Yoleen的博客">
+      <meta itemprop="description" content=" 进阶篇第 4 章（架构系列完结篇）。学了 14 章的概念，最好的练习是读真实系统。本章选四个公开资料充分、风格迥异的系统——Redis、Kafka、PostgreSQL、SQLite——用本系列的眼光拆解：它们的架构风格是什么、关键取舍是…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          14-进阶-大型系统风格案例剖析
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-05 19:30:00" itemprop="dateCreated datePublished" datetime="2026-09-05T19:30:00+08:00">2026-09-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F%E4%B8%8E%E6%9E%B6%E6%9E%84/" itemprop="url" rel="index"><span itemprop="name">设计模式与架构</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>9 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 进阶篇第 4 章（架构系列完结篇）。学了 14 章的概念，最好的练习是读真实系统。本章选四个公开资料充分、风格迥异的系统——Redis、Kafka、PostgreSQL、SQLite——用本系列的眼光拆解：它们的架构风格是什么、关键取舍是…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="14-进阶大型系统风格案例剖析"><a class="markdownIt-Anchor" href="#14-进阶大型系统风格案例剖析"></a> 14 - 进阶：大型系统风格案例剖析</h1>
+<blockquote>
+<p>进阶篇第 4 章（架构系列完结篇）。学了 14 章的概念，最好的练习是<strong>读真实系统</strong>。本章选四个公开资料充分、风格迥异的系统——Redis、Kafka、PostgreSQL、SQLite——用本系列的眼光拆解：它们的架构风格是什么、关键取舍是什么、对我们自己的设计有什么可迁移的启发。所有事实均来自各项目官方文档/论文/作者公开阐述，出处标注在各节。</p>
+</blockquote>
+<blockquote>
+<p>方法论声明：案例剖析只覆盖公开文档确认的设计要点，不臆测内部实现；“启发&quot;部分明确区分&quot;事实&quot;与&quot;我的解读”。</p>
+</blockquote>
+<h2 id="1-redis约束驱动的极简主义"><a class="markdownIt-Anchor" href="#1-redis约束驱动的极简主义"></a> 1. Redis：约束驱动的极简主义</h2>
+<h3 id="公认的设计要点来源redis-官方文档与作者-antirez-的博客"><a class="markdownIt-Anchor" href="#公认的设计要点来源redis-官方文档与作者-antirez-的博客"></a> 公认的设计要点（来源：Redis 官方文档与作者 antirez 的博客）</h3>
+<ol>
+<li><strong>内存优先 + 单线程命令执行</strong>（网络 I/O 在 Redis 6.0 起支持多线程，但<strong>命令执行保持单线程</strong>）：每个命令原子完成，从而把最难的并发问题从数据结构层整个砍掉；</li>
+<li><strong>数据结构专门化</strong>：不是&quot;通用 KV&quot;，而是为每类访问模式定制结构（List 的 quicklist、ZSet 的跳表+哈希双结构、String 的 SDS 动态字符串）。SDS 做到 O(1) 取长度、二进制安全；</li>
+<li><strong>持久化是二选一的权衡</strong>：RDB（定时快照，快但可能丢最近数据）vs AOF（追加日志，更安全但文件大/恢复慢），可混用——官方文档明确讨论了两者的权衡；</li>
+<li><strong>单机为核，集群按槽分片</strong>（16384 slot 的哈希槽方案）。</li>
+</ol>
+<h3 id="用本系列的眼光解读"><a class="markdownIt-Anchor" href="#用本系列的眼光解读"></a> 用本系列的眼光解读</h3>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>本系列概念</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>单线程换原子性</td>
+<td>09 篇取舍公理：用&quot;吞吐上限&quot;换&quot;极低复杂度+无锁正确性&quot;</td>
+</tr>
+<tr>
+<td>每种访问模式一个专门结构</td>
+<td>01 篇&quot;为变化设计&quot;的反面印证：<strong>当变化轴固定且性能极端重要时，为场景定制优于通用抽象</strong></td>
+</tr>
+<tr>
+<td>RDB vs AOF</td>
+<td>09 篇质量属性冲突：持久性 vs 性能，给用户选项而非替用户决定</td>
+</tr>
+<tr>
+<td>16384 槽</td>
+<td>数据架构（13 篇）：分片键的选择决定了哪些多 key 操作可用（跨槽 mget 受限）——<strong>分片键是数据架构最不可逆的决策之一</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>可迁移的启发</strong>：约束你的问题域（Redis 只做内存 KV）能换来数量级的简单性。我们设计子系统时常问反方向的问题：“这个组件<strong>不打算</strong>解决什么？”——答案越清晰，设计越锋利。</p>
+<h2 id="2-kafka把日志提升为一等抽象"><a class="markdownIt-Anchor" href="#2-kafka把日志提升为一等抽象"></a> 2. Kafka：把&quot;日志&quot;提升为一等抽象</h2>
+<h3 id="公认的设计要点来源kafka-官方文档与原始论文-kreps-et-al-2011"><a class="markdownIt-Anchor" href="#公认的设计要点来源kafka-官方文档与原始论文-kreps-et-al-2011"></a> 公认的设计要点（来源：Kafka 官方文档与原始论文 Kreps et al. 2011）</h3>
+<ol>
+<li><strong>核心数据结构是 append-only 的分区日志</strong>：消息按主题分区追加、只追加不修改、按时间/大小保留（<strong>保留策略而非删除确认</strong>——消费进度与数据保留解耦）；</li>
+<li><strong>顺序写 + 零拷贝</strong>：磁盘顺序写接近内存随机写速度（论文引用的存储性能事实），配合 sendfile 零拷贝达成高吞吐；</li>
+<li><strong>消费者拉模型 + 消费位移由消费者自管</strong>（offset）：重放历史是天然能力——这是与&quot;消息队列&quot;（RabbitMQ 式，确认即删）的本质分野；</li>
+<li><strong>分区是并行与顺序的单位</strong>：分区内有序、跨分区无序（08 篇 EDA 表格里的原话即源于此）。</li>
+</ol>
+<h3 id="用本系列的眼光解读-2"><a class="markdownIt-Anchor" href="#用本系列的眼光解读-2"></a> 用本系列的眼光解读</h3>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>本系列概念</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>日志抽象统一了&quot;消息、存储、集成&quot;</td>
+<td>01/08 篇：找到一个足够好的抽象（日志），大量上游问题（削峰、解耦、重放、审计）自动获得解法</td>
+</tr>
+<tr>
+<td>保留而非删除</td>
+<td>13 篇派生数据可重建的物理基础：源日志还在，任何下游索引都能重放重建</td>
+</tr>
+<tr>
+<td>拉模型 + 自管位移</td>
+<td>消费方控制节奏（背压的雏形）与 12 篇 API 的&quot;服务端保持自由度&quot;同源</td>
+</tr>
+<tr>
+<td>分区=顺序+并行单位</td>
+<td>分片键思想：业务把&quot;需要顺序的事&quot;（同一订单）路由到同分区</td>
+</tr>
+</tbody>
+</table>
+<p><strong>可迁移的启发</strong>：当你的系统需要&quot;一份数据、多种消费者、各自节奏&quot;，日志抽象 + 重放能力的组合远优于点对点队列。<strong>架构判断的关键在于识别自己属于哪类需求</strong>。</p>
+<h2 id="3-postgresql以正确性为锚点的分层单体"><a class="markdownIt-Anchor" href="#3-postgresql以正确性为锚点的分层单体"></a> 3. PostgreSQL：以&quot;正确性&quot;为锚点的分层单体</h2>
+<h3 id="公认的设计要点来源postgresql-官方文档"><a class="markdownIt-Anchor" href="#公认的设计要点来源postgresql-官方文档"></a> 公认的设计要点（来源：PostgreSQL 官方文档）</h3>
+<ol>
+<li><strong>MVCC 快照隔离</strong>：读不阻塞写、写不阻塞读（13 篇引用过）；旧行版本由 VACUUM 回收——这是&quot;实现选择带来运营责任&quot;（vacuum 调优）的典型；</li>
+<li><strong>进程级扩展机制</strong>：扩展（extension）体系让 PostGIS（地理）、pgvector（向量）等以插件形式生长——<strong>微内核风格</strong>（08 篇）在数据库内核的应用；</li>
+<li><strong>WAL（预写日志）</strong>：先写日志再写数据页——崩溃恢复与复制的统一基础（流复制直接复用 WAL 传输）；</li>
+<li><strong>严格的标准兼容姿态 + 谨慎的默认值</strong>：官方文档以&quot;行为精确可解释&quot;著称。</li>
+</ol>
+<h3 id="用本系列的眼光解读-3"><a class="markdownIt-Anchor" href="#用本系列的眼光解读-3"></a> 用本系列的眼光解读</h3>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>本系列概念</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>WAL 一份日志服务恢复+复制</td>
+<td>与 Kafka 同构的洞察：<strong>日志是日志型系统的万能中间表示</strong></td>
+</tr>
+<tr>
+<td>extension 生态</td>
+<td>微内核的代价与收益：契约（扩展 API）必须长期稳定，换来生态按需生长</td>
+</tr>
+<tr>
+<td>VACUUM 的存在</td>
+<td>09 篇&quot;每多一个 9 成本陡增&quot;的变体：<strong>每个高级特性都有运营税单</strong>，MVCC 的税单叫 vacuum</td>
+</tr>
+</tbody>
+</table>
+<p><strong>可迁移的启发</strong>：为&quot;最坏情况下的正确性&quot;选型（数据库的正确性优先于性能），为&quot;最好情况的性能&quot;做应用层设计（缓存/读写分离）——<strong>两层别搞反</strong>。</p>
+<h2 id="4-sqlite流程与纪律即架构"><a class="markdownIt-Anchor" href="#4-sqlite流程与纪律即架构"></a> 4. SQLite：流程与纪律即架构</h2>
+<h3 id="公认的设计要点来源sqlite-官方文档-how-sqlite-is-tested-most-widely-deployed-等页面"><a class="markdownIt-Anchor" href="#公认的设计要点来源sqlite-官方文档-how-sqlite-is-tested-most-widely-deployed-等页面"></a> 公认的设计要点（来源：SQLite 官方文档 “How SQLite Is Tested”、“Most Widely Deployed” 等页面）</h3>
+<ol>
+<li><strong>嵌入式、无服务器、单文件</strong>：没有独立进程，库即存储；官方称其为世界上部署最广泛的软件之一（数以十亿计的设备内嵌）；</li>
+<li><strong>以测试纪律闻名</strong>：官方文档记载其测试代码量数倍于产品代码（包含自动化测试、模糊测试、故障注入），并公开详述测试方法论；</li>
+<li><strong>文件格式承诺跨版本稳定</strong>（官方承诺 2050 年前的可读性）——把&quot;文件即长期契约&quot;作为第一设计约束；</li>
+<li><strong>单写者模型 + WAL 模式可选</strong>：以写入模型换取零管理成本。</li>
+</ol>
+<h3 id="用本系列的眼光解读-4"><a class="markdownIt-Anchor" href="#用本系列的眼光解读-4"></a> 用本系列的眼光解读</h3>
+<table>
+<thead>
+<tr>
+<th>现象</th>
+<th>本系列概念</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>文件格式跨版本承诺</td>
+<td>12 篇 API 契约思维的极致：数据格式是<strong>最长周期的契约</strong>（13 篇&quot;数据决策最不可逆&quot;的实物证据）</td>
+</tr>
+<tr>
+<td>测试投入数倍于产品</td>
+<td>13 篇（Agent 评测）同款哲学：<strong>系统的可靠性预算花在哪里，可靠性就长在哪里</strong></td>
+</tr>
+<tr>
+<td>无服务器、零配置</td>
+<td>09 篇质量属性排序的示范：嵌入式场景&quot;零运维&quot;是第一质量属性，为此放弃并发写吞吐</td>
+</tr>
+</tbody>
+</table>
+<p><strong>可迁移的启发</strong>：SQLite 证明<strong>纪律与流程本身是架构</strong>（09 篇架构定义的活例证）。同样的代码结构，测试纪律差一个量级，就是完全不同的系统。</p>
+<h2 id="5-横向对照四个系统回答同一组问题"><a class="markdownIt-Anchor" href="#5-横向对照四个系统回答同一组问题"></a> 5. 横向对照：四个系统回答同一组问题</h2>
+<table>
+<thead>
+<tr>
+<th>问题</th>
+<th>Redis</th>
+<th>Kafka</th>
+<th>PostgreSQL</th>
+<th>SQLite</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>核心抽象</td>
+<td>内存数据结构</td>
+<td>分区日志</td>
+<td>关系 + MVCC + WAL</td>
+<td>单文件关系库</td>
+</tr>
+<tr>
+<td>一致性来源</td>
+<td>单线程执行</td>
+<td>分区内日志序</td>
+<td>ACID/WAL</td>
+<td>单写者/文件锁</td>
+</tr>
+<tr>
+<td>牺牲了什么</td>
+<td>持久性弹性/容量</td>
+<td>跨分区顺序</td>
+<td>运维简单性</td>
+<td>并发写吞吐</td>
+</tr>
+<tr>
+<td>风格标签</td>
+<td>约束驱动的极简</td>
+<td>日志一等公民</td>
+<td>正确性锚点+微内核</td>
+<td>纪律即架构</td>
+</tr>
+</tbody>
+</table>
+<p>对照的结论（本系列的收束）：</p>
+<ol>
+<li><strong>每个成功的系统都明确&quot;牺牲什么&quot;</strong>——找不到牺牲清单的架构方案，说明取舍还没想清楚（09 篇取舍公理的验收标准）；</li>
+<li><strong>日志结构反复出现</strong>（Kafka 日志、PG WAL、Redis AOF）——&quot;先追加、后应用、可重放&quot;是分布式系统的万金油（13 篇 outbox、Agent 12 篇事件溯源都是它的应用）；</li>
+<li><strong>风格没有高下，只有匹配</strong>——四个系统服务四种完全不同的质量属性排序（08 篇的核心命题在最成功系统上的回响）。</li>
+</ol>
+<h2 id="自测"><a class="markdownIt-Anchor" href="#自测"></a> 自测</h2>
+<ol>
+<li>Redis 用什么换到了&quot;数据结构层无锁&quot;？这是哪条取舍公理的实例？</li>
+<li>Kafka 与传统消息队列的本质分野？&quot;保留而非删除&quot;支撑了哪条工程能力？</li>
+<li>PG 的 extension 体系属于哪种架构风格？它的长期税单是什么？</li>
+<li>SQLite 的&quot;测试代码数倍于产品代码&quot;说明什么？与本系列哪篇的观点同构？</li>
+<li>四个系统的&quot;牺牲清单&quot;练习：给你自己的系统写下牺牲清单，每项能说清为什么吗？</li>
+</ol>
+<h2 id="系列收官"><a class="markdownIt-Anchor" href="#系列收官"></a> 系列收官</h2>
+<p>进阶四篇与基础十篇合计：判断尺（01-02）→ 模式词汇（03-06）→ 架构思维（07-10）→ 重构实战（11）→ API 契约（12）→ 数据一致性（13）→ 案例内化（14）。最后一练：挑一个你日常使用的开源工具，按本章四步（设计要点→概念映射→税单识别→启发迁移）写一篇你自己的案例剖析。</p>
+<h2 id="参考来源"><a class="markdownIt-Anchor" href="#参考来源"></a> 参考来源</h2>
+<ul>
+<li>Redis：官方文档（持久化/集群/数据类型）: <a target="_blank" rel="noopener" href="https://redis.io/docs/">https://redis.io/docs/</a> ；antirez 博客（设计阐述）: <a target="_blank" rel="noopener" href="http://antirez.com/">http://antirez.com/</a></li>
+<li>Kafka：Kreps, Narkhede &amp; Rao, <em>Kafka: a Distributed Messaging System for Log Processing</em>, NetDB’11: <a target="_blank" rel="noopener" href="https://www.microsoft.com/en-us/research/publication/kafka-a-distributed-messaging-system-for-log-processing/">https://www.microsoft.com/en-us/research/publication/kafka-a-distributed-messaging-system-for-log-processing/</a> ；官方文档: <a target="_blank" rel="noopener" href="https://kafka.apache.org/documentation/">https://kafka.apache.org/documentation/</a></li>
+<li>PostgreSQL：官方文档（MVCC/WAL/扩展）: <a target="_blank" rel="noopener" href="https://www.postgresql.org/docs/">https://www.postgresql.org/docs/</a></li>
+<li>SQLite：官方文档（Most Widely Deployed / How SQLite Is Tested / 文件格式承诺）: <a target="_blank" rel="noopener" href="https://www.sqlite.org/mostdeployed.html">https://www.sqlite.org/mostdeployed.html</a> 、<a target="_blank" rel="noopener" href="https://www.sqlite.org/testing.html">https://www.sqlite.org/testing.html</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F/" rel="tag"># 设计模式</a>
+              <a href="/tags/%E6%9E%B6%E6%9E%84/" rel="tag"># 架构</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/05/13-%E8%BF%9B%E9%98%B6-%E6%95%B0%E6%8D%AE%E6%9E%B6%E6%9E%84%E4%B8%8E%E4%B8%80%E8%87%B4%E6%80%A7/" rel="prev" title="13-进阶-数据架构与一致性">
+                  <i class="fa fa-angle-left"></i> 13-进阶-数据架构与一致性
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/05/Agent%20%E5%BC%80%E5%8F%91-README/" rel="next" title="Agent 开发 · 学习路线总览">
+                  Agent 开发 · 学习路线总览 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

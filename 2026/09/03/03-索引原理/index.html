@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 用复杂度对比说清&#39;为什么要索引&#39;：全表扫描 O(n) vs 索引查找 O(log n)。 - 画出 B+树结构并亲手推导阶数，理解&#39;为什么 3 层能存千万行&#39;。 - 区分聚簇索引与二级索引（InnoDB 主键即数据），说清回表与覆盖索引…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="03-索引原理">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/03-%E7%B4%A2%E5%BC%95%E5%8E%9F%E7%90%86/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 用复杂度对比说清&#39;为什么要索引&#39;：全表扫描 O(n) vs 索引查找 O(log n)。 - 画出 B+树结构并亲手推导阶数，理解&#39;为什么 3 层能存千万行&#39;。 - 区分聚簇索引与二级索引（InnoDB 主键即数据），说清回表与覆盖索引…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T11:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.554Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Redis">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="数据库">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/03-%E7%B4%A2%E5%BC%95%E5%8E%9F%E7%90%86/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/03-%E7%B4%A2%E5%BC%95%E5%8E%9F%E7%90%86/","path":"2026/09/03/03-索引原理/","title":"03-索引原理"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>03-索引原理 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#03-%E7%B4%A2%E5%BC%95%E5%8E%9F%E7%90%86"><span class="nav-number">1.</span> <span class="nav-text"> 03 - 索引原理</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E7%B4%A2%E5%BC%95%E4%B8%80%E6%AC%A1%E5%AF%B9%E6%AF%94%E5%AE%9E%E9%AA%8C"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 为什么要索引：一次对比实验</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-b%E6%A0%91%E7%BB%93%E6%9E%84%E8%AF%A6%E8%A7%A3"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. B+树结构详解</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E8%81%9A%E7%B0%87%E7%B4%A2%E5%BC%95-vs-%E4%BA%8C%E7%BA%A7%E7%B4%A2%E5%BC%95%E4%B8%BB%E9%94%AE%E5%8D%B3%E6%95%B0%E6%8D%AE"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 聚簇索引 vs 二级索引：主键即数据</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E6%9C%80%E5%B7%A6%E5%89%8D%E7%BC%80%E5%8E%9F%E5%88%99%E8%81%94%E5%90%88%E7%B4%A2%E5%BC%95-explain-%E5%AE%9E%E9%AA%8C"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 最左前缀原则：联合索引 EXPLAIN 实验</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E8%A6%86%E7%9B%96%E7%B4%A2%E5%BC%95%E4%B8%8D%E5%9B%9E%E8%A1%A8%E7%9A%84%E8%89%BA%E6%9C%AF"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 覆盖索引：不回表的艺术</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E7%B4%A2%E5%BC%95%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E5%8F%8D%E8%80%8C%E6%85%A2%E5%86%99%E6%94%BE%E5%A4%A7%E5%AE%9E%E6%B5%8B"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 索引什么时候反而慢：写放大实测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%93%88%E5%B8%8C%E7%B4%A2%E5%BC%95%E4%B8%8E%E4%BD%8D%E5%9B%BE%E7%B4%A2%E5%BC%95%E4%B8%80%E5%8F%A5%E8%AF%9D%E5%B8%A6%E8%BF%87"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 哈希索引与位图索引：一句话带过</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/03-%E7%B4%A2%E5%BC%95%E5%8E%9F%E7%90%86/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="03-索引原理 | Yoleen的博客">
+      <meta itemprop="description" content="- 用复杂度对比说清&#39;为什么要索引&#39;：全表扫描 O(n) vs 索引查找 O(log n)。 - 画出 B+树结构并亲手推导阶数，理解&#39;为什么 3 层能存千万行&#39;。 - 区分聚簇索引与二级索引（InnoDB 主键即数据），说清回表与覆盖索引…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          03-索引原理
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 19:00:00" itemprop="dateCreated datePublished" datetime="2026-09-03T19:00:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/" itemprop="url" rel="index"><span itemprop="name">数据库</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>15 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 用复杂度对比说清'为什么要索引'：全表扫描 O(n) vs 索引查找 O(log n)。 - 画出 B+树结构并亲手推导阶数，理解'为什么 3 层能存千万行'。 - 区分聚簇索引与二级索引（InnoDB 主键即数据），说清回表与覆盖索引…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="03-索引原理"><a class="markdownIt-Anchor" href="#03-索引原理"></a> 03 - 索引原理</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>用复杂度对比说清&quot;为什么要索引&quot;：全表扫描 O(n) vs 索引查找 O(log n)。</li>
+<li>画出 B+树结构并<strong>亲手推导阶数</strong>，理解&quot;为什么 3 层能存千万行&quot;。</li>
+<li>区分聚簇索引与二级索引（InnoDB 主键即数据），说清回表与覆盖索引。</li>
+<li>用 EXPLAIN 逐例验证最左前缀原则，并<strong>实测建索引的写放大代价</strong>——索引不是免费的。</li>
+</ul>
+<h2 id="1-为什么要索引一次对比实验"><a class="markdownIt-Anchor" href="#1-为什么要索引一次对比实验"></a> 1. 为什么要索引：一次对比实验</h2>
+<p>100 万行的表按 id 找一行，没有索引只能<strong>全表扫描</strong>——逐行看一遍，O(n)；有索引（B+树）从根走到底，O(log n)。数字差距大到没有讨论余地：n=10^7 时 log₂n≈23，即 <strong>~43 万倍的比较次数差距</strong>；落到 IO 上，全表扫描读所有数据页，索引查找只读 3-4 个页。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># index_vs_scan.py —— 实测: 100万行, 索引查找 vs 全表扫描</span></span><br><span class="line"><span class="keyword">import</span> sqlite3, time</span><br><span class="line">conn = sqlite3.connect(<span class="string">&quot;/tmp/idx_demo.db&quot;</span>)</span><br><span class="line">conn.execute(<span class="string">&quot;CREATE TABLE IF NOT EXISTS t(id INTEGER PRIMARY KEY, v INT, s TEXT)&quot;</span>)</span><br><span class="line"><span class="keyword">if</span> conn.execute(<span class="string">&quot;SELECT count(*) FROM t&quot;</span>).fetchone()[<span class="number">0</span>] == <span class="number">0</span>:</span><br><span class="line">    conn.executemany(<span class="string">&quot;INSERT INTO t(v, s) VALUES(?, ?)&quot;</span>,</span><br><span class="line">                     [(i, <span class="string">f&quot;value-<span class="subst">&#123;i&#125;</span>&quot;</span>) <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">1_000_000</span>)])</span><br><span class="line">    conn.commit()</span><br><span class="line"></span><br><span class="line">t0 = time.monotonic()</span><br><span class="line">row = conn.execute(<span class="string">&quot;SELECT s FROM t WHERE id = 999999&quot;</span>).fetchone()      <span class="comment"># 走主键索引(rowid)</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;索引查找 id=999999: <span class="subst">&#123;(time.monotonic()-t0)*<span class="number">1000</span>:<span class="number">.3</span>f&#125;</span> ms, <span class="subst">&#123;row&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line">t0 = time.monotonic()</span><br><span class="line">row = conn.execute(<span class="string">&quot;SELECT s FROM t WHERE v = 999999&quot;</span>).fetchone()       <span class="comment"># v 无索引 → 全表扫描</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;全表扫描 v=999999: <span class="subst">&#123;(time.monotonic()-t0)*<span class="number">1000</span>:<span class="number">.3</span>f&#125;</span> ms, <span class="subst">&#123;row&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>实测输出（WSL2/Ubuntu，数据已在操作系统页缓存中）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">索引查找 id=999999: 0.048 ms, (&#x27;value-999999&#x27;,)</span><br><span class="line">全表扫描 v=999999: 218.352 ms, (&#x27;value-999999&#x27;,)</span><br></pre></td></tr></table></figure>
+<p><strong>~4500 倍</strong>。数据全在内存里尚且如此，数据在盘上时差距更大（扫描要读 ~2 万个页，索引查找读 3-4 个页，每页一次随机 IO——回忆 01 章的存储层次）。本篇所有&quot;快&quot;都来自一个抽象：<strong>索引 = 把&quot;找数据&quot;变成&quot;在有序结构上找位置&quot;</strong>。</p>
+<h2 id="2-b树结构详解"><a class="markdownIt-Anchor" href="#2-b树结构详解"></a> 2. B+树结构详解</h2>
+<p>数据库索引的标准答案是 <strong>B+树</strong>。B 树由 Bayer &amp; McCreight 1970 年提出（<em>Organization and Maintenance of Large Ordered Indices</em>），B+树是它的工程变体：<strong>数据只存叶子节点，内部节点只存路由键，叶子之间用链表串起来</strong>（B+树的精确起源有考证争议，通说为 1970 年代初 IBM 的实现，见 Knuth TAOCP 6.2.4 的批注）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">                         内部节点(页): [17 | 35]              ← 只存键+子页指针</span><br><span class="line">                        /            \</span><br><span class="line">              [3|10|17]                [35|42|58]           ← 再一层路由</span><br><span class="line">              /   |   \                /   |   \</span><br><span class="line">叶子: [1|3|5|10|12|17]→[18|21|35|39]→[35|42|50|58|61]→[70|...]   ← 全部数据+有序链表</span><br><span class="line">        叶子之间双向链表 → 支持范围扫描 WHERE id BETWEEN 10 AND 40</span><br></pre></td></tr></table></figure>
+<p>为什么是 B+树而不是二叉树/红黑树/哈希表？逐个排除（DDIA 第 3 章）：</p>
+<ul>
+<li><strong>二叉树太瘦高</strong>：100 万节点高约 20 层，每层一次页读取（磁盘随机 IO）= 20 次 IO；B+树把分叉做大（几百个分支），<strong>矮胖</strong>——100 万行 3 层，10 亿行 4 层。</li>
+<li><strong>哈希表不支持范围查询</strong>：<code>WHERE id BETWEEN 10 AND 40</code>、<code>ORDER BY</code>、前缀匹配，哈希全废；B+树叶子上数据有序，范围扫描 = 定位起点 + 顺链表走。</li>
+<li><strong>跳表也可以</strong>（Redis zset 用它，08 章），但跳表每层指针是随机内存访问，B+树以&quot;页&quot;为单位对齐磁盘 IO——数据库要的是&quot;最少页读取&quot;。</li>
+</ul>
+<p><strong>阶数推导：为什么 3 层能存千万行。</strong> 设页大小 P=4096B（SQLite 默认），内部节点存&quot;键 + 子页号&quot;。以 8B 整数键 + 4B 页号 ≈ 12B/条计，一个页容纳约 <code>4096/12 ≈ 341</code> 个分支（扣除页头/预留空间后常按 ~300-400 估）。叶子节点存&quot;键 + 行数据&quot;，假设整行 ~50B，每叶 ~80 行。则：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">高度 2:  341 内部分支 × 80 行/叶        ≈   2.7 万行</span><br><span class="line">高度 3:  341 × 341 × 80                ≈  930 万行     ← 3 层 ≈ 千万行</span><br><span class="line">高度 4:  341 × 341 × 341 × 80          ≈ 31.7 亿行</span><br></pre></td></tr></table></figure>
+<p>这就是&quot;千万行 3 层&quot;的出处：<strong>分支数 ~341，任何一层都是页级随机 IO，3 层 = 3 次 IO 摸到任何一行</strong>；根节点常驻缓冲池，实际磁盘 IO 往往只剩 1-2 次。行更大（如 500B）时每叶行数降到 ~8，3 层也还有 ~90 万行，4 层 3 亿——所以 B+树高度几乎永远是 3-4 层，这是它对所有规模数据承诺的常数。</p>
+<p>维护：插入找叶子，满则<strong>分裂</strong>（中点上提进父节点，父满继续向上分裂，根分裂则长高一层）；删除不足半满则<strong>合并/重分布</strong>。分裂导致键在物理页间搬家——07 章讲 UUID 主键时会回到这个细节（随机插入造成频繁分裂，这是自增 ID 的核心优势）。</p>
+<h2 id="3-聚簇索引-vs-二级索引主键即数据"><a class="markdownIt-Anchor" href="#3-聚簇索引-vs-二级索引主键即数据"></a> 3. 聚簇索引 vs 二级索引：主键即数据</h2>
+<p>B+树索引分两种用法（MySQL InnoDB 的术语，PostgreSQL 的堆表只有第二种，见本节末）：</p>
+<ul>
+<li><strong>聚簇索引（clustered index）</strong>：叶子节点<strong>就是数据行本身</strong>，表即索引。InnoDB 强制如此——<code>PRIMARY KEY</code> 的 B+树就是整张表。</li>
+<li><strong>二级索引（secondary index）</strong>：叶子存&quot;索引键 + 主键值&quot;。查二级索引拿到主键后，还要回聚簇索引查整行——这一步叫<strong>回表（bookmark lookup / 回表）</strong>。</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">聚簇索引(主键 id)                二级索引(列 v)</span><br><span class="line">根 [50|100]                     根 [100|200]</span><br><span class="line">叶: id=1→(整行)                 叶: v=5→id=3, v=9→id=1 ...</span><br><span class="line">      ↓ 命中即返回                     ↓ 还差一步</span><br><span class="line">                                回表: 拿 id=3 再走一遍聚簇索引</span><br></pre></td></tr></table></figure>
+<p>两个直接推论：</p>
+<ol>
+<li><strong>主键查询走聚簇索引：1 棵树搞定，无回表</strong>；二级索引查询：2 棵树，除非覆盖（下节）。</li>
+<li><strong>二级索引的叶子存主键，所以主键越胖每页装得越少、树越高</strong>——UUID(16B) 做主键比 BIGINT(8B) 的每棵二级索引都更占空间、更深，加上随机插入的分裂问题（07 章），就是&quot;自增 ID 优先&quot;的完整论证。</li>
+</ol>
+<p>PostgreSQL 不搞聚簇：所有表是<strong>堆表（heap）</strong>，索引叶子存&quot;键 + ctid（物理行位置）&quot;。代价是同样要回表（回堆）；好处是更新主键外的列不搬家、二级索引与行的关系更松。<code>CLUSTER</code> 命令可一次性按索引重排物理顺序，但不会自动维持。两种路线没有绝对优劣，面试常考，答&quot;MySQL 聚簇 = 表即主键索引，PG 堆表 = 表与索引分离&quot;即可。</p>
+<p>SQLite 与 InnoDB 同路：<code>INTEGER PRIMARY KEY</code> 就是 rowid 的别名，表数据按 rowid 聚簇存储（第 06 章 hexdump 可亲眼看）。<strong>例外</strong>：SQLite 的 <code>WITHOUT ROWID</code> 表按主键聚簇，此时非整数主键也可聚簇。</p>
+<h2 id="4-最左前缀原则联合索引-explain-实验"><a class="markdownIt-Anchor" href="#4-最左前缀原则联合索引-explain-实验"></a> 4. 最左前缀原则：联合索引 EXPLAIN 实验</h2>
+<p>联合索引 <code>(a, b)</code> 的排序规则：先按 a 排，a 相同再按 b 排——<strong>本质上是一本&quot;先姓氏后名字&quot;的电话簿</strong>。能查&quot;姓王&quot;（a=?），能查&quot;姓王名强&quot;（a=? AND b=?），不能直接查&quot;名强&quot;（b=?，得翻遍全本）。这就是<strong>最左前缀原则</strong>。用实验钉死（SQLite 的 <code>EXPLAIN QUERY PLAN</code>，MySQL 用 <code>EXPLAIN</code>，PostgreSQL 用 <code>EXPLAIN</code>，输出措辞不同、结论一致）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># leftmost.py —— 联合索引 (user_id, status) 的最左前缀实验</span></span><br><span class="line"><span class="keyword">import</span> sqlite3</span><br><span class="line">conn = sqlite3.connect(<span class="string">&quot;:memory:&quot;</span>)</span><br><span class="line">conn.execute(<span class="string">&quot;CREATE TABLE orders(id INTEGER PRIMARY KEY, user_id INT, amt REAL, status TEXT)&quot;</span>)</span><br><span class="line">conn.executemany(<span class="string">&quot;INSERT INTO orders(user_id, amt, status) VALUES(?,?,?)&quot;</span>,</span><br><span class="line">                 [(i % <span class="number">1000</span>, i * <span class="number">1.0</span>, <span class="string">&quot;ok&quot;</span> <span class="keyword">if</span> i % <span class="number">3</span> <span class="keyword">else</span> <span class="string">&quot;paid&quot;</span>) <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">100_000</span>)])</span><br><span class="line">conn.execute(<span class="string">&quot;CREATE INDEX ix_us ON orders(user_id, status)&quot;</span>)</span><br><span class="line"></span><br><span class="line">plan = <span class="keyword">lambda</span> q: conn.execute(<span class="string">&quot;EXPLAIN QUERY PLAN &quot;</span> + q).fetchone()[<span class="number">3</span>]</span><br><span class="line">cases = [</span><br><span class="line">    <span class="string">&quot;SELECT * FROM orders WHERE user_id=42&quot;</span>,                            <span class="comment"># 最左列: 走索引</span></span><br><span class="line">    <span class="string">&quot;SELECT * FROM orders WHERE user_id=42 AND status=&#x27;ok&#x27;&quot;</span>,            <span class="comment"># 全匹配: 走索引</span></span><br><span class="line">    <span class="string">&quot;SELECT * FROM orders WHERE status=&#x27;ok&#x27;&quot;</span>,                           <span class="comment"># 缺最左列: 全表扫描!</span></span><br><span class="line">    <span class="string">&quot;SELECT * FROM orders WHERE status=&#x27;ok&#x27; AND user_id=42&quot;</span>,            <span class="comment"># 顺序无关, 优化器重排</span></span><br><span class="line">    <span class="string">&quot;SELECT amt FROM orders WHERE user_id=42&quot;</span>,                          <span class="comment"># 只查 amt: 覆盖索引</span></span><br><span class="line">]</span><br><span class="line"><span class="keyword">for</span> q <span class="keyword">in</span> cases:</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;<span class="subst">&#123;plan(q):&lt;<span class="number">50</span>&#125;</span> &lt;- <span class="subst">&#123;q[:<span class="number">52</span>]&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>实测输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">SEARCH orders USING INDEX ix_us (user_id=?)                        &lt;- SELECT * FROM orders WHERE user_id=42</span><br><span class="line">SEARCH orders USING INDEX ix_us (user_id=? AND status=?)           &lt;- ... user_id=42 AND status=&#x27;ok&#x27;</span><br><span class="line">SCAN orders                                                        &lt;- SELECT * FROM orders WHERE status=&#x27;ok&#x27;</span><br><span class="line">SEARCH orders USING INDEX ix_us (user_id=? AND status=?)           &lt;- ... status=&#x27;ok&#x27; AND user_id=42</span><br><span class="line">SEARCH orders USING COVERING INDEX ix_us (user_id=?)               &lt;- SELECT amt FROM orders WHERE user_id=42</span><br></pre></td></tr></table></figure>
+<p>四条结论：</p>
+<ol>
+<li><code>user_id=42</code>：SEARCH（索引范围查找）。</li>
+<li><code>user_id AND status</code>：两列都用上，定位更窄。</li>
+<li><strong>只查 status：SCAN（全表扫描）</strong>——跳过最左列，索引失效。这不是 bug，是排序结构决定的（电话簿按姓排，只报名字没人帮你找）。</li>
+<li>WHERE 里两列顺序写反了照样走索引——优化器会重排，<strong>最左前缀约束的是索引定义顺序，不是 SQL 书写顺序</strong>。</li>
+</ol>
+<p>补充两条边界（经验做法）：</p>
+<ul>
+<li><strong>范围查询截断后续列</strong>：<code>WHERE user_id=42 AND amt&gt;100</code> 走索引但只用到 user_id（amt 是范围条件，其后的 status 若在索引中则用不上）。设计口诀：<strong>等值列在前，范围列收尾</strong>——<code>(user_id, status, amt)</code> 中 amt 放最后。</li>
+<li><strong>LIKE 的前缀例外</strong>：<code>LIKE 'ABC%'</code> 等价于范围查询（&gt;= ‘ABC’ AND &lt; ‘ABD’）可走索引；<code>LIKE '%ABC'</code> 从中间匹配，失效。</li>
+</ul>
+<h2 id="5-覆盖索引不回表的艺术"><a class="markdownIt-Anchor" href="#5-覆盖索引不回表的艺术"></a> 5. 覆盖索引：不回表的艺术</h2>
+<p>上面第 5 个用例的输出里藏着 <code>COVERING INDEX</code>：查询要的列（amt）恰好全在索引里（索引含 user_id 键），<strong>跳过回表直接从索引出结果</strong>。回表 = 再走一遍聚簇索引 = 再来几次 IO；数据量大时，覆盖索引是&quot;二级索引查询&quot;与&quot;主键查询&quot;拉平的杠杆：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">无覆盖:  二级索引树(3次IO) → 回表聚簇树(1-3次IO)  =  4-6 次IO</span><br><span class="line">有覆盖:  二级索引树(3次IO) → 叶子即答案            =  3 次IO, 且叶子页更密集缓存更友好</span><br></pre></td></tr></table></figure>
+<p>代价是索引更宽（把 amt 塞进索引）。取舍口诀（经验做法）：<strong>高频查询 + 列很少 + 明显的回表热点，才值得做覆盖索引</strong>；顺手把&quot;多塞一列&quot;当习惯则会让每条 INSERT 都付出代价（下一节实测）。MySQL 支持 <code>INCLUDE</code> 式的思路（其实用联合索引实现），PostgreSQL 11+ 有原生 <code>CREATE INDEX ... INCLUDE (col)</code>——把列附在叶子里但不参与排序键，专为此设计。SQLite 直接靠联合索引 + 查询列恰好被覆盖。</p>
+<p>验证方法：<code>EXPLAIN QUERY PLAN</code> 出现 <code>USING COVERING INDEX</code>（SQLite）/ <code>Index Only Scan</code>（PostgreSQL）/ <code>Using index</code>（MySQL）即覆盖生效。</p>
+<h2 id="6-索引什么时候反而慢写放大实测"><a class="markdownIt-Anchor" href="#6-索引什么时候反而慢写放大实测"></a> 6. 索引什么时候反而慢：写放大实测</h2>
+<p>每个二级索引都是一棵<strong>独立维护的 B+树</strong>：INSERT/UPDATE 索引列时，数据树 + 每棵索引树都要更新（还可能页分裂）。索引把读的 O(n) 降成 O(log n)，同时把写的常数放大 1 倍多。实测（200 万行，含 1 个二级索引 vs 无索引，<code>executemany</code> 单事务批量插入）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># write_amp.py —— 建索引前后的插入速度对比(完整脚本见运行输出)</span></span><br><span class="line"><span class="keyword">import</span> sqlite3, time, os</span><br><span class="line"><span class="keyword">def</span> <span class="title function_">bench</span>(<span class="params">path, with_index, n=<span class="number">200_000</span></span>):</span><br><span class="line">    <span class="keyword">if</span> os.path.exists(path): os.remove(path)</span><br><span class="line">    c = sqlite3.connect(path)</span><br><span class="line">    c.execute(<span class="string">&quot;CREATE TABLE t(id INTEGER PRIMARY KEY, v INT, s TEXT)&quot;</span>)</span><br><span class="line">    <span class="keyword">if</span> with_index: c.execute(<span class="string">&quot;CREATE INDEX ix_v ON t(v)&quot;</span>)</span><br><span class="line">    t0 = time.monotonic()</span><br><span class="line">    c.executemany(<span class="string">&quot;INSERT INTO t(v,s) VALUES(?,?)&quot;</span>, [(i % <span class="number">100_000</span>, <span class="string">f&quot;row<span class="subst">&#123;i&#125;</span>&quot;</span>) <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n)])</span><br><span class="line">    c.commit()</span><br><span class="line">    dt = time.monotonic() - t0</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;插入<span class="subst">&#123;n&#125;</span>行: <span class="subst">&#123;<span class="string">&#x27;带索引&#x27;</span> <span class="keyword">if</span> with_index <span class="keyword">else</span> <span class="string">&#x27;无索引&#x27;</span>&#125;</span> <span class="subst">&#123;dt:<span class="number">.2</span>f&#125;</span>s &quot;</span></span><br><span class="line">          <span class="string">f&quot;(<span class="subst">&#123;n/dt/<span class="number">1e3</span>:<span class="number">.0</span>f&#125;</span> 千行/s), 文件 <span class="subst">&#123;os.path.getsize(path)/<span class="number">1e6</span>:<span class="number">.1</span>f&#125;</span> MB&quot;</span>)</span><br><span class="line">bench(<span class="string">&quot;/tmp/no_idx.db&quot;</span>,  <span class="literal">False</span>)</span><br><span class="line">bench(<span class="string">&quot;/tmp/with_idx.db&quot;</span>, <span class="literal">True</span>)</span><br></pre></td></tr></table></figure>
+<p>实测输出（WSL2，SSD；无索引时也含主键聚簇树的维护）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">插入200000行: 无索引 0.14s (1428 千行/s), 文件 4.3 MB</span><br><span class="line">插入200000行: 带索引 0.20s (1000 千行/s), 文件 6.9 MB</span><br></pre></td></tr></table></figure>
+<p>两个代价同时可见：<strong>写慢 1.4 倍、文件大 60%</strong>。注意这还是&quot;单索引 + 小行 + 单事务&quot;的温和场景；真实 OLTP 里每表三五个索引、行更宽，写入开销翻几倍很常见。单条自动提交的插入受每条 fsync 支配（分布式系统 07 章实验），索引差异会被落盘噪声掩盖——所以实验必须用同一事务批量插（经验做法：基准测试先固定事务边界，再谈别的变量）。</p>
+<p>什么时候<strong>不该</strong>建索引（经验做法清单）：</p>
+<ol>
+<li><strong>写多读少且查询模式覆盖不到的列</strong>：日志表、行情 tick 表按 tick 序号建索引，几乎没人按序号查。</li>
+<li><strong>低选择性列单列建索引</strong>：性别/状态类列（基数 2-3），索引过滤不掉多少行，优化器宁愿全表扫描——不如做联合索引的尾列或前缀列。</li>
+<li><strong>从不作为查询条件的列</strong>：纯粹的存储负担。</li>
+<li><strong>小表</strong>：几百行的表全表扫描比树查找还快，优化器自己会放弃索引。</li>
+</ol>
+<p>反过来，一个高频经验数字：<strong>一个表 2-5 个精心设计的联合索引</strong>通常是最优点；每加一个索引都问一句&quot;哪个查询会用到它？写放大值吗？&quot;</p>
+<h2 id="7-哈希索引与位图索引一句话带过"><a class="markdownIt-Anchor" href="#7-哈希索引与位图索引一句话带过"></a> 7. 哈希索引与位图索引：一句话带过</h2>
+<ul>
+<li><strong>哈希索引</strong>：键 → hash → 桶，点查 O(1)，但完全不支持范围/排序/前缀。主流 B+树数据库里只以&quot;自适应&quot;形式出现（InnoDB 自适应哈希索引自动给热点页加速）；PostgreSQL 支持哈希索引但少有人用（btree 几乎总能胜任）。记忆点：<strong>点查专用、范围免谈</strong>。</li>
+<li><strong>位图索引</strong>：每个列值一个位向量，<code>性别=男</code> 的位图中第 i 位标记第 i 行。适合<strong>基数极低 + 只读分析</strong>（数据仓库），写入并发下锁整段位图，OLTP 别碰。PostgreSQL 里没有持久化位图索引，但执行计划里有位图扫描（Bitmap Index Scan，把 btree 结果先聚合成位图再回表，05 章会见到）。</li>
+</ul>
+<p>本系列后续章节的索引主角仍是 B+树：05 章看优化器怎么&quot;决定用不用它&quot;，06 章 hexdump 亲手看 SQLite 的索引页，10 章手写引擎时再体会一次&quot;为什么是 B+树&quot;。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“建了索引查询就快”</strong>：条件写法可以让索引失效——对列套函数（<code>WHERE upper(name)=...</code>）、隐式类型转换（字符串列 vs 数字字面量）、前导 <code>%</code> 的 LIKE、跳过最左列。05 章逐一复现。</li>
+<li><strong>“索引越多越好”</strong>：每多一棵树，写放大 +1，空间 +1 份，优化器选择面还变大（统计信息不准时可能选错）。索引是&quot;读的预付款&quot;，付的是写的账。</li>
+<li><strong>“聚簇索引就是主键索引的名字”</strong>：聚簇是&quot;数据按索引物理组织&quot;的属性。MySQL(InnoDB) 主键即数据；PG 没有聚簇（堆表 + 独立索引）；SQLite <code>INTEGER PRIMARY KEY</code> 即 rowid。同一个词在不同库里行为不同，答之前先问&quot;哪个库&quot;。</li>
+<li><strong>“主键一定要用 UUID 才现代”</strong>：UUID 随机 → 插入落点随机 → 页分裂频繁 + 缓存命中率低（07 章实测思路）。分布式 ID（雪花等，趋势递增）才是&quot;全局唯一 + 顺序友好&quot;的两全解。</li>
+<li><strong>“EXPLAIN 的 rows 是准确值”</strong>：它是<strong>估计值</strong>（基于统计信息），误差大时优化器会选错计划（05 章讲 ANALYZE 更新统计信息）。看计划要结合 <code>EXPLAIN ANALYZE</code> 的真实执行数据。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>索引把查找从 O(n) 降到 O(log n)：百万行内存级实测差 ~4500 倍，盘上差距更大。</li>
+<li>B+树 = 矮胖多叉 + 叶子链表：以页为 IO 单位，341 分支 × 80 行/叶 → 3 层 ~930 万行，高度对规模近乎常数。</li>
+<li>聚簇索引叶子即数据（InnoDB/SQLite rowid 表），二级索引叶子存主键、查询常需回表；PG 堆表索引叶子存 ctid。</li>
+<li>最左前缀是联合索引的结构属性：等值列在前、范围列收尾、书写顺序无关；覆盖索引（COVERING/Index Only Scan）消灭回表。</li>
+<li>索引不是免费的：实测写慢 1.4 倍、体积 +60%；按&quot;读热查询反推索引&quot;，2-5 个联合索引是常见最优区间。</li>
+<li>哈希（点查 O(1) 无范围）与位图（低基数只读）是配角；主角永远是 B+树。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>用本机的页大小与一行真实数据的字节数重算 2 节的阶数推导（<code>PRAGMA page_size</code> 查 SQLite 默认值；估算你业务表一行多少字节），算出&quot;你的表 3 层能存多少行&quot;，与推导数字对比。</li>
+<li>在 <a target="_blank" rel="noopener" href="http://leftmost.py">leftmost.py</a> 上加索引 <code>(status, user_id)</code>，重跑 5 个用例，验证&quot;status 开头时 user_id=42 AND status=‘ok’ 走新索引&quot;；再写一个两索引都能服务的查询，加 <code>ANALYZE</code> 前后对比优化器选择。</li>
+<li>实测范围截断：建 <code>(user_id, status, amt)</code> 索引，跑 <code>WHERE user_id=42 AND amt&gt;100</code> 与 <code>WHERE user_id=42 AND status='ok' AND amt&gt;100</code>，用 EXPLAIN QUERY PLAN 对比两者用了几列。</li>
+<li>把 write_amp.py 的索引改成 3 个（v、s、v+s），记录插入速度与文件大小；再改成&quot;先插数据后建索引&quot;的顺序重跑，比较两种建库顺序的总耗时并解释差异。</li>
+<li>概念题：为什么 InnoDB 二级索引叶子存&quot;主键值&quot;而不是&quot;物理行号 ctid&quot;？提示——考虑 <code>UPDATE ... SET 其他列</code> 与页分裂时哪些会变、哪些不变，以及两种设计各自的维护代价。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/" rel="tag"># 数据库</a>
+              <a href="/tags/Redis/" rel="tag"># Redis</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/02-SQL%E5%9F%BA%E7%A1%80/" rel="prev" title="02-SQL基础">
+                  <i class="fa fa-angle-left"></i> 02-SQL基础
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/04-%E4%BA%8B%E5%8A%A1%E4%B8%8EMVCC/" rel="next" title="04-事务与MVCC">
+                  04-事务与MVCC <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

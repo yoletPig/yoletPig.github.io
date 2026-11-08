@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的三个问题 1. 一个请求进来，路由层凭什么决定&#39;留端侧&#39;还是&#39;上云端&#39;？四象限怎么落到可执行规则？ 2. 端侧模型和云端模型能力不同，怎么保证用户感知的回答&#39;一致&#39;？ 3. 级联推理（端侧答不好→云端升级→结果回填）的完整时序…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第1-2周-端云协同架构设计与分流策略">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/09/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-8-%E7%BB%93%E8%AF%BE%E9%A1%B9%E7%9B%AE-%E7%AB%AF%E4%BA%91%E4%B8%80%E4%BD%93%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E-%E7%AC%AC1-2%E5%91%A8-%E7%AB%AF%E4%BA%91%E5%8D%8F%E5%90%8C%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%88%86%E6%B5%81%E7%AD%96%E7%95%A5/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的三个问题 1. 一个请求进来，路由层凭什么决定&#39;留端侧&#39;还是&#39;上云端&#39;？四象限怎么落到可执行规则？ 2. 端侧模型和云端模型能力不同，怎么保证用户感知的回答&#39;一致&#39;？ 3. 级联推理（端侧答不好→云端升级→结果回填）的完整时序…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-08T22:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.790Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="推理优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/09/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-8-%E7%BB%93%E8%AF%BE%E9%A1%B9%E7%9B%AE-%E7%AB%AF%E4%BA%91%E4%B8%80%E4%BD%93%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E-%E7%AC%AC1-2%E5%91%A8-%E7%AB%AF%E4%BA%91%E5%8D%8F%E5%90%8C%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%88%86%E6%B5%81%E7%AD%96%E7%95%A5/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/09/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-8-%E7%BB%93%E8%AF%BE%E9%A1%B9%E7%9B%AE-%E7%AB%AF%E4%BA%91%E4%B8%80%E4%BD%93%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E-%E7%AC%AC1-2%E5%91%A8-%E7%AB%AF%E4%BA%91%E5%8D%8F%E5%90%8C%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%88%86%E6%B5%81%E7%AD%96%E7%95%A5/","path":"2026/09/09/模型性能优化-8-结课项目-端云一体推理引擎-第1-2周-端云协同架构设计与分流策略/","title":"第1-2周-端云协同架构设计与分流策略"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第1-2周-端云协同架构设计与分流策略 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-1-2-%E5%91%A8%E6%95%99%E7%A8%8B%E7%AB%AF%E4%BA%91%E5%8D%8F%E5%90%8C%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%88%86%E6%B5%81%E7%AD%96%E7%95%A5"><span class="nav-number">1.</span> <span class="nav-text"> 第 1-2 周教程：端云协同架构设计与分流策略</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E7%AB%AF%E4%BA%91%E5%8D%8F%E5%90%8C%E8%A7%A3%E5%86%B3%E7%9A%84%E4%B8%89%E4%B8%AA%E7%9F%9B%E7%9B%BE"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：端云协同解决的三个矛盾</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E7%BA%AF%E4%BA%91%E7%AB%AF%E4%B8%8E%E7%BA%AF%E7%AB%AF%E4%BE%A7%E5%90%84%E8%87%AA%E7%9A%84%E7%9F%AD%E6%9D%BF"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 纯云端与纯端侧各自的短板</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E8%B7%AF%E7%94%B1%E5%B1%82%E6%98%AF%E7%81%B5%E9%AD%82"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 路由层是灵魂</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%9B%9B%E8%B1%A1%E9%99%90%E5%88%86%E6%B5%81%E5%86%B3%E7%AD%96%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83%E4%B8%80"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 四象限分流决策（本周交付核心一）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E5%9B%9B%E4%B8%AA%E5%86%B3%E7%AD%96%E7%BB%B4%E5%BA%A6"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 四个决策维度</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E5%86%B3%E7%AD%96%E9%80%BB%E8%BE%91%E5%8F%AF%E6%89%A7%E8%A1%8C%E8%A7%84%E5%88%99"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 决策逻辑（可执行规则）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-%E5%A4%8D%E6%9D%82%E5%BA%A6%E8%AF%84%E4%BC%B0%E6%80%8E%E4%B9%88%E5%81%9A"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 复杂度评估怎么做</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E4%B8%80%E8%87%B4%E6%80%A7%E8%AE%BE%E8%AE%A1%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83%E4%BA%8C"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 一致性设计（本周交付核心二）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E9%97%AE%E9%A2%98%E7%AB%AF%E4%BA%91%E6%A8%A1%E5%9E%8B%E4%B8%8D%E5%90%8C%E5%9B%9E%E7%AD%94%E4%BC%9A%E4%B8%8D%E4%B8%80%E8%87%B4"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 问题：端云模型不同，回答会不一致</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E4%B8%89%E4%B8%AA%E5%AF%B9%E9%BD%90%E6%89%8B%E6%AE%B5"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 三个对齐手段</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-%E4%BC%9A%E8%AF%9D%E7%8A%B6%E6%80%81%E5%90%8C%E6%AD%A5%E8%AE%BE%E8%AE%A1"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 会话状态同步设计</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E7%BA%A7%E8%81%94%E6%8E%A8%E7%90%86%E9%97%AD%E7%8E%AF%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83%E4%B8%89"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 级联推理闭环（本周交付核心三）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E6%97%B6%E5%BA%8F%E5%9B%BE"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 时序图</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E7%BA%A7%E8%81%94%E7%9A%84%E4%BB%B7%E5%80%BC%E4%B8%8E%E9%9A%BE%E7%82%B9"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 级联的价值与难点</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E9%99%8D%E7%BA%A7%E4%B8%8E%E5%AE%B9%E7%81%BE"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 降级与容灾</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E4%BA%A4%E4%BB%98%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1%E6%96%87%E6%A1%A3"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 交付：架构设计文档</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.7.</span> <span class="nav-text"> 7. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#71-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.7.1.</span> <span class="nav-text"> 7.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#72-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.7.2.</span> <span class="nav-text"> 7.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#8-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.8.</span> <span class="nav-text"> 8. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.9.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/09/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-8-%E7%BB%93%E8%AF%BE%E9%A1%B9%E7%9B%AE-%E7%AB%AF%E4%BA%91%E4%B8%80%E4%BD%93%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E-%E7%AC%AC1-2%E5%91%A8-%E7%AB%AF%E4%BA%91%E5%8D%8F%E5%90%8C%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%88%86%E6%B5%81%E7%AD%96%E7%95%A5/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第1-2周-端云协同架构设计与分流策略 | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的三个问题 1. 一个请求进来，路由层凭什么决定&#39;留端侧&#39;还是&#39;上云端&#39;？四象限怎么落到可执行规则？ 2. 端侧模型和云端模型能力不同，怎么保证用户感知的回答&#39;一致&#39;？ 3. 级联推理（端侧答不好→云端升级→结果回填）的完整时序…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第1-2周-端云协同架构设计与分流策略
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-09 06:30:00" itemprop="dateCreated datePublished" datetime="2026-09-09T06:30:00+08:00">2026-09-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" itemprop="url" rel="index"><span itemprop="name">模型性能优化</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/Stage-8-%E7%BB%93%E8%AF%BE%E9%A1%B9%E7%9B%AE-%E7%AB%AF%E4%BA%91%E4%B8%80%E4%BD%93%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E/" itemprop="url" rel="index"><span itemprop="name">Stage 8-结课项目-端云一体推理引擎</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>8 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的三个问题 1. 一个请求进来，路由层凭什么决定'留端侧'还是'上云端'？四象限怎么落到可执行规则？ 2. 端侧模型和云端模型能力不同，怎么保证用户感知的回答'一致'？ 3. 级联推理（端侧答不好→云端升级→结果回填）的完整时序…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-1-2-周教程端云协同架构设计与分流策略"><a class="markdownIt-Anchor" href="#第-1-2-周教程端云协同架构设计与分流策略"></a> 第 1-2 周教程：端云协同架构设计与分流策略</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>一个请求进来，路由层凭什么决定&quot;留端侧&quot;还是&quot;上云端&quot;？四象限怎么落到可执行规则？</li>
+<li>端侧模型和云端模型能力不同，怎么保证用户感知的回答&quot;一致&quot;？</li>
+<li>级联推理（端侧答不好→云端升级→结果回填）的完整时序是什么？哪里最容易出错？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 1-2 周。交付物：《端云一体推理引擎架构设计文档》——架构图 + 分流决策表（隐私/延迟/能力/负载四象限）+ 级联推理时序图 + 风险清单。这是架构面试主答卷。</p>
+<hr />
+<h2 id="1-第一性原理端云协同解决的三个矛盾"><a class="markdownIt-Anchor" href="#1-第一性原理端云协同解决的三个矛盾"></a> 1. 第一性原理：端云协同解决的三个矛盾</h2>
+<h3 id="11-纯云端与纯端侧各自的短板"><a class="markdownIt-Anchor" href="#11-纯云端与纯端侧各自的短板"></a> 1.1 纯云端与纯端侧各自的短板</h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>纯云端</th>
+<th>纯端侧</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>隐私</td>
+<td>数据出端</td>
+<td>✅ 数据不出端</td>
+</tr>
+<tr>
+<td>延迟</td>
+<td>网络往返</td>
+<td>✅ 本地低延迟</td>
+</tr>
+<tr>
+<td>能力</td>
+<td>✅ 大模型强</td>
+<td>小模型弱</td>
+</tr>
+<tr>
+<td>离线</td>
+<td>❌ 断网即废</td>
+<td>✅ 可用</td>
+</tr>
+<tr>
+<td>成本</td>
+<td>按量计费</td>
+<td>一次性硬件</td>
+</tr>
+</tbody>
+</table>
+<p>端云协同的目标：<strong>把每个请求送到&quot;最合适&quot;的地方</strong>——隐私/离线/简单请求留端侧，复杂/重载请求上云端。</p>
+<h3 id="12-路由层是灵魂"><a class="markdownIt-Anchor" href="#12-路由层是灵魂"></a> 1.2 路由层是灵魂</h3>
+<p>没有智能路由，端云只是两套孤立系统。路由层回答：&quot;这个请求给谁？&quot;它的决策质量直接决定整个系统的体验与成本。</p>
+<hr />
+<h2 id="2-四象限分流决策本周交付核心一"><a class="markdownIt-Anchor" href="#2-四象限分流决策本周交付核心一"></a> 2. 四象限分流决策（本周交付核心一）</h2>
+<h3 id="21-四个决策维度"><a class="markdownIt-Anchor" href="#21-四个决策维度"></a> 2.1 四个决策维度</h3>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>判定</th>
+<th>端侧</th>
+<th>云端</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>隐私</strong></td>
+<td>数据能否出端</td>
+<td>敏感（医疗/金融/个人对话）</td>
+<td>脱敏/公开内容</td>
+</tr>
+<tr>
+<td><strong>延迟</strong></td>
+<td>能否容忍网络往返</td>
+<td>实时交互、弱网</td>
+<td>可等待的批处理</td>
+</tr>
+<tr>
+<td><strong>能力</strong></td>
+<td>端侧模型答得了吗</td>
+<td>简单问答、本地控制</td>
+<td>复杂推理、长文、知识密集</td>
+</tr>
+<tr>
+<td><strong>负载</strong></td>
+<td>云端排队了吗</td>
+<td>云端过载时兜底</td>
+<td>正常时承载重载</td>
+</tr>
+</tbody>
+</table>
+<h3 id="22-决策逻辑可执行规则"><a class="markdownIt-Anchor" href="#22-决策逻辑可执行规则"></a> 2.2 决策逻辑（可执行规则）</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">路由决策（按优先级短路）：</span><br><span class="line">1. 隐私标记 = 敏感            → 端侧（强制，不升级）</span><br><span class="line">2. 云端不可达 / 断网           → 端侧（兜底）</span><br><span class="line">3. 请求复杂度评估 &gt; 端侧能力    → 云端</span><br><span class="line">4. 云端队列长度 &gt; 阈值          → 端侧兜底（降级）</span><br><span class="line">5. 其余                       → 端侧先试（级联起点）</span><br></pre></td></tr></table></figure>
+<p><strong>关键点</strong>：</p>
+<ul>
+<li>隐私是<strong>硬约束</strong>（一票否决，绝不上传）；</li>
+<li>能力是<strong>主判据</strong>（端侧答不了的必须上云）；</li>
+<li>负载是<strong>调节阀</strong>（过载时牺牲质量保可用）。</li>
+</ul>
+<h3 id="23-复杂度评估怎么做"><a class="markdownIt-Anchor" href="#23-复杂度评估怎么做"></a> 2.3 复杂度评估怎么做</h3>
+<p>路由层需要一个轻量的&quot;请求难度&quot;估计：</p>
+<ul>
+<li><strong>启发式</strong>：输入长度、是否需要联网知识、问题类型分类；</li>
+<li><strong>小分类器</strong>：训练一个轻量模型预测&quot;端侧能否胜任&quot;；</li>
+<li><strong>端侧置信度反馈</strong>：端侧先答，置信度低再升级（级联模式，见下节）。</li>
+</ul>
+<hr />
+<h2 id="3-一致性设计本周交付核心二"><a class="markdownIt-Anchor" href="#3-一致性设计本周交付核心二"></a> 3. 一致性设计（本周交付核心二）</h2>
+<h3 id="31-问题端云模型不同回答会不一致"><a class="markdownIt-Anchor" href="#31-问题端云模型不同回答会不一致"></a> 3.1 问题：端云模型不同，回答会不一致</h3>
+<p>端侧跑 1.5B/3B 量化模型，云端跑 7B——同一问题可能给出不同甚至矛盾的回答。用户来回切换会困惑。</p>
+<h3 id="32-三个对齐手段"><a class="markdownIt-Anchor" href="#32-三个对齐手段"></a> 3.2 三个对齐手段</h3>
+<ol>
+<li><strong>量化精度对齐</strong>：端侧量化模型的输出质量尽量逼近云端（Stage 2 的量化评测保证）；</li>
+<li><strong>回答风格对齐</strong>：端云用同一套 system prompt / 输出格式约束，风格一致；</li>
+<li><strong>会话状态同步</strong>：多轮对话的上下文在端云间同步，避免&quot;换端后失忆&quot;。</li>
+</ol>
+<h3 id="33-会话状态同步设计"><a class="markdownIt-Anchor" href="#33-会话状态同步设计"></a> 3.3 会话状态同步设计</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">会话状态存哪：</span><br><span class="line">- 端侧本地（快、但切云端要同步）</span><br><span class="line">- 云端集中（一致、但离线丢）</span><br><span class="line">→ 折中：端侧为主，上云时同步上下文摘要</span><br></pre></td></tr></table></figure>
+<p>用 <strong>Redis</strong> 存会话状态，端云都读写同一份（端侧离线时用本地缓存，联网后补同步）。</p>
+<hr />
+<h2 id="4-级联推理闭环本周交付核心三"><a class="markdownIt-Anchor" href="#4-级联推理闭环本周交付核心三"></a> 4. 级联推理闭环（本周交付核心三）</h2>
+<h3 id="41-时序图"><a class="markdownIt-Anchor" href="#41-时序图"></a> 4.1 时序图</h3>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">sequenceDiagram</span><br><span class="line">    participant U as 用户</span><br><span class="line">    participant R as 路由层</span><br><span class="line">    participant E as 端侧</span><br><span class="line">    participant C as 云端</span><br><span class="line"></span><br><span class="line">    U-&gt;&gt;R: 请求</span><br><span class="line">    R-&gt;&gt;E: 先交端侧（非隐私硬拒场景）</span><br><span class="line">    E--&gt;&gt;R: 端侧回答 + 置信度</span><br><span class="line">    alt 置信度 ≥ 阈值</span><br><span class="line">        R--&gt;&gt;U: 直接返回端侧回答（快、省）</span><br><span class="line">    else 置信度 &lt; 阈值</span><br><span class="line">        R-&gt;&gt;C: 升级云端</span><br><span class="line">        C--&gt;&gt;R: 云端高质量回答</span><br><span class="line">        R--&gt;&gt;U: 返回云端回答</span><br><span class="line">        R-&gt;&gt;E: 回填：把云端答案缓存到端侧</span><br><span class="line">        Note over E: 下次同类问题端侧可直答</span><br><span class="line">    end</span><br></pre></td></tr></table></figure>
+<h3 id="42-级联的价值与难点"><a class="markdownIt-Anchor" href="#42-级联的价值与难点"></a> 4.2 级联的价值与难点</h3>
+<p><strong>价值</strong>：</p>
+<ul>
+<li>端侧答得好的请求不花云端钱（省钱）；</li>
+<li>答不好的自动升级保质量（体验）；</li>
+<li>云端答案回填端侧缓存，<strong>同类问题下次端侧直答</strong>——这是一个<strong>知识蒸馏闭环</strong>，端侧能力随使用增长。</li>
+</ul>
+<p><strong>难点（易错点）</strong>：</p>
+<ol>
+<li><strong>置信度阈值</strong>：太高 → 频繁上云（费钱）；太低 → 端侧硬答差答案（伤体验）。需用验证集标定；</li>
+<li><strong>回填的正确性</strong>：缓存键怎么设计（问题归一化），避免缓存错误答案；</li>
+<li><strong>升级延迟</strong>：端侧已花时间再上云，总延迟 = 端侧 + 云端。要设端侧超时（如 500ms 未出或低置信就立即升级）。</li>
+</ol>
+<hr />
+<h2 id="5-降级与容灾"><a class="markdownIt-Anchor" href="#5-降级与容灾"></a> 5. 降级与容灾</h2>
+<table>
+<thead>
+<tr>
+<th>故障</th>
+<th>策略</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>云端不可达</td>
+<td>端侧兜底全部请求（质量降级但可用）</td>
+</tr>
+<tr>
+<td>断网重连</td>
+<td>离线期间请求排队/缓存，重连后补同步</td>
+</tr>
+<tr>
+<td>请求重复</td>
+<td>用请求 ID 去重（级联升级时别重复计费）</td>
+</tr>
+<tr>
+<td>端侧故障</td>
+<td>切纯云端模式</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="6-交付架构设计文档"><a class="markdownIt-Anchor" href="#6-交付架构设计文档"></a> 6. 交付：架构设计文档</h2>
+<p>把以上整合成文档（面试主答卷）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">《端云一体推理引擎架构设计文档》</span><br><span class="line">1. 目标与场景（端云协同解决什么）</span><br><span class="line">2. 总体架构图（端侧集群/云端集群/路由层/状态同步）</span><br><span class="line">3. 分流决策表（四象限 + 决策伪代码）</span><br><span class="line">4. 一致性设计（量化/风格/会话同步）</span><br><span class="line">5. 级联推理时序图 + 置信度阈值标定方法</span><br><span class="line">6. 降级与容灾</span><br><span class="line">7. 风险清单</span><br></pre></td></tr></table></figure>
+<p><strong>风险清单示例</strong>（主动暴露，面试加分）：</p>
+<ul>
+<li>置信度估计不准 → 分流错误；</li>
+<li>端云能力差距大 → 一致性难保；</li>
+<li>回填缓存污染；</li>
+<li>网络抖动导致级联超时。</li>
+</ul>
+<hr />
+<h2 id="7-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#7-工程权衡与失效模式"></a> 7. 工程权衡与失效模式</h2>
+<h3 id="71-权衡"><a class="markdownIt-Anchor" href="#71-权衡"></a> 7.1 权衡</h3>
+<ul>
+<li><strong>分流激进度</strong>：多留端侧省钱但质量风险，多上云保质量但贵；</li>
+<li><strong>级联深度</strong>：端侧先试多一次往返延迟，直上云少一次但费钱；</li>
+<li><strong>缓存回填</strong>：填了提速，但错误缓存有害。</li>
+</ul>
+<h3 id="72-失效模式"><a class="markdownIt-Anchor" href="#72-失效模式"></a> 7.2 失效模式</h3>
+<ol>
+<li><strong>隐私请求误上云</strong>：分流逻辑漏判敏感数据。修复：隐私检测前置 + 端侧强制兜底 + 审计日志。</li>
+<li><strong>置信度阈值失配</strong>：分流错误率高。修复：用标注集标定阈值、上线后按反馈调整。</li>
+<li><strong>级联双重延迟</strong>：端侧慢 + 又上云，总延迟超 SLO。修复：端侧设短超时，快速升级。</li>
+<li><strong>会话失忆</strong>：端云切换后上下文丢。修复：统一会话存储 + 切换时同步。</li>
+</ol>
+<hr />
+<h2 id="8-延伸思考题含解析"><a class="markdownIt-Anchor" href="#8-延伸思考题含解析"></a> 8. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：什么请求该留在端侧？<br />
+<strong>A</strong>：① 隐私敏感（硬约束，绝不上传）；② 简单、端侧能力内；③ 实时交互/弱网（延迟敏感）；④ 云端过载时的兜底。核心是&quot;隐私一票否决 + 能力够就留端&quot;。</p>
+<p><strong>Q2</strong>：端云回答不一致怎么办？<br />
+<strong>A</strong>：三层对齐：① 端侧量化质量逼近云端（量化评测把关）；② 统一 system prompt/输出格式保风格一致；③ 会话状态同步保多轮连贯。无法完全一致时，能力不足的问题直接路由云端，不让端侧硬答。</p>
+<p><strong>Q3</strong>：级联的置信度阈值怎么定？<br />
+<strong>A</strong>：用带标注的验证集标定：扫描阈值，找&quot;端侧准确率达标（如 ≥90%）时的最高阈值&quot;——既尽量留端侧省钱，又不让差答案流出。上线后按用户反馈/抽检持续调整。</p>
+<p><strong>Q4</strong>：级联推理相比直接路由，多了什么好处和代价？<br />
+<strong>A</strong>：好处：端侧能答的不花钱、答不好自动保质量、回填让端侧越用越强。代价：低置信请求有双重延迟（端侧+云端），需设端侧超时快速升级。</p>
+<p><strong>Q5</strong>：这套架构的商业价值在哪？<br />
+<strong>A</strong>：① 成本：简单请求留端侧，云端调用费大幅下降；② 体验：隐私本地、低延迟、离线可用；③ 差异化：端云协同 + 越用越强的蒸馏闭环是竞争壁垒。用对比报告量化成本节省。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 画总体架构图（端侧/云端/路由/状态同步四块）。</li>
+<li>[ ] 完成四象限分流决策表 + 决策伪代码。</li>
+<li>[ ] 画级联推理时序图，标注置信度分支与回填。</li>
+<li>[ ] 设计一致性方案（量化/风格/会话同步）。</li>
+<li>[ ] 列出风险清单（含置信度失配、缓存污染等）。</li>
+<li>[ ] 产出完整《架构设计文档》。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%8E%A8%E7%90%86%E4%BC%98%E5%8C%96/" rel="tag"># 推理优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/09/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-8-%E7%BB%93%E8%AF%BE%E9%A1%B9%E7%9B%AE-%E7%AB%AF%E4%BA%91%E4%B8%80%E4%BD%93%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E-README/" rel="prev" title="README">
+                  <i class="fa fa-angle-left"></i> README
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/09/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-8-%E7%BB%93%E8%AF%BE%E9%A1%B9%E7%9B%AE-%E7%AB%AF%E4%BA%91%E4%B8%80%E4%BD%93%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E-%E7%AC%AC3-4%E5%91%A8-%E4%BA%91%E7%AB%AF%E4%BE%A7%E6%90%AD%E5%BB%BA%E9%87%8F%E5%8C%96%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%BC%95%E6%93%8E%E7%BC%96%E6%8E%92%E5%AE%9E%E6%88%98/" rel="next" title="第3-4周-云端侧搭建量化模型与引擎编排实战">
+                  第3-4周-云端侧搭建量化模型与引擎编排实战 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

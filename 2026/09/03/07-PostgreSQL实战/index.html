@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 完成 PG 16 安装与 psql 基础操作，建立日常命令肌肉记忆。 - 会选数据类型：text vs varchar、numeric vs float（钱的教训）、jsonb 的正确用法。 - 理解主键策略：自增 vs UUID 的索…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="07-PostgreSQL实战">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/07-PostgreSQL%E5%AE%9E%E6%88%98/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 完成 PG 16 安装与 psql 基础操作，建立日常命令肌肉记忆。 - 会选数据类型：text vs varchar、numeric vs float（钱的教训）、jsonb 的正确用法。 - 理解主键策略：自增 vs UUID 的索…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T13:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.554Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Redis">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="数据库">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/07-PostgreSQL%E5%AE%9E%E6%88%98/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/07-PostgreSQL%E5%AE%9E%E6%88%98/","path":"2026/09/03/07-PostgreSQL实战/","title":"07-PostgreSQL实战"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>07-PostgreSQL实战 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#07-postgresql%E5%AE%9E%E6%88%98"><span class="nav-number">1.</span> <span class="nav-text"> 07 - PostgreSQL实战</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%AE%89%E8%A3%85%E4%B8%8E-psql-%E5%9F%BA%E7%A1%80"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 安装与 psql 基础</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E6%95%B0%E6%8D%AE%E7%B1%BB%E5%9E%8B%E9%80%89%E6%8B%A9%E9%92%B1%E4%B8%8E-jsonb"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 数据类型选择：钱与 JSONB</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%BA%8F%E5%88%97%E4%B8%8E%E4%B8%BB%E9%94%AE%E7%AD%96%E7%95%A5%E8%87%AA%E5%A2%9E-vs-uuid"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 序列与主键策略：自增 vs UUID</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%88%86%E5%8C%BA%E8%A1%A8%E4%B8%80%E5%BC%A0%E5%A4%A7%E8%A1%A8%E6%8C%89%E8%A7%84%E5%88%99%E6%8B%86"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 分区表：一张大表按规则拆</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E8%BF%9E%E6%8E%A5%E6%B1%A0%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 连接池：为什么需要</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%A4%87%E4%BB%BDpg_dump-%E4%B8%8E-pitr-%E6%A6%82%E5%BF%B5"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 备份：pg_dump 与 PITR 概念</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-python-%E6%8E%A5%E5%85%A5psycopg3-%E4%B8%8E-sql-%E6%B3%A8%E5%85%A5%E9%98%B2%E5%BE%A1"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. Python 接入：psycopg3 与 SQL 注入防御</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/07-PostgreSQL%E5%AE%9E%E6%88%98/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="07-PostgreSQL实战 | Yoleen的博客">
+      <meta itemprop="description" content="- 完成 PG 16 安装与 psql 基础操作，建立日常命令肌肉记忆。 - 会选数据类型：text vs varchar、numeric vs float（钱的教训）、jsonb 的正确用法。 - 理解主键策略：自增 vs UUID 的索…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          07-PostgreSQL实战
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 21:00:00" itemprop="dateCreated datePublished" datetime="2026-09-03T21:00:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/" itemprop="url" rel="index"><span itemprop="name">数据库</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.3k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 完成 PG 16 安装与 psql 基础操作，建立日常命令肌肉记忆。 - 会选数据类型：text vs varchar、numeric vs float（钱的教训）、jsonb 的正确用法。 - 理解主键策略：自增 vs UUID 的索…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="07-postgresql实战"><a class="markdownIt-Anchor" href="#07-postgresql实战"></a> 07 - PostgreSQL实战</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>完成 PG 16 安装与 psql 基础操作，建立日常命令肌肉记忆。</li>
+<li>会选数据类型：text vs varchar、numeric vs float（钱的教训）、jsonb 的正确用法。</li>
+<li>理解主键策略：自增 vs UUID 的索引分裂问题，学会实测思路。</li>
+<li>掌握分区表、连接池（为什么需要）、备份三件套与 Python 接入（psycopg3 + SQL 注入防御）。</li>
+</ul>
+<h2 id="1-安装与-psql-基础"><a class="markdownIt-Anchor" href="#1-安装与-psql-基础"></a> 1. 安装与 psql 基础</h2>
+<p>Ubuntu/WSL2 上装 PostgreSQL 16（apt 默认源版本可能较旧，走 PGDG 官方源）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> apt install -y postgresql                  <span class="comment"># 基础安装(版本随发行版)</span></span><br><span class="line"><span class="built_in">sudo</span> systemctl start postgresql                 <span class="comment"># WSL2 也可用 service postgresql start</span></span><br><span class="line"><span class="built_in">sudo</span> -u postgres psql                           <span class="comment"># 首次以 postgres 用户进入</span></span><br><span class="line"><span class="comment"># -- 建自己的工作库与账号</span></span><br><span class="line">CREATE ROLE yyl LOGIN PASSWORD <span class="string">&#x27;yourpw&#x27;</span>;</span><br><span class="line">CREATE DATABASE dev OWNER yyl;</span><br><span class="line">\q</span><br><span class="line">psql <span class="string">&quot;postgresql://yyl@localhost:5432/dev&quot;</span>      <span class="comment"># 之后这样进</span></span><br></pre></td></tr></table></figure>
+<p>psql 元命令速查（斜杠命令不是 SQL，不加分号）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">\l          列出数据库        \c dbname    切换数据库</span><br><span class="line">\dt         列出表            \d 表名      表结构+索引+约束(最常用)</span><br><span class="line">\x          切换展开显示(宽表必备)             \timing     显示每条 SQL 耗时</span><br><span class="line">\copy       客户端导入导出CSV  \i file.sql  执行脚本</span><br><span class="line">SELECT version();             当前版本; SELECT pg_backend_pid();  当前连接的进程号</span><br></pre></td></tr></table></figure>
+<p>一个必须先建立的模型：<strong>PG = 一个 postgres 服务进程 + 每连接一个后端进程（fork）</strong>（MySQL 是每连接一线程）。这决定了 PG 的内存与调度行为，也直接引出 6 节&quot;为什么需要连接池&quot;。</p>
+<h2 id="2-数据类型选择钱与-jsonb"><a class="markdownIt-Anchor" href="#2-数据类型选择钱与-jsonb"></a> 2. 数据类型选择：钱与 JSONB</h2>
+<p>选类型是建模的第一层决定，错了后期极难改。三条主线：</p>
+<p><strong>text vs varchar(n)</strong>：PG 里 <code>text</code> 与 <code>varchar(n)</code> 性能完全相同（都变长存储），区别只在 <code>varchar(n)</code> 的长度<strong>约束</strong>会报错。经验做法：<strong>内部数据用 text + CHECK 约束（可随时放宽）</strong>；对接外部系统需要长度契约时才 varchar(n)。Oracle 背景的 <code>varchar2(50)</code> 直觉（不指定长度会报错）在 PG 不成立。</p>
+<p><strong>numeric vs float——钱的教训</strong>：float 是 IEEE 754 二进制浮点，<strong>不能精确表示 0.1</strong>，累加后出现精度漂移：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">SELECT</span> <span class="number">0.1</span>::float8 <span class="operator">*</span> <span class="number">3</span>;            <span class="comment">-- 0.30000000000000004  ← 钱变成假账</span></span><br><span class="line"><span class="keyword">SELECT</span> <span class="number">0.1</span>::<span class="type">numeric</span> <span class="operator">*</span> <span class="number">3</span>;           <span class="comment">-- 0.3                  ← 十进制精确</span></span><br><span class="line"><span class="keyword">SELECT</span> <span class="built_in">sum</span>(x) <span class="keyword">FROM</span> (<span class="keyword">VALUES</span> (<span class="number">0.1</span>::float8),(<span class="number">0.2</span>),(<span class="number">0.3</span>)) t(x);   <span class="comment">-- 0.6000000000000001</span></span><br><span class="line"><span class="keyword">SELECT</span> <span class="built_in">sum</span>(x) <span class="keyword">FROM</span> (<span class="keyword">VALUES</span> (<span class="number">0.1</span>::<span class="type">numeric</span>),(<span class="number">0.2</span>),(<span class="number">0.3</span>)) t(x);  <span class="comment">-- 0.6</span></span><br></pre></td></tr></table></figure>
+<p>规则只有一条（经验做法）：<strong>凡是钱、股数、手续费，一律 <code>NUMERIC(p,s)</code></strong>（如 NUMERIC(18,6) 容纳加密货币小数位）；float 留给统计近似值（收益率均值、模型特征）。两者互转的隐式截断在报表对账时爆发，返工成本极高。SQLite 无此问题（内部统一 REAL，但同样不该存钱）；MySQL 用 DECIMAL。</p>
+<p><strong>jsonb 用法</strong>：PG 的 jsonb 是二进制解析、可索引的 JSON。典型场景——外部 API 的原始返回先整包落库（溯源），稳定字段再提成列：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE TABLE</span> api_raw(id <span class="type">BIGINT</span> GENERATED ALWAYS <span class="keyword">AS</span> <span class="keyword">IDENTITY</span>, src TEXT,</span><br><span class="line">                     payload JSONB, pulled_at TIMESTAMPTZ <span class="keyword">DEFAULT</span> now());</span><br><span class="line"><span class="keyword">INSERT INTO</span> api_raw(src, payload) <span class="keyword">VALUES</span> (<span class="string">&#x27;tencent&#x27;</span>,</span><br><span class="line">  <span class="string">&#x27;&#123;&quot;symbol&quot;:&quot;SH600519&quot;,&quot;price&quot;:1688.0,&quot;tags&quot;:[&quot;white&quot;,&quot;liquor&quot;]&#125;&#x27;</span>);</span><br><span class="line"><span class="comment">-- 查询: -&gt;&gt; 返回text, -&gt; 返回jsonb; ? 检查键存在</span></span><br><span class="line"><span class="keyword">SELECT</span> payload<span class="operator">-</span><span class="operator">&gt;&gt;</span><span class="string">&#x27;symbol&#x27;</span>, payload<span class="operator">-</span><span class="operator">&gt;</span><span class="string">&#x27;tags&#x27;</span><span class="operator">-</span><span class="operator">&gt;&gt;</span><span class="number">0</span> <span class="keyword">FROM</span> api_raw <span class="keyword">WHERE</span> src<span class="operator">=</span><span class="string">&#x27;tencent&#x27;</span>;</span><br><span class="line"><span class="keyword">CREATE</span> INDEX <span class="keyword">ON</span> api_raw <span class="keyword">USING</span> gin(payload);      <span class="comment">-- GIN 索引支持包含查询</span></span><br><span class="line"><span class="keyword">SELECT</span> <span class="built_in">count</span>(<span class="operator">*</span>) <span class="keyword">FROM</span> api_raw <span class="keyword">WHERE</span> payload ? <span class="string">&#x27;tags&#x27;</span>;</span><br></pre></td></tr></table></figure>
+<p>经验做法：<strong>jsonb 存&quot;结构未定/纯透传&quot;的数据，一旦某字段开始参与 WHERE/JOIN，就提为独立列</strong>（可加表达式索引过渡：<code>CREATE INDEX ON api_raw ((payload-&gt;&gt;'symbol'))</code>）。jsonb 不是&quot;不想建模&quot;的借口——是过渡带。</p>
+<h2 id="3-序列与主键策略自增-vs-uuid"><a class="markdownIt-Anchor" href="#3-序列与主键策略自增-vs-uuid"></a> 3. 序列与主键策略：自增 vs UUID</h2>
+<p>03 章埋的问题现在收口。两种主键方案：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 方案A: 身份列(PG 10+ 推荐, 替代已过时的 SERIAL)</span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> orders_a(id <span class="type">BIGINT</span> GENERATED ALWAYS <span class="keyword">AS</span> <span class="keyword">IDENTITY</span> <span class="keyword">PRIMARY KEY</span>, ...);</span><br><span class="line"><span class="comment">-- 方案B: UUID</span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> orders_b(id UUID <span class="keyword">PRIMARY KEY</span> <span class="keyword">DEFAULT</span> gen_random_uuid(), ...);</span><br></pre></td></tr></table></figure>
+<p>对比维度：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>自增 BIGINT</th>
+<th>UUID v4（随机）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>索引体积</td>
+<td>8B 键，树矮</td>
+<td>16B 键，每棵二级索引都变胖</td>
+</tr>
+<tr>
+<td>插入局部性</td>
+<td>恒定递增 → 永远追加最右叶，缓存友好</td>
+<td>随机落点 → 频繁页分裂、缓存命中率低</td>
+</tr>
+<tr>
+<td>全局唯一</td>
+<td>否（分库需号段/雪花）</td>
+<td>是</td>
+</tr>
+<tr>
+<td>信息泄露</td>
+<td>可被猜出订单量</td>
+<td>不可</td>
+</tr>
+</tbody>
+</table>
+<p><strong>索引分裂实测思路</strong>（在 03 章分裂机理上展开）：建两张表分别用两种主键，各插 100 万行随机外键数据，对比两个数字——插入耗时（随机 UUID 的页分裂显著更多）与索引大小（<code>pg_relation_size('idx')</code>，UUID 版通常大 30-50%）。随机写放大随树高增长，数据量越大差距越明显（3 层变 4 层是拐点）。缓解办法（经验做法）：<strong>必须 UUID 就用 UUIDv7（时间有序，PG 18 原生）/ 雪花 ID</strong>——保住全局唯一同时恢复插入局部性；单库无分片需求就 BIGINT，别给自己找分布式问题。SQLite 下同理（rowid 天然自增）。</p>
+<h2 id="4-分区表一张大表按规则拆"><a class="markdownIt-Anchor" href="#4-分区表一张大表按规则拆"></a> 4. 分区表：一张大表按规则拆</h2>
+<p>单表过亿行后（行数只是信号，真正的判据是&quot;维护动作&quot;：索引重建/删除旧数据/VACUUM 都开始小时级），把表按规则拆成物理子表，查询自动路由：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 范围分区: 行情表按月分区(11 章会完整设计, 这里演示语法骨架)</span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> kline (</span><br><span class="line">    symbol TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">    ts     TIMESTAMPTZ <span class="keyword">NOT NULL</span>,</span><br><span class="line">    o <span class="type">NUMERIC</span>, h <span class="type">NUMERIC</span>, l <span class="type">NUMERIC</span>, c <span class="type">NUMERIC</span>, v <span class="type">NUMERIC</span>,</span><br><span class="line">    <span class="keyword">PRIMARY KEY</span> (symbol, ts)                    <span class="comment">-- 分区键必须进主键</span></span><br><span class="line">) <span class="keyword">PARTITION</span> <span class="keyword">BY</span> <span class="keyword">RANGE</span> (ts);</span><br><span class="line"><span class="keyword">CREATE TABLE</span> kline_2025_06 <span class="keyword">PARTITION</span> <span class="keyword">OF</span> kline</span><br><span class="line">    <span class="keyword">FOR</span> <span class="keyword">VALUES</span> <span class="keyword">FROM</span> (<span class="string">&#x27;2025-06-01&#x27;</span>) <span class="keyword">TO</span> (<span class="string">&#x27;2025-07-01&#x27;</span>);</span><br><span class="line"><span class="keyword">CREATE TABLE</span> kline_2025_07 <span class="keyword">PARTITION</span> <span class="keyword">OF</span> kline</span><br><span class="line">    <span class="keyword">FOR</span> <span class="keyword">VALUES</span> <span class="keyword">FROM</span> (<span class="string">&#x27;2025-07-01&#x27;</span>) <span class="keyword">TO</span> (<span class="string">&#x27;2025-08-01&#x27;</span>);</span><br><span class="line"><span class="keyword">INSERT INTO</span> kline <span class="keyword">VALUES</span> (<span class="string">&#x27;SH600519&#x27;</span>, <span class="string">&#x27;2025-06-05 09:31+08&#x27;</span>, <span class="number">1688</span>,<span class="number">1690</span>,<span class="number">1685</span>,<span class="number">1689</span>, <span class="number">12000</span>);</span><br><span class="line">EXPLAIN <span class="keyword">SELECT</span> <span class="operator">*</span> <span class="keyword">FROM</span> kline <span class="keyword">WHERE</span> ts <span class="operator">&gt;=</span> <span class="string">&#x27;2025-06-01&#x27;</span> <span class="keyword">AND</span> ts <span class="operator">&lt;</span> <span class="string">&#x27;2025-07-01&#x27;</span>;</span><br><span class="line"><span class="comment">-- 计划只见 kline_2025_06 一个分区 → 分区裁剪(pruning)生效; 跨月查询自动扫描相关分区</span></span><br></pre></td></tr></table></figure>
+<p>收益三条：<strong>查询裁剪</strong>（只扫命中的分区，配合 05 章执行计划）；<strong>运维解耦</strong>（删旧数据 = <code>DROP TABLE kline_2023_01</code>，秒级且不产生 vacuum 压力，对比 DELETE 千万行的痛苦）；<strong>索引变小</strong>（每分区独立局部索引）。分区类型：RANGE（时间/数值序列，最常用）、LIST（地区/状态等离散值）、HASH（打散无明显边界的数据）。经验做法：<strong>先用时间 RANGE 按月，每分区 1000 万-1 亿行为宜；分区键必须出现在主键/唯一约束里</strong>——这个约束决定了设计分区键前要先想清楚查询形态。</p>
+<h2 id="5-连接池为什么需要"><a class="markdownIt-Anchor" href="#5-连接池为什么需要"></a> 5. 连接池：为什么需要</h2>
+<p>回到 1 节的进程模型：<strong>每个 PG 连接 = 一个后端进程</strong>（~5-10MB 基础内存 + 各类缓存），新建连接要 fork + 初始化，数十毫秒级。应用侧的常见灾难：Web 框架每个请求开一个连接 → 100 QPS 就是 100 个进程，内存爆 + 上下文切换剧增；PG 默认 <code>max_connections=100</code>，超了直接拒绝。解法不是调大 max_connections（每个连接都有内存代价，上下文切换是全局税），而是<strong>复用</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">无池:  请求→fork后端进程→执行→退出     (每请求数十ms额外开销 + 进程数随QPS爆炸)</span><br><span class="line">有池:  请求→从池里借连接→执行→归还     (连接进程常驻, 数量=池大小, 与QPS解耦)</span><br><span class="line"></span><br><span class="line">应用内池(psycopg_pool): 单进程内复用, 适合单体应用</span><br><span class="line">pgbouncer(外部池):      独立中间件, 多个应用进程/多台机器共享一个小连接池</span><br><span class="line">  - session 模式: 连接绑定整个会话(用到事务外的会话特性时)</span><br><span class="line">  - transaction 模式: 事务结束即归还(默认推荐, 吞吐最高; 会话级 SET/临时表不可用!)</span><br></pre></td></tr></table></figure>
+<p>经验做法：<strong>单进程应用先用 <code>psycopg_pool.ConnectionPool(min_size=5, max_size=20)</code>；多进程部署直接上 pgbouncer（transaction 模式）</strong>。给个参照系：一台 16GB 的库机，max_connections 调到 300 就是自找 swap——连接数是<strong>稀缺资源</strong>，池化后应用侧并发 1000 也只需要几十个连接。</p>
+<h2 id="6-备份pg_dump-与-pitr-概念"><a class="markdownIt-Anchor" href="#6-备份pg_dump-与-pitr-概念"></a> 6. 备份：pg_dump 与 PITR 概念</h2>
+<p>备份分两个等级（12 章做恢复演练，这里先建立工具坐标）：</p>
+<ul>
+<li><strong>逻辑备份 <code>pg_dump</code></strong>：导出 SQL/目录归档，单库粒度，跨版本恢复友好，适合中小库与日常例行：</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">pg_dump <span class="string">&quot;postgresql://yyl@localhost/dev&quot;</span> -Fc -f dev.dump    <span class="comment"># -Fc 自定义压缩格式</span></span><br><span class="line">pg_restore -d newdb dev.dump                                 <span class="comment"># 恢复(可 -j 4 并行)</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li><strong>物理备份 + PITR（Point-In-Time Recovery）</strong>：基于 WAL 归档，能把库<strong>恢复到任意时间点</strong>（“删库发生在 14:32:17，恢复到 14:32:16”），全库粒度，生产标配。概念模型：基础备份（pg_basebackup）+ 持续归档的 WAL 段文件（<code>archive_mode=on</code> + <code>archive_command</code>），恢复 = 基础备份 + 重放 WAL 到目标时刻（<code>recovery_target_time</code>）。成本：需要备份存储空间与归档盘；收益：RPO（可接受的数据丢失量）可压到秒级。</li>
+<li>经验做法：<strong>逻辑备份兜底 + 物理备份/PITR 上生产的双轨</strong>；加密与异地存放是底线；备份的有效性 = 12 章的恢复演练说了算（光备份不恢复 = 没备份）。</li>
+</ul>
+<h2 id="7-python-接入psycopg3-与-sql-注入防御"><a class="markdownIt-Anchor" href="#7-python-接入psycopg3-与-sql-注入防御"></a> 7. Python 接入：psycopg3 与 SQL 注入防御</h2>
+<p>安装与最小连接（psycopg 3.x，注意不是老的 psycopg2）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">pip install <span class="string">&quot;psycopg[binary]&quot;</span>      <span class="comment"># 版本 3.x</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># pg_demo.py —— 参数化查询是唯一正确的姿势</span></span><br><span class="line"><span class="keyword">import</span> psycopg</span><br><span class="line"></span><br><span class="line"><span class="keyword">with</span> psycopg.connect(<span class="string">&quot;postgresql://yyl@localhost:5432/dev&quot;</span>) <span class="keyword">as</span> conn:</span><br><span class="line">    <span class="keyword">with</span> conn.cursor() <span class="keyword">as</span> cur:</span><br><span class="line">        <span class="comment"># 正确: 参数化(占位符 %s, 参数元组) —— 值永远不被解析为 SQL 代码</span></span><br><span class="line">        cur.execute(<span class="string">&quot;SELECT symbol, c FROM kline WHERE symbol = %s AND ts &gt;= %s&quot;</span>,</span><br><span class="line">                    (<span class="string">&quot;SH600519&quot;</span>, <span class="string">&quot;2025-06-01&quot;</span>))</span><br><span class="line">        rows = cur.fetchall()</span><br><span class="line"></span><br><span class="line">        <span class="comment"># 批量插入: executemany 慢(逐条), 用 execute_values/copy</span></span><br><span class="line">        <span class="keyword">from</span> psycopg <span class="keyword">import</span> sql</span><br><span class="line">        <span class="keyword">with</span> conn.transaction():                      <span class="comment"># 显式事务块</span></span><br><span class="line">            cur.executemany(</span><br><span class="line">                <span class="string">&quot;INSERT INTO kline(symbol, ts, o,h,l,c,v) VALUES (%s,%s,%s,%s,%s,%s,%s) ON CONFLICT (symbol, ts) DO NOTHING&quot;</span>,</span><br><span class="line">                [(<span class="string">&quot;SH600519&quot;</span>, <span class="string">&quot;2025-06-06 09:31+08&quot;</span>, <span class="number">1689</span>,<span class="number">1695</span>,<span class="number">1687</span>,<span class="number">1692</span>, <span class="number">9800</span>)])</span><br><span class="line">    conn.commit()                                     <span class="comment"># with 块退出自动提交/回滚</span></span><br></pre></td></tr></table></figure>
+<p><strong>SQL 注入：一个完整的攻击演示与防御</strong>。注入的本质：字符串拼接让&quot;数据&quot;越权成为&quot;代码&quot;：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 危险: 用户输入直接拼接</span></span><br><span class="line">symbol = <span class="built_in">input</span>(<span class="string">&quot;股票代码: &quot;</span>)           <span class="comment"># 攻击者输入:  SH600519&#x27;; DROP TABLE kline; --</span></span><br><span class="line">cur.execute(<span class="string">f&quot;SELECT * FROM kline WHERE symbol = &#x27;<span class="subst">&#123;symbol&#125;</span>&#x27;&quot;</span>)</span><br><span class="line"><span class="comment"># 实际执行: SELECT * FROM kline WHERE symbol = &#x27;SH600519&#x27;; DROP TABLE kline; --&#x27;</span></span><br><span class="line"><span class="comment"># → 你的表没了。(PG 默认多语句在一个 simple query 里可执行, 变体还有 &#x27; OR &#x27;1&#x27;=&#x27;1 拖库全表)</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 安全: 参数化 —— 输入永远是&quot;值&quot;, 语法树在占位符处已经定型</span></span><br><span class="line">cur.execute(<span class="string">&quot;SELECT * FROM kline WHERE symbol = %s&quot;</span>, (symbol,))</span><br></pre></td></tr></table></figure>
+<p>防御清单（经验做法）：<strong>所有值走占位符；表名/列名不能参数化时用 <code>psycopg.sql.Identifier()</code> 组装（白名单校验双保险）；应用账号最小权限（业务账号不给 DROP/DDL）；报错信息不回显 SQL 原文</strong>。注入与 ORM：ORM 的参数化是默认的，但 <code>raw()</code>/<code>extra()</code> 里拼字符串照样中招——防线在习惯不在工具。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“varchar(n) 比 text 快”</strong>：PG 里两者同性能，区别只是约束。反过来，用 <code>varchar(n)</code> 当&quot;长度校验工具&quot;会在业务扩容时变成 DDL 负担——约束交给 CHECK。</li>
+<li><strong>“float 存金额没事，浮点误差很小”</strong>：小误差在 sum/复利/对账里复利式放大，财务系统的一分钱差异能烧掉一整周。NUMERIC 是起点不是优化项。</li>
+<li><strong>“UUID 主键更现代，直接换”</strong>：随机 UUID 破坏 B+树插入局部性（03/本篇 3 节），写放大与索引膨胀是实测可复现的。单库 BIGINT，分布式用 UUIDv7/雪花，按需选择。</li>
+<li><strong>“max_connections 调大就能抗并发”</strong>：每连接一个进程的模型下，连接数是内存与调度税。正确路径是池化复用，让 20 个连接服务 1000 并发。</li>
+<li><strong>“pg_dump 一下就万事大吉”</strong>：pg_dump 恢复的是&quot;最后一次 dump 的时刻&quot;，不能回到任意时间点；且没演练过的备份等于没有。RPO/RTO 定清楚，再选逻辑/物理/PITR 组合。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>psql 元命令 + 进程模型（每连接一个进程）是 PG 的第一课；连接是稀缺资源，池化是刚需。</li>
+<li>类型三决定：内部 text+CHECK、金额 NUMERIC、透传 jsonb（参与查询就提列）。</li>
+<li>主键策略的本质是插入局部性：自增 BIGINT 追加友好；随机 UUID 页分裂+膨胀，UUIDv7/雪花是兼顾唯一与有序的折中。</li>
+<li>分区表的三收益（裁剪/运维解耦/小索引）与铁律（分区键进主键，先想查询形态再定分区键）；时间 RANGE 按月是默认起手式。</li>
+<li>备份双轨：pg_dump 例行 + WAL 归档 PITR；有效性由恢复演练定义（12 章实测）。</li>
+<li>psycopg3：占位符参数化是注入的唯一防线；表名用 sql.Identifier；批量用 executemany/copy；连接用池。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>建库实操：创建 test 库，建 kline 分区表（按月 3 个分区），用 Python 插入 10 万条随机 OHLCV，验证 <code>EXPLAIN</code> 的分区裁剪；再 <code>DROP</code> 一个分区观察耗时，与 <code>DELETE WHERE ts &lt; ...</code> 对比。</li>
+<li>主键实测：按 3 节思路建自增/UUID 两张表各插 100 万行，记录总耗时与 <code>pg_relation_size</code> 的差异，写下你机器上的倍数。</li>
+<li>注入靶场：建一张 users 表，故意写一个拼接查询的函数，用 <code>' OR '1'='1</code> 演示拖库；改参数化后验证输入原样存取（把攻击串存进表再查出来打印，理解&quot;数据就是数据&quot;）。</li>
+<li>连接池实验：写脚本同时开 200 个无池连接（psycopg 直连），观察 <code>SELECT count(*) FROM pg_stat_activity;</code> 与内存；换 <code>ConnectionPool(max_size=20)</code> 达到同样并发，对比两边数字。</li>
+<li>备份初体验：<code>pg_dump -Fc</code> 导出 test 库，<code>DROP</code> 掉 kline，<code>pg_restore</code> 恢复并验证行数一致；把 dump 文件 <code>pg_restore -l</code> 看目录结构，思考&quot;如果是误删发生在 3 小时前，这份 dump 能帮你回到什么时刻&quot;（引出 PITR 的必要性）。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/" rel="tag"># 数据库</a>
+              <a href="/tags/Redis/" rel="tag"># Redis</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/06-SQLite%E5%86%85%E5%B9%95%E4%B8%8E%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E/" rel="prev" title="06-SQLite内幕与存储引擎">
+                  <i class="fa fa-angle-left"></i> 06-SQLite内幕与存储引擎
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/08-Redis%E4%B8%8E%E7%BC%93%E5%AD%98/" rel="next" title="08-Redis与缓存">
+                  08-Redis与缓存 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

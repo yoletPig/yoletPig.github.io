@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 建立编译器优化清单（内联&#x2F;LICM&#x2F;向量化）并学会验证手段：-fopt-info、Godbolt。 - 掌握微基准的规范写法：防止优化器把基准代码删掉（DoNotOptimize）。 - 用实测理解三类数据&#x2F;控制流优化：SoA 数据布局…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="06-性能工程与代码优化">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/06-%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B%E4%B8%8E%E4%BB%A3%E7%A0%81%E4%BC%98%E5%8C%96/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 建立编译器优化清单（内联&#x2F;LICM&#x2F;向量化）并学会验证手段：-fopt-info、Godbolt。 - 掌握微基准的规范写法：防止优化器把基准代码删掉（DoNotOptimize）。 - 用实测理解三类数据&#x2F;控制流优化：SoA 数据布局…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-04T15:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.594Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="C++">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/06-%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B%E4%B8%8E%E4%BB%A3%E7%A0%81%E4%BC%98%E5%8C%96/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/06-%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B%E4%B8%8E%E4%BB%A3%E7%A0%81%E4%BC%98%E5%8C%96/","path":"2026/09/04/06-性能工程与代码优化/","title":"06-性能工程与代码优化"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>06-性能工程与代码优化 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#06-%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B%E4%B8%8E%E4%BB%A3%E7%A0%81%E4%BC%98%E5%8C%96"><span class="nav-number">1.</span> <span class="nav-text"> 06 - 性能工程与代码优化</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%BC%96%E8%AF%91%E5%99%A8%E4%BC%98%E5%8C%96%E6%B8%85%E5%8D%95%E4%B8%8E%E9%AA%8C%E8%AF%81%E6%89%8B%E6%AE%B5"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 编译器优化清单与验证手段</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E9%98%B2%E6%AD%A2%E4%BC%98%E5%8C%96%E6%8E%89%E5%9F%BA%E5%87%86%E4%BB%A3%E7%A0%81donotoptimize-%E8%A7%84%E8%8C%83%E5%86%99%E6%B3%95"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 防止优化掉基准代码：DoNotOptimize 规范写法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%95%B0%E6%8D%AE%E5%B8%83%E5%B1%80%E4%BC%98%E5%8C%96soa-vs-aos-%E5%AE%9E%E6%B5%8B"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 数据布局优化：SoA vs AoS 实测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%87%8F%E5%B0%91%E8%99%9A%E5%87%BD%E6%95%B0%E5%BC%80%E9%94%80final-devirtualization-%E4%B8%8E-variant-%E5%88%86%E6%B4%BE"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 减少虚函数开销：final、devirtualization 与 variant 分派</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%AD%97%E7%AC%A6%E4%B8%B2%E5%A4%84%E7%90%86%E4%BC%98%E5%8C%96string_view-%E4%B8%8E-sbo"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 字符串处理优化：string_view 与 SBO</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-allocator-%E6%A6%82%E5%BF%B5%E4%B8%8E-arena-%E5%88%86%E9%85%8D%E5%99%A8"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. allocator 概念与 arena 分配器</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%89%96%E6%9E%90%E9%A9%B1%E5%8A%A8perf-%E7%81%AB%E7%84%B0%E5%9B%BE%E8%AF%BB-c-%E6%A0%88"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 剖析驱动：perf 火焰图读 C++ 栈</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/06-%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B%E4%B8%8E%E4%BB%A3%E7%A0%81%E4%BC%98%E5%8C%96/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="06-性能工程与代码优化 | Yoleen的博客">
+      <meta itemprop="description" content="- 建立编译器优化清单（内联&#x2F;LICM&#x2F;向量化）并学会验证手段：-fopt-info、Godbolt。 - 掌握微基准的规范写法：防止优化器把基准代码删掉（DoNotOptimize）。 - 用实测理解三类数据&#x2F;控制流优化：SoA 数据布局…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          06-性能工程与代码优化
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 23:00:00" itemprop="dateCreated datePublished" datetime="2026-09-04T23:00:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/C-%E8%BF%9B%E9%98%B6/" itemprop="url" rel="index"><span itemprop="name">C++进阶</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>14 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 建立编译器优化清单（内联/LICM/向量化）并学会验证手段：-fopt-info、Godbolt。 - 掌握微基准的规范写法：防止优化器把基准代码删掉（DoNotOptimize）。 - 用实测理解三类数据/控制流优化：SoA 数据布局…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="06-性能工程与代码优化"><a class="markdownIt-Anchor" href="#06-性能工程与代码优化"></a> 06 - 性能工程与代码优化</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>建立编译器优化清单（内联/LICM/向量化）并学会验证手段：<code>-fopt-info</code>、Godbolt。</li>
+<li>掌握微基准的规范写法：防止优化器把基准代码删掉（<code>DoNotOptimize</code>）。</li>
+<li>用实测理解三类数据/控制流优化：SoA 数据布局、<code>final</code>/<code>std::variant</code> 去虚化、string_view/SBO。</li>
+<li>实现最小 arena 分配器并测量收益；衔接《Linux 性能工程》03 的 perf 火焰图读 C++ 栈。</li>
+</ul>
+<p>方法论先立住（经验做法）：<strong>没有剖析数据不动手</strong>。本章每个优化都按&quot;先测慢版本 → 改 → 再测&quot;推进；绝对数字因机器而异，看相对倍数。</p>
+<h2 id="1-编译器优化清单与验证手段"><a class="markdownIt-Anchor" href="#1-编译器优化清单与验证手段"></a> 1. 编译器优化清单与验证手段</h2>
+<p>GCC/Clang 在 <code>-O2</code> 常开的优化里，对日常代码影响最大的四个：</p>
+<table>
+<thead>
+<tr>
+<th>优化</th>
+<th>做什么</th>
+<th>怎么验证</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>内联（inlining）</td>
+<td>函数体替换调用，解锁后续一切跨函数优化</td>
+<td>Godbolt 看调用指令是否消失；<code>-finline-functions</code>（-O3 自动）</td>
+</tr>
+<tr>
+<td>LICM（循环不变量外提）</td>
+<td>把循环内不变的计算搬到循环外</td>
+<td><code>-fopt-info-all</code> 或看汇编位置</td>
+</tr>
+<tr>
+<td>自动向量化</td>
+<td>循环变 SIMD（第 03 章详述）</td>
+<td><code>-fopt-info-vec-optimized</code></td>
+</tr>
+<tr>
+<td>死代码消除（DCE）</td>
+<td>删除无副作用计算</td>
+<td>本章第 2 节的&quot;0.0001 ms 惨案&quot;</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Godbolt（<a target="_blank" rel="noopener" href="http://godbolt.org">godbolt.org</a>）是读懂优化器的第一工具</strong>：左边贴代码右边出汇编，切换 <code>-O0/-O2/-O3</code> 与编译器版本，看 <code>call</code> 消失（内联）、<code>vaddps</code> 出现（向量化）。示例——一个 4 行函数在 <code>-O0</code> 下是 30 行汇编 + 3 次 <code>call</code>，<code>-O2</code> 后被整体折叠成一条 <code>ret</code>（常量折叠 + 内联）；这种&quot;眼见为实&quot;比任何文档都快。</p>
+<p><code>-fopt-info</code> 家族（GCC）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">g++ -O3 -fopt-info-vec-optimized -c foo.cpp    <span class="comment"># 只报告成功的向量化</span></span><br><span class="line">g++ -O3 -fopt-info-vec-missed     -c foo.cpp   <span class="comment"># 只报告失败与原因（第 03 章见过）</span></span><br><span class="line">g++ -O3 -fopt-info-all           -c foo.cpp   <span class="comment"># 全部优化动作（内联、外提……）</span></span><br></pre></td></tr></table></figure>
+<p>输出直接指到行号与原因，例如 <code>foo.cpp:12:9: optimized: loop vectorized (80.0%)</code>；missed 信息甚至会说 <code>not vectorized: unsuitable data stride</code>。<strong>把 missed 报告当 TODO 清单读</strong>是编译器优化的最短学习路径（经验做法）。</p>
+<h2 id="2-防止优化掉基准代码donotoptimize-规范写法"><a class="markdownIt-Anchor" href="#2-防止优化掉基准代码donotoptimize-规范写法"></a> 2. 防止优化掉基准代码：DoNotOptimize 规范写法</h2>
+<p>先看一个真实事故——第 05 章 spin 基准的初版里有一个纯递增循环：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">long</span> c = <span class="number">0</span>;</span><br><span class="line"><span class="keyword">for</span> (<span class="type">long</span> i = <span class="number">0</span>; i &lt; <span class="number">10&#x27;000&#x27;000</span>; ++i) ++c;    <span class="comment">// 本想测 1000 万次递增</span></span><br><span class="line"><span class="keyword">return</span> c;</span><br></pre></td></tr></table></figure>
+<p>实测输出是 <strong>0.0001 ms</strong>——优化器把整个循环折叠成 <code>c = 10'000'000</code>（常量折叠），我们测到的是&quot;函数调用开销&quot;。基准代码的第一铁律：<strong>被测计算必须有可观察的副作用</strong>。规范写法（Google Benchmark 的 <code>DoNotOptimize</code> 同款）：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// donotopt.cpp</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;chrono&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdint&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="comment">// 1) 阻止结果被丢弃：把值通过内联汇编&quot;交给&quot;编译器看不见的地方</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="keyword">inline</span> <span class="type">void</span> <span class="title">DoNotOptimize</span><span class="params">(T <span class="type">const</span>&amp; value)</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">asm</span> <span class="title">volatile</span><span class="params">(<span class="string">&quot;&quot;</span> : : <span class="string">&quot;r,m&quot;</span>(value) : <span class="string">&quot;memory&quot;</span>)</span></span>;</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 2) 阻止&quot;循环体没被改过所以不用重算&quot;：标记内存可能被外部改动</span></span><br><span class="line"><span class="keyword">template</span> &lt;<span class="keyword">typename</span> T&gt;</span><br><span class="line"><span class="function"><span class="keyword">inline</span> <span class="type">void</span> <span class="title">ClobberMemory</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="function"><span class="keyword">asm</span> <span class="title">volatile</span><span class="params">(<span class="string">&quot;&quot;</span> : : : <span class="string">&quot;memory&quot;</span>)</span></span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="keyword">volatile</span> <span class="type">long</span> sink = <span class="number">0</span>;                        <span class="comment">// 也可以用 volatile 落点</span></span><br><span class="line">    <span class="keyword">auto</span> t0 = std::chrono::steady_clock::<span class="built_in">now</span>();</span><br><span class="line">    <span class="type">long</span> c = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">long</span> i = <span class="number">0</span>; i &lt; <span class="number">10&#x27;000&#x27;000</span>; ++i) c += i;</span><br><span class="line">    <span class="keyword">auto</span> t1 = std::chrono::steady_clock::<span class="built_in">now</span>();</span><br><span class="line">    <span class="built_in">DoNotOptimize</span>(c);                              <span class="comment">// 结果被&quot;消费&quot;，循环不能删</span></span><br><span class="line">    sink += c;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;1 亿次累加: &quot;</span></span><br><span class="line">              &lt;&lt; std::chrono::<span class="built_in">duration</span>&lt;<span class="type">double</span>, std::milli&gt;(t1 - t0).<span class="built_in">count</span>() &lt;&lt; <span class="string">&quot; ms\n&quot;</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O2 donotopt.cpp -o donotopt &amp;&amp; ./donotopt</span><br><span class="line"><span class="comment"># 输出：1 亿次累加: 3.87731 ms</span></span><br></pre></td></tr></table></figure>
+<p>三条防线（经验做法）：输入用 <code>DoNotOptimize</code> 递给被测函数（防止常量折叠）；结果 <code>DoNotOptimize</code> 或写进 <code>volatile</code>/全局；被测循环内有函数调用时，让函数定义对优化器不可见（单独编译单元 / <code>noinline</code>）。严肃基准直接用 Google Benchmark 或 nanobench，它们的计时统计（中位数、误差、循环展开控制）比自己写靠谱得多。</p>
+<h2 id="3-数据布局优化soa-vs-aos-实测"><a class="markdownIt-Anchor" href="#3-数据布局优化soa-vs-aos-实测"></a> 3. 数据布局优化：SoA vs AoS 实测</h2>
+<p>缓存行 64 字节（《计算机系统与网络》03）。遍历 400 万个粒子、只更新 <code>x/y</code> 两个分量：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// soa.cpp —— AoS（数组结构体）vs SoA（结构体数组）</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;chrono&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;vector&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">ParticleAoS</span> &#123; <span class="type">float</span> x, y, z, vx, vy, vz; <span class="type">float</span> pad[<span class="number">10</span>]; &#125;;   <span class="comment">// 64B/粒子，只用到 1/3 字段</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">ParticlesSoA</span> &#123;</span><br><span class="line">    std::vector&lt;<span class="type">float</span>&gt; x, y, z, vx, vy, vz;</span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">ParticlesSoA</span><span class="params">(<span class="type">size_t</span> n)</span> : x(n), y(n), z(n), vx(n), vy(n), vz(n) &#123;</span>&#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">const</span> <span class="type">size_t</span> N = <span class="number">1</span> &lt;&lt; <span class="number">22</span>;                       <span class="comment">// 4M 粒子</span></span><br><span class="line">    <span class="function">std::vector&lt;ParticleAoS&gt; <span class="title">aos</span><span class="params">(N)</span></span>;</span><br><span class="line">    <span class="function">ParticlesSoA <span class="title">soa</span><span class="params">(N)</span></span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; N; ++i) &#123; aos[i].vx = soa.vx[i] = <span class="number">1.0f</span> * i; aos[i].vy = soa.vy[i] = <span class="number">0.5f</span>; &#125;</span><br><span class="line">    <span class="keyword">using</span> clk = std::chrono::steady_clock;</span><br><span class="line">    <span class="keyword">auto</span> t0 = clk::<span class="built_in">now</span>();</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; N; ++i) &#123; aos[i].x += aos[i].vx * <span class="number">0.016f</span>; aos[i].y += aos[i].vy * <span class="number">0.016f</span>; &#125;</span><br><span class="line">    <span class="keyword">auto</span> t1 = clk::<span class="built_in">now</span>();</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; N; ++i) &#123; soa.x[i] += soa.vx[i] * <span class="number">0.016f</span>; soa.y[i] += soa.vy[i] * <span class="number">0.016f</span>; &#125;</span><br><span class="line">    <span class="keyword">auto</span> t2 = clk::<span class="built_in">now</span>();</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;AoS 更新两分量: &quot;</span> &lt;&lt; std::chrono::<span class="built_in">duration</span>&lt;<span class="type">double</span>, std::milli&gt;(t1 - t0).<span class="built_in">count</span>() &lt;&lt; <span class="string">&quot; ms\n&quot;</span>;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;SoA 更新两分量: &quot;</span> &lt;&lt; std::chrono::<span class="built_in">duration</span>&lt;<span class="type">double</span>, std::milli&gt;(t2 - t1).<span class="built_in">count</span>() &lt;&lt; <span class="string">&quot; ms\n&quot;</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O2 soa.cpp -o soa &amp;&amp; ./soa &amp;&amp; ./soa</span><br><span class="line"><span class="comment"># 输出（i5-12600K 实测两次）：</span></span><br><span class="line"><span class="comment"># AoS 更新两分量: 16.133 ms</span></span><br><span class="line"><span class="comment"># SoA 更新两分量: 3.0885 ms</span></span><br><span class="line"><span class="comment"># AoS 更新两分量: 17.376 ms</span></span><br><span class="line"><span class="comment"># SoA 更新两分量: 3.0818 ms</span></span><br></pre></td></tr></table></figure>
+<p><strong>5 倍差距</strong>，来自两个叠加效应：AoS 每粒子 64 字节而只用 16 字节，带宽与缓存利用率打 25 折；SoA 的连续 float 数组还能被自动向量化（<code>-fopt-info</code> 会告诉你 AoS 版没向量化）。SoA 的代价是&quot;一个实体的字段散在各数组&quot;——增删实体要同步搬多个数组。决策口诀（经验做法）：<strong>整批遍历同字段 → SoA；总是整体访问单个实体 → AoS；两者都要 → AoS 里再做热/冷字段分离</strong>（高频字段排前面、低频大字段挪到旁路数组或指针）。</p>
+<h2 id="4-减少虚函数开销final-devirtualization-与-variant-分派"><a class="markdownIt-Anchor" href="#4-减少虚函数开销final-devirtualization-与-variant-分派"></a> 4. 减少虚函数开销：final、devirtualization 与 variant 分派</h2>
+<p>虚调用本身不贵（一次间接跳转，几周期），贵的三件事是：<strong>阻碍内联</strong>（后续优化全灭）、<strong>分支预测失败</strong>（目标频繁变化时）、<strong>指针追逐</strong>（对象散布堆上，每跳一页缓存）。</p>
+<p><strong>第一层：给 devirtualization 创造条件。</strong> 编译器看到静态类型确定或 <code>final</code> 时，虚调用被直接改成直调/内联：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">struct</span> <span class="title class_">Base</span>  &#123; <span class="function"><span class="keyword">virtual</span> <span class="type">double</span> <span class="title">area</span><span class="params">()</span> <span class="type">const</span></span>; <span class="keyword">virtual</span> ~<span class="built_in">Base</span>() = <span class="keyword">default</span>; &#125;;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Circle</span> <span class="keyword">final</span> : Base &#123;          <span class="comment">// final：没有进一步派生 → 编译器可去虚化</span></span><br><span class="line">    <span class="type">double</span> r;</span><br><span class="line">    <span class="function"><span class="type">double</span> <span class="title">area</span><span class="params">()</span> <span class="type">const</span> <span class="keyword">override</span> </span>&#123; <span class="keyword">return</span> <span class="number">3.141592653589</span> * r * r; &#125;</span><br><span class="line">&#125;;</span><br><span class="line"><span class="function"><span class="type">double</span> <span class="title">f</span><span class="params">(<span class="type">const</span> Circle&amp; c)</span> </span>&#123; <span class="keyword">return</span> c.<span class="built_in">area</span>(); &#125;   <span class="comment">// Circle 是 final：直接内联，无虚表查找</span></span><br></pre></td></tr></table></figure>
+<p><strong>第二层：<code>std::variant</code> 闭集分派。</strong> 类型集合在编译期已知（AST 节点、指令类型、推理引擎的算子闭集）时，<code>variant</code> 把&quot;虚表 + 指针追逐&quot;换成&quot;连续内存 + switch&quot;。但要诚实：<strong>分支可预测时两者接近</strong>——先看&quot;对象连续 vs 散布&quot;的真实对比：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// varv.cpp —— variant（连续存储） vs 虚函数（指针乱序，模拟真实堆布局）</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;algorithm&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;chrono&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;memory&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;numeric&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;random&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;variant&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;vector&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Circle</span> &#123; <span class="type">double</span> r; &#125;;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Rect</span>   &#123; <span class="type">double</span> w, h; <span class="type">double</span> pad; &#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">ShapeV</span> &#123; <span class="function"><span class="keyword">virtual</span> <span class="type">double</span> <span class="title">area</span><span class="params">()</span> <span class="type">const</span> </span>= <span class="number">0</span>; <span class="keyword">virtual</span> ~<span class="built_in">ShapeV</span>() = <span class="keyword">default</span>; &#125;;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">CircleV</span> <span class="keyword">final</span> : ShapeV &#123; <span class="type">double</span> r; <span class="function"><span class="keyword">explicit</span> <span class="title">CircleV</span><span class="params">(<span class="type">double</span> rr)</span>:r(rr)&#123;</span>&#125;</span><br><span class="line">                               <span class="function"><span class="type">double</span> <span class="title">area</span><span class="params">()</span> <span class="type">const</span> <span class="keyword">override</span> </span>&#123; <span class="keyword">return</span> <span class="number">3.141592653589</span>*r*r; &#125; &#125;;</span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">RectV</span>   <span class="keyword">final</span> : ShapeV &#123; <span class="type">double</span> w, h; <span class="function"><span class="keyword">explicit</span> <span class="title">RectV</span><span class="params">(<span class="type">double</span> ww,<span class="type">double</span> hh)</span>:w(ww),h(hh)&#123;</span>&#125;</span><br><span class="line">                               <span class="function"><span class="type">double</span> <span class="title">area</span><span class="params">()</span> <span class="type">const</span> <span class="keyword">override</span> </span>&#123; <span class="keyword">return</span> w*h; &#125; &#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">const</span> <span class="type">int</span> N = <span class="number">10&#x27;000&#x27;000</span>;</span><br><span class="line">    std::vector&lt;std::variant&lt;Circle, Rect&gt;&gt; vs; vs.<span class="built_in">reserve</span>(N);      <span class="comment">// 连续：每个 32B</span></span><br><span class="line">    std::vector&lt;std::unique_ptr&lt;ShapeV&gt;&gt;     vp; vp.<span class="built_in">reserve</span>(N);     <span class="comment">// 每元素一个堆对象</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; N; ++i) &#123;</span><br><span class="line">        <span class="keyword">if</span> (i % <span class="number">2</span>) &#123; vs.<span class="built_in">emplace_back</span>(Circle&#123;<span class="number">1.0</span>&#125;); vp.<span class="built_in">push_back</span>(std::<span class="built_in">make_unique</span>&lt;CircleV&gt;(<span class="number">1.0</span>)); &#125;</span><br><span class="line">        <span class="keyword">else</span>       &#123; vs.<span class="built_in">emplace_back</span>(Rect&#123;<span class="number">2.0</span>,<span class="number">3.0</span>,<span class="number">0</span>&#125;); vp.<span class="built_in">push_back</span>(std::<span class="built_in">make_unique</span>&lt;RectV&gt;(<span class="number">2.0</span>,<span class="number">3.0</span>)); &#125;</span><br><span class="line">    &#125;</span><br><span class="line">    &#123;   <span class="comment">// 打乱 unique_ptr 的指向顺序：模拟对象散布在堆各处</span></span><br><span class="line">        <span class="function">std::vector&lt;<span class="type">int</span>&gt; <span class="title">order</span><span class="params">(N)</span></span>; std::<span class="built_in">iota</span>(order.<span class="built_in">begin</span>(), order.<span class="built_in">end</span>(), <span class="number">0</span>);</span><br><span class="line">        <span class="function">std::mt19937 <span class="title">g</span><span class="params">(<span class="number">42</span>)</span></span>; std::<span class="built_in">shuffle</span>(order.<span class="built_in">begin</span>(), order.<span class="built_in">end</span>(), g);</span><br><span class="line">        std::vector&lt;std::unique_ptr&lt;ShapeV&gt;&gt; <span class="built_in">shuffled</span>(N);</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; N; ++i) shuffled[i] = std::<span class="built_in">move</span>(vp[order[i]]);</span><br><span class="line">        vp = std::<span class="built_in">move</span>(shuffled);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">using</span> clk = std::chrono::steady_clock;</span><br><span class="line">    <span class="type">double</span> s1 = <span class="number">0</span>, s2 = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">auto</span> t0 = clk::<span class="built_in">now</span>();</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">auto</span>&amp; v : vs) s1 += std::<span class="built_in">visit</span>([](<span class="type">const</span> <span class="keyword">auto</span>&amp; s) &#123;</span><br><span class="line">        <span class="keyword">using</span> T = std::<span class="type">decay_t</span>&lt;<span class="keyword">decltype</span>(s)&gt;;</span><br><span class="line">        <span class="keyword">if</span> <span class="keyword">constexpr</span> (std::is_same_v&lt;T, Circle&gt;) <span class="keyword">return</span> <span class="number">3.141592653589</span>*s.r*s.r;</span><br><span class="line">        <span class="keyword">else</span> <span class="keyword">return</span> s.w*s.h;</span><br><span class="line">    &#125;, v);</span><br><span class="line">    <span class="keyword">auto</span> t1 = clk::<span class="built_in">now</span>();</span><br><span class="line">    <span class="keyword">for</span> (<span class="keyword">auto</span>&amp; p : vp) s2 += p-&gt;<span class="built_in">area</span>();</span><br><span class="line">    <span class="keyword">auto</span> t2 = clk::<span class="built_in">now</span>();</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;variant(连续存储): &quot;</span> &lt;&lt; std::chrono::<span class="built_in">duration</span>&lt;<span class="type">double</span>,std::milli&gt;(t1-t0).<span class="built_in">count</span>() &lt;&lt; <span class="string">&quot; ms\n&quot;</span>;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;虚函数(指针乱序)  : &quot;</span> &lt;&lt; std::chrono::<span class="built_in">duration</span>&lt;<span class="type">double</span>,std::milli&gt;(t2-t1).<span class="built_in">count</span>() &lt;&lt; <span class="string">&quot; ms\n&quot;</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O2 varv.cpp -o varv &amp;&amp; ./varv &amp;&amp; ./varv</span><br><span class="line"><span class="comment"># 输出（i5-12600K 实测两次）：</span></span><br><span class="line"><span class="comment"># variant(连续存储): 23.7626 ms</span></span><br><span class="line"><span class="comment"># 虚函数(指针乱序)  : 191.662 ms</span></span><br><span class="line"><span class="comment"># variant(连续存储): 23.825 ms</span></span><br><span class="line"><span class="comment"># 虚函数(指针乱序)  : 192.056 ms</span></span><br></pre></td></tr></table></figure>
+<p><strong>8 倍</strong>。但注意公平：如果指针不乱序（分配恰好连续、可预取），本机测得两者都是 ~24ms 几乎打平。所以结论要说准（经验做法）：<strong>variant 的收益主要来自&quot;数据连续 + 类型闭集&quot;，而不只是&quot;没有虚表&quot;；分支高度可预测的小对象虚调用并不慢</strong>。开集扩展（插件注册新类型）必须虚函数；闭集大批量遍历选 variant/SoA 化。</p>
+<h2 id="5-字符串处理优化string_view-与-sbo"><a class="markdownIt-Anchor" href="#5-字符串处理优化string_view-与-sbo"></a> 5. 字符串处理优化：string_view 与 SBO</h2>
+<p>两个事实打底：<strong><code>std::string</code> 的拷贝必然可能分配堆</strong>；<strong>libc++/libstdc++ 有 SBO（Small Buffer Optimization，也常写 SSO）</strong>——短字符串（libstdc++ 15 字节、libc++ 22 字节）直接存在对象内部，零堆分配。</p>
+<p>工程清单：</p>
+<ul>
+<li><strong>函数参数与解析路径用 <code>std::string_view</code></strong>（C++17）：只持有&quot;指针 + 长度&quot;，切分/比较零拷贝。JSON 解析器（第 12 章）的键值全是 <code>string_view</code> 指向原文，这是它快的第一支柱。</li>
+<li><strong><code>substr</code> 的成本差一个量级</strong>：<code>std::string::substr</code> 拷贝（分配），<code>string_view::substr</code> 只是两个整数运算。</li>
+<li><strong>拼接用 <code>reserve</code> + <code>append</code></strong>，或 <code>std::format</code>（C++20，第 07 章）；<code>a + b + c</code> 连锁会产生临时对象链。</li>
+<li><strong>SBO 意味着&quot;小字符串并不慢&quot;</strong>：别为十几字节的路径写 <code>string_view</code> 优化到牺牲清晰度；热点在&quot;长字符串的切分与传递&quot;。</li>
+<li><strong><code>string_view</code> 不拥有内存</strong>：悬空 view 是 C++17 后最常见的新坑（见本章误区）。</li>
+</ul>
+<h2 id="6-allocator-概念与-arena-分配器"><a class="markdownIt-Anchor" href="#6-allocator-概念与-arena-分配器"></a> 6. allocator 概念与 arena 分配器</h2>
+<p><code>std::allocator</code> 把 new/delete 抽象成可替换的&quot;内存策略&quot;。推理引擎的高频模式：<strong>每一步推理要分配大量小对象（张量描述符、节点、临时缓冲），用完一次性丢弃</strong>。逐个 new/delete 的代价 = 分配器锁 + 元数据 + 缓存不友好；arena 一次拿一大块、指针一拨就算分配：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// arena.cpp —— new/delete vs 最小 arena：200 万个 16 字节节点</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;chrono&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstddef&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;memory&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;new&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;vector&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Arena</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">Arena</span><span class="params">(<span class="type">size_t</span> chunk)</span> : buf_(::operator new(chunk)), cap_(chunk), used_(<span class="number">0</span>) &#123;</span>&#125;</span><br><span class="line">    ~<span class="built_in">Arena</span>() &#123; ::<span class="function"><span class="keyword">operator</span> <span class="title">delete</span><span class="params">(buf_)</span></span>; &#125;</span><br><span class="line">    <span class="function"><span class="type">void</span>* <span class="title">allocate</span><span class="params">(<span class="type">size_t</span> n, <span class="type">size_t</span> align = <span class="number">16</span>)</span> </span>&#123;</span><br><span class="line">        <span class="type">uintptr_t</span> base = <span class="keyword">reinterpret_cast</span>&lt;<span class="type">uintptr_t</span>&gt;(buf_) + used_;</span><br><span class="line">        base = (base + align - <span class="number">1</span>) &amp; ~(<span class="type">uintptr_t</span>)(align - <span class="number">1</span>);       <span class="comment">// 对齐</span></span><br><span class="line">        used_ = base - <span class="keyword">reinterpret_cast</span>&lt;<span class="type">uintptr_t</span>&gt;(buf_) + n;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">reinterpret_cast</span>&lt;<span class="type">void</span>*&gt;(base);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">reset</span><span class="params">()</span> <span class="keyword">noexcept</span> </span>&#123; used_ = <span class="number">0</span>; &#125;                           <span class="comment">// 整批回收：一行</span></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    <span class="type">void</span>* buf_; <span class="type">size_t</span> cap_, used_;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">Node</span> &#123; <span class="type">int</span> a, b, c, d; &#125;;</span><br><span class="line"></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123;</span><br><span class="line">    <span class="type">const</span> <span class="type">int</span> N = <span class="number">2&#x27;000&#x27;000</span>;</span><br><span class="line">    <span class="keyword">using</span> clk = std::chrono::steady_clock;</span><br><span class="line">    <span class="type">double</span> s = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">auto</span> t0 = clk::<span class="built_in">now</span>();</span><br><span class="line">    &#123;</span><br><span class="line">        std::vector&lt;std::unique_ptr&lt;Node&gt;&gt; v; v.<span class="built_in">reserve</span>(N);        <span class="comment">// 每节点一次堆分配</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; N; ++i) v.<span class="built_in">push_back</span>(std::<span class="built_in">make_unique</span>&lt;Node&gt;(Node&#123;<span class="number">1</span>,<span class="number">2</span>,<span class="number">3</span>,<span class="number">4</span>&#125;));</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">auto</span>&amp; p : v) s += p-&gt;a + p-&gt;b;</span><br><span class="line">    &#125;                                                              <span class="comment">// 析构：200 万次 free</span></span><br><span class="line">    <span class="keyword">auto</span> t1 = clk::<span class="built_in">now</span>();</span><br><span class="line">    &#123;</span><br><span class="line">        <span class="function">Arena <span class="title">ar</span><span class="params">(N * <span class="keyword">sizeof</span>(Node) + <span class="number">4096</span>)</span></span>;</span><br><span class="line">        std::vector&lt;Node*&gt; v; v.<span class="built_in">reserve</span>(N);</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; N; ++i) v.<span class="built_in">push_back</span>(<span class="keyword">static_cast</span>&lt;Node*&gt;(ar.<span class="built_in">allocate</span>(<span class="keyword">sizeof</span>(Node))));</span><br><span class="line">        <span class="keyword">for</span> (<span class="keyword">auto</span> p : v) s += p-&gt;a + p-&gt;b;</span><br><span class="line">    &#125;                                                              <span class="comment">// 析构：一次 free</span></span><br><span class="line">    <span class="keyword">auto</span> t2 = clk::<span class="built_in">now</span>();</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;new/delete: &quot;</span> &lt;&lt; std::chrono::<span class="built_in">duration</span>&lt;<span class="type">double</span>,std::milli&gt;(t1-t0).<span class="built_in">count</span>() &lt;&lt; <span class="string">&quot; ms\n&quot;</span>;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;arena      : &quot;</span> &lt;&lt; std::chrono::<span class="built_in">duration</span>&lt;<span class="type">double</span>,std::milli&gt;(t2-t1).<span class="built_in">count</span>() &lt;&lt; <span class="string">&quot; ms\n&quot;</span>;</span><br><span class="line">    std::cout &lt;&lt; <span class="string">&quot;(校验 &quot;</span> &lt;&lt; s &lt;&lt; <span class="string">&quot;)\n&quot;</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O2 arena.cpp -o arena &amp;&amp; ./arena &amp;&amp; ./arena</span><br><span class="line"><span class="comment"># 输出（i5-12600K 实测两次）：</span></span><br><span class="line"><span class="comment"># new/delete: 58.6728 ms</span></span><br><span class="line"><span class="comment"># arena      : 12.261 ms</span></span><br><span class="line"><span class="comment"># new/delete: 52.9778 ms</span></span><br><span class="line"><span class="comment"># arena      : 11.6708 ms</span></span><br></pre></td></tr></table></figure>
+<p><strong>约 4.6 倍</strong>，且 arena 附赠三样好处：内存连续（缓存友好）、整批回收（析构函数都不用跑，POD 情况）、无锁（每帧/每请求一个 arena，天然线程隔离）。标准库的对应物是 <strong>C++17 的 <code>std::pmr</code></strong>（<code>std::pmr::monotonic_buffer_resource</code> 就是生产级 arena，<code>pmr::vector</code>/<code>pmr::string</code> 直接换底）——新代码优先 pmr，别重复造轮子（经验做法）。llama.cpp 的计算图与 PyTorch C++ 层的 memory pool 是同一思想的两个工业级实现。arena 的限制也要记牢：<strong>不能单独释放某个对象</strong>；对象生命周期必须&quot;同生共死&quot;。</p>
+<h2 id="7-剖析驱动perf-火焰图读-c-栈"><a class="markdownIt-Anchor" href="#7-剖析驱动perf-火焰图读-c-栈"></a> 7. 剖析驱动：perf 火焰图读 C++ 栈</h2>
+<p>衔接《Linux 性能工程》03/10。C++ 侧两个前置：<strong>编译要带 <code>-g</code>，并加 <code>-fno-omit-frame-pointer</code></strong>（否则帧指针被优化掉，栈回溯靠 DWARF 慢十倍）；Release 也可以带 <code>-g</code>（调试信息不进指令流，不影响性能）。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O2 -g -fno-omit-frame-pointer app.cpp -o app</span><br><span class="line">perf record -F 99 -g -- ./app                 <span class="comment"># 99Hz 采样调用栈</span></span><br><span class="line">perf script | ./stackcollapse-perf.pl | ./flamegraph.pl &gt; flame.svg   <span class="comment"># 火焰图（FlameGraph 工具集）</span></span><br></pre></td></tr></table></figure>
+<p>火焰图的读法（自上而下是调用方向，宽度是 CPU 时间占比）：<strong>看最宽的&quot;平顶&quot;</strong>——平顶 = 自身耗时大（值得优化）；宽而不平的塔 = 调用链深但每层不热（先看顶部）。C++ 特有注意事项：模板实例化让符号名巨长（<code>std::vector&lt;xxx&gt;::push_back</code> 全展开），火焰图先用 <code>c++filt</code> 或让脚本折叠模板参数；动态库符号读不到时确认没 <code>strip</code>。另一个利器是 <code>perf annotate</code>（对着汇编标采样热点）——SIMD 章验证&quot;这行循环到底没向量化&quot;时，<code>perf annotate</code> 里看到的是 <code>vaddps</code> 还是标量 <code>addss</code> 一目了然。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>基准被优化器删掉</strong>（第 2 节的 0.0001ms）：结果必须被消费。这是所有微基准错误里最隐蔽的。</li>
+<li><strong>拿 Debug 构建的数字做决策</strong>：Debug 比 Release 慢一个数量级（第 01 章 fib 实验 11 倍），所有性能结论必须来自 <code>-O2</code> 及以上的构建。</li>
+<li><strong>SoA 全盘推广</strong>：频繁随机访问单个实体的代码（哈希表、图）SoA 反而更慢（多次缓存行）；先确认访问模式再动布局。</li>
+<li><strong><code>string_view</code> 悬空</strong>：view 指向临时 <code>std::string</code>、<code>substr</code> 后源被释放、函数返回局部 view——三大悬空现场。规则：<strong>view 的寿命 ≤ 源数据的寿命</strong>，跨作用域持有就拷成 <code>std::string</code>。</li>
+<li><strong>arena 忘记对齐或越界</strong>：教学版 arena 不检查剩余空间（真实版要查），<code>align</code> 处理错会导致 <code>movaps</code> 段错误（第 03 章）——分配器是&quot;性能与正确性交界处&quot;，优先用 <code>std::pmr</code>。</li>
+<li><strong>只看平均延迟</strong>：火焰图给出的是分布，P99 尾延迟常由另一条冷路径贡献；剖析与优化都要分桶看（衔接《Linux 性能工程》的延迟分析）。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>验证先行：<code>-fopt-info</code> 家族报告成功/失败与原因；Godbolt 看汇编验证内联与向量化；<code>perf annotate</code> 对汇编标热点。</li>
+<li>基准规范：<code>DoNotOptimize</code>/消费结果防 DCE，<code>-g -fno-omit-frame-pointer</code> 建 Release 才有可剖析的栈。</li>
+<li>数据布局：SoA vs AoS 实测 5x，口诀&quot;整批遍历用 SoA、整体访问用 AoS、热冷字段分离居中&quot;。</li>
+<li>去虚化：<code>final</code> 让编译器直调；variant 收益来自&quot;连续 + 闭集&quot;，实测指针乱序时 8 倍、可预取时打平——诚实归因。</li>
+<li>字符串：<code>string_view</code> 零拷贝切分，SBO 保短字符串无分配；警惕悬空。</li>
+<li>allocator：arena/pmr 把&quot;百万级小对象&quot;从 53ms 干到 12ms（4.6x），整批回收 + 连续内存是推理引擎的标配思路。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>把第 3 节 AoS 的 <code>pad[10]</code> 去掉（24B/粒子）重测，SoA 的优势缩小到多少？解释&quot;浪费字段比例&quot;与&quot;加速比&quot;的关系。</li>
+<li>给第 6 节 Arena 补上&quot;空间不足返回 nullptr&quot;与 <code>reset()</code> 复用，改造成&quot;每轮推理开始 reset、结束整块释放&quot;的形状，测量 1000 轮循环的总耗时变化。</li>
+<li>用 Godbolt 对比 <code>struct Circle final</code> 与不带 <code>final</code> 的 <code>area()</code> 调用汇编，指出去虚化发生的位置。</li>
+<li>用 <code>perf record -g</code> 剖析第 12 章的 JSON 解析器，找出最宽平顶；对照 <code>-fopt-info-vec</code> 报告，提出一个优化假设并用数字验证或证伪它。</li>
+<li>写一个&quot;热冷字段分离&quot;实验：<code>Entity { Transform t; std::string name; }</code> 拆成 <code>vector&lt;Transform&gt;</code> + <code>vector&lt;string&gt;</code> 两个数组，测遍历全部 Transform 的速度变化，并说明什么情况下不值得拆。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/C/" rel="tag"># C++</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/05-%E6%97%A0%E9%94%81%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84/" rel="prev" title="05-无锁数据结构">
+                  <i class="fa fa-angle-left"></i> 05-无锁数据结构
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/07-C++20-23%E7%8E%B0%E4%BB%A3%E7%89%B9%E6%80%A7/" rel="next" title="07-C++20-23现代特性">
+                  07-C++20-23现代特性 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

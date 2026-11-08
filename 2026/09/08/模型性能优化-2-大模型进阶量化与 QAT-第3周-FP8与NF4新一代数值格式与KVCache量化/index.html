@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的问题 1. FP8 E4M3&#x2F;E5M2 的位级构成是什么？为什么前向用前者、反向用后者？ 2. Transformer Engine 的延迟缩放（Delayed Scaling）在解决什么问题？ 3. NF4 码本为什么取正态…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第3周-FP8与NF4新一代数值格式与KVCache量化">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/08/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-2-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E8%BF%9B%E9%98%B6%E9%87%8F%E5%8C%96%E4%B8%8E%20QAT-%E7%AC%AC3%E5%91%A8-FP8%E4%B8%8ENF4%E6%96%B0%E4%B8%80%E4%BB%A3%E6%95%B0%E5%80%BC%E6%A0%BC%E5%BC%8F%E4%B8%8EKVCache%E9%87%8F%E5%8C%96/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的问题 1. FP8 E4M3&#x2F;E5M2 的位级构成是什么？为什么前向用前者、反向用后者？ 2. Transformer Engine 的延迟缩放（Delayed Scaling）在解决什么问题？ 3. NF4 码本为什么取正态…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-08T05:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.750Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="推理优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/08/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-2-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E8%BF%9B%E9%98%B6%E9%87%8F%E5%8C%96%E4%B8%8E%20QAT-%E7%AC%AC3%E5%91%A8-FP8%E4%B8%8ENF4%E6%96%B0%E4%B8%80%E4%BB%A3%E6%95%B0%E5%80%BC%E6%A0%BC%E5%BC%8F%E4%B8%8EKVCache%E9%87%8F%E5%8C%96/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/08/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-2-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E8%BF%9B%E9%98%B6%E9%87%8F%E5%8C%96%E4%B8%8E%20QAT-%E7%AC%AC3%E5%91%A8-FP8%E4%B8%8ENF4%E6%96%B0%E4%B8%80%E4%BB%A3%E6%95%B0%E5%80%BC%E6%A0%BC%E5%BC%8F%E4%B8%8EKVCache%E9%87%8F%E5%8C%96/","path":"2026/09/08/模型性能优化-2-大模型进阶量化与 QAT-第3周-FP8与NF4新一代数值格式与KVCache量化/","title":"第3周-FP8与NF4新一代数值格式与KVCache量化"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第3周-FP8与NF4新一代数值格式与KVCache量化 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-3-%E5%91%A8%E6%95%99%E7%A8%8Bfp8-%E4%B8%8E-nf4%E6%96%B0%E4%B8%80%E4%BB%A3%E6%95%B0%E5%80%BC%E6%A0%BC%E5%BC%8F%E4%B8%8E-kv-cache-%E9%87%8F%E5%8C%96"><span class="nav-number">1.</span> <span class="nav-text"> 第 3 周教程：FP8 与 NF4——新一代数值格式与 KV Cache 量化</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E5%BD%93%E5%9D%87%E5%8C%80%E7%BD%91%E6%A0%BC%E4%B8%8D%E5%A4%9F%E7%94%A8%E5%B0%B1%E6%8D%A2%E6%95%B0%E5%80%BC%E6%A0%BC%E5%BC%8F%E6%9C%AC%E8%BA%AB"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：当均匀网格不够用，就换数值格式本身</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-fp8-%E4%BD%8D%E7%BA%A7%E8%A7%A3%E6%9E%90"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 FP8 位级解析</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-transformer-engine-%E7%9A%84%E5%BB%B6%E8%BF%9F%E7%BC%A9%E6%94%BE"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 Transformer Engine 的延迟缩放</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-nf4%E4%BF%A1%E6%81%AF%E8%AE%BA%E6%9C%80%E4%BC%98%E7%9A%84-4-bit-%E7%A0%81%E6%9C%AC"><span class="nav-number">1.1.3.</span> <span class="nav-text"> 1.3 NF4：信息论最优的 4-bit 码本</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#14-%E5%8F%8C%E9%87%8D%E9%87%8F%E5%8C%96double-quantization"><span class="nav-number">1.1.4.</span> <span class="nav-text"> 1.4 双重量化（Double Quantization）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#15-kv-cache-%E9%87%8F%E5%8C%96%E9%95%BF%E4%B8%8A%E4%B8%8B%E6%96%87%E7%9A%84%E6%9C%80%E5%90%8E%E6%88%98%E5%9C%BA"><span class="nav-number">1.1.5.</span> <span class="nav-text"> 1.5 KV Cache 量化：长上下文的最后战场</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E7%B3%BB%E7%BB%9F%E6%9E%B6%E6%9E%84%E4%B8%8E%E6%95%B0%E6%8D%AE%E6%B5%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 系统架构与数据流</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%9E%E7%8E%B0%E4%B8%8E%E9%AA%8C%E8%AF%81%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 实现与验证（本周交付核心）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E6%89%8B%E5%86%99-nf4-%E7%A0%81%E6%9C%AC%E7%94%9F%E6%88%90%E5%99%A8%E4%B8%8E-bitsandbytes-%E5%AF%B9%E9%BD%90"><span class="nav-number">1.3.1.</span> <span class="nav-text"> 3.1 手写 NF4 码本生成器（与 bitsandbytes 对齐）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-qlora-%E4%BA%91%E7%AB%AF%E5%BE%AE%E8%B0%83%E9%AA%8C%E8%AF%817b-%E5%8D%95%E5%8D%A1-24g-%E5%8F%AF%E8%AE%AD"><span class="nav-number">1.3.2.</span> <span class="nav-text"> 3.2 QLoRA 云端微调（验证&quot;7B 单卡 24G 可训&quot;）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#33-fp8-%E4%BD%8D%E7%BA%A7%E8%A7%A3%E7%A0%81%E5%B0%8F%E7%BB%83%E4%B9%A0%E5%8F%AF%E8%BF%90%E8%A1%8C"><span class="nav-number">1.3.3.</span> <span class="nav-text"> 3.3 FP8 位级解码小练习（可运行）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-kv-cache-%E9%A2%84%E7%AE%97%E8%AE%A1%E7%AE%97%E5%99%A8%E5%8F%AF%E8%BF%90%E8%A1%8C%E9%95%BF%E4%B8%8A%E4%B8%8B%E6%96%87%E5%BF%85%E5%A4%87"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. KV Cache 预算计算器（可运行，长上下文必备）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#61-%E6%95%B0%E5%80%BC%E6%A0%BC%E5%BC%8F%E5%85%A8%E6%99%AF%E4%B8%80%E9%A1%B5%E8%A1%A8%E5%A4%8D%E4%B9%A0%E9%94%9A%E7%82%B9"><span class="nav-number">1.6.1.</span> <span class="nav-text"> 6.1 数值格式全景一页表（复习锚点）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-fp8-%E8%AE%AD%E7%BB%83%E9%85%8D%E6%96%B9%E9%80%9F%E6%9F%A5%E9%85%8D%E5%90%88-transformer-engine"><span class="nav-number">1.7.</span> <span class="nav-text"> 7. FP8 训练配方速查（配合 Transformer Engine）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#71-%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E7%9A%84%E5%AE%9E%E9%AA%8C%E8%AE%B0%E5%BD%95%E6%A8%A1%E6%9D%BF"><span class="nav-number">1.7.1.</span> <span class="nav-text"> 7.1 本周交付的实验记录模板</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#8-%E9%9D%A2%E8%AF%95%E5%BF%AB%E9%97%AE%E5%BF%AB%E7%AD%94%E6%9C%AC%E5%91%A8%E5%86%85%E5%AE%B9%E5%8E%8B%E7%BC%A9%E7%89%88"><span class="nav-number">1.8.</span> <span class="nav-text"> 8. 面试快问快答（本周内容压缩版）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.9.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/08/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-2-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E8%BF%9B%E9%98%B6%E9%87%8F%E5%8C%96%E4%B8%8E%20QAT-%E7%AC%AC3%E5%91%A8-FP8%E4%B8%8ENF4%E6%96%B0%E4%B8%80%E4%BB%A3%E6%95%B0%E5%80%BC%E6%A0%BC%E5%BC%8F%E4%B8%8EKVCache%E9%87%8F%E5%8C%96/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第3周-FP8与NF4新一代数值格式与KVCache量化 | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的问题 1. FP8 E4M3&#x2F;E5M2 的位级构成是什么？为什么前向用前者、反向用后者？ 2. Transformer Engine 的延迟缩放（Delayed Scaling）在解决什么问题？ 3. NF4 码本为什么取正态…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第3周-FP8与NF4新一代数值格式与KVCache量化
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-08 13:30:00" itemprop="dateCreated datePublished" datetime="2026-09-08T13:30:00+08:00">2026-09-08</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" itemprop="url" rel="index"><span itemprop="name">模型性能优化</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/Stage-2-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E8%BF%9B%E9%98%B6%E9%87%8F%E5%8C%96%E4%B8%8E-QAT/" itemprop="url" rel="index"><span itemprop="name">Stage 2-大模型进阶量化与 QAT</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>15 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的问题 1. FP8 E4M3/E5M2 的位级构成是什么？为什么前向用前者、反向用后者？ 2. Transformer Engine 的延迟缩放（Delayed Scaling）在解决什么问题？ 3. NF4 码本为什么取正态…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-3-周教程fp8-与-nf4新一代数值格式与-kv-cache-量化"><a class="markdownIt-Anchor" href="#第-3-周教程fp8-与-nf4新一代数值格式与-kv-cache-量化"></a> 第 3 周教程：FP8 与 NF4——新一代数值格式与 KV Cache 量化</h1>
+<blockquote>
+<p><strong>本周要回答的问题</strong></p>
+<ol>
+<li>FP8 E4M3/E5M2 的位级构成是什么？为什么前向用前者、反向用后者？</li>
+<li>Transformer Engine 的延迟缩放（Delayed Scaling）在解决什么问题？</li>
+<li>NF4 码本为什么取正态分布的分位数中点？&quot;双重量化&quot;省了多少显存？</li>
+<li>KV Cache 为什么是长上下文的最后战场？KIVI 的 INT2 凭什么可行？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 3 周。交付物：① 手写 NF4 码本生成器，与 <code>bitsandbytes</code> 的 <code>create_normal_map()</code> 数值对齐；② 云上 <code>bitsandbytes</code> 4-bit 加载 + LoRA 微调，记录显存与收敛曲线，验证&quot;7B 单卡 24G 可训&quot;。</p>
+<hr />
+<h2 id="1-第一性原理当均匀网格不够用就换数值格式本身"><a class="markdownIt-Anchor" href="#1-第一性原理当均匀网格不够用就换数值格式本身"></a> 1. 第一性原理：当均匀网格不够用，就换数值格式本身</h2>
+<p>INT4 均匀网格的 16 个码点是&quot;平均分配&quot;的——但 LLM 权重分布是<strong>中间密、两端疏</strong>的近似正态。两条出路：① 换<strong>浮点</strong>格式（FP8：指数位自动给两端稀疏、中间密集的相对精度）；② 换<strong>定制非均匀</strong>格式（NF4：码点直接按权重分布的分位数摆放）。</p>
+<h3 id="11-fp8-位级解析"><a class="markdownIt-Anchor" href="#11-fp8-位级解析"></a> 1.1 FP8 位级解析</h3>
+<p>FP8 两种格式（IEEE-like，含符号位）：</p>
+<table>
+<thead>
+<tr>
+<th>格式</th>
+<th>指数/尾数</th>
+<th>最大正规值</th>
+<th>特点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>E4M3</td>
+<td>4 / 3</td>
+<td><strong>448</strong></td>
+<td>尾数多 → 相对精度高；范围小</td>
+</tr>
+<tr>
+<td>E5M2</td>
+<td>5 / 2</td>
+<td><strong>57344</strong></td>
+<td>指数多 → 范围大；尾数粗</td>
+</tr>
+</tbody>
+</table>
+<p>手工解码一个 E4M3 数（符号 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>s</mi></mrow><annotation encoding="application/x-tex">s</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">s</span></span></span></span>、指数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>e</mi></mrow><annotation encoding="application/x-tex">e</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">e</span></span></span></span>、尾数 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>m</mi></mrow><annotation encoding="application/x-tex">m</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">m</span></span></span></span>）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mi>v</mi><mo>=</mo><mo stretchy="false">(</mo><mo>−</mo><mn>1</mn><msup><mo stretchy="false">)</mo><mi>s</mi></msup><mo>⋅</mo><msup><mn>2</mn><mrow><mi>e</mi><mo>−</mo><mn>7</mn></mrow></msup><mo>⋅</mo><mrow><mo fence="true">(</mo><mn>1</mn><mo>+</mo><mfrac><mi>m</mi><mn>8</mn></mfrac><mo fence="true">)</mo></mrow><mspace width="1em"/><mo stretchy="false">(</mo><mi>e</mi><mo>≥</mo><mn>1</mn><mo stretchy="false">)</mo><mo separator="true">,</mo><mspace width="2em"/><mi>v</mi><mo>=</mo><mo stretchy="false">(</mo><mo>−</mo><mn>1</mn><msup><mo stretchy="false">)</mo><mi>s</mi></msup><mo>⋅</mo><msup><mn>2</mn><mrow><mo>−</mo><mn>6</mn></mrow></msup><mo>⋅</mo><mfrac><mi>m</mi><mn>8</mn></mfrac><mspace width="1em"/><mo stretchy="false">(</mo><mi>e</mi><mo>=</mo><mn>0</mn><mo separator="true">,</mo><mtext> 次正规</mtext><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">v = (-1)^s \cdot 2^{e-7} \cdot \left(1 + \frac{m}{8}\right) \quad (e \ge 1), \qquad
+v = (-1)^s \cdot 2^{-6} \cdot \frac{m}{8} \quad (e = 0,\ \text{次正规})
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">1</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7143919999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.864108em;vertical-align:0em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.864108em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">e</span><span class="mbin mtight">−</span><span class="mord mtight">7</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.8359999999999999em;vertical-align:-0.686em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">(</span></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.10756em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">8</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">m</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">)</span></span></span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mopen">(</span><span class="mord mathnormal">e</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≥</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mclose">)</span><span class="mpunct">,</span><span class="mspace" style="margin-right:2em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal" style="margin-right:0.03588em;">v</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">−</span><span class="mord">1</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7143919999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">s</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.864108em;vertical-align:0em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.864108em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">6</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.7935600000000003em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.10756em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">8</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathnormal">m</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:1em;"></span><span class="mopen">(</span><span class="mord mathnormal">e</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord text"><span class="mord cjk_fallback">次正规</span></span><span class="mclose">)</span></span></span></span></span></p>
+<p>例：E4M3 <code>0 1000 010</code> → <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>e</mi><mo>=</mo><mn>8</mn><mo separator="true">,</mo><mi>m</mi><mo>=</mo><mn>2</mn></mrow><annotation encoding="application/x-tex">e=8, m=2</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">e</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8388800000000001em;vertical-align:-0.19444em;"></span><span class="mord">8</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">2</span></span></span></span> → <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mrow><mn>8</mn><mo>−</mo><mn>7</mn></mrow></msup><mo>⋅</mo><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mn>2</mn><mi mathvariant="normal">/</mi><mn>8</mn><mo stretchy="false">)</mo><mo>=</mo><mn>2</mn><mo>×</mo><mn>1.25</mn><mo>=</mo><mn>2.5</mn></mrow><annotation encoding="application/x-tex">2^{8-7}\cdot(1+2/8) = 2 \times 1.25 = 2.5</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8141079999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">8</span><span class="mbin mtight">−</span><span class="mord mtight">7</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">⋅</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">2</span><span class="mord">/</span><span class="mord">8</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord">.</span><span class="mord">2</span><span class="mord">5</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">2</span><span class="mord">.</span><span class="mord">5</span></span></span></span>。注意深度学习实际用的 E4M3 是 <strong>E4M3FN 变体</strong>：普通 IEEE 规则下 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>e</mi><mo>=</mo><mn>15</mn><mo separator="true">,</mo><mi>m</mi><mo>=</mo><mn>7</mn></mrow><annotation encoding="application/x-tex">e=15, m=7</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">e</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8388800000000001em;vertical-align:-0.19444em;"></span><span class="mord">1</span><span class="mord">5</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">m</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">7</span></span></span></span> 应为 480，但该变体把 <code>S.1111.111</code> 保留为 NaN、其余 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>e</mi><mo>=</mo><mn>15</mn></mrow><annotation encoding="application/x-tex">e=15</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal">e</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord">5</span></span></span></span> 码点照常编码，于是最大有限值是 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mn>8</mn></msup><mo>×</mo><mn>1.75</mn><mo>=</mo><mn>448</mn></mrow><annotation encoding="application/x-tex">2^8 \times 1.75 = 448</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.897438em;vertical-align:-0.08333em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">8</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord">.</span><span class="mord">7</span><span class="mord">5</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">4</span><span class="mord">4</span><span class="mord">8</span></span></span></span>——表中的 448 与 NaN 约定来自这里。</p>
+<p><strong>为什么分工是&quot;前向 E4M3、反向 E5M2&quot;</strong>：权重与前向激活幅度集中在 ±448 内，需要尾数精度；梯度跨多个数量级且偶发极大值，需要 E5M2 的动态范围。这是 <em>FP8 Formats for Deep Learning</em>（NVIDIA 白皮书）确立的标准配方。</p>
+<h3 id="12-transformer-engine-的延迟缩放"><a class="markdownIt-Anchor" href="#12-transformer-engine-的延迟缩放"></a> 1.2 Transformer Engine 的延迟缩放</h3>
+<p>FP8 GEMM 需要把张量缩放到格式的可表示范围（否则上溢/下溢）。<strong>延迟缩放（Delayed Scaling）</strong>：用<strong>前几个迭代记录到的 amax 历史</strong>来估计当前迭代的缩放因子，而不是当场全量统计——</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mtext>scale</mtext><mi>t</mi></msub><mo>=</mo><mi>f</mi><mo fence="false">(</mo><mi>max</mi><mo>⁡</mo><mo stretchy="false">(</mo><msub><mtext>amax</mtext><mrow><mi>t</mi><mo>−</mo><mn>1</mn></mrow></msub><mo separator="true">,</mo><msub><mtext>amax</mtext><mrow><mi>t</mi><mo>−</mo><mn>2</mn></mrow></msub><mo separator="true">,</mo><mo>…</mo><mtext> </mtext><mo stretchy="false">)</mo><mo fence="false">)</mo></mrow><annotation encoding="application/x-tex">\text{scale}_t = f\big(\max(\text{amax}_{t-1}, \text{amax}_{t-2}, \dots)\big)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord text"><span class="mord">scale</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.2805559999999999em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">t</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.20001em;vertical-align:-0.35001em;"></span><span class="mord mathnormal" style="margin-right:0.10764em;">f</span><span class="mord"><span class="delimsizing size1">(</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop">max</span><span class="mopen">(</span><span class="mord"><span class="mord text"><span class="mord">amax</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.301108em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.208331em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord text"><span class="mord">amax</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.301108em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">t</span><span class="mbin mtight">−</span><span class="mord mtight">2</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.208331em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mclose">)</span><span class="mord"><span class="delimsizing size1">)</span></span></span></span></span></span></p>
+<p>理由：① 当场统计要多一次全张量归约（抵消 FP8 的速度收益）；② 相邻迭代间激活分布变化平缓，历史 amax 是良好估计。风险：分布突变时首步溢出 → loss spike，需要 amax 历史窗口与梯度裁剪兜底。<strong>FP8 训练配方</strong>：主权重（master weights）与优化器状态仍保 FP32，FP8 只出现在 GEMM 的前向/反向矩阵上。</p>
+<h3 id="13-nf4信息论最优的-4-bit-码本"><a class="markdownIt-Anchor" href="#13-nf4信息论最优的-4-bit-码本"></a> 1.3 NF4：信息论最优的 4-bit 码本</h3>
+<p>QLoRA（Dettmers et al., 2023）的 NormalFloat 4 构造：</p>
+<ol>
+<li><strong>假设</strong>权重 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>w</mi><mo>∼</mo><mi mathvariant="script">N</mi><mo stretchy="false">(</mo><mn>0</mn><mo separator="true">,</mo><msup><mi>σ</mi><mn>2</mn></msup><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">w \sim \mathcal{N}(0, \sigma^2)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∼</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathcal" style="margin-right:0.14736em;">N</span></span><span class="mopen">(</span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">σ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose">)</span></span></span></span>（实践上先做分块归一化——每 64 个权重一块，除以该块的<strong>绝对最大值 absmax</strong> 归一到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mo>−</mo><mn>1</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[-1,1]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">−</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">1</span><span class="mclose">]</span></span></span></span>，强制满足）；</li>
+<li>取标准正态的 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mn>4</mn></msup><mo>+</mo><mn>1</mn><mo>=</mo><mn>17</mn></mrow><annotation encoding="application/x-tex">2^4 + 1 = 17</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.897438em;vertical-align:-0.08333em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">4</span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">1</span><span class="mord">7</span></span></span></span> 个<strong>等概率分位点</strong> <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msub><mi>q</mi><mi>i</mi></msub><mo>=</mo><msup><mi mathvariant="normal">Φ</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup><mtext> ⁣</mtext><mrow><mo fence="true">(</mo><mfrac><mi>i</mi><mn>17</mn></mfrac><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">q_i = \Phi^{-1}\!\left(\frac{i}{17}\right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord"><span class="mord mathnormal" style="margin-right:0.03588em;">q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:-0.03588em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.205674em;vertical-align:-0.35001em;"></span><span class="mord"><span class="mord">Φ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:-0.16666666666666666em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.855664em;"><span style="top:-2.6550000000000002em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mord mtight">7</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">)</span></span></span></span></span></span>（把概率质量等分成 16 份）；</li>
+<li>相邻分位点<strong>取中点</strong>作为码点，并显式包含 0；归一化到 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">[</mo><mo>−</mo><mn>1</mn><mo separator="true">,</mo><mn>1</mn><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">[-1, 1]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">[</span><span class="mord">−</span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">1</span><span class="mclose">]</span></span></span></span>。</li>
+</ol>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><msub><mi>c</mi><mi>i</mi></msub><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mrow><mo fence="true">(</mo><msup><mi mathvariant="normal">Φ</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup><mtext> ⁣</mtext><mrow><mo fence="true">(</mo><mstyle displaystyle="false" scriptlevel="0"><mfrac><mi>i</mi><mn>17</mn></mfrac></mstyle><mo fence="true">)</mo></mrow><mo>+</mo><msup><mi mathvariant="normal">Φ</mi><mrow><mo>−</mo><mn>1</mn></mrow></msup><mtext> ⁣</mtext><mrow><mo fence="true">(</mo><mstyle displaystyle="false" scriptlevel="0"><mfrac><mrow><mi>i</mi><mo>+</mo><mn>1</mn></mrow><mn>17</mn></mfrac></mstyle><mo fence="true">)</mo></mrow><mo fence="true">)</mo></mrow><mo separator="true">,</mo><mspace width="1em"/><mi>i</mi><mo>=</mo><mn>0</mn><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><mn>15</mn></mrow><annotation encoding="application/x-tex">c_i = \frac{1}{2}\left(\Phi^{-1}\!\left(\tfrac{i}{17}\right) + \Phi^{-1}\!\left(\tfrac{i+1}{17}\right)\right), \quad i = 0,\dots,15
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.58056em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">c</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mathnormal mtight">i</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.00744em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.32144em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">2</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mord">Φ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.864108em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:-0.16666666666666666em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.855664em;"><span style="top:-2.6550000000000002em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mord mtight">7</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">)</span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mord">Φ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.864108em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:-0.16666666666666666em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">(</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.855664em;"><span style="top:-2.6550000000000002em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span><span class="mord mtight">7</span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.394em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">i</span><span class="mbin mtight">+</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">)</span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">)</span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:1em;"></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathnormal">i</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8388800000000001em;vertical-align:-0.19444em;"></span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">1</span><span class="mord">5</span></span></span></span></span></p>
+<p><strong>为什么这是&quot;信息论最优&quot;</strong>：对已知分布 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>p</mi></mrow><annotation encoding="application/x-tex">p</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.625em;vertical-align:-0.19444em;"></span><span class="mord mathnormal">p</span></span></span></span>，使期望量化误差 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi mathvariant="double-struck">E</mi><mo stretchy="false">[</mo><mo stretchy="false">(</mo><mi>w</mi><mo>−</mo><mi>Q</mi><mo stretchy="false">(</mo><mi>w</mi><mo stretchy="false">)</mo><msup><mo stretchy="false">)</mo><mn>2</mn></msup><mo stretchy="false">]</mo></mrow><annotation encoding="application/x-tex">\mathbb{E}[(w - Q(w))^2]</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord mathbb">E</span></span><span class="mopen">[</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord mathnormal">Q</span><span class="mopen">(</span><span class="mord mathnormal" style="margin-right:0.02691em;">w</span><span class="mclose">)</span><span class="mclose"><span class="mclose">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span><span class="mclose">]</span></span></span></span> 最小的码点，正是使每个码点覆盖等概率区间的分位数中点（标量量化的经典结论，Lloyd-Max 在高斯下的特例）。0 附近概率密度最高 → 码点最密；尾部稀疏 → 码点稀——恰好匹配正态形状。</p>
+<h3 id="14-双重量化double-quantization"><a class="markdownIt-Anchor" href="#14-双重量化double-quantization"></a> 1.4 双重量化（Double Quantization）</h3>
+<p>NF4 量化后每 64 个权重配一个 FP32 scale（常数块大小）。QLoRA 再把这个 scale 本身量化成 8-bit（256 个块共享一个 FP32 二级 scale）：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>额外开销</mtext><mo>:</mo><mtext> </mtext><mfrac><mrow><mn>32</mn><mtext> bit</mtext></mrow><mn>64</mn></mfrac><mo>=</mo><mn>0.5</mn><mtext> bpw </mtext><mover><mo stretchy="true">→</mo><mpadded width="+0.6em" lspace="0.3em"><mtext>双重量化</mtext></mpadded></mover><mtext> </mtext><mfrac><mn>8</mn><mn>64</mn></mfrac><mo>+</mo><mfrac><mn>32</mn><mrow><mn>64</mn><mo>×</mo><mn>256</mn></mrow></mfrac><mo>≈</mo><mn>0.127</mn><mtext> bpw</mtext></mrow><annotation encoding="application/x-tex">\text{额外开销}:\ \frac{32\ \text{bit}}{64} = 0.5\ \text{bpw} \ \xrightarrow{\text{双重量化}}\ \frac{8}{64} + \frac{32}{64 \times 256} \approx 0.127\ \text{bpw}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">额外开销</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">:</span><span class="mspace"> </span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.05744em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.37144em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">6</span><span class="mord">4</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">3</span><span class="mord">2</span><span class="mspace"> </span><span class="mord text"><span class="mord">bit</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.294771em;vertical-align:-0.19444em;"></span><span class="mord">0</span><span class="mord">.</span><span class="mord">5</span><span class="mspace"> </span><span class="mord text"><span class="mord">bpw</span></span><span class="mspace"> </span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel x-arrow"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.100331em;"><span style="top:-3.322em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight x-arrow-pad"><span class="mord mtight"><span class="mord text mtight"><span class="mord cjk_fallback mtight">双重量化</span></span></span></span></span><span class="svg-align" style="top:-2.689em;"><span class="pstrut" style="height:2.7em;"></span><span class="hide-tail" style="height:0.522em;min-width:1.469em;"><svg width='400em' height='0.522em' viewBox='0 0 400000 522' preserveAspectRatio='xMaxYMin slice'><path d='M0 241v40h399891c-47.3 35.3-84 78-110 128
+-16.7 32-27.7 63.7-33 95 0 1.3-.2 2.7-.5 4-.3 1.3-.5 2.3-.5 3 0 7.3 6.7 11 20
+ 11 8 0 13.2-.8 15.5-2.5 2.3-1.7 4.2-5.5 5.5-11.5 2-13.3 5.7-27 11-41 14.7-44.7
+ 39-84.5 73-119.5s73.7-60.2 119-75.5c6-2 9-5.7 9-11s-3-9-9-11c-45.3-15.3-85
+-40.5-119-75.5s-58.3-74.8-73-119.5c-4.7-14-8.3-27.3-11-40-1.3-6.7-3.2-10.8-5.5
+-12.5-2.3-1.7-7.5-2.5-15.5-2.5-14 0-21 3.7-21 11 0 2 2 10.3 6 25 20.7 83.3 67
+ 151.7 139 205zm0 0v40h399900v-40z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.010999999999999899em;"><span></span></span></span></span></span><span class="mspace"> </span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.00744em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.32144em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">6</span><span class="mord">4</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">8</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:2.09077em;vertical-align:-0.7693300000000001em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.32144em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">6</span><span class="mord">4</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord">2</span><span class="mord">5</span><span class="mord">6</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">3</span><span class="mord">2</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.7693300000000001em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord">0</span><span class="mord">.</span><span class="mord">1</span><span class="mord">2</span><span class="mord">7</span><span class="mspace"> </span><span class="mord text"><span class="mord">bpw</span></span></span></span></span></span></p>
+<p>7B 模型省下约 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mo stretchy="false">(</mo><mn>0.5</mn><mo>−</mo><mn>0.127</mn><mo stretchy="false">)</mo><mo>×</mo><mn>7</mn><mo>×</mo><mn>1</mn><msup><mn>0</mn><mn>9</mn></msup><mi mathvariant="normal">/</mi><mn>8</mn><mo>≈</mo><mn>0.4</mn></mrow><annotation encoding="application/x-tex">(0.5 - 0.127) \times 7\times10^9 / 8 \approx 0.4</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mopen">(</span><span class="mord">0</span><span class="mord">.</span><span class="mord">5</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord">0</span><span class="mord">.</span><span class="mord">1</span><span class="mord">2</span><span class="mord">7</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">7</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord">1</span><span class="mord"><span class="mord">0</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight">9</span></span></span></span></span></span></span></span><span class="mord">/</span><span class="mord">8</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">≈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.64444em;vertical-align:0em;"></span><span class="mord">0</span><span class="mord">.</span><span class="mord">4</span></span></span></span> GB——不多，但<strong>足以决定 7B 能否塞进 24G 卡</strong>（配合优化器状态的 CPU offload）。</p>
+<h3 id="15-kv-cache-量化长上下文的最后战场"><a class="markdownIt-Anchor" href="#15-kv-cache-量化长上下文的最后战场"></a> 1.5 KV Cache 量化：长上下文的最后战场</h3>
+<p>decode 时 KV cache 体积 = <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mn>2</mn><mo>×</mo><msub><mi>n</mi><mrow><mi>l</mi><mi>a</mi><mi>y</mi><mi>e</mi><mi>r</mi><mi>s</mi></mrow></msub><mo>×</mo><msub><mi>n</mi><mrow><mi>k</mi><mi>v</mi><mi mathvariant="normal">_</mi><mi>h</mi><mi>e</mi><mi>a</mi><mi>d</mi><mi>s</mi></mrow></msub><mo>×</mo><msub><mi>d</mi><mrow><mi>h</mi><mi>e</mi><mi>a</mi><mi>d</mi></mrow></msub><mo>×</mo><mi>s</mi><mi>e</mi><mi>q</mi><mo>×</mo><mtext>bytes</mtext></mrow><annotation encoding="application/x-tex">2 \times n_{layers} \times n_{kv\_heads} \times d_{head} \times seq \times \text{bytes}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">2</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.8694379999999999em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3361079999999999em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.01968em;">l</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight" style="margin-right:0.03588em;">y</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight" style="margin-right:0.02778em;">r</span><span class="mord mathnormal mtight">s</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.95033em;vertical-align:-0.367em;"></span><span class="mord"><span class="mord mathnormal">n</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight" style="margin-right:0.03148em;">k</span><span class="mord mathnormal mtight" style="margin-right:0.03588em;">v</span><span class="mord mtight" style="margin-right:0.02778em;">_</span><span class="mord mathnormal mtight">h</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">d</span><span class="mord mathnormal mtight">s</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.367em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.84444em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord mathnormal">d</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">h</span><span class="mord mathnormal mtight">e</span><span class="mord mathnormal mtight">a</span><span class="mord mathnormal mtight">d</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.7777700000000001em;vertical-align:-0.19444em;"></span><span class="mord mathnormal">s</span><span class="mord mathnormal">e</span><span class="mord mathnormal" style="margin-right:0.03588em;">q</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">×</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord text"><span class="mord">bytes</span></span></span></span></span>（GQA 模型用 KV 头数，比注意力头数小得多）。以 Qwen2.5-7B 为例（28 层、GQA 4 个 KV 头、头维 128），4K 上下文 FP16 ≈ 0.24 GB；若是无 GQA 的 MHA 模型（28 个 KV 头）则 ≈ 1.6 GB——且都<strong>随序列长度线性增长</strong>。两条路线：</p>
+<ul>
+<li><strong>FP8 KV cache</strong>：vLLM/TRT-LLM 已支持，体积减半、精度损失通常 &lt; 0.1 PPL；</li>
+<li><strong>KIVI</strong>（Liu et al., 2024，arXiv:2402.02750）：Key 沿<strong>通道维</strong>、Value 沿 <strong>token 维</strong>做 2-bit 量化（两者离群结构方向不同：Key 离群在通道、Value 离群在早期 token），并把少数初始/最近的 token 保留全精度。论文报告：<strong>峰值显存（含权重）降低约 2.6×，可支持最多 4× 的 batch 规模</strong>（吞吐提升 2.35~3.47×）。</li>
+</ul>
+<hr />
+<h2 id="2-系统架构与数据流"><a class="markdownIt-Anchor" href="#2-系统架构与数据流"></a> 2. 系统架构与数据流</h2>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">NF4/QLoRA 数据流：</span><br><span class="line">HF 权重 ──► 分块(64) ──► 每块除以 absmax ──► NF4 码点查表 ──► (q4, scale_fp32)</span><br><span class="line">                                                     │</span><br><span class="line">                             双重量化：scale_fp32 ──► q8 + 二级 scale</span><br><span class="line">推理/训练时：q4 ──► 码点查表 ──► × 块 scale ──► FP16 前向</span><br><span class="line">训练梯度：只更新 LoRA 分支（主权重冻结在 NF4）</span><br></pre></td></tr></table></figure>
+<hr />
+<h2 id="3-实现与验证本周交付核心"><a class="markdownIt-Anchor" href="#3-实现与验证本周交付核心"></a> 3. 实现与验证（本周交付核心）</h2>
+<h3 id="31-手写-nf4-码本生成器与-bitsandbytes-对齐"><a class="markdownIt-Anchor" href="#31-手写-nf4-码本生成器与-bitsandbytes-对齐"></a> 3.1 手写 NF4 码本生成器（与 bitsandbytes 对齐）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> torch</span><br><span class="line"><span class="keyword">from</span> scipy.stats <span class="keyword">import</span> norm</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">nf4_codebook_paper</span>():</span><br><span class="line">    <span class="string">&quot;&quot;&quot;QLoRA 论文的概念构造：正态分布 2^4+1=17 个等概率分位点，</span></span><br><span class="line"><span class="string">    码点取相邻分位点的中点（升序，含 0，归一化到 [-1, 1]）。&quot;&quot;&quot;</span></span><br><span class="line">    quantiles = norm.ppf((torch.linspace(<span class="number">0</span>, <span class="number">1</span>, <span class="number">18</span>)[<span class="number">1</span>:-<span class="number">1</span>]).numpy())  <span class="comment"># 16 个内部分界</span></span><br><span class="line">    mids = [(quantiles[i] + quantiles[i+<span class="number">1</span>]) / <span class="number">2</span> <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="built_in">len</span>(quantiles)-<span class="number">1</span>)]</span><br><span class="line">    code = [quantiles[<span class="number">0</span>] - <span class="number">1.0</span>] + mids + [quantiles[-<span class="number">1</span>] + <span class="number">1.0</span>]      <span class="comment"># 16 个码点</span></span><br><span class="line">    code = torch.tensor(code)</span><br><span class="line">    code[code.<span class="built_in">abs</span>().argmin()] = <span class="number">0.0</span>                 <span class="comment"># 显式包含 0（QLoRA 做法）</span></span><br><span class="line">    <span class="keyword">return</span> code / code.<span class="built_in">abs</span>().<span class="built_in">max</span>()</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">nf4_codebook_bnb_symmetric</span>(<span class="params">offset=<span class="number">0.9677083</span></span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;bitsandbytes 对称 NF4 码本的同构复现（use_extra_value=False 的构造）：</span></span><br><span class="line"><span class="string">    以经验调优的 offset 为最外层分位边界，7 正 + 7 负 + 0。&quot;&quot;&quot;</span></span><br><span class="line">    pos = norm.ppf(torch.linspace(offset, <span class="number">0.5</span>, <span class="number">8</span>)[:-<span class="number">1</span>])   <span class="comment"># 7 个正码点（numpy 数组）</span></span><br><span class="line">    code = [<span class="built_in">float</span>(-v) <span class="keyword">for</span> v <span class="keyword">in</span> pos[::-<span class="number">1</span>]] + [<span class="number">0.0</span>] + [<span class="built_in">float</span>(v) <span class="keyword">for</span> v <span class="keyword">in</span> pos]</span><br><span class="line">    code = torch.tensor(code)</span><br><span class="line">    <span class="keyword">return</span> code / code.<span class="built_in">abs</span>().<span class="built_in">max</span>()</span><br><span class="line"></span><br><span class="line">mine = nf4_codebook_bnb_symmetric()</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---- 与 bitsandbytes 官方数值对齐 ----</span></span><br><span class="line"><span class="keyword">import</span> bitsandbytes.functional <span class="keyword">as</span> F</span><br><span class="line">bnb = F.create_normal_map(offset=<span class="number">0.9677083</span>, use_extra_value=<span class="literal">False</span>)  <span class="comment"># 官方 16 码点（对称版）</span></span><br><span class="line">bnb16 = bnb[:<span class="number">16</span>]   <span class="comment"># 注意：返回的是 256 元素查表（后 242 个是 0 padding），前 16 个才是码点</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;mine:&quot;</span>, [<span class="string">f&quot;<span class="subst">&#123;v:<span class="number">.4</span>f&#125;</span>&quot;</span> <span class="keyword">for</span> v <span class="keyword">in</span> mine.sort().values.tolist()])</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;bnb :&quot;</span>, [<span class="string">f&quot;<span class="subst">&#123;v:<span class="number">.4</span>f&#125;</span>&quot;</span> <span class="keyword">for</span> v <span class="keyword">in</span> bnb16.tolist()])</span><br><span class="line">diff = (mine.sort().values - bnb16).<span class="built_in">abs</span>().<span class="built_in">max</span>().item()</span><br><span class="line"><span class="keyword">assert</span> diff &lt; <span class="number">1e-5</span>, <span class="string">f&quot;对称码本应逐位对齐，实际最大偏差 <span class="subst">&#123;diff&#125;</span>&quot;</span></span><br><span class="line"><span class="comment"># 概念版（论文中点法）与官方版量级一致但数值有差异——把最大偏差记下来：</span></span><br><span class="line">paper_diff = (nf4_codebook_paper().sort().values - bnb16).<span class="built_in">abs</span>().<span class="built_in">max</span>().item()</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;NF4 对称码本对齐 ✓（逐位偏差 <span class="subst">&#123;diff:<span class="number">.2</span>e&#125;</span>）；论文中点法与官方版最大偏差 <span class="subst">&#123;paper_diff:<span class="number">.3</span>f&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>预期输出</strong>：bitsandbytes 的构造复现逐位对齐（偏差 ~1e-7，浮点误差量级）；论文中点法与官方版最大偏差达零点几——<strong>这不是 bug</strong>：bitsandbytes 的 <code>create_normal_map</code> 用的是经验调优的最外层分位边界 <code>offset=0.9677083</code>（而非严格的 1/17 等分），且默认的 <code>nf4</code> 类型是 <code>use_extra_value=True</code> 的<strong>非对称</strong>版（7 负 + 9 正含 0）。论文的&quot;等概率分位点中点&quot;是概念性构造，工程实现做了数值微调——两者的分布形状（0 密、两端疏）一致。把偏差来源写进实验记录。</p>
+<h3 id="32-qlora-云端微调验证7b-单卡-24g-可训"><a class="markdownIt-Anchor" href="#32-qlora-云端微调验证7b-单卡-24g-可训"></a> 3.2 QLoRA 云端微调（验证&quot;7B 单卡 24G 可训&quot;）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 云环境：单卡 RTX 4090/A10G-24G 即可</span></span><br><span class="line"><span class="keyword">import</span> torch, bitsandbytes <span class="keyword">as</span> bnb</span><br><span class="line"><span class="keyword">from</span> transformers <span class="keyword">import</span> (AutoModelForCausalLM, AutoTokenizer,</span><br><span class="line">                          BitsAndBytesConfig, TrainingArguments)</span><br><span class="line"><span class="keyword">from</span> peft <span class="keyword">import</span> LoraConfig, get_peft_model, prepare_model_for_kbit_training</span><br><span class="line"><span class="keyword">from</span> datasets <span class="keyword">import</span> load_dataset</span><br><span class="line"></span><br><span class="line">bnb_cfg = BitsAndBytesConfig(</span><br><span class="line">    load_in_4bit=<span class="literal">True</span>,</span><br><span class="line">    bnb_4bit_quant_type=<span class="string">&quot;nf4&quot;</span>,                  <span class="comment"># ← 本周主角</span></span><br><span class="line">    bnb_4bit_use_double_quant=<span class="literal">True</span>,             <span class="comment"># ← 双重量化</span></span><br><span class="line">    bnb_4bit_compute_dtype=torch.bfloat16)</span><br><span class="line"></span><br><span class="line">model = AutoModelForCausalLM.from_pretrained(</span><br><span class="line">    <span class="string">&quot;Qwen/Qwen2.5-7B&quot;</span>, quantization_config=bnb_cfg)</span><br><span class="line">model = prepare_model_for_kbit_training(model)</span><br><span class="line">model = get_peft_model(model, LoraConfig(r=<span class="number">16</span>, lora_alpha=<span class="number">32</span>,</span><br><span class="line">                    target_modules=<span class="string">&quot;all-linear&quot;</span>, task_type=<span class="string">&quot;CAUSAL_LM&quot;</span>))</span><br><span class="line">model.print_trainable_parameters()</span><br><span class="line"><span class="comment"># 预期：trainable ≈ 0.3%（LoRA 分支），冻结主体 99.7%</span></span><br><span class="line"></span><br><span class="line">tok = AutoTokenizer.from_pretrained(<span class="string">&quot;Qwen/Qwen2.5-7B&quot;</span>)</span><br><span class="line">data = load_dataset(<span class="string">&quot;tatsu-lab/alpaca&quot;</span>, split=<span class="string">&quot;train[:5000]&quot;</span>)</span><br><span class="line"><span class="comment"># （tokenizer 编码、Trainer 配置从略——复用 Stage 1 蒸馏周的 collate）</span></span><br></pre></td></tr></table></figure>
+<p><strong>记录三件事</strong>（交付）：① <code>nvidia-smi</code> 峰值显存（预期 ~20 GB，&lt; 24G 断言成立）；② loss 曲线前 500 步收敛趋势；③ <code>print_trainable_parameters()</code> 的百分比。三者合起来就是对&quot;7B 单卡 24G 可训&quot;的完整实证。</p>
+<h3 id="33-fp8-位级解码小练习可运行"><a class="markdownIt-Anchor" href="#33-fp8-位级解码小练习可运行"></a> 3.3 FP8 位级解码小练习（可运行）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">e4m3_decode</span>(<span class="params">bits: <span class="built_in">int</span></span>) -&gt; <span class="built_in">float</span>:</span><br><span class="line">    s = (bits &gt;&gt; <span class="number">7</span>) &amp; <span class="number">1</span>; e = (bits &gt;&gt; <span class="number">3</span>) &amp; <span class="number">0xF</span>; m = bits &amp; <span class="number">0x7</span></span><br><span class="line">    <span class="keyword">if</span> e == <span class="number">15</span> <span class="keyword">and</span> m == <span class="number">7</span>:</span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">float</span>(<span class="string">&quot;nan&quot;</span>)   <span class="comment"># E4M3FN（NVIDIA/PyTorch 约定）：最高码点保留为 NaN</span></span><br><span class="line">    <span class="keyword">if</span> e == <span class="number">0</span>:</span><br><span class="line">        <span class="keyword">return</span> (-<span class="number">1</span>)**s * <span class="number">2</span>**(-<span class="number">6</span>) * (m / <span class="number">8</span>)</span><br><span class="line">    <span class="keyword">return</span> (-<span class="number">1</span>)**s * <span class="number">2</span>**(e - <span class="number">7</span>) * (<span class="number">1</span> + m / <span class="number">8</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">assert</span> <span class="built_in">abs</span>(e4m3_decode(<span class="number">0b0_1000_010</span>) - <span class="number">2.5</span>) &lt; <span class="number">1e-9</span></span><br><span class="line"><span class="keyword">assert</span> e4m3_decode(<span class="number">0b0_1111_110</span>) == <span class="number">448</span>          <span class="comment"># E4M3 最大有限值：2^8 × 1.75</span></span><br><span class="line"><span class="keyword">import</span> math</span><br><span class="line"><span class="keyword">assert</span> math.isnan(e4m3_decode(<span class="number">0b0_1111_111</span>))     <span class="comment"># S.1111.111 = NaN，不是 480</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;E4M3 位级解码 ✓：0b0_1000_010 → 2.5，0b0_1111_110 → 448，全 1 → NaN&quot;</span>)</span><br></pre></td></tr></table></figure>
+<hr />
+<h2 id="4-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#4-工程权衡与失效模式"></a> 4. 工程权衡与失效模式</h2>
+<h3 id="41-权衡"><a class="markdownIt-Anchor" href="#41-权衡"></a> 4.1 权衡</h3>
+<ul>
+<li><strong>FP8 训练 vs BF16</strong>：Hopper/Ada 上 GEMM 吞吐 ~2×，但需要 Transformer Engine 生态与缩放调参；老硬件无 Tensor Core 支持就完全没收益。</li>
+<li><strong>NF4 vs INT4</strong>：NF4 免校准、分布匹配好，但<strong>没有配套的高速推理内核</strong>（bitsandbytes 推理偏慢）——它是<strong>训练/微调格式</strong>，部署时通常转 GPTQ/AWQ/GGUF。</li>
+<li><strong>KV 量化位宽</strong>：FP8 稳妥（几乎无损）；INT2（KIVI）激进，需按任务验收长文本质量。</li>
+</ul>
+<h3 id="42-失效模式"><a class="markdownIt-Anchor" href="#42-失效模式"></a> 4.2 失效模式</h3>
+<ol>
+<li><strong>FP8 loss spike</strong>：症状——训练中途 loss 突跳；根因——延迟缩放估计滞后于分布突变；修复——加大 amax 历史窗口、梯度裁剪、必要时回退该层 BF16。</li>
+<li><strong>NF4 假设失配</strong>：症状——某些层（如稀疏化后、特定蒸馏模型）NF4 掉点比 INT4 还多；根因——权重偏离正态；修复——检查分块归一化是否生效、对该层换格式。</li>
+<li><strong>4-bit 加载后首层乱码</strong>：症状——生成乱码但 loss 正常；根因——<code>compute_dtype</code> 与设备不匹配（如老卡不支持 bf16）；修复——改 <code>float16</code>。</li>
+<li><strong>KV INT2 长文本崩坏</strong>：症状——短问答正常、超过某长度后幻觉激增；根因——早期 token 的 KV 离群值被 2-bit 截断（Value 侧尤甚）；修复——回退 FP8 或对敏感层保留高精度（KIVI 的通道/Token 维选择正是为此设计）。</li>
+</ol>
+<hr />
+<h2 id="5-延伸思考题含解析"><a class="markdownIt-Anchor" href="#5-延伸思考题含解析"></a> 5. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：为什么 FP8 不能只用一种格式？<br />
+<strong>A</strong>：指数位与尾数位是零和的：给范围（E5M2）就丢精度，给精度（E4M3）就丢范围。前向数值幅度集中 → 要精度；反向梯度跨数量级 → 要范围。一种格式无法同时满足两个分布。</p>
+<p><strong>Q2</strong>：延迟缩放相比&quot;当场统计缩放&quot;省了什么、赌了什么？<br />
+<strong>A</strong>：省了一次全张量归约（否则吃掉 FP8 GEMM 的大部分收益）；赌的是&quot;相邻迭代分布变化平缓&quot;。分布平稳时免费，突变时首步溢出——所以要有 amax 历史与裁剪兜底。</p>
+<p><strong>Q3</strong>：NF4 码本为什么必须显式包含 0？<br />
+<strong>A</strong>：正态分布在 0 处概率密度最高，大量权重会被量化到 0 附近；若码点不含 0，最接近 0 的两个码点 ±ε 会引入系统性偏置（符号随机化噪声），含 0 码点让&quot;该是零的权重就是零&quot;。</p>
+<p><strong>Q4</strong>：双重量化的收益为什么在 7B/24G 场景特别关键？<br />
+<strong>A</strong>：省下的 ~0.4 GB 看似小，但 24G 卡的预算表里：权重 3.5G + KV + 激活 + LoRA 梯度 + 优化器已逼近上限——0.4G 正是&quot;能训&quot;与&quot;OOM&quot;的分界线。收益大小取决于离预算边界的距离。</p>
+<p><strong>Q5</strong>：Key 和 Value 为什么用不同维度做超细量化？<br />
+<strong>A</strong>：离群结构不同：Key 的大幅度值集中在固定<strong>通道</strong>（跨 token 稳定），Value 的离群集中在<strong>早期/特殊 token</strong>（跨通道）。沿各自离群方向做分组量化才能隔离极端值——KIVI 的通道维（Key）/token 维（Value）选择是数据观察的结果，不是对称美学。</p>
+<hr />
+<h2 id="6-kv-cache-预算计算器可运行长上下文必备"><a class="markdownIt-Anchor" href="#6-kv-cache-预算计算器可运行长上下文必备"></a> 6. KV Cache 预算计算器（可运行，长上下文必备）</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">kv_cache_gb</span>(<span class="params">n_layers, n_kv_heads, d_head, seq_len, batch,</span></span><br><span class="line"><span class="params">                dtype_bytes=<span class="number">2.0</span></span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;KV cache 体积：2(K+V) × 层数 × 头数 × 头维 × 序列长 × batch × 字节。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">2</span> * n_layers * n_kv_heads * d_head * seq_len * batch * dtype_bytes / <span class="number">1e9</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># Qwen2.5-7B：28 层、GQA 4 个 KV 头、头维 128（注意不是 28 个——GQA 把 KV 头压缩了 7 倍）</span></span><br><span class="line"><span class="keyword">for</span> seq <span class="keyword">in</span> (<span class="number">4096</span>, <span class="number">32768</span>):</span><br><span class="line">    <span class="keyword">for</span> fmt, b <span class="keyword">in</span> [(<span class="string">&quot;FP16&quot;</span>, <span class="number">2</span>), (<span class="string">&quot;FP8&quot;</span>, <span class="number">1</span>), (<span class="string">&quot;KIVI-INT2&quot;</span>, <span class="number">0.25</span>)]:</span><br><span class="line">        gb = kv_cache_gb(<span class="number">28</span>, <span class="number">4</span>, <span class="number">128</span>, seq, batch=<span class="number">1</span>, dtype_bytes=b)</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;seq=<span class="subst">&#123;seq:&gt;<span class="number">6</span>&#125;</span>, <span class="subst">&#123;fmt:&gt;<span class="number">9</span>&#125;</span>: KV = <span class="subst">&#123;gb:<span class="number">5.2</span>f&#125;</span> GB&quot;</span>)</span><br><span class="line"><span class="comment"># 预期：4K FP16 ≈ 0.23 GB（GQA）；32K FP16 ≈ 1.88 GB——长上下文下 KV 追上权重</span></span><br><span class="line"><span class="comment"># 断言：FP8 恰好是 FP16 的一半</span></span><br><span class="line">fp16 = kv_cache_gb(<span class="number">28</span>, <span class="number">4</span>, <span class="number">128</span>, <span class="number">4096</span>, <span class="number">1</span>, <span class="number">2</span>)</span><br><span class="line">fp8 = kv_cache_gb(<span class="number">28</span>, <span class="number">4</span>, <span class="number">128</span>, <span class="number">4096</span>, <span class="number">1</span>, <span class="number">1</span>)</span><br><span class="line"><span class="keyword">assert</span> <span class="built_in">abs</span>(fp16 / fp8 - <span class="number">2.0</span>) &lt; <span class="number">1e-9</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;KV 预算计算自检通过 ✓&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>结论用法</strong>：长上下文服务里，KV 很快超过权重本身成为显存大头——这就是为什么 vLLM 的 PagedAttention 管 KV、KIVI/FP8 压 KV，两者解决的是同一个资源问题（分页管&quot;碎片&quot;，量化管&quot;总量&quot;）。</p>
+<h3 id="61-数值格式全景一页表复习锚点"><a class="markdownIt-Anchor" href="#61-数值格式全景一页表复习锚点"></a> 6.1 数值格式全景一页表（复习锚点）</h3>
+<table>
+<thead>
+<tr>
+<th>格式</th>
+<th>类别</th>
+<th>码点分布</th>
+<th>校准需求</th>
+<th>主战场</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>FP8 E4M3/E5M2</td>
+<td>浮点</td>
+<td>对数稀疏（指数位）</td>
+<td>缩放策略（延迟缩放）</td>
+<td>训练 + H 卡推理</td>
+</tr>
+<tr>
+<td>INT8/INT4</td>
+<td>均匀整数</td>
+<td>等距</td>
+<td>需要（定 scale）</td>
+<td>通用 PTQ</td>
+</tr>
+<tr>
+<td>NF4</td>
+<td>非均匀码本</td>
+<td>正态分位数</td>
+<td>免（分布假设）</td>
+<td>训练/微调（QLoRA）</td>
+</tr>
+<tr>
+<td>IQ 系列</td>
+<td>非均匀码本</td>
+<td>imatrix 加权码点</td>
+<td>需要（imatrix）</td>
+<td>CPU 极限压缩（Stage 4）</td>
+</tr>
+</tbody>
+</table>
+<p>四个家族的共同主线：<strong>码点布局匹配数值分布</strong>。分布越规整（旋转后/正态假设后），同样的位宽能承载越多的信息——这是贯穿 Stage 1-2 的一条暗线。</p>
+<hr />
+<h2 id="7-fp8-训练配方速查配合-transformer-engine"><a class="markdownIt-Anchor" href="#7-fp8-训练配方速查配合-transformer-engine"></a> 7. FP8 训练配方速查（配合 Transformer Engine）</h2>
+<table>
+<thead>
+<tr>
+<th>组件</th>
+<th>精度</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>主权重（master）</td>
+<td>FP32</td>
+<td>优化器状态与权重更新要高精度</td>
+</tr>
+<tr>
+<td>前向 GEMM 输入</td>
+<td>E4M3</td>
+<td>幅度集中，精度优先</td>
+</tr>
+<tr>
+<td>反向梯度</td>
+<td>E5M2</td>
+<td>跨数量级，范围优先</td>
+</tr>
+<tr>
+<td>优化器状态</td>
+<td>FP32（或 ZeRO 下分片）</td>
+<td>数值稳定底线</td>
+</tr>
+<tr>
+<td>缩放策略</td>
+<td>延迟缩放 + amax 历史窗口</td>
+<td>避免当场统计开销</td>
+</tr>
+</tbody>
+</table>
+<p><strong>loss spike 应对清单</strong>（出现时按序排查）：① amax 历史窗口是否太短；② 梯度裁剪阈值是否过松；③ 该层是否应回退 BF16（混合粒度到层）；④ 数据批是否有异常样本。</p>
+<h3 id="71-本周交付的实验记录模板"><a class="markdownIt-Anchor" href="#71-本周交付的实验记录模板"></a> 7.1 本周交付的实验记录模板</h3>
+<table>
+<thead>
+<tr>
+<th>实验</th>
+<th>关键数字</th>
+<th>断言/结论</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>NF4 码本对齐</td>
+<td>bnb 复现偏差 <em>实测</em></td>
+<td>~1e-7 逐位对齐</td>
+</tr>
+<tr>
+<td>E4M3 解码练习</td>
+<td>2.5、448 与 NaN</td>
+<td>断言通过</td>
+</tr>
+<tr>
+<td>QLoRA 7B 微调</td>
+<td>峰值显存 <em>实测</em></td>
+<td>&lt; 24 GB</td>
+</tr>
+<tr>
+<td>KV 预算计算</td>
+<td>4K/32K 三档</td>
+<td>FP8 恰为 FP16 一半</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="8-面试快问快答本周内容压缩版"><a class="markdownIt-Anchor" href="#8-面试快问快答本周内容压缩版"></a> 8. 面试快问快答（本周内容压缩版）</h2>
+<p><strong>Q：E4M3 和 E5M2 怎么选？</strong><br />
+前向/权重用 E4M3（尾数 3 位、精度优先、范围 448 够）；反向梯度用 E5M2（指数 5 位、范围 57344、跨数量级）。一种格式无法同时满足两个分布。</p>
+<p><strong>Q：延迟缩放省了什么、赌了什么？</strong><br />
+省一次全张量归约（否则吃掉 FP8 GEMM 收益）；赌相邻迭代分布平稳。突变时首步溢出，用 amax 历史 + 梯度裁剪兜底。</p>
+<p><strong>Q：NF4 为什么信息论最优？</strong><br />
+码点取正态分布的等概率分位数中点，使期望量化误差最小——前提是权重近似正态（QLoRA 用分块归一化强制满足）。</p>
+<p><strong>Q：双重量化省多少？</strong><br />
+每 64 权重的 FP32 scale 从 0.5 bpw 压到 ~0.127 bpw，7B 省 ~0.4 GB——恰是 7B 能否塞进 24G 卡的分界线。</p>
+<p><strong>Q：KIVI 的 Key 和 Value 为什么用不同维度量化？</strong><br />
+Key 离群在固定通道 → 通道维分组；Value 离群在早期/特殊 token → token 维分组。沿各自离群方向隔离极端值。</p>
+<p><strong>Q：为什么 FP8 KV 比 INT2 KV 更常用？</strong><br />
+FP8 几乎无损（&lt; 0.1 PPL）且引擎原生支持；INT2 省得多但长文本崩坏风险高，需逐任务验收。稳妥与激进的取舍。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 手算解码一个 E4M3 数（写出 <span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><msup><mn>2</mn><mrow><mi>e</mi><mo>−</mo><mn>7</mn></mrow></msup><mo stretchy="false">(</mo><mn>1</mn><mo>+</mo><mi>m</mi><mi mathvariant="normal">/</mi><mn>8</mn><mo stretchy="false">)</mo></mrow><annotation encoding="application/x-tex">2^{e-7}(1+m/8)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.064108em;vertical-align:-0.25em;"></span><span class="mord"><span class="mord">2</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8141079999999999em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathnormal mtight">e</span><span class="mbin mtight">−</span><span class="mord mtight">7</span></span></span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathnormal">m</span><span class="mord">/</span><span class="mord">8</span><span class="mclose">)</span></span></span></span> 的代入过程）。</li>
+<li>[ ] 跑通 NF4 码本生成器：bitsandbytes 对称构造的复现逐位对齐（偏差 ~1e-7）；记录&quot;论文中点法 vs 官方实现&quot;的偏差并解释来源。</li>
+<li>[ ] 云上跑通 QLoRA：记录峰值显存（&lt; 24G）、可训练参数比例、500 步 loss 曲线。</li>
+<li>[ ] 写出双重量化的显存节省推导（0.5 → 0.127 bpw）。</li>
+<li>[ ] 用自己的话回答：NF4 为什么是&quot;训练格式&quot;而不是&quot;部署格式&quot;？</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%8E%A8%E7%90%86%E4%BC%98%E5%8C%96/" rel="tag"># 推理优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/08/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-2-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E8%BF%9B%E9%98%B6%E9%87%8F%E5%8C%96%E4%B8%8E%20QAT-README/" rel="prev" title="README">
+                  <i class="fa fa-angle-left"></i> README
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/08/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-2-%E5%A4%A7%E6%A8%A1%E5%9E%8B%E8%BF%9B%E9%98%B6%E9%87%8F%E5%8C%96%E4%B8%8E%20QAT-%E7%AC%AC4%E5%91%A8-QAT%E9%87%8F%E5%8C%96%E6%84%9F%E7%9F%A5%E8%AE%AD%E7%BB%83%E5%85%A8%E6%B5%81%E7%A8%8B/" rel="next" title="第4周-QAT量化感知训练全流程">
+                  第4周-QAT量化感知训练全流程 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

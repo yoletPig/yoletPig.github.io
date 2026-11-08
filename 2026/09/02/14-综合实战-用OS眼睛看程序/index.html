@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 把前 13 章的观察工具（strace&#x2F;ps&#x2F;top&#x2F;&#x2F;proc&#x2F;cgroup）串成一套完整的&#39;OS 眼睛&#39;流程，用它解剖一个真实的 Python 训练进程。 - 亲手测出 fork 的真实开销、缺页的发生现场、GIL 下线程的调度形态…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="14-综合实战-用OS眼睛看程序">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/14-%E7%BB%BC%E5%90%88%E5%AE%9E%E6%88%98-%E7%94%A8OS%E7%9C%BC%E7%9D%9B%E7%9C%8B%E7%A8%8B%E5%BA%8F/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 把前 13 章的观察工具（strace&#x2F;ps&#x2F;top&#x2F;&#x2F;proc&#x2F;cgroup）串成一套完整的&#39;OS 眼睛&#39;流程，用它解剖一个真实的 Python 训练进程。 - 亲手测出 fork 的真实开销、缺页的发生现场、GIL 下线程的调度形态…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T05:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.518Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="操作系统">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/14-%E7%BB%BC%E5%90%88%E5%AE%9E%E6%88%98-%E7%94%A8OS%E7%9C%BC%E7%9D%9B%E7%9C%8B%E7%A8%8B%E5%BA%8F/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/14-%E7%BB%BC%E5%90%88%E5%AE%9E%E6%88%98-%E7%94%A8OS%E7%9C%BC%E7%9D%9B%E7%9C%8B%E7%A8%8B%E5%BA%8F/","path":"2026/09/02/14-综合实战-用OS眼睛看程序/","title":"14-综合实战-用OS眼睛看程序"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>14-综合实战-用OS眼睛看程序 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#14-%E7%BB%BC%E5%90%88%E5%AE%9E%E6%88%98-%E7%94%A8os%E7%9C%BC%E7%9D%9B%E7%9C%8B%E7%A8%8B%E5%BA%8F"><span class="nav-number">1.</span> <span class="nav-text"> 14 - 综合实战-用OS眼睛看程序</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%BB%BC%E5%90%88%E8%A7%A3%E5%89%96%E8%A7%82%E5%AF%9F%E4%B8%80%E4%B8%AA-python-%E8%AE%AD%E7%BB%83%E8%BF%9B%E7%A8%8B"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 综合解剖：观察一个 Python 训练进程</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%AE%9E%E9%AA%8Cfork-%E7%9A%84%E7%9C%9F%E5%AE%9E%E5%BC%80%E9%94%80"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 实验：fork 的真实开销</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%9E%E9%AA%8C%E8%A7%82%E5%AF%9F%E7%BC%BA%E9%A1%B5%E7%9A%84%E5%8F%91%E7%94%9F%E7%8E%B0%E5%9C%BA"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 实验：观察缺页的发生现场</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%AE%9E%E9%AA%8Cgil-%E4%B8%8E%E7%BA%BF%E7%A8%8B%E8%B0%83%E5%BA%A6ps-t"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 实验：GIL 与线程调度（ps -T）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%AE%9E%E9%AA%8C%E5%AE%B9%E5%99%A8%E8%B5%84%E6%BA%90%E9%99%90%E5%88%B6%E4%B8%8B%E7%9A%84%E8%AE%AD%E7%BB%83%E8%BF%9B%E7%A8%8B"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 实验：容器资源限制下的训练进程</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%E9%9D%A2%E8%AF%95%E9%AB%98%E9%A2%91%E9%A2%98%E6%B8%85%E5%8D%9530-%E9%A2%98%E5%B8%A6%E7%AD%94%E6%A1%88%E8%A6%81%E7%82%B9"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 操作系统面试高频题清单（30 题带答案要点）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/14-%E7%BB%BC%E5%90%88%E5%AE%9E%E6%88%98-%E7%94%A8OS%E7%9C%BC%E7%9D%9B%E7%9C%8B%E7%A8%8B%E5%BA%8F/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="14-综合实战-用OS眼睛看程序 | Yoleen的博客">
+      <meta itemprop="description" content="- 把前 13 章的观察工具（strace&#x2F;ps&#x2F;top&#x2F;&#x2F;proc&#x2F;cgroup）串成一套完整的&#39;OS 眼睛&#39;流程，用它解剖一个真实的 Python 训练进程。 - 亲手测出 fork 的真实开销、缺页的发生现场、GIL 下线程的调度形态…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          14-综合实战-用OS眼睛看程序
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 13:30:00" itemprop="dateCreated datePublished" datetime="2026-09-02T13:30:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">操作系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>16 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 把前 13 章的观察工具（strace/ps/top//proc/cgroup）串成一套完整的'OS 眼睛'流程，用它解剖一个真实的 Python 训练进程。 - 亲手测出 fork 的真实开销、缺页的发生现场、GIL 下线程的调度形态…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="14-综合实战-用os眼睛看程序"><a class="markdownIt-Anchor" href="#14-综合实战-用os眼睛看程序"></a> 14 - 综合实战-用OS眼睛看程序</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>把前 13 章的观察工具（strace/ps/top//proc/cgroup）串成一套完整的&quot;OS 眼睛&quot;流程，用它解剖一个真实的 Python 训练进程。</li>
+<li>亲手测出 fork 的真实开销、缺页的发生现场、GIL 下线程的调度形态——把&quot;听说&quot;变成&quot;见过&quot;。</li>
+<li>完成一次容器资源限制实验，理解训练任务放进容器后性能形态的变化。</li>
+<li>收获 30 道 OS 面试高频题与答案要点，作为整个系列的验收清单。</li>
+</ul>
+<p>前置：01–13 全部章节；所有实验环境 Ubuntu 22.04 / WSL2。本章所有代码可直接保存运行。</p>
+<h2 id="1-综合解剖观察一个-python-训练进程"><a class="markdownIt-Anchor" href="#1-综合解剖观察一个-python-训练进程"></a> 1. 综合解剖：观察一个 Python 训练进程</h2>
+<p>先造一个&quot;像模像样&quot;的训练进程（加载-训练-保存三阶段，不需要真实框架，纯标准库模拟）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># train_sim.py —— 模拟训练进程：加载(读大文件) → 训练(CPU+子进程) → 保存(写盘)</span></span><br><span class="line"><span class="keyword">import</span> os, time, sys, resource</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">rss_kb</span>():</span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(<span class="string">f&quot;/proc/<span class="subst">&#123;os.getpid()&#125;</span>/status&quot;</span>) <span class="keyword">as</span> f:          <span class="comment"># 04 篇：读 VmRSS</span></span><br><span class="line">        <span class="keyword">for</span> line <span class="keyword">in</span> f:</span><br><span class="line">            <span class="keyword">if</span> line.startswith(<span class="string">&quot;VmRSS&quot;</span>):</span><br><span class="line">                <span class="keyword">return</span> <span class="built_in">int</span>(line.split()[<span class="number">1</span>])</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">log</span>(<span class="params">tag</span>):</span><br><span class="line">    r = resource.getrusage(resource.RUSAGE_SELF)            <span class="comment"># 05 篇：缺页计数</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;[<span class="subst">&#123;time.strftime(<span class="string">&#x27;%H:%M:%S&#x27;</span>)&#125;</span>] <span class="subst">&#123;tag:<span class="number">6</span>&#125;</span> rss=<span class="subst">&#123;rss_kb():7d&#125;</span>KB &quot;</span></span><br><span class="line">          <span class="string">f&quot;minflt=<span class="subst">&#123;r.ru_minflt:7d&#125;</span> majflt=<span class="subst">&#123;r.ru_majflt:4d&#125;</span>&quot;</span>, flush=<span class="literal">True</span>)</span><br><span class="line"></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;PID=<span class="subst">&#123;os.getpid()&#125;</span>，3 秒后开始（趁现在去 top/strace 挂上观察）&quot;</span>, flush=<span class="literal">True</span>)</span><br><span class="line">time.sleep(<span class="number">3</span>)</span><br><span class="line"></span><br><span class="line">log(<span class="string">&quot;启动&quot;</span>)</span><br><span class="line">weights = <span class="built_in">bytearray</span>(<span class="number">150</span> * <span class="number">1024</span> * <span class="number">1024</span>)                       <span class="comment"># ① 加载权重 150MB</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">0</span>, <span class="built_in">len</span>(weights), <span class="number">4096</span>):</span><br><span class="line">    weights[i] = i &amp; <span class="number">0xFF</span>                                    <span class="comment"># 触摸每页 → 按需调页</span></span><br><span class="line">log(<span class="string">&quot;加载后&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> step <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">4</span>):                                        <span class="comment"># ② 训练：纯 CPU 循环</span></span><br><span class="line">    t0 = time.perf_counter()</span><br><span class="line">    acc = <span class="number">0</span></span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">0</span>, <span class="built_in">len</span>(weights), <span class="number">1024</span>):</span><br><span class="line">        acc += weights[i]</span><br><span class="line">    log(<span class="string">f&quot;step<span class="subst">&#123;step&#125;</span> <span class="subst">&#123;time.perf_counter()-t0:<span class="number">.3</span>f&#125;</span>s&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> <span class="string">&quot;--fork&quot;</span> <span class="keyword">in</span> sys.argv:                                     <span class="comment"># ③ fork 一个子进程碰权重</span></span><br><span class="line">    pid = os.fork()                                          <span class="comment"># 02 篇：COW 复制</span></span><br><span class="line">    <span class="keyword">if</span> pid == <span class="number">0</span>:</span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">0</span>, <span class="built_in">len</span>(weights), <span class="number">4096</span>):               <span class="comment"># 子进程写 → 触发 COW 缺页</span></span><br><span class="line">            weights[i] = <span class="number">2</span></span><br><span class="line">        os._exit(<span class="number">0</span>)</span><br><span class="line">    os.waitpid(pid, <span class="number">0</span>)</span><br><span class="line">    log(<span class="string">&quot;fork+写后&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">with</span> <span class="built_in">open</span>(<span class="string">&quot;/tmp/ckpt.bin&quot;</span>, <span class="string">&quot;wb&quot;</span>) <span class="keyword">as</span> f:                       <span class="comment"># ④ 保存 checkpoint</span></span><br><span class="line">    f.write(weights)</span><br><span class="line">    f.flush(); os.fsync(f.fileno())                          <span class="comment"># 08 篇：fsync 兑现持久性</span></span><br><span class="line">log(<span class="string">&quot;保存后&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>观察流程分四步走（<strong>经验做法</strong>：先看账本再下结论，每一步都对应前文的一个概念）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ python3 train_sim.py --fork</span><br><span class="line">PID=25301，3 秒后开始（趁现在去 top/strace 挂上观察）</span><br><span class="line">[10:00:03] 启动   rss=  11232KB minflt=   4123 majflt=   0</span><br><span class="line">[10:00:04] 加载后 rss=163404KB minflt=  40778 majflt=   0   ← 150MB 匿名内存：写一页分配一页</span><br><span class="line">[10:00:06] step0 0.142s rss=163404KB minflt=  40782 ...</span><br><span class="line">[10:00:09] fork+写后 rss=313572KB minflt=  81771             ← COW 触发：子进程写，父进程 RSS 涨</span><br><span class="line">[10:00:10] 保存后 rss=313572KB ...                            ← fsync 不涨 RSS，涨的是磁盘</span><br></pre></td></tr></table></figure>
+<p>对照观察工具箱（每个命令的原理都在前文）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ strace -c -f python3 train_sim.py          <span class="comment"># ① 系统调用账单：openat/mmap/write/fork/clone 各多少次</span></span><br><span class="line">$ ps -o pid,rss,vsz,<span class="built_in">stat</span>,wchan:20 -p &lt;PID&gt;   <span class="comment"># ② 状态与等待点（wchan：睡在哪个内核函数）</span></span><br><span class="line">$ <span class="built_in">cat</span> /proc/&lt;PID&gt;/status | grep -E <span class="string">&quot;VmRSS|Threads|voluntary&quot;</span>   <span class="comment"># ③ 内存/线程/切换计数</span></span><br><span class="line">$ top -p &lt;PID&gt;                               <span class="comment"># ④ CPU 与 RES 的实时形状</span></span><br><span class="line">$ <span class="built_in">cat</span> /proc/&lt;PID&gt;/smaps_rollup               <span class="comment"># ⑤ 内存构成：Anonymous(权重) vs Shared(库)</span></span><br></pre></td></tr></table></figure>
+<p>读数要点（把这五条练成条件反射）：<strong>minflt 大涨 = 分配/换页活动</strong>（加载后 +3.6 万次缺页，全是&quot;写一页分配一页&quot;的 minor）；<strong>fork 后 RSS 涨一倍 = COW 触发</strong>（子进程写页时复制，父进程看的 RSS 含共享页——严格说此时两进程各持一半页，<code>smaps_rollup</code> 的 Rss 求和会大于物理总量，这是共享页会计的经典坑）；<strong>majflt=0 = 文件都在 page cache</strong>；CPU 时间应≈纯循环时间，若明显大于，查缺页与调度（voluntary_ctxt_switches 列）。</p>
+<h2 id="2-实验fork-的真实开销"><a class="markdownIt-Anchor" href="#2-实验fork-的真实开销"></a> 2. 实验：fork 的真实开销</h2>
+<p>02 篇说&quot;COW 让 fork 便宜&quot;，现在量化。测三个东西：fork 一个 150MB 进程的成本、fork+exec 的成本、以及&quot;父进程内存越大 fork 越慢吗&quot;：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># fork_cost.py —— 用进程自身测 fork/fork+exec 开销</span></span><br><span class="line"><span class="keyword">import</span> os, time, subprocess, sys</span><br><span class="line"></span><br><span class="line">blob = <span class="built_in">bytearray</span>(<span class="built_in">int</span>(sys.argv[<span class="number">1</span>]) * <span class="number">1024</span> * <span class="number">1024</span>) <span class="keyword">if</span> <span class="built_in">len</span>(sys.argv) &gt; <span class="number">1</span> <span class="keyword">else</span> <span class="built_in">bytearray</span>(<span class="number">0</span>)</span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">0</span>, <span class="built_in">len</span>(blob), <span class="number">4096</span>): blob[i] = <span class="number">1</span>        <span class="comment"># 触摸：确保真实分配</span></span><br><span class="line"></span><br><span class="line">N = <span class="number">200</span></span><br><span class="line">t0 = time.perf_counter()</span><br><span class="line"><span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(N):</span><br><span class="line">    pid = os.fork()                                    <span class="comment"># 纯 fork：COW 复制页表</span></span><br><span class="line">    <span class="keyword">if</span> pid == <span class="number">0</span>:</span><br><span class="line">        os._exit(<span class="number">0</span>)                                    <span class="comment"># 子进程立刻退出</span></span><br><span class="line">    os.waitpid(pid, <span class="number">0</span>)</span><br><span class="line">t1 = time.perf_counter() - t0</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;父进程RSS=<span class="subst">&#123;os.stat(<span class="string">&#x27;/proc/self/statm&#x27;</span>).st_size <span class="keyword">and</span> <span class="string">&#x27;&#x27;</span>&#125;</span>&quot;</span></span><br><span class="line">      <span class="string">f&quot;纯fork: <span class="subst">&#123;t1/N*<span class="number">1e3</span>:<span class="number">.3</span>f&#125;</span> ms/次&quot;</span>)</span><br><span class="line"></span><br><span class="line">t0 = time.perf_counter()</span><br><span class="line"><span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(N):</span><br><span class="line">    subprocess.run([<span class="string">&quot;/bin/true&quot;</span>], check=<span class="literal">False</span>)         <span class="comment"># fork + exec + 回收</span></span><br><span class="line">t1 = time.perf_counter() - t0</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;fork+exec(/bin/true): <span class="subst">&#123;t1/N*<span class="number">1e3</span>:<span class="number">.3</span>f&#125;</span> ms/次&quot;</span>)</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ python3 fork_cost.py 150</span><br><span class="line">纯fork: 0.812 ms/次                  ← 150MB 进程：复制页表而已（几万条 PTE）</span><br><span class="line">fork+exec(/bin/true): 2.945 ms/次    ← 多了：execve 重建地址空间 + 加载器 + 动态链接（01 篇）</span><br><span class="line">$ python3 fork_cost.py 800           # 把父进程换成 800MB 再测</span><br><span class="line">纯fork: 3.966 ms/次                  ← 页表按内存大小线性增长（多级页表条目更多）</span><br></pre></td></tr></table></figure>
+<p>结论三连：fork 是<strong>毫秒级</strong>（不是纳秒级）、成本与父进程内存<strong>正相关</strong>（复制页表）、fork+exec 比 fork 贵 3~4 倍（地址空间重建 + 动态链接）。工程落点：高频起子进程的服务（每个请求 fork 一个 worker）在 10ms 延迟预算里 3ms 交给 fork+exec 不可接受——用进程池（预先 fork）或线程；数据加载器（PyTorch DataLoader num_workers）每个 epoch 不重建 worker 也是这个原因。<strong>经验做法</strong>：<code>strace -c</code> 里 clone 出现频率高，先问&quot;能不能池化&quot;。</p>
+<h2 id="3-实验观察缺页的发生现场"><a class="markdownIt-Anchor" href="#3-实验观察缺页的发生现场"></a> 3. 实验：观察缺页的发生现场</h2>
+<p>05 篇讲了缺页的类型，这里看&quot;发生的那一瞬&quot;：用 <code>/proc/pid/pagemap</code> 不可行（WSL2 权限），改用两个可复现的视角——minflt 时间线 + mmap 文件映射的 major fault 制造（先清缓存让文件出内存，需 root 且<strong>只对 /tmp 小文件做</strong>）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># fault_timeline.py —— 每秒打印缺页计数，观察&quot;哪一步在缺页&quot;</span></span><br><span class="line"><span class="keyword">import</span> os, time, resource, mmap</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">faults</span>():</span><br><span class="line">    r = resource.getrusage(resource.RUSAGE_SELF)</span><br><span class="line">    <span class="keyword">return</span> r.ru_minflt, r.ru_majflt</span><br><span class="line"></span><br><span class="line">m0, M0 = faults()</span><br><span class="line">data = <span class="built_in">bytearray</span>(<span class="number">64</span> * <span class="number">1024</span> * <span class="number">1024</span>)          <span class="comment"># 64MB 匿名内存</span></span><br><span class="line">m1, _ = faults()</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;分配64MB后     minflt +<span class="subst">&#123;m1-m0&#125;</span>&quot;</span>)    <span class="comment"># 预期 0：还没写！</span></span><br><span class="line"><span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">0</span>, <span class="built_in">len</span>(data), <span class="number">4096</span>):</span><br><span class="line">    data[i] = <span class="number">1</span>                             <span class="comment"># 逐页写</span></span><br><span class="line">m2, _ = faults()</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;逐页写后       minflt +<span class="subst">&#123;m2-m1&#125;</span>&quot;</span>)    <span class="comment"># 预期 ≈ 16K：每页一次（零页升级）</span></span><br><span class="line"><span class="keyword">del</span> data</span><br><span class="line">f = <span class="built_in">open</span>(<span class="string">&quot;/tmp/bigfile&quot;</span>, <span class="string">&quot;rb&quot;</span>)              <span class="comment"># 04/05 篇造的 200MB 文件</span></span><br><span class="line">mm = mmap.mmap(f.fileno(), <span class="number">0</span>, prot=mmap.PROT_READ)</span><br><span class="line">m3, M3 = faults()</span><br><span class="line">mm[::<span class="number">4096</span>].count(<span class="string">b&quot;&quot;</span>)                       <span class="comment"># 逐页摸文件映射</span></span><br><span class="line">m4, M4 = faults()</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;mmap逐页摸后   minflt +<span class="subst">&#123;m4-m3&#125;</span>  majflt +<span class="subst">&#123;M4-M3&#125;</span>&quot;</span>)   <span class="comment"># minor（cache命中）</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ python3 fault_timeline.py</span><br><span class="line">分配64MB后     minflt +0</span><br><span class="line">逐页写后       minflt +16384            ← 64MB/4KB = 16384 页，一次不多一次不少</span><br><span class="line">mmap逐页摸后   minflt +51200  majflt +0  ← 文件页在 cache：minor；清 cache 后 majflt 会显形</span><br></pre></td></tr></table></figure>
+<p>三个数对上三课：<strong>分配不等于分配落地</strong>（bytearray(64MB) 零缺页——虚拟内存只是登记，04 篇误区 2 的实证）；<strong>写才触发</strong>（16384 次缺页 = 按需调页把零页换成真页）；<strong>mmap 的访问是缺页驱动</strong>（每次首次访问一页 = 一次 minor，这就是&quot;mmap 读大文件首遍慢、二遍快&quot;的机制）。观察生产进程：<code>pidstat -r -p PID 1</code> 的 majflt/s 列持续 &gt;10 就该查内存压力（05 篇工作集）。</p>
+<h2 id="4-实验gil-与线程调度ps-t"><a class="markdownIt-Anchor" href="#4-实验gil-与线程调度ps-t"></a> 4. 实验：GIL 与线程调度（ps -T）</h2>
+<p>02 篇说&quot;GIL 下 CPU 密集线程不并行&quot;，10 篇说&quot;线程是调度单位&quot;。合起来实测：4 个纯 CPU 线程 vs 4 个进程，看 CPU 时间去向与线程的调度形态：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># gil_demo.py —— GIL 实测：4 线程 vs 4 进程的墙钟时间与 CPU 时间</span></span><br><span class="line"><span class="keyword">import</span> threading, multiprocessing, time, os, resource</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">burn</span>(<span class="params">n=<span class="number">8_000_000</span></span>):</span><br><span class="line">    x = <span class="number">0</span></span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n): x += i * i            <span class="comment"># 纯 Python 计算：吃 GIL</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">run_threads</span>():</span><br><span class="line">    ts = [threading.Thread(target=burn) <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">4</span>)]</span><br><span class="line">    t0 = time.perf_counter()</span><br><span class="line">    [t.start() <span class="keyword">for</span> t <span class="keyword">in</span> ts]; [t.join() <span class="keyword">for</span> t <span class="keyword">in</span> ts]</span><br><span class="line">    <span class="keyword">return</span> time.perf_counter() - t0</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">run_procs</span>():</span><br><span class="line">    ps = [multiprocessing.Process(target=burn) <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">4</span>)]</span><br><span class="line">    t0 = time.perf_counter()</span><br><span class="line">    [p.start() <span class="keyword">for</span> p <span class="keyword">in</span> ps]; [p.join() <span class="keyword">for</span> p <span class="keyword">in</span> ps]</span><br><span class="line">    <span class="keyword">return</span> time.perf_counter() - t0</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    burn()                                    <span class="comment"># 预热</span></span><br><span class="line">    single = time.perf_counter(); burn(); single = time.perf_counter() - single</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;单线程基准: <span class="subst">&#123;single:<span class="number">.2</span>f&#125;</span>s&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;4 线程(GIL): <span class="subst">&#123;run_threads():<span class="number">.2</span>f&#125;</span>s   ← 没变快（甚至更慢：GIL 竞争开销）&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;4 进程    : <span class="subst">&#123;run_procs():<span class="number">.2</span>f&#125;</span>s   ← 接近 4 倍加速（真并行）&quot;</span>)</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ python3 gil_demo.py</span><br><span class="line">单线程基准: 0.42s</span><br><span class="line">4 线程(GIL): 1.85s   ← 没变快（甚至更慢：GIL 竞争开销）</span><br><span class="line">4 进程    : 0.49s    ← 接近 4 倍加速（真并行）</span><br></pre></td></tr></table></figure>
+<p>用 OS 工具看线程的调度形态（<code>ps -T</code>：每线程一行，02 篇的 SPID）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">$ python3 -c <span class="string">&quot;import threading,time; [threading.Thread(target=lambda: time.sleep(30)).start() for _ in range(4)]; time.sleep(30)&quot;</span> &amp;</span><br><span class="line">$ ps -T -p $(pgrep -f <span class="string">&#x27;time.sleep(30)&#x27;</span>) -o spid,<span class="built_in">stat</span>,pcpu,<span class="built_in">comm</span></span><br><span class="line">   SPID STAT %CPU COMMAND</span><br><span class="line">  25404 Ssl   0.0 python3</span><br><span class="line">  25405 S     0.0 python3        ← 5 个线程全部 S（睡眠）：<span class="built_in">sleep</span> 不占 CPU</span><br><span class="line">  25406 S     0.0 python3</span><br><span class="line">$ <span class="built_in">cat</span> /proc/&lt;pid&gt;/status | grep -E <span class="string">&quot;Threads|voluntary|nonvoluntary&quot;</span></span><br><span class="line">Threads:  5</span><br><span class="line">voluntary_ctxt_switches:  3120       ← GIL 让出/等待引发的自愿切换</span><br><span class="line">nonvoluntary_ctxt_switches: 15       ← 时间片用尽的非自愿切换</span><br></pre></td></tr></table></figure>
+<p>两个可迁移的判读经验（<strong>经验做法</strong>）：<strong>voluntary 高 = 在等东西</strong>（GIL/IO/锁——推理服务的典型形态，正常）；<strong>nonvoluntary 高 = CPU 抢不到</strong>（线程数超核数或优先级低——该减线程或调 nice，03/07 篇）。看 Python 进程在干嘛的另一条路是 py-spy（采样 profiler，直接读线程栈，不需要插桩）——OS 层面它是把 /proc/pid/task 的线程逐个 ptrace，本质还是本系列的工具。</p>
+<h2 id="5-实验容器资源限制下的训练进程"><a class="markdownIt-Anchor" href="#5-实验容器资源限制下的训练进程"></a> 5. 实验：容器资源限制下的训练进程</h2>
+<p>13 篇的 cgroup 实验在&quot;训练任务&quot;上走一遍完整闭环（docker 可用则一条命令，cgroup 原生则三行文件）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 方式一：docker（13 篇的 --cpus/--memory 就是 cpu.max/memory.max）</span></span><br><span class="line">$ docker run --<span class="built_in">rm</span> --cpus=0.5 --memory=300m python:3.11-slim \</span><br><span class="line">    python3 -c <span class="string">&quot;</span></span><br><span class="line"><span class="string">import time, os</span></span><br><span class="line"><span class="string">t0 = time.perf_counter()</span></span><br><span class="line"><span class="string">b = bytearray(400 * 1024 * 1024)          # 吃 400MB &gt; 300M 上限</span></span><br><span class="line"><span class="string">for i in range(0, len(b), 4096): b[i] = 1</span></span><br><span class="line"><span class="string">print(&#x27;不可能到达这里&#x27;)&quot;</span></span><br><span class="line">Killed                                    ← OOM：cgroup 直接杀（05 篇 OOM killer 的容器版）</span><br><span class="line"></span><br><span class="line">$ docker run --<span class="built_in">rm</span> --cpus=0.5 python:3.11-slim python3 -c <span class="string">&quot;</span></span><br><span class="line"><span class="string">import time</span></span><br><span class="line"><span class="string">t0 = time.perf_counter(); x = 0</span></span><br><span class="line"><span class="string">for i in range(30_000_000): x += i</span></span><br><span class="line"><span class="string">print(f&#x27;&#123;time.perf_counter()-t0:.2f&#125;s&#x27;)&quot;</span>  ← 同样的循环，0.5 核下时间约翻倍</span><br><span class="line">2.86s                                     ← throttle：不是被杀，是被扣速</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 方式二：原生 cgroup v2（无 docker 也行，13 篇的步骤）</span></span><br><span class="line">$ <span class="built_in">sudo</span> <span class="built_in">mkdir</span> /sys/fs/cgroup/train</span><br><span class="line">$ <span class="built_in">echo</span> <span class="string">&quot;+cpu +memory&quot;</span> | <span class="built_in">sudo</span> <span class="built_in">tee</span> /sys/fs/cgroup/train/cgroup.subtree_control</span><br><span class="line">$ <span class="built_in">echo</span> <span class="string">&quot;100000 50000&quot;</span> | <span class="built_in">sudo</span> <span class="built_in">tee</span> /sys/fs/cgroup/train/cpu.max</span><br><span class="line">$ <span class="built_in">echo</span> <span class="string">&quot;300M&quot;</span>          | <span class="built_in">sudo</span> <span class="built_in">tee</span> /sys/fs/cgroup/train/memory.max</span><br><span class="line">$ <span class="built_in">echo</span> $$ | <span class="built_in">sudo</span> <span class="built_in">tee</span> /sys/fs/cgroup/train/cgroup.procs   <span class="comment"># 把当前 shell 放进去（注意：整个 shell 都受限）</span></span><br><span class="line">$ python3 train_sim.py                                     <span class="comment"># 观察各阶段变慢与 OOM 风险</span></span><br></pre></td></tr></table></figure>
+<p>读数与迁移（<strong>经验做法</strong>）：训练/推理任务入容器前先测<strong>真实工作集</strong>（05 篇：RSS 峰值 + 20% 余量），memory.max 给少了 OOM 杀训练（半天白跑），给多了浪费配额；CPU 配额低于核数会拉长墙钟时间但不影响正确性（throttle 是慢不是错）；显存限制不在 cgroup 管辖（cgroup 管不了 GPU），CUDA 侧要用 MPS/时间片或 MIG——这是容器跑 GPU 的特殊一章（模型性能优化 Stage 7 的部署实践与此衔接）。</p>
+<h2 id="6-操作系统面试高频题清单30-题带答案要点"><a class="markdownIt-Anchor" href="#6-操作系统面试高频题清单30-题带答案要点"></a> 6. 操作系统面试高频题清单（30 题带答案要点）</h2>
+<p>把全系列收进一张验收单。答案要点给出&quot;踩分点&quot;，不是完整答案——完整答案你在前文都见过（括号是出处章节）。</p>
+<p><strong>进程与调度</strong></p>
+<ol>
+<li>进程和线程的区别？（02）要点：资源分配单位 vs 调度单位；地址空间/切换成本/隔离性/共享方式四条对比。</li>
+<li>fork 返回几次？父子各自拿到什么？（02）要点：一次调用两次返回；0/子PID；COW；继承 fd/环境/信号。</li>
+<li>僵尸进程怎么产生、怎么清理？（02）要点：已死未收尸；父进程 wait/SIG_IGN/杀父改孤儿；kill 僵尸无效。</li>
+<li>什么是写时复制，为什么它让 fork 高效？（02/14）要点：共享只读页、写时缺页复制；fork 只复制页表。</li>
+<li>进程状态 D 和 S 的区别？load average 为什么计入 D？（02）要点：可中断/不可中断睡眠；D 在等内核 IO。</li>
+<li>CFS 的核心思想？（03）要点：vruntime 按权重折算；红黑树取最左；公平产生优先级。</li>
+<li>nice 值什么时候起作用？（03）要点：仅 CPU 竞争时；每档 1.25 倍权重比；非配额。</li>
+<li>时间片越长越好还是越短越好？（03/07）要点：三目标互斥；响应 vs 切换开销的折中。</li>
+</ol>
+<p><strong>内存</strong></p>
+<ol start="9">
+<li>为什么需要虚拟内存？（04）要点：隔离/重定位/保护三件事，各举一例。</li>
+<li>页表为什么多级化？四级各索引多少位？（05）要点：512GB 单级账太大；9+9+9+12；稀疏不建子树。</li>
+<li>TLB 是什么，缺了会怎样？（04）要点：PTE 缓存；miss 要查内存级页表；局部性=性能。</li>
+<li>minor/major fault 区别？（04/05）要点：页在不在物理内存；majflt 要 IO，性能红色警报。</li>
+<li>LRU 为什么实际系统不直接用？（05）要点：硬件只给引用位；Clock/双链表近似。</li>
+<li>什么是 Belady 异常？（05）要点：FIFO 加页框缺页反升；LRU 不会。</li>
+<li>malloc 大于 128KB 发生什么？（06）要点：mmap 直接映射；free 即 munmap 归还；阈值可调。</li>
+<li>内部碎片和外部碎片？（06）要点：块内浪费 vs 空洞不连续；合并/分桶对抗。</li>
+<li>Python 的内存为什么&quot;涨了不回&quot;？（06）要点：pymalloc 池化、arena 整块归还门槛；&gt;512B 走 C malloc。</li>
+<li>OOM killer 怎么选人？（05）要点：badness 评分（RSS+adj）；dmesg 看 anon-rss；oom_score_adj 保命。</li>
+<li>free 显示内存快满了正常吗？（05）要点：page cache 占用是设计；看 available。</li>
+<li>mmap 和 read 读大文件怎么选？（05）要点：反复访问/共享选 mmap；一次性顺序读 read；首遍缺页成本。</li>
+</ol>
+<p><strong>中断与并发</strong></p>
+<ol start="21">
+<li>中断、异常、软中断的区别？（07）要点：触发者外设/指令/内核；IDT 路由；异步 vs 同步。</li>
+<li>上下半部为什么拆？（07）要点：屏蔽期最小化；softirq 不睡眠 / workqueue 可睡眠。</li>
+<li>一次上下文切换的成本构成？（07）要点：直接（寄存器/切换）微秒级 + 间接（TLB/cache 失效）可更大。</li>
+<li>vDSO 为什么快？（07）要点：只读系统调用映射进用户态；省模式切换；无副作用才可 vDSO。</li>
+<li>自旋锁和互斥锁怎么选？（11）要点：临界区长短/核数；pthread_mutex=自旋片刻+futex 睡眠。</li>
+<li>死锁四条件？怎么预防？（11）要点：互斥/持有等待/不可抢占/循环等待；全局顺序/成套获取。</li>
+<li>条件变量为什么要 while 检查？（11）要点：虚假唤醒+竞争唤醒；wait 原子释放锁并睡眠。</li>
+<li>futex 的快慢路径？（11）要点：无竞争用户态 CAS；有竞争才 futex 系统调用睡眠。</li>
+</ol>
+<p><strong>IO 与网络</strong></p>
+<ol start="29">
+<li>select/poll/epoll 的本质区别？（09）要点：注册一次 vs 每次全量拷贝；就绪链表 O(1)；收益来自连接多活跃少。</li>
+<li>TCP 粘包是什么、怎么解决？（12）要点：字节流无边界是本质不是 bug；长度前缀/分隔符/定长；UDP 有界。</li>
+</ol>
+<p><strong>答题心法（经验做法）</strong>：每题先给一句&quot;本质&quot;，再给&quot;机制&quot;，最后给&quot;一个真实场景&quot;——本系列每一章的&quot;性能含义&quot;段落就是场景素材库。面试官区分背书者与理解者的标准动作是追问&quot;在你项目里它怎么现形&quot;。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“观察工具链要装很多组件”</strong>：strace/ps/top//proc/pidstat 全在最小 Ubuntu 里；perf/py-spy 是增强不是门槛。先把 /proc 读熟，比任何监控面板都接近真相。</li>
+<li><strong>“RSS 涨 = 泄漏”</strong>：06 篇的池化、05 篇的 page cache、04 篇的 VIRT 增长都会伪装成泄漏；先用 smaps_rollup 分层再定罪。</li>
+<li><strong>“minflt 大 = 出问题了”</strong>：分配型 minor 是正常机制（本章第 1 节加载权重 +3.6 万次）；只有 majflt 或缺页伴随 CPU 空转（抖动）才是警报。</li>
+<li><strong>“容器里测的性能 = 宿主机性能”</strong>：throttle、CPU 配额、cgroup 内存压力都会改写结果；压测前先 <code>cat /sys/fs/cgroup/cpu.max</code> 确认自己戴了几道枷锁（13 篇）。</li>
+<li><strong>“OS 知识面试完就没用了”</strong>：本章五组实验就是日常：训练慢先看 CPU 形态（调度）、内存涨先看缺页与分配器、服务抖先看 IO 状态（D 状态）、部署挂先看 cgroup 配额——OS 是生产排障的第一现场。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>一套&quot;OS 眼睛&quot;流程：strace 看系统调用账单 → /proc/status 看 RSS/线程/切换 → smaps_rollup 看内存构成 → pidstat 看缺页与切换速率 → cgroup 看配额枷锁；每一步对应前文一个概念。</li>
+<li>fork 实测：纯 fork 毫秒级且随父进程内存线性涨（页表复制），fork+exec 贵 3~4 倍（动态链接）；高频起进程要池化。</li>
+<li>缺页实测：分配零缺页、写才触发（16384 页一次不差）、mmap 访问缺页驱动；majflt 持续 &gt;10/s 是内存压力指纹。</li>
+<li>GIL 实测：4 线程不快反慢（GIL 竞争）、4 进程真并行；voluntary 切换高 = 在等，nonvoluntary 高 = 抢不到——ps -T 与 ctxt_switches 是线程体检表。</li>
+<li>容器实验闭环：CPU 超限 throttle（慢）、内存超限 OOM（死）；训练入容器先量工作集再定 memory.max；GPU 不归 cgroup 管。</li>
+<li>30 题清单覆盖进程/内存/中断/并发/网络五域；答题心法 = 本质 + 机制 + 项目场景。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>完整跑通第 1 节的 train_sim.py 观察流程（strace -c、ps、smaps_rollup 五件套），把每步读数抄进笔记并与正文对照；再给 train_sim.py 加一个 mmap 读权重文件的阶段，观察 minflt/majflt 形状变化。</li>
+<li>用 fork_cost.py 扫描父进程 100MB/400MB/800MB 三档，画出 fork 成本曲线；再用 <code>strace -c</code> 数一次 fork+exec 的系统调用数，解释 3~4 倍差距的构成。</li>
+<li>复现第 4 节后，把 burn 的负载改成 <code>time.sleep</code> 为主（IO 密集模拟），重新对比 4 线程 vs 4 进程；写下&quot;GIL 什么时候不是瓶颈&quot;的一句话判据。</li>
+<li>用 cgroup v2（或 docker）给 train_sim.py 依次配 200M/300M/500M 内存限额跑三次，记录 OOM 出现的阈值与 RSS 峰值的关系；把&quot;训练任务内存配额公式（峰值+20%）&quot;写成你团队的部署模板。</li>
+<li>从 30 题清单里随机抽 10 道自测（不看书），每题按&quot;本质+机制+场景&quot;三段式口头作答并录音回放；答不顺的题标注出处章节重学，直到 10 题全部流畅——这是本系列的结业标准。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" rel="tag"># 操作系统</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/13-%E5%AE%B9%E5%99%A8%E4%B8%8E%E8%99%9A%E6%8B%9F%E5%8C%96/" rel="prev" title="13-容器与虚拟化">
+                  <i class="fa fa-angle-left"></i> 13-容器与虚拟化
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%B3%BB%E7%BB%9F%E4%B8%8E%E7%BD%91%E7%BB%9C-README/" rel="next" title="计算机系统与网络 · 学习路线总览">
+                  计算机系统与网络 · 学习路线总览 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

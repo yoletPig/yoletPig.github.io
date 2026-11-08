@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 从补码的动机出发理解整数的机器表示，能预判符号扩展、无符号比较、溢出这三类经典翻车现场。 - 逐位拆解 IEEE 754：亲手把 0.1f 拆成符号&#x2F;指数&#x2F;尾数，从此 float32&#x2F;float64&#x2F;fp16&#x2F;bf16 的位分配不再是背…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="05-数字的表示与浮点陷阱">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/05-%E6%95%B0%E5%AD%97%E7%9A%84%E8%A1%A8%E7%A4%BA%E4%B8%8E%E6%B5%AE%E7%82%B9%E9%99%B7%E9%98%B1/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 从补码的动机出发理解整数的机器表示，能预判符号扩展、无符号比较、溢出这三类经典翻车现场。 - 逐位拆解 IEEE 754：亲手把 0.1f 拆成符号&#x2F;指数&#x2F;尾数，从此 float32&#x2F;float64&#x2F;fp16&#x2F;bf16 的位分配不再是背…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T08:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.522Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="网络">
+<meta property="article:tag" content="计算机系统">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/05-%E6%95%B0%E5%AD%97%E7%9A%84%E8%A1%A8%E7%A4%BA%E4%B8%8E%E6%B5%AE%E7%82%B9%E9%99%B7%E9%98%B1/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/05-%E6%95%B0%E5%AD%97%E7%9A%84%E8%A1%A8%E7%A4%BA%E4%B8%8E%E6%B5%AE%E7%82%B9%E9%99%B7%E9%98%B1/","path":"2026/09/02/05-数字的表示与浮点陷阱/","title":"05-数字的表示与浮点陷阱"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>05-数字的表示与浮点陷阱 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#05-%E6%95%B0%E5%AD%97%E7%9A%84%E8%A1%A8%E7%A4%BA%E4%B8%8E%E6%B5%AE%E7%82%B9%E9%99%B7%E9%98%B1"><span class="nav-number">1.</span> <span class="nav-text"> 05 - 数字的表示与浮点陷阱</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E8%A1%A5%E7%A0%81%E4%B8%BA%E4%BB%80%E4%B9%88%E8%B4%9F%E6%95%B0%E8%A6%81%E8%BF%99%E6%A0%B7%E5%AD%98"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 补码：为什么负数要这样存</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E6%95%B4%E6%95%B0%E6%BA%A2%E5%87%BA%E4%B8%8E%E7%AC%A6%E5%8F%B7%E9%99%B7%E9%98%B1%E4%B8%89%E4%B8%AA%E7%9C%9F%E5%AE%9E%E7%BF%BB%E8%BD%A6%E7%8E%B0%E5%9C%BA"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 整数溢出与符号陷阱：三个真实翻车现场</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-ieee-754%E9%80%90%E4%BD%8D%E6%8B%86%E8%A7%A3%E4%B8%80%E4%B8%AA%E7%9C%9F%E5%AE%9E%E6%95%B0%E5%AD%97"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. IEEE 754：逐位拆解一个真实数字</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E7%B2%BE%E5%BA%A6%E9%97%AE%E9%A2%98%E7%9A%84%E4%B8%A4%E4%B8%AA%E7%BB%8F%E5%85%B8%E7%8E%B0%E5%9C%BA"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 精度问题的两个经典现场</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-kahan-%E6%B1%82%E5%92%8C%E7%BB%99%E8%AF%AF%E5%B7%AE%E8%AE%B0%E8%B4%A6"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. Kahan 求和：给误差&quot;记账&quot;</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-float16-%E4%B8%8E-bfloat16%E6%B7%B1%E5%BA%A6%E5%AD%A6%E4%B9%A0%E4%B8%BA%E4%BB%80%E4%B9%88%E5%81%8F%E7%88%B1%E6%AE%8B%E7%BC%BA%E7%9A%84-bf16"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. float16 与 bfloat16：深度学习为什么偏爱&quot;残缺&quot;的 bf16</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-nan-%E4%B8%8E-inf%E4%BA%A7%E7%94%9F-%E4%BC%A0%E6%92%AD-%E6%8E%92%E6%9F%A5"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. NaN 与 Inf：产生、传播、排查</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/05-%E6%95%B0%E5%AD%97%E7%9A%84%E8%A1%A8%E7%A4%BA%E4%B8%8E%E6%B5%AE%E7%82%B9%E9%99%B7%E9%98%B1/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="05-数字的表示与浮点陷阱 | Yoleen的博客">
+      <meta itemprop="description" content="- 从补码的动机出发理解整数的机器表示，能预判符号扩展、无符号比较、溢出这三类经典翻车现场。 - 逐位拆解 IEEE 754：亲手把 0.1f 拆成符号&#x2F;指数&#x2F;尾数，从此 float32&#x2F;float64&#x2F;fp16&#x2F;bf16 的位分配不再是背…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          05-数字的表示与浮点陷阱
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 16:30:00" itemprop="dateCreated datePublished" datetime="2026-09-02T16:30:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%B3%BB%E7%BB%9F%E4%B8%8E%E7%BD%91%E7%BB%9C/" itemprop="url" rel="index"><span itemprop="name">计算机系统与网络</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 从补码的动机出发理解整数的机器表示，能预判符号扩展、无符号比较、溢出这三类经典翻车现场。 - 逐位拆解 IEEE 754：亲手把 0.1f 拆成符号/指数/尾数，从此 float32/float64/fp16/bf16 的位分配不再是背…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="05-数字的表示与浮点陷阱"><a class="markdownIt-Anchor" href="#05-数字的表示与浮点陷阱"></a> 05 - 数字的表示与浮点陷阱</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>从补码的动机出发理解整数的机器表示，能预判符号扩展、无符号比较、溢出这三类经典翻车现场。</li>
+<li>逐位拆解 IEEE 754：亲手把 0.1f 拆成符号/指数/尾数，从此 float32/float64/fp16/bf16 的位分配不再是背诵内容。</li>
+<li>掌握浮点误差的两个工程定律：0.1+0.2 != 0.3 的原因、大数吃小数的累加误差，并用 Kahan 求和实测修复。</li>
+<li>建立 fp16/bfloat16 的选型直觉（动态范围 vs 精度），以及 NaN/Inf 的产生-传播-排查路径。</li>
+</ul>
+<p>前置：01 章（位与指令层面）；本章是模型性能优化系列量化/混合精度话题的数值基础。</p>
+<h2 id="1-补码为什么负数要这样存"><a class="markdownIt-Anchor" href="#1-补码为什么负数要这样存"></a> 1. 补码：为什么负数要这样存</h2>
+<p>无符号数没悬念：8 位 <code>b7...b0</code> 值 = Σ bᵢ·2ⁱ。问题是怎么表示负数？三种历史方案里，补码（two’s complement）胜出的原因只有一个：<strong>让同一套加法器硬件同时服务有符号与无符号</strong>。补码定义：<code>-x</code> 的编码 = <code>~x + 1</code>（按位取反加一）。验证 8 位下 <code>3 + (-3)</code>：<code>00000011 + 11111101 = 1_00000000</code>，最高位进位丢弃后得 0 ✅——<strong>减法直接变成加法，模 2⁸ 算术</strong>，01 章辛苦搭的加法器一行不用改（CSAPP 2.2；P&amp;H 数章节 3.4 也从&quot;简化硬件&quot;角度推过）。</p>
+<p>补码的边界要背下来：8 位范围 [-128, 127]；32 位 [-2³¹, 2³¹-1]；64 位 [-9.2e18, 9.2e18]。注意<strong>范围不对称</strong>：负数比正数多一个（-128 没有正伙伴），这是 <code>abs(INT_MIN)</code> 仍为负、<code>INT_MIN / -1</code> 是未定义行为的根源。</p>
+<p>另一个必须预判的行为是<strong>符号扩展</strong>：8 位 <code>-1</code> 是 <code>11111111</code>，扩展到 32 位必须变成 <code>11111111111111111111111111111111</code>（仍是 -1）——高位复制符号位；而无符号 8 位 <code>255</code> 扩展时高位补 0。02 章的 <code>movsbl</code>/<code>movzbl</code> 两条指令正是这两个动作的硬件体现。<strong>ARM 注</strong>：x86-64 与 ARM64 的补码与扩展行为一致，差异不在表示，而在&quot;溢出是否置标志位&quot;等细节层面。</p>
+<h2 id="2-整数溢出与符号陷阱三个真实翻车现场"><a class="markdownIt-Anchor" href="#2-整数溢出与符号陷阱三个真实翻车现场"></a> 2. 整数溢出与符号陷阱：三个真实翻车现场</h2>
+<p><strong>现场一：有符号溢出是未定义行为。</strong> C 标准规定有符号整数溢出为 UB（C11 6.5/5），编译器可以假设它不发生——<code>for (int i=0; i&lt;=INT_MAX; i++)</code> 可能被优化成死循环；无符号溢出则是良定义的（模 2ⁿ 回绕）。<strong>经验做法</strong>：计数器、循环变量永远用 <code>size_t</code>/<code>long</code>；二进制协议字段长度检查要防 <code>len + 8 &lt; len</code> 式回绕。</p>
+<p><strong>现场二：无符号倒序循环死循环。</strong> <code>for (size_t i = n-1; i &gt;= 0; i--)</code>——<code>size_t</code> 永远 ≥0，条件永真，i 从 0 减一变成 SIZE_MAX，数组越界。正确写法 <code>for (size_t i = n; i-- &gt; 0;)</code>。</p>
+<p><strong>现场三：有符号/无符号混比。</strong> C 的&quot;通常算术转换&quot;规则：有符号与无符号比较时，<strong>有符号一方被转成无符号</strong>（C11 6.3.1.8）。于是：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="type">int</span> a = <span class="number">-1</span>;</span><br><span class="line"><span class="type">unsigned</span> b = <span class="number">1</span>;</span><br><span class="line"><span class="keyword">if</span> (a &lt; b) <span class="built_in">printf</span>(<span class="string">&quot;a&lt;b\n&quot;</span>); <span class="keyword">else</span> <span class="built_in">printf</span>(<span class="string">&quot;a&gt;=b\n&quot;</span>);</span><br><span class="line"><span class="comment">// 输出：a&gt;=b   —— 因为 a 被转成 0xFFFFFFFF，比 1 大</span></span><br></pre></td></tr></table></figure>
+<p>（试运行验证，输出 <code>a&gt;=b</code>。）<code>strlen</code> 返回 <code>size_t</code>，<code>if (strlen(s) - 10 &lt; 0)</code> 永假——短字符串时 <code>size_t</code> 下溢成天文数字。<strong>经验做法</strong>：开 <code>-Wall -Wextra</code>，<code>-Wsign-compare</code> 会把这类问题全揪出来；PyBind/Cython 传参时留意 Py_ssize_t（有符号）与 size_t（无符号）的转换点。</p>
+<h2 id="3-ieee-754逐位拆解一个真实数字"><a class="markdownIt-Anchor" href="#3-ieee-754逐位拆解一个真实数字"></a> 3. IEEE 754：逐位拆解一个真实数字</h2>
+<p>浮点的目标：用固定 32/64 位表示<strong>跨度极大</strong>的数。设计思路照搬科学计数法 <code>±1.M × 2^E</code>，IEEE 754（2008 版，CSAPP 2.4）规定了位布局：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">float32（32 位）：┌─1─┬────8────┬────────23────────┐</span><br><span class="line">                  │ S │ 指数 E   │    尾数 M          │   值 = (-1)^S × 1.M × 2^(E-127)</span><br><span class="line">float64（64 位）：┌─1─┬───11───┬────────52────────┐   bias=1023</span><br><span class="line">bf16/fp16：见 6 节</span><br></pre></td></tr></table></figure>
+<p>三个设计点：① 尾数省掉前导 1（规格化数恒为 <a target="_blank" rel="noopener" href="http://1.xxx">1.xxx</a>），<strong>白赚一位精度</strong>；② 指数用偏置码（bias）而非补码，使浮点比较可以当整数比较做（对排序/快速比较至关重要）；③ 指数全 0 表示非规格化数（渐近下溢），全 1 表示 Inf/NaN（见 7 节）。</p>
+<p><strong>亲手拆 0.1f</strong>（先跑代码拿真实位型）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// flt.c 摘录 —— 打印浮点数的位</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdint.h&gt;</span></span></span><br><span class="line"><span class="type">void</span> <span class="title function_">bits</span><span class="params">(<span class="type">float</span> f)</span>&#123;<span class="type">uint32_t</span> u;<span class="built_in">memcpy</span>(&amp;u,&amp;f,<span class="number">4</span>);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;%.4f = 0x%08X = &quot;</span>, f, u);</span><br><span class="line">    <span class="keyword">for</span>(<span class="type">int</span> i=<span class="number">31</span>;i&gt;=<span class="number">0</span>;i--) <span class="built_in">putchar</span>(((u&gt;&gt;i)&amp;<span class="number">1</span>)+<span class="string">&#x27;0&#x27;</span>);</span><br><span class="line">    <span class="built_in">putchar</span>(<span class="string">&#x27;\n&#x27;</span>);&#125;</span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">()</span>&#123; bits(<span class="number">0.1f</span>); bits(<span class="number">0.2f</span>); bits(<span class="number">0.3f</span>); bits(<span class="number">-6.5f</span>); bits(<span class="number">1.0f</span>); <span class="keyword">return</span> <span class="number">0</span>; &#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ gcc -O0 flt.c -o flt &amp;&amp; ./flt</span><br><span class="line">0.1000 = 0x3DCCCCCD = 00111101110011001100110011001101</span><br><span class="line">0.2000 = 0x3E4CCCCD = 00111110010011001100110011001101</span><br><span class="line">0.3000 = 0x3E99999A = 00111110100110011001100110011010</span><br><span class="line">-6.5000 = 0xC0D00000 = 11000000110100000000000000000000</span><br><span class="line">1.0000 = 0x3F800000 = 00111111100000000000000000000000</span><br></pre></td></tr></table></figure>
+<p>拆 <code>0.1f = 0x3DCCCCCD</code>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">S = 0（正）</span><br><span class="line">E = 01111011₂ = 123 → 真指数 = 123-127 = -4</span><br><span class="line">M = 1001100110011001100110 1₂（尾数最后进位舍入到 1）</span><br><span class="line">值 = 1.10011001100110011001101₂ × 2⁻⁴</span><br><span class="line">   = (1 + 1/2 + 1/16 + 1/32 + ...) × 0.0625 ≈ 0.100000001490116...</span><br></pre></td></tr></table></figure>
+<p>关键结论：<strong>0.1 在二进制里是无限循环小数（0.0̄0011̄），32 位存不下</strong>，机器里存的是&quot;最接近 0.1 的那个浮点数&quot; 0.100000001490116…。0.1≠0.1 的全部后续故事都从这一句来。对照 <code>1.0f = 0x3F800000</code>：E=127（真指数 0）、M=0（1.0 无小数部分）——最干净的浮点数。</p>
+<h2 id="4-精度问题的两个经典现场"><a class="markdownIt-Anchor" href="#4-精度问题的两个经典现场"></a> 4. 精度问题的两个经典现场</h2>
+<p><strong>现场一：0.1 + 0.2 != 0.3。</strong> 继续用 flt.c 的输出：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ python3 -c <span class="string">&quot;print(0.1+0.2, 0.1+0.2==0.3)&quot;</span></span><br><span class="line">0.30000000000000004 False</span><br></pre></td></tr></table></figure>
+<p>二进制视角（flt.c 的位型）：0.1f 和 0.2f 各自带尾数舍入误差，相加后误差叠加并对齐指数时再次舍入，结果落在 0.3 的&quot;下一个&quot;浮点数上。<strong>这不是 Python/浮点的 bug，是二进制定点的数学必然</strong>（IEEE 754 规定了每一步怎么舍，误差是有界的：|误差| ≤ 0.5 ulp）。工程结论（CSAPP 2.4.4 的建议）：浮点相等判断用 <code>fabs(a-b) &lt; eps</code>（eps 按量级取，如 1e-6·max(|a|,|b|)）；涉及钱用整数分或 Decimal。</p>
+<p><strong>现场二：累加误差（大数吃小数）。</strong> 朴素求和的误差模型：每次加法的相对误差 ε（float32 ε≈1.2e-7），总误差最坏 ∝ n·ε·Σ|xᵢ|。最阴险的形态是<strong>当部分和远大于新加数</strong>——<code>s = 1e8f; s += 1e-8f</code> 在 float32 下 s 完全不动（1e-8 相对 1e8 低于 2⁻²⁴ 的可分辨范围，被舍掉）。实测：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// flt.c 摘录 —— 1e7 次 1e-7 累加，朴素 vs Kahan</span></span><br><span class="line">    <span class="type">float</span> s=<span class="number">0.f</span>; <span class="keyword">for</span>(<span class="type">int</span> i=<span class="number">0</span>;i&lt;<span class="number">10000000</span>;i++) s+=<span class="number">1e-7</span>f;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;naive  1e7 x 1e-7 : %.7f\n&quot;</span>, s);</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ ./flt</span><br><span class="line">naive  1e7 x 1e-7 : 1.0647675      <span class="comment"># 真值 1.0，错了 6.5%！</span></span><br></pre></td></tr></table></figure>
+<h2 id="5-kahan-求和给误差记账"><a class="markdownIt-Anchor" href="#5-kahan-求和给误差记账"></a> 5. Kahan 求和：给误差&quot;记账&quot;</h2>
+<p>Kahan 补偿求和的思想非常朴素：<strong>每次舍掉的误差单独存起来，下次加回去</strong>（Kahan 1965；《Numerical Recipes》与 Higham《Accuracy and Stability of Numerical Algorithms》有完整误差分析）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// flt.c 摘录 —— Kahan 补偿求和</span></span><br><span class="line">    <span class="type">float</span> sk=<span class="number">0.f</span>, c=<span class="number">0.f</span>;                 <span class="comment">// c 是&quot;丢失的钱包&quot;</span></span><br><span class="line">    <span class="keyword">for</span>(<span class="type">int</span> i=<span class="number">0</span>;i&lt;<span class="number">10000000</span>;i++)&#123;</span><br><span class="line">        <span class="type">float</span> y=<span class="number">1e-7</span>f - c;               <span class="comment">// 把上次的舍入误差补回本次加数</span></span><br><span class="line">        <span class="type">float</span> t=sk+y;</span><br><span class="line">        c=(t-sk)-y;                      <span class="comment">// 记下这次又被舍掉的量</span></span><br><span class="line">        sk=t;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;Kahan  1e7 x 1e-7 : %.7f\n&quot;</span>, sk);</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ ./flt</span><br><span class="line">naive  1e7 x 1e-7 : 1.0647675</span><br><span class="line">Kahan  1e7 x 1e-7 : 1.0000000        <span class="comment"># 完美回到真值</span></span><br></pre></td></tr></table></figure>
+<p>（本篇 4 节输出里同时含两行，此处单独展示对比。）每步多 3 次浮点运算，把 O(n·ε·Σ|x|) 压到 O(ε·Σ|x|) 量级。<strong>经验做法</strong>：① 求和前把数据<strong>按大小排序或分组累加</strong>（pairwise 求和，NumPy 的 <code>np.sum</code> 默认用 pairwise，误差远小于朴素循环）；② 混合精度训练里梯度累积用 fp32 累加器（bf16 加数 + fp32 部分和），正是 Kahan 思想的简化版——用高精度&quot;钱包&quot;接住低精度加数的舍入误差；③ 并行归约（<code>torch.sum</code>）天然是 pairwise 树形结构，这也是为什么 GPU 上求和有时反而比 CPU 朴素循环更准。</p>
+<h2 id="6-float16-与-bfloat16深度学习为什么偏爱残缺的-bf16"><a class="markdownIt-Anchor" href="#6-float16-与-bfloat16深度学习为什么偏爱残缺的-bf16"></a> 6. float16 与 bfloat16：深度学习为什么偏爱&quot;残缺&quot;的 bf16</h2>
+<p>fp32 精度太高、太占带宽（03 章：推理是带宽受限），于是半精度登场。两者的位分配对比（IEEE 754 half 与 Google brain float 2018）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">fp32   : S EEEEEEEE MMMMMMMMMMMMMMMMMMMMMMMM   8 位指数 23 位尾数</span><br><span class="line">fp16   : S EEEEE  MMMMMMMMMM                  5 位指数 10 位尾数（IEEE 754 half）</span><br><span class="line">bf16   : S EEEEEEEE MMMMMMM                   8 位指数  7 位尾数（fp32 截断尾数）</span><br></pre></td></tr></table></figure>
+<ul>
+<li><strong>fp16</strong>：动态范围 ±65504，最小规格化数 6e-5。精度高（10 位尾数）但<strong>范围窄</strong>——梯度动辄小于 6e-5 下溢为 0，大值又容易溢出到 Inf，所以 fp16 训练必须配 loss scaling（把 loss 乘大，把梯度拉出下溢区，算完再缩回）。</li>
+<li><strong>bf16</strong>：指数位与 fp32 <strong>完全一致</strong>，动态范围与 fp32 相同（±3.4e38），只是尾数从 23 位砍到 7 位（相对精度 ~2⁻⁸≈0.4%）。<strong>fp32↔bf16 转换就是尾数截断</strong>，无下溢/上溢风险，几乎不需要 loss scaling——这是 A100/4090/TPU 上训练的事实标准。</li>
+<li>选型口诀（<strong>经验做法</strong>，与模型性能优化系列量化章互为表里）：<strong>要范围选 bf16（训练/推理默认），要精度选 fp16（配 scaling）或 fp32；部署端到 int8/int4 走量化</strong>。注意 CPU 上的历史包袱：x86 的 AVX512-BF16 才有原生 bf16，AVX2 只有 fp16 存储转换指令（F16C）——端侧 ARM 的 NEON 原生支持 fp16 向量运算，bf16 要 ARMv8.6+（RK3588 的 A76 是 ARMv8.2，bf16 硬件支持不完整，端侧量化常直接跳 int8）。</li>
+</ul>
+<h2 id="7-nan-与-inf产生-传播-排查"><a class="markdownIt-Anchor" href="#7-nan-与-inf产生-传播-排查"></a> 7. NaN 与 Inf：产生、传播、排查</h2>
+<p>特殊值编码（指数全 1）：<code>Inf = 尾数 0</code>，<code>NaN = 尾数非 0</code>（qNaN 静默传播，sNaN 触发异常）。产生路径速查：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Inf 的产生：1/0、溢出（1e39 超 fp32 范围）、tanh 反传 exp 溢出</span><br><span class="line">NaN 的产生：0/0、Inf-Inf、Inf×0、sqrt(-1)、log(-1) —— 数学上&quot;未定义&quot;的运算</span><br><span class="line">传播规律：NaN 感染一切（NaN+x=NaN、NaN&gt;x=False！比较永远返回假）</span><br></pre></td></tr></table></figure>
+<p>NaN 两个反直觉性质要背下来：<strong><code>nan != nan</code> 为真</strong>（比较运算符语义），所以 <code>x != x</code> 是判 NaN 的惯用法（<code>math.isnan</code> 内部就是这个）；<strong>NaN 与任何数比较都返回 False</strong>，因此 <code>max(a, b)</code> 遇 NaN 会静默返回另一个值——过滤逻辑被 NaN 无声击穿。实测：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ python3 -c <span class="string">&quot;</span></span><br><span class="line"><span class="string">import math</span></span><br><span class="line"><span class="string">x = float(&#x27;nan&#x27;)</span></span><br><span class="line"><span class="string">print(x == x, x != x, x &gt; 1, x &lt; 1)</span></span><br><span class="line"><span class="string">print(max(x, 1.0), min(x, 1.0))&quot;</span></span><br><span class="line">False True False False</span><br><span class="line">1.0 1.0</span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>（loss=NaN 排查清单，与训练工程直接对接）：① 先定位<strong>第一次</strong>出现 NaN 的 step（<code>torch.autograd.set_detect_anomaly(True)</code> 或在 loss 上插 assert）；② 常见嫌疑按概率排：学习率过大 → 梯度爆炸（开 grad clip）、fp16 未加 loss scaling → 换 bf16、输入含 NaN/未归一化 → 数据管道加 <code>torch.isfinite</code> 校验、除零/<code>log(0)</code> → 加 eps；③ 生产推理服务对输入做 <code>isfinite</code> 前置校验，防止 NaN 静默流过全图输出垃圾。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“浮点误差是随机的、不可控的”</strong>：IEEE 754 是确定性标准，每一步舍入都有定义；误差可以用模型分析（Kahan）、可以用算法控制（pairwise/补偿求和）。不可控的错觉来自&quot;没把中间值打印出来看&quot;。</li>
+<li><strong>“float 和 double 只差精度，行为一样”</strong>：差在 ulp 间距和误差累积速度，float32 累加 1e7 次 1e-7 错 6.5%（4 节实测），同样代码用 double 几乎无感——<strong>累加器/统计量的类型比数据类型更值得升精度</strong>。</li>
+<li><strong>“bf16 是 fp16 的升级版”</strong>：不是升级，是<strong>取舍反转</strong>——bf16 拿 3 位尾数换 3 位指数，精度降 8 倍、范围升 33 个数量级。任务需要哪种，取决于你的数是要&quot;更准&quot;还是&quot;不爆/不消失&quot;。</li>
+<li><strong>“整数运算总是精确的”</strong>：无符号回绕、有符号 UB、隐式转换（2 节三个现场）都在精确外表下埋雷；Python 的 int 无限精度反而让人失去对固定位宽的警惕，跨到 C/NumPy（<code>np.int32</code> 溢出回绕）时翻车。</li>
+<li><strong>“NaN 排查要靠玄学”</strong>：NaN 是确定性传播的，从输出往回二分（中间每层 assert isfinite）10 分钟内必定位；<code>detect_anomaly</code> 与逐层打印是标准流程，不是玄学。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>补码让一套加法器通吃加减法（模 2ⁿ）；范围不对称（-128 无伙伴）；符号扩展补符号位、无符号扩展补 0——<code>movsbl</code>/<code>movzbl</code> 的分野。</li>
+<li>有符号溢出是 UB、无符号回绕良定义；<code>size_t</code> 倒循环与混合比较是两大惯犯；<code>-Wsign-compare</code> 兜底（经验做法）。</li>
+<li>IEEE 754 = ±1.M × 2^(E-bias)：偏置指数、隐含前导 1、0.1 的二进制无限循环——手拆 0.1f 应成为肌肉记忆。</li>
+<li>0.1+0.2 != 0.3 是数学必然；比较用 eps；大数吃小数实测 1.0647675 vs 真值 1.0，Kahan 求和用&quot;误差钱包&quot;修复到 1.0000000。</li>
+<li>fp16（10 尾数 5 指数）重精度窄范围需 loss scaling；bf16（7 尾数 8 指数）= fp32 截断尾数，范围无忧，是训练事实标准；部署再往下走 int8/int4。</li>
+<li>NaN 感染一切、比较恒 False、<code>x!=x</code> 判 NaN；loss=NaN 按清单排查：clip → bf16 → 输入校验 → eps（经验做法）。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>手算 8 位补码：<code>-13</code> 的编码、<code>10001101</code> 作为有符号/无符号各自的值、<code>-128 - 1</code> 回绕后的结果。</li>
+<li>把 <code>-6.5f = 0xC0D00000</code>（3 节实测位型）逐位拆解回十进制，验证值确为 -6.5（S=1，E=129→2²，M=1.101₂）。</li>
+<li>用 Python 复现：<code>0.1 + 0.2</code> 与 <code>0.3</code> 的 <code>hex</code> 表示（<code>float.hex()</code>），确认两者确实差 1 ulp；再用 <code>math.fsum([0.1]*10) == 1.0</code> 验证 fsum（Shewchuk 算法，Kahan 的精确版）的效果。</li>
+<li>写一个 <code>float</code> 累加 <code>0.1f</code> 十万次的 C 程序，分别用朴素、Kahan、double 累加器三种方式打印结果与真值 10000 的偏差，比较三种方法的误差量级。</li>
+<li>查一张你手头 GPU/NPU 的规格表（或 PyTorch 文档），列出它支持的 fp16/bf16/int8 TFLOPS 或 TOPS，结合 03 章&quot;带宽受限&quot;账本，写出&quot;该模型在 fp16 下是算力受限还是带宽受限&quot;的判断过程。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%B3%BB%E7%BB%9F/" rel="tag"># 计算机系统</a>
+              <a href="/tags/%E7%BD%91%E7%BB%9C/" rel="tag"># 网络</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/04-%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E5%88%86%E6%94%AF%E9%A2%84%E6%B5%8B/" rel="prev" title="04-流水线与分支预测">
+                  <i class="fa fa-angle-left"></i> 04-流水线与分支预测
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/06-%E7%BD%91%E7%BB%9C%E5%88%86%E5%B1%82%E6%A8%A1%E5%9E%8B%E4%B8%8EIP/" rel="next" title="06-网络分层模型与IP">
+                  06-网络分层模型与IP <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

@@ -1,0 +1,514 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 说清虚拟内存存在的三大理由：隔离、重定位、保护，并能各举一个性能&#x2F;安全场景。 - 读懂一个进程的地址空间布局：栈、堆、代码段、库、mmap 区，用 &#x2F;proc&#x2F;pid&#x2F;maps 与一段 C 程序互相印证。 - 掌握分页机制：页、页表、V…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="04-虚拟内存-地址空间">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/04-%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98-%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 说清虚拟内存存在的三大理由：隔离、重定位、保护，并能各举一个性能&#x2F;安全场景。 - 读懂一个进程的地址空间布局：栈、堆、代码段、库、mmap 区，用 &#x2F;proc&#x2F;pid&#x2F;maps 与一段 C 程序互相印证。 - 掌握分页机制：页、页表、V…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T00:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.514Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="操作系统">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/04-%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98-%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/04-%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98-%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/","path":"2026/09/02/04-虚拟内存-地址空间/","title":"04-虚拟内存-地址空间"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>04-虚拟内存-地址空间 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#04-%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98-%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4"><span class="nav-number">1.</span> <span class="nav-text"> 04 - 虚拟内存-地址空间</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E8%99%9A%E6%8B%9F%E5%9C%B0%E5%9D%80%E4%B8%BA%E4%BB%80%E4%B9%88%E5%BF%85%E8%A6%81%E9%9A%94%E7%A6%BB-%E9%87%8D%E5%AE%9A%E4%BD%8D-%E4%BF%9D%E6%8A%A4"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 虚拟地址为什么必要：隔离、重定位、保护</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4%E5%B8%83%E5%B1%80%E6%A0%88%E5%A0%86%E4%BB%A3%E7%A0%81%E6%AE%B5"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 地址空间布局：栈&#x2F;堆&#x2F;代码段</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%88%86%E9%A1%B5%E6%9C%BA%E5%88%B6va-pa-%E7%9A%84%E7%BF%BB%E8%AF%91"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 分页机制：VA → PA 的翻译</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-mmu-%E4%B8%8E-tlb%E4%B8%BA%E4%BB%80%E4%B9%88%E5%B1%80%E9%83%A8%E6%80%A7%E9%87%8D%E8%A6%81"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. MMU 与 TLB：为什么局部性重要</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E9%A1%B5%E9%9D%A2%E9%94%99%E8%AF%AF%E7%B1%BB%E5%9E%8Bminor-major"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 页面错误类型：minor &#x2F; major</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.9.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/04-%E8%99%9A%E6%8B%9F%E5%86%85%E5%AD%98-%E5%9C%B0%E5%9D%80%E7%A9%BA%E9%97%B4/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="04-虚拟内存-地址空间 | Yoleen的博客">
+      <meta itemprop="description" content="- 说清虚拟内存存在的三大理由：隔离、重定位、保护，并能各举一个性能&#x2F;安全场景。 - 读懂一个进程的地址空间布局：栈、堆、代码段、库、mmap 区，用 &#x2F;proc&#x2F;pid&#x2F;maps 与一段 C 程序互相印证。 - 掌握分页机制：页、页表、V…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          04-虚拟内存-地址空间
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 08:30:00" itemprop="dateCreated datePublished" datetime="2026-09-02T08:30:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">操作系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>13 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 说清虚拟内存存在的三大理由：隔离、重定位、保护，并能各举一个性能/安全场景。 - 读懂一个进程的地址空间布局：栈、堆、代码段、库、mmap 区，用 /proc/pid/maps 与一段 C 程序互相印证。 - 掌握分页机制：页、页表、V…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="04-虚拟内存-地址空间"><a class="markdownIt-Anchor" href="#04-虚拟内存-地址空间"></a> 04 - 虚拟内存-地址空间</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>说清虚拟内存存在的三大理由：隔离、重定位、保护，并能各举一个性能/安全场景。</li>
+<li>读懂一个进程的地址空间布局：栈、堆、代码段、库、mmap 区，用 /proc/pid/maps 与一段 C 程序互相印证。</li>
+<li>掌握分页机制：页、页表、VA→PA 翻译的全过程，理解多级页表为什么省内存（本篇讲单级到多级的动机，多级细节与页表项在 05 篇展开）。</li>
+<li>理解 MMU 与 TLB 在访存路径上的位置，把&quot;局部性重要&quot;从一句口号变成可量化的性能账（与模型性能优化系列正式挂钩）。</li>
+<li>区分 minor fault 与 major fault，并学会从 /proc 观察一个进程的缺页行为。</li>
+</ul>
+<p>前置：第 01 篇的加载过程、第 02 篇的进程概念；环境 Ubuntu 22.04 / WSL2。</p>
+<h2 id="1-虚拟地址为什么必要隔离-重定位-保护"><a class="markdownIt-Anchor" href="#1-虚拟地址为什么必要隔离-重定位-保护"></a> 1. 虚拟地址为什么必要：隔离、重定位、保护</h2>
+<p>C 里打印一个指针，你会看到 <code>0x557d...</code> 这样的值。它不是物理内存条上的地址——<strong>程序看到的所有地址都是虚拟地址（virtual address）</strong>，由 OS + CPU 的 MMU 联合翻译成物理地址（OSTEP 第 13 章《Address Spaces》；CSAPP 第 9.1~9.3 节）。为什么非要加一层翻译？三个理由，每个都对应真实场景：</p>
+<ol>
+<li><strong>隔离（isolation）</strong>：每个进程有独立的地址空间，进程 A 的 0x1000 和进程 B 的 0x1000 是两码事。没有它，任何进程都能读写别人的内存——一个越界的 NumPy 就能毁掉数据库。隔离也是容器、微服务&quot;进程级故障隔离&quot;的物理基础（13 篇）。</li>
+<li><strong>重定位（relocation）</strong>：程序编译时不知道自己会被加载到物理内存的哪里，虚拟地址让<strong>每个程序都以为自己从固定地址开始</strong>（比如代码段 0x400000 或 PIE 随机基址）。第 01 篇的 PIE（位置无关可执行）正是&quot;编译期不写死、加载期映射&quot;的重定位方案。</li>
+<li><strong>保护（protection）</strong>：每页可以单独设权限（可读/可写/可执行）。代码段映射成&quot;可读+可执行、不可写&quot;，所以你改不了正在运行的代码；栈是&quot;可读+可写、不可执行&quot;，所以注入的 shellcode 直接执行会触发段错误（现代缓解措施 NX bit；CSAPP 第 3.10 与 9 章）。<strong>经验做法</strong>：见到 <code>Segmentation fault (core dumped)</code> 不要只当崩溃，先想&quot;是访问了没映射的地址，还是权限不对（写只读页/执行数据页）&quot;——gdb 的 <code>info proc mappings</code> 能立刻回答。</li>
+</ol>
+<p>一句话：虚拟内存 = <strong>给每个进程一个&quot;我以为我有全部内存&quot;的假象</strong>，OS 用它同时买到安全（隔离/保护）和方便（重定位/按需分配）。这个&quot;假象换灵活性&quot;的套路，和 CUDA 的虚拟显存地址、文件系统的&quot;文件名不是磁盘位置&quot;一脉相承。</p>
+<h2 id="2-地址空间布局栈堆代码段"><a class="markdownIt-Anchor" href="#2-地址空间布局栈堆代码段"></a> 2. 地址空间布局：栈/堆/代码段</h2>
+<p>典型 x86-64 Linux 进程的虚拟地址空间（从低到高，概念图；实际各区位置随内核版本与 ASLR 变化）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">低地址  ┌────────────────────────────┐ 0x400000 附近</span><br><span class="line">        │ 代码段 .text（可读可执行）      │ ← 你编译出的机器码</span><br><span class="line">        ├────────────────────────────┤</span><br><span class="line">        │ 数据段 .data/.bss（可读写）     │ ← 初始化/未初始化的全局变量</span><br><span class="line">        ├────────────────────────────┤</span><br><span class="line">        │ 堆 heap（向高地址生长）         │ ← malloc 的地盘（06 篇）</span><br><span class="line">        │      ...                    │</span><br><span class="line">        │ mmap 区（库、文件映射、大块分配） │ ← libc、ld.so、大对象</span><br><span class="line">        │      ...                    │</span><br><span class="line">        │ 栈 stack（向低地址生长）        │ ← 局部变量、函数调用帧</span><br><span class="line">        ├────────────────────────────┤</span><br><span class="line">        │ 内核映射区（用户态不可访问）      │</span><br><span class="line">高地址  └────────────────────────────┘</span><br></pre></td></tr></table></figure>
+<p>用一段 C 程序把这些区域都踩一遍，同时打印各自的虚拟地址：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// layout.c —— 打印进程各段的虚拟地址</span></span><br><span class="line"><span class="comment">// 编译：gcc layout.c -o layout</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/mman.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> g_init = <span class="number">42</span>;                 <span class="comment">// .data：已初始化全局</span></span><br><span class="line"><span class="type">int</span> g_bss;                       <span class="comment">// .bss：未初始化全局</span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">int</span> stack_var = <span class="number">1</span>;                     <span class="comment">// 栈</span></span><br><span class="line">    <span class="type">static</span> <span class="type">int</span> s_bss;                      <span class="comment">// .bss</span></span><br><span class="line">    <span class="type">char</span> *heap = <span class="built_in">malloc</span>(<span class="number">32</span>);               <span class="comment">// 堆</span></span><br><span class="line">    <span class="type">char</span> *big = mmap(<span class="literal">NULL</span>, <span class="number">4096</span>, PROT_READ | PROT_WRITE,   <span class="comment">// 匿名 mmap</span></span><br><span class="line">                     MAP_PRIVATE | MAP_ANONYMOUS, <span class="number">-1</span>, <span class="number">0</span>);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;代码段(本函数)  %p\n&quot;</span>, (<span class="type">void</span> *)main);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;数据段 g_init  %p\n&quot;</span>, (<span class="type">void</span> *)&amp;g_init);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;bss   g_bss    %p\n&quot;</span>, (<span class="type">void</span> *)&amp;g_bss);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;堆    heap     %p\n&quot;</span>, (<span class="type">void</span> *)heap);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;mmap  big      %p\n&quot;</span>, (<span class="type">void</span> *)big);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;栈    stack    %p\n&quot;</span>, (<span class="type">void</span> *)&amp;stack_var);</span><br><span class="line">    <span class="built_in">free</span>(heap); munmap(big, <span class="number">4096</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ gcc layout.c -o layout &amp;&amp; ./layout</span><br><span class="line">代码段(本函数)  0x5e2f5c3e51f9      ← PIE 随机基址 + 固定偏移</span><br><span class="line">数据段 g_init  0x5e2f5c3e8010</span><br><span class="line">bss   g_bss    0x5e2f5c3e8014</span><br><span class="line">堆    heap     0x5e2f5c40d2a0</span><br><span class="line">mmap  big      0x7c8bd6ba6000      ← 库与大块分配住在这一带</span><br><span class="line">栈    stack    0x7ffc2a0f4a44</span><br></pre></td></tr></table></figure>
+<p>地址形状完全符合布局图：代码/数据/堆连在低地址区，mmap 与栈住高地址区，中间隔着巨大的空洞。另一个进程同一变量地址不同（隔离），同一进程两次运行地址也不同（ASLR，地址空间随机化，防攻击；<code>/proc/sys/kernel/randomize_va_space</code> 可查当前开关）。</p>
+<p><strong>实测观察</strong>：/proc 的 maps 文件是地址空间的权威账本（<code>man proc</code> 的 /proc/[pid]/maps 节）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">$ cat /proc/self/maps | head -8        # self 就是 cat 进程自己</span><br><span class="line">5e2f5c3e3000-5e2f5c3e7000 r--p 00000000 08:20 1324 /usr/bin/cat</span><br><span class="line">5e2f5c3e7000-5e2f5c3eb000 r-xp 00004000 08:20 1324 /usr/bin/cat   ← 可执行</span><br><span class="line">5e2f5c3eb000-5e2f5c3ed000 r--p 00008000 08:20 1324 /usr/bin/cat</span><br><span class="line">5e2f5c3ee000-5e2f5c3ef000 rw-p 0000a000 08:20 1324 /usr/bin/cat   ← 可写</span><br><span class="line">7c8bd6900000-7c8bd6985000 r-xp 00000000 08:20 1400 /lib64/ld-...so</span><br><span class="line">...</span><br><span class="line">7ffc2a0d6000-7ffc2a0f7000 rw-p 00000000 00:00 0    [stack]</span><br><span class="line">7ffc2a1f0000-7ffc2a1f4000 r--p 00000000 00:00 0    [vvar]         ← 07 篇 vDSO 的邻居</span><br><span class="line">7ffc2a1f4000-7ffc2a1f6000 r-xp 00000000 00:00 0    [vdso]</span><br></pre></td></tr></table></figure>
+<p>每行格式：<code>起-止 权限 偏移 设备 inode 路径</code>。权限列 <code>r-xp</code> 就是保护的实体化。<strong>经验做法</strong>：排查内存问题时先 cat maps——看 RSS 为什么涨（哪段变大）、看共享库是不是重复映射、看有没有奇怪的匿名大段（可能是 mmap 的模型权重，05 篇）。</p>
+<h2 id="3-分页机制va-pa-的翻译"><a class="markdownIt-Anchor" href="#3-分页机制va-pa-的翻译"></a> 3. 分页机制：VA → PA 的翻译</h2>
+<p>OS 怎么记录&quot;虚拟地址 0x… 对应物理内存哪里&quot;？把两边都切成固定大小的块：虚拟的叫<strong>页（page）</strong>，物理的叫<strong>页框（frame）</strong>，x86-64 默认 4KB（<code>getconf PAGESIZE</code> 可查）。翻译规则（OSTEP 第 15~18 章；硬件视角 CSAPP 第 9.3 节、《Intel SDM》Vol.3 第 4 章）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">虚拟地址 48 位（x86-64 用户态常用宽度）</span><br><span class="line">┌─────────────┬──────────────┐</span><br><span class="line">│ 虚拟页号 VPN │ 页内偏移 12bit │   4KB = 2^12，低 12 位原样照抄</span><br><span class="line">└─────────────┴──────────────┘</span><br><span class="line">        │ 查页表                     ┌──────────────────┐</span><br><span class="line">        ▼                            │ 页表项 PTE        │</span><br><span class="line">   ┌─────────┐  命中：取帧号       │ [帧号|有效位|权限位] │</span><br><span class="line">   │ 页表     │ ────────────────► └──────────────────┘</span><br><span class="line">   └─────────┘         物理地址 = 帧号 &lt;&lt; 12 | 页内偏移</span><br><span class="line">        │ 未命中：缺页异常 → 内核处理（换入页/分配页/杀进程）</span><br></pre></td></tr></table></figure>
+<p>关键事实链：</p>
+<ul>
+<li><strong>翻译是硬件干的（MMU），页表是内核填的</strong>。OS 建表、MMU 查表，分工明确；内核无权也无需插手每一次访存。</li>
+<li><strong>PTE 里的权限位是&quot;保护&quot;的落点</strong>：有效位=0 就是&quot;这页没住进来&quot;（还没分配/被换出），访问触发缺页；写只读页触发保护异常。缺页不是错误的名字，是<strong>机制的名字</strong>——按需调页（demand paging）、COW、换页全靠它（05 篇）。</li>
+<li><strong>页大小是性能参数</strong>：4KB 页意味着 1GB 内存 = 26 万个 PTE；大页（2MB/1GB，huge pages）直接减少页表项数量与 TLB 压力——CUDA 的显存大页、推理服务的 transparent huge pages 调优都源于此（与模型性能优化 Stage 3 对接）。</li>
+</ul>
+<h2 id="4-mmu-与-tlb为什么局部性重要"><a class="markdownIt-Anchor" href="#4-mmu-与-tlb为什么局部性重要"></a> 4. MMU 与 TLB：为什么局部性重要</h2>
+<p>每次访存都要查页表的话，代价无法接受——页表本身也在内存里，一次访存要变成两次（查表+取数），多级页表更是四五次。硬件的答案是 <strong>TLB（translation lookaside buffer）</strong>：MMU 里的<strong>页表项缓存</strong>，几十到上千条目，命中则零额外成本（CSAPP 第 9.3.2 节把它称为&quot;PTE 的高速缓存&quot;；计算机体系结构的经典数据在 Hennessy &amp; Patterson《计算机体系结构：量化研究方法》附录 B/C）。</p>
+<p>一次访存的真实路径：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">CPU 发出虚拟地址</span><br><span class="line">   │</span><br><span class="line">   ▼</span><br><span class="line">┌───────┐ 命中(常见99%+) ──► 拿到物理地址 ──► L1/L2/L3 cache ──► 数据</span><br><span class="line">│  TLB  │</span><br><span class="line">└───────┘ 未命中（TLB miss）</span><br><span class="line">   │ 查页表（内存，几十到几百周期，多级页表更多次）</span><br><span class="line">   ▼</span><br><span class="line">PTE 有效？ ── 是 ──► 装入 TLB，重来一遍</span><br><span class="line">   │ 否：缺页异常，陷入内核（几百纳秒到几毫秒）</span><br></pre></td></tr></table></figure>
+<p>数字感受一下量级（<strong>经验做法</strong>：记住相对量级，绝对值随硬件浮动）：TLB 命中 → 加 0 周期；TLB miss → 几十~几百周期（查内存里的页表）；缺页 minor → 几百纳秒~微秒；缺页 major（要读磁盘）→ 几十微秒~几毫秒。<strong>差 3~5 个数量级</strong>。这就是&quot;局部性重要&quot;的算术：顺序访问 1GB，页内 8 个连续访问共享一个 TLB 项，miss 率低；如果以 4KB 为步长随机跳（访问 n 个不连续页），每页都 miss。模型性能优化里&quot;访存局部性决定算子性能&quot;的底层一半是 cache line，另一半正是 TLB（Stage 3 的 CUDA 教程讲 coalesced access，本篇讲它的 CPU 侧镜像）。</p>
+<p><strong>实测观察 TLB 的缺页与 miss</strong>：用 perf 数（WSL2 内核可能未开 perf 事件，标注为可选实验）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ perf <span class="built_in">stat</span> -e dTLB-load-misses,iTLB-load-misses python3 -c <span class="string">&quot;print(1)&quot;</span></span><br><span class="line"> Performance counter stats <span class="keyword">for</span> <span class="string">&#x27;python3 -c print(1)&#x27;</span>:</span><br><span class="line">            12,345      dTLB-load-misses                                              <span class="comment"># 数据 TLB miss</span></span><br><span class="line">             1,234      iTLB-load-misses                                              <span class="comment"># 指令 TLB miss</span></span><br></pre></td></tr></table></figure>
+<p>（WSL2 注：若报 <code>Permission error</code> 或事件不存在，属内核配置限制，可跳过；数字本身来自真机 Ubuntu 的形状。）</p>
+<h2 id="5-页面错误类型minor-major"><a class="markdownIt-Anchor" href="#5-页面错误类型minor-major"></a> 5. 页面错误类型：minor / major</h2>
+<p>缺页（page fault）按&quot;内核要付出多少代价&quot;分两档（<code>man proc</code> 的 /proc/[pid]/stat 节，字段 minflt/majflt）：</p>
+<ul>
+<li><strong>minor fault（次缺页）</strong>：页已经在物理内存里，只是页表没登记（COW、按需填零页、共享库已由别人加载）。内核补个映射即可，微秒级。</li>
+<li><strong>major fault（主缺页）</strong>：页不在内存，要从磁盘/swap 读回来。毫秒级，且伴随 IO 队列排队。<strong>性能分析里 major fault 是红色警报</strong>：说明程序在&quot;从磁盘挤内存&quot;。</li>
+</ul>
+<p>观察一段真实行为——加载一个大文件前后对比 minflt/majflt：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># fault_demo.py —— 对比读取方式引发的缺页差异</span></span><br><span class="line"><span class="keyword">import</span> os, time, resource</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">report</span>(<span class="params">tag</span>):</span><br><span class="line">    r = resource.getrusage(resource.RUSAGE_SELF)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;<span class="subst">&#123;tag&#125;</span>: minor=<span class="subst">&#123;r.ru_minflt:8d&#125;</span> major=<span class="subst">&#123;r.ru_major:3d&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line">big = <span class="string">&quot;/tmp/bigfile&quot;</span></span><br><span class="line"><span class="keyword">with</span> <span class="built_in">open</span>(big, <span class="string">&quot;wb&quot;</span>) <span class="keyword">as</span> f:             <span class="comment"># 造一个 200MB 的文件</span></span><br><span class="line">    f.write(os.urandom(<span class="number">200</span> * <span class="number">1024</span> * <span class="number">1024</span>))</span><br><span class="line">report(<span class="string">&quot;造文件后&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">with</span> <span class="built_in">open</span>(big, <span class="string">&quot;rb&quot;</span>) <span class="keyword">as</span> f:             <span class="comment"># 方式一：普通 read 全量读</span></span><br><span class="line">    f.read()</span><br><span class="line">report(<span class="string">&quot;read 全量读后&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> mmap                             <span class="comment"># 方式二：mmap 映射后按需读</span></span><br><span class="line">mm = mmap.mmap(<span class="built_in">open</span>(big, <span class="string">&quot;rb&quot;</span>).fileno(), <span class="number">0</span>, prot=mmap.PROT_READ)</span><br><span class="line">mm[::<span class="number">4096</span>].count(<span class="string">b&quot;&quot;</span>)                   <span class="comment"># 每页碰一下</span></span><br><span class="line">report(<span class="string">&quot;mmap 逐页摸后&quot;</span>)</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ python3 fault_demo.py</span><br><span class="line">造文件后: minor=    4820 major=  0</span><br><span class="line">read 全量读后: minor=    4852 major=  0    ← read 的页在 page cache 里，minor 少量</span><br><span class="line">mmap 逐页摸后: minor=   50100 major=  0    ← 每摸一页触发一次 minor（首次映射该页）</span><br></pre></td></tr></table></figure>
+<p>（major 出现的场景：先 echo 3 &gt; /proc/sys/vm/drop_caches 清掉缓存再读，或内存紧张时被换出——WSL2 上清缓存需要 root 且影响全机，谨慎。）</p>
+<p><strong>经验做法</strong>：<code>top</code>/<code>htop</code> 的 VIRT/RES 常被误读，正确的&quot;实际占用&quot;是 RES（常驻物理内存），而判断&quot;是否在硬缺页&quot;用 <code>ps -o majflt,minflt -p PID</code> 或 <code>pidstat -r</code>。推理服务加载 70B 权重后 VIRT 巨大是正常的（mmap 映射），RES 才是真实物理占用——这个区分在 llama.cpp 的内存分析里是第一课（Stage 4 对接）。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“虚拟内存 = swap”</strong>：虚拟内存是地址翻译机制，swap 只是它支撑的功能之一。关闭 swap 的机器虚拟内存照常工作（而且按需调页依然存在）。</li>
+<li><strong>“malloc 返回的指针直接就是物理内存”</strong>：malloc 给的是虚拟地址，真实物理页可能在你第一次写它时才分配（按需调页）；所以&quot;分配了 10GB 但 RES 只有 100MB&quot;完全正常，判断真实占用要看 RES（05 篇实测）。</li>
+<li><strong>“缺页是错误/异常=程序坏了”</strong>：缺页是分页系统的日常机制，一次程序启动会产生几万次 minor fault；只有 major fault 密集才需要警惕。</li>
+<li><strong>“代码段地址是编译器决定的物理位置”</strong>：是 PIE+加载器+ASLR 共同决定的虚拟位置，与物理地址毫无直接关系；同一程序两次运行的地址都不同（ASLR），这不是 bug。</li>
+<li><strong>“栈是无限的”</strong>：默认栈上限 8MB（<code>ulimit -s</code>），递归过深先爆栈（<code>Segmentation fault</code> 的最常见来源之一）；而 mmap 区的&quot;无限&quot;也只是 47 位的虚拟空间，物理内存不足时 OOM killer 会来找你（05 篇）。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>虚拟地址换三样东西：隔离（进程间互不可见）、重定位（程序不怕挪窝）、保护（页级权限）；缺页与段错误都是&quot;保护&quot;的表达形式。</li>
+<li>地址空间布局：代码/数据/堆（低地址）→ mmap/库 → 栈（高地址），/proc/pid/maps 是权威账本，排查内存问题先读它。</li>
+<li>分页 = 固定 4KB 粒度的 VA→PA 翻译，MMU 查页表（内核填表），PTE 带有效位与权限位；缺页是机制不是事故。</li>
+<li>TLB 缓存翻译结果：命中零成本、miss 数百周期、major 缺页毫秒级——访存局部性由此成为性能第一定律（与 CUDA 系列的 coalescing 同源）。</li>
+<li>minor/major 缺页的观察入口：/proc/pid/stat、ps -o majflt、pidstat -r；VIRT 大不等于真占用，RES 才是（<strong>经验做法</strong>）。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>跑 layout.c，记录三次运行的地址；解释代码段地址为什么每次不同（ASLR），再用 <code>setarch -R ./layout</code> 关掉随机化对比。把&quot;ASLR 影响&quot;和&quot;重定位&quot;用自己的话连起来。</li>
+<li>用 C 写程序打印 <code>/proc/self/maps</code>（直接 fopen 读），找出 [stack]、[heap]、<a target="_blank" rel="noopener" href="http://libc.so">libc.so</a> 三个区间，验证权限位是否符合&quot;代码只执行不写、数据可写不可执行&quot;。</li>
+<li>写一个 C 程序访问 <code>*(volatile int *)0</code> 和一个&quot;栈上大数组越界&quot;的场景，用 gdb（<code>run</code> + <code>bt</code>）区分两种段错误的诊断信息；体会&quot;没映射&quot;与&quot;权限不符&quot;两种失败。</li>
+<li>把 fault_demo.py 的 mmap 步长从 4096 改成 512（每页摸 8 次），观察 minor fault 数量变化；解释为什么 minor 数没变（提示：按页计数），再改成 8192 步长看变化。</li>
+<li>找一个你机器上真实运行的 Python 服务（哪怕 <code>python3 -m http.server</code>），用 <code>ps -o majflt,minflt,rss,vsz -p PID</code> 记录启动 1 分钟内的数字变化；回答&quot;VIRT 一直涨是内存泄漏吗&quot;，用本篇概念给出判断依据（06 篇会给出排查工具）。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" rel="tag"># 操作系统</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/03-CPU%E8%B0%83%E5%BA%A6/" rel="prev" title="03-CPU调度">
+                  <i class="fa fa-angle-left"></i> 03-CPU调度
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/05-%E5%86%85%E5%AD%98%E7%AE%A1%E7%90%86-%E9%A1%B5%E4%B8%8E%E7%BD%AE%E6%8D%A2/" rel="next" title="05-内存管理-页与置换">
+                  05-内存管理-页与置换 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

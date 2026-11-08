@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="1. 理解 with 语句的原理：enter&#x2F;exit 的调用时机、参数含义与返回值语义； 2. 会用 contextlib.contextmanager 用生成器写上下文管理器，并理解两种写法的取舍； 3. 掌握异常抑制（exit 返回 …">
+<meta property="og:type" content="article">
+<meta property="og:title" content="05-上下文管理器">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/05-%E4%B8%8A%E4%B8%8B%E6%96%87%E7%AE%A1%E7%90%86%E5%99%A8/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="1. 理解 with 语句的原理：enter&#x2F;exit 的调用时机、参数含义与返回值语义； 2. 会用 contextlib.contextmanager 用生成器写上下文管理器，并理解两种写法的取舍； 3. 掌握异常抑制（exit 返回 …">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-01T17:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.506Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Python">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/05-%E4%B8%8A%E4%B8%8B%E6%96%87%E7%AE%A1%E7%90%86%E5%99%A8/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/05-%E4%B8%8A%E4%B8%8B%E6%96%87%E7%AE%A1%E7%90%86%E5%99%A8/","path":"2026/09/02/05-上下文管理器/","title":"05-上下文管理器"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>05-上下文管理器 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#05-%E4%B8%8A%E4%B8%8B%E6%96%87%E7%AE%A1%E7%90%86%E5%99%A8"><span class="nav-number">1.</span> <span class="nav-text"> 05 - 上下文管理器</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-with-%E7%9A%84%E5%8E%9F%E7%90%86enter-%E4%B8%8E-exit"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. with 的原理：enter 与 exit</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-contextlibcontextmanager%E7%94%9F%E6%88%90%E5%99%A8%E5%86%99%E6%B3%95"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. contextlib.contextmanager：生成器写法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%BC%82%E5%B8%B8%E6%8A%91%E5%88%B6%E4%B8%8E%E6%B8%85%E7%90%86%E9%A1%BA%E5%BA%8F"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 异常抑制与清理顺序</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-exitstack%E4%B8%8D%E5%AE%9A%E6%95%B0%E9%87%8F%E7%9A%84%E8%B5%84%E6%BA%90"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. ExitStack：不定数量的资源</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%AE%9E%E6%88%98%E4%B8%B4%E6%97%B6%E7%9B%AE%E5%BD%95-%E6%95%B0%E6%8D%AE%E5%BA%93%E4%BA%8B%E5%8A%A1-%E9%94%81"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 实战：临时目录 &#x2F; 数据库事务 &#x2F; 锁</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E9%99%B7%E9%98%B1"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见陷阱</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.9.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/05-%E4%B8%8A%E4%B8%8B%E6%96%87%E7%AE%A1%E7%90%86%E5%99%A8/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="05-上下文管理器 | Yoleen的博客">
+      <meta itemprop="description" content="1. 理解 with 语句的原理：enter&#x2F;exit 的调用时机、参数含义与返回值语义； 2. 会用 contextlib.contextmanager 用生成器写上下文管理器，并理解两种写法的取舍； 3. 掌握异常抑制（exit 返回 …">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          05-上下文管理器
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 01:30:00" itemprop="dateCreated datePublished" datetime="2026-09-02T01:30:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Python/" itemprop="url" rel="index"><span itemprop="name">Python</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.6k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>9 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">1. 理解 with 语句的原理：enter/exit 的调用时机、参数含义与返回值语义； 2. 会用 contextlib.contextmanager 用生成器写上下文管理器，并理解两种写法的取舍； 3. 掌握异常抑制（exit 返回 …</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="05-上下文管理器"><a class="markdownIt-Anchor" href="#05-上下文管理器"></a> 05 - 上下文管理器</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ol>
+<li>理解 <code>with</code> 语句的原理：<code>__enter__</code>/<code>__exit__</code> 的调用时机、参数含义与返回值语义；</li>
+<li>会用 <code>contextlib.contextmanager</code> 用生成器写上下文管理器，并理解两种写法的取舍；</li>
+<li>掌握<strong>异常抑制</strong>（<code>__exit__</code> 返回 True）与<strong>清理顺序</strong>（嵌套时 LIFO），理解为什么 <code>finally</code> 是最后防线；</li>
+<li>落地四个实战：计时器、临时目录、数据库事务、锁的正确用法；会管理不定数量资源（<code>ExitStack</code>）。</li>
+</ol>
+<h2 id="1-with-的原理enter-与-exit"><a class="markdownIt-Anchor" href="#1-with-的原理enter-与-exit"></a> 1. with 的原理：<strong>enter</strong> 与 <strong>exit</strong></h2>
+<p><code>with expr as x:</code> 的幕后流程（官方文档：Python Language Reference → 3.10 with statement；PEP 343 引入）：</p>
+<ol>
+<li>求值 <code>expr</code>，调用其 <code>__enter__()</code>，返回值绑定给 <code>x</code>；</li>
+<li>执行 with 块内的语句；</li>
+<li><strong>无论块内是否抛异常</strong>，都调用 <code>__exit__(exc_type, exc_value, traceback)</code>：
+<ul>
+<li>正常结束 → 三个参数都是 <code>None</code>；</li>
+<li>有异常 → 传入异常三元组，<code>__exit__</code> 处理完后异常<strong>继续向外传播</strong>（除非返回 True，见第 3 节）。</li>
+</ul>
+</li>
+</ol>
+<p>用 try/finally 手工等价展开，理解就到位了：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># with f = open(...): 的等价物（简化示意，真实 open 语义见文档）</span></span><br><span class="line">f = <span class="built_in">open</span>(<span class="string">&quot;data.txt&quot;</span>, encoding=<span class="string">&quot;utf-8&quot;</span>)</span><br><span class="line"><span class="keyword">try</span>:</span><br><span class="line">    data = f.read()</span><br><span class="line"><span class="keyword">finally</span>:</span><br><span class="line">    f.close()          <span class="comment"># 无论读写是否抛异常，close 一定执行</span></span><br></pre></td></tr></table></figure>
+<p>自己实现一个最典型的——计时器：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> time</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Timer</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;with Timer() as t: ... 之后 t.elapsed 可读。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__enter__</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="variable language_">self</span>.start = time.perf_counter()</span><br><span class="line">        <span class="keyword">return</span> <span class="variable language_">self</span>                       <span class="comment"># 绑定给 as 后面的名字</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__exit__</span>(<span class="params">self, exc_type, exc_value, traceback</span>):</span><br><span class="line">        <span class="variable language_">self</span>.elapsed = time.perf_counter() - <span class="variable language_">self</span>.start</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">False</span>                      <span class="comment"># 不吞异常：异常照常传播</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__repr__</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">return</span> <span class="string">f&quot;&lt;Timer elapsed=<span class="subst">&#123;self.elapsed:<span class="number">.4</span>f&#125;</span>s&gt;&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">with</span> Timer() <span class="keyword">as</span> t:</span><br><span class="line"><span class="meta">... </span>    <span class="built_in">sum</span>(<span class="built_in">range</span>(<span class="number">1_000_000</span>))</span><br><span class="line"><span class="meta">... </span>    <span class="built_in">print</span>(<span class="string">f&quot;耗时 <span class="subst">&#123;t.elapsed:<span class="number">.4</span>f&#125;</span>s&quot;</span>)   <span class="comment"># 注意：此刻 elapsed 还没定稿（__exit__ 未跑）</span></span><br><span class="line"><span class="meta">... </span><span class="comment"># __exit__ 在块结束后才执行，elapsed 在此定稿</span></span><br><span class="line">耗时 <span class="number">0.0183</span>s</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>t.elapsed                             <span class="comment"># 离开 with 后读取才准确</span></span><br><span class="line"><span class="number">0.019124</span></span><br></pre></td></tr></table></figure>
+<p>细节对照：<code>as</code> 绑定的是 <code>__enter__</code> 的<strong>返回值</strong>（不是表达式本身）；<code>__exit__</code> 返回 <code>False</code>（或 None）表示&quot;不处理异常&quot;。注意上面块内读 <code>t.elapsed</code> 是早于 <code>__exit__</code> 的——所以计时器的读取习惯放在 with 块<strong>之外</strong>。</p>
+<h2 id="2-contextlibcontextmanager生成器写法"><a class="markdownIt-Anchor" href="#2-contextlibcontextmanager生成器写法"></a> 2. contextlib.contextmanager：生成器写法</h2>
+<p><code>@contextlib.contextmanager</code>（标准库 contextlib 模块）让你用一个<strong>生成器函数</strong>替代两个方法：<code>yield</code> 之前的代码是 <code>__enter__</code>，之后的是 <code>__exit__</code>，yield 的值绑定给 <code>as</code>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> contextlib</span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"></span><br><span class="line"><span class="meta">@contextlib.contextmanager</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">timer</span>(<span class="params">label</span>):</span><br><span class="line">    start = time.perf_counter()          <span class="comment"># --- __enter__ 部分 ---</span></span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        <span class="keyword">yield</span> start                      <span class="comment"># ← 块体在此执行；yield 值给 as</span></span><br><span class="line">    <span class="keyword">finally</span>:                             <span class="comment"># --- __exit__ 部分 ---</span></span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;[<span class="subst">&#123;label&#125;</span>] <span class="subst">&#123;time.perf_counter() - start:<span class="number">.4</span>f&#125;</span>s&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">with</span> timer(<span class="string">&quot;sum&quot;</span>):</span><br><span class="line"><span class="meta">... </span>    <span class="built_in">sum</span>(<span class="built_in">range</span>(<span class="number">1_000_000</span>))</span><br><span class="line">[<span class="built_in">sum</span>] <span class="number">0.0189</span>s</span><br></pre></td></tr></table></figure>
+<p><code>try/finally</code> 不是装饰——<strong>必须写</strong>：如果块内抛异常，异常会在 <code>yield</code> 处重新抛出，没有 finally 清理代码就跳过了。这等价于类写法里 <code>__exit__</code> 中做清理。</p>
+<p>两种写法的取舍（《Fluent Python》第 15 章观点）：</p>
+<ul>
+<li><strong><code>contextmanager</code></strong>：简单资源、一次性逻辑，代码量少、局部性好；缺点是<strong>一个类只能干一件事的状态复用</strong>不如类方便（生成器是一次性的，不能复用同一 manager 实例——每次 with 都要重新调用工厂函数）；</li>
+<li><strong>类实现</strong>：需要状态、可复用实例（如连接池对象既做上下文管理器又做普通对象）、复杂清理逻辑时用类。</li>
+</ul>
+<p><strong>经验做法</strong>：库代码暴露给别人的 API 用类实现（可复用、可继承、可文档化），脚本内部的小工具用 <code>contextmanager</code> 快速完成。</p>
+<p><code>contextlib</code> 还有几个常用件：<code>closing(obj)</code> 给只有 <code>close()</code> 的对象补 with 支持；<code>suppress(*exc)</code> 有意忽略特定异常（比裸 try/except 意图清晰）；<code>redirect_stdout/stderr</code> 重定向输出；<code>nullcontext</code> 占位（&quot;可能有上下文也可能没有&quot;的统一接口）。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">import</span> contextlib, os</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">with</span> contextlib.suppress(FileNotFoundError):   <span class="comment"># 明确表达&quot;没有就算了&quot;</span></span><br><span class="line"><span class="meta">... </span>    os.remove(<span class="string">&quot;/tmp/不存在的文件.txt&quot;</span>)</span><br></pre></td></tr></table></figure>
+<h2 id="3-异常抑制与清理顺序"><a class="markdownIt-Anchor" href="#3-异常抑制与清理顺序"></a> 3. 异常抑制与清理顺序</h2>
+<p><strong><code>__exit__</code> 返回 True 的含义是&quot;我已处理，别再传播&quot;</strong>。这是官方文档明文规定的行为，也是 <code>contextlib.suppress</code> 的实现原理。三种情形对比：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">class</span> <span class="title class_">Absorb</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__enter__</span>(<span class="params">self</span>): <span class="keyword">return</span> <span class="variable language_">self</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__exit__</span>(<span class="params">self, *exc</span>): <span class="keyword">return</span> <span class="literal">True</span>        <span class="comment"># 吞掉一切异常</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Propagate</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__enter__</span>(<span class="params">self</span>): <span class="keyword">return</span> <span class="variable language_">self</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__exit__</span>(<span class="params">self, *exc</span>): <span class="keyword">return</span> <span class="literal">False</span>       <span class="comment"># 放行异常（默认行为）</span></span><br><span class="line"></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">with</span> Absorb():</span><br><span class="line"><span class="meta">... </span>    <span class="keyword">raise</span> ValueError(<span class="string">&quot;消失&quot;</span>)</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="built_in">print</span>(<span class="string">&quot;继续执行&quot;</span>)                             <span class="comment"># 异常被吞，程序活着</span></span><br><span class="line">继续执行</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">with</span> Propagate():</span><br><span class="line"><span class="meta">... </span>    <span class="keyword">raise</span> ValueError(<span class="string">&quot;向上传播&quot;</span>)</span><br><span class="line">Traceback (most recent call last):</span><br><span class="line">  ...</span><br><span class="line">ValueError: 向上传播</span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：除非极个别场景（如 <code>suppress(FileNotFoundError)</code> 这种&quot;预期的、无害的异常&quot;），<code>__exit__</code> 一律返回 <code>False</code>——无差别吞异常是事故之源（14 篇陷阱清单里的&quot;异常吞掉&quot;）。要抑制就<strong>精确指定异常类型</strong>。</p>
+<p><strong>嵌套的清理顺序是 LIFO（后进先出）</strong>——with 块可以叠着写，<code>__exit__</code> 按 <code>__enter__</code> 的逆序执行，像剥洋葱：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> contextlib</span><br><span class="line"></span><br><span class="line"><span class="meta">@contextlib.contextmanager</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">step</span>(<span class="params">name</span>):</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;  enter <span class="subst">&#123;name&#125;</span>&quot;</span>)</span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        <span class="keyword">yield</span></span><br><span class="line">    <span class="keyword">finally</span>:</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;  exit  <span class="subst">&#123;name&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">with</span> step(<span class="string">&quot;A&quot;</span>), step(<span class="string">&quot;B&quot;</span>), step(<span class="string">&quot;C&quot;</span>):    <span class="comment"># Python 3.1+ 可逗号并列</span></span><br><span class="line"><span class="meta">... </span>    <span class="built_in">print</span>(<span class="string">&quot;  body&quot;</span>)</span><br><span class="line">  enter A</span><br><span class="line">  enter B</span><br><span class="line">  enter C</span><br><span class="line">  body</span><br><span class="line">  exit  C        <span class="comment"># 逆序！最后进入的最先退出</span></span><br><span class="line">  exit  B</span><br><span class="line">  exit  A</span><br></pre></td></tr></table></figure>
+<p>这个顺序是有讲究的：典型如 <code>with lock, conn:</code> ——先释放锁还是先关连接？LIFO 保证<strong>申请顺序与释放顺序严格相反</strong>，与 <code>__init__</code>/<code>__del__</code>、栈帧退出的直觉一致。即使块中抛异常，每个已进入的 <code>__exit__</code> 也会按序执行完。这也是&quot;锁的正确用法&quot;（第 6 节）的根基。</p>
+<h2 id="4-exitstack不定数量的资源"><a class="markdownIt-Anchor" href="#4-exitstack不定数量的资源"></a> 4. ExitStack：不定数量的资源</h2>
+<p>编译期不知道要开几个文件/锁几个资源时，<code>contextlib.ExitStack</code> 把&quot;栈&quot;交给运行时管理（官方文档：contextlib → ExitStack）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> contextlib</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">merge_logs</span>(<span class="params">paths, output</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;打开 N 个日志合并写入：数量运行时才知道。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">with</span> contextlib.ExitStack() <span class="keyword">as</span> stack, <span class="built_in">open</span>(output, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> out:</span><br><span class="line">        files = [stack.enter_context(<span class="built_in">open</span>(p, encoding=<span class="string">&quot;utf-8&quot;</span>)) <span class="keyword">for</span> p <span class="keyword">in</span> paths]</span><br><span class="line">        <span class="keyword">for</span> f <span class="keyword">in</span> files:</span><br><span class="line">            <span class="keyword">for</span> line <span class="keyword">in</span> f:</span><br><span class="line">                out.write(line)</span><br><span class="line">    <span class="comment"># 离开 with 时：先关 output，再按逆序关 files</span></span><br></pre></td></tr></table></figure>
+<p><code>ExitStack</code> 的三种常用动作：<code>enter_context(cm)</code> 压入并返回结果；<code>callback(fn, *args)</code> 注册任意清理回调（不需要上下文管理器时用）；<code>pop_all()</code> 把已压入的资源<strong>转移</strong>到新栈——实现&quot;提交或回滚&quot;语义的标准手法：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">update_configs</span>(<span class="params">paths</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;全部解析成功才落盘；任何一步失败，已打开/已修改全部回滚。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">with</span> contextlib.ExitStack() <span class="keyword">as</span> stack:</span><br><span class="line">        stack.callback(<span class="built_in">print</span>, <span class="string">&quot;rollback: 恢复快照&quot;</span>)     <span class="comment"># 默认回调（失败路径走）</span></span><br><span class="line">        data = &#123;&#125;</span><br><span class="line">        <span class="keyword">for</span> p <span class="keyword">in</span> paths:</span><br><span class="line">            <span class="keyword">with</span> <span class="built_in">open</span>(p) <span class="keyword">as</span> f:</span><br><span class="line">                data[p] = f.read()</span><br><span class="line">        success = stack.pop_all()          <span class="comment"># 校验通过：把清理动作转到新栈</span></span><br><span class="line">        <span class="comment"># ... 落盘成功后 success.close() 才真正&quot;提交&quot;</span></span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：资源获取路径上&quot;半途失败要回滚&quot;的逻辑，用 <code>ExitStack</code> + <code>pop_all</code> 比手写嵌套 try/finally 清晰得多；Agent/服务代码里动态申请的锁、连接、临时文件，都适合交给 ExitStack 统一收口。</p>
+<h2 id="5-实战临时目录-数据库事务-锁"><a class="markdownIt-Anchor" href="#5-实战临时目录-数据库事务-锁"></a> 5. 实战：临时目录 / 数据库事务 / 锁</h2>
+<p><strong>临时目录</strong>——块结束自动删除，永不遗留垃圾（标准库 tempfile）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> contextlib</span><br><span class="line"><span class="keyword">import</span> shutil</span><br><span class="line"><span class="keyword">import</span> tempfile</span><br><span class="line"></span><br><span class="line"><span class="meta">@contextlib.contextmanager</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">temp_workspace</span>():</span><br><span class="line">    d = tempfile.mkdtemp(prefix=<span class="string">&quot;pycourse_&quot;</span>)</span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        <span class="keyword">yield</span> d</span><br><span class="line">    <span class="keyword">finally</span>:</span><br><span class="line">        shutil.rmtree(d, ignore_errors=<span class="literal">True</span>)</span><br><span class="line"></span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">import</span> os</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span><span class="keyword">with</span> temp_workspace() <span class="keyword">as</span> ws:</span><br><span class="line"><span class="meta">... </span>    <span class="built_in">open</span>(os.path.join(ws, <span class="string">&quot;a.txt&quot;</span>), <span class="string">&quot;w&quot;</span>).write(<span class="string">&quot;hi&quot;</span>)</span><br><span class="line"><span class="meta">... </span>    <span class="built_in">print</span>(os.listdir(ws))</span><br><span class="line">[<span class="string">&#x27;a.txt&#x27;</span>]</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>os.path.exists(ws)          <span class="comment"># 块外已删除</span></span><br><span class="line"><span class="literal">False</span></span><br></pre></td></tr></table></figure>
+<p><strong>数据库事务</strong>——<code>__enter__</code> 开启事务，正常退出提交、异常回滚（以 sqlite3 为例，标准库自带该语义）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> sqlite3</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">transfer</span>(<span class="params">conn, from_id, to_id, amount</span>):</span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        <span class="keyword">with</span> conn:                                    <span class="comment"># sqlite3.Connection 的 with：事务</span></span><br><span class="line">            conn.execute(<span class="string">&quot;UPDATE accounts SET balance = balance - ? WHERE id = ?&quot;</span>,</span><br><span class="line">                         (amount, from_id))</span><br><span class="line">            conn.execute(<span class="string">&quot;UPDATE accounts SET balance = balance + ? WHERE id = ?&quot;</span>,</span><br><span class="line">                         (amount, to_id))</span><br><span class="line">    <span class="keyword">except</span> Exception:</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">&quot;回滚：转账未生效&quot;</span>)                      <span class="comment"># with 内异常 → 自动 ROLLBACK</span></span><br><span class="line">        <span class="keyword">raise</span></span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">&quot;提交成功&quot;</span>)                              <span class="comment"># 无异常 → 自动 COMMIT</span></span><br><span class="line"></span><br><span class="line">conn = sqlite3.connect(<span class="string">&quot;:memory:&quot;</span>)</span><br><span class="line">conn.execute(<span class="string">&quot;CREATE TABLE accounts (id INTEGER PRIMARY KEY, balance INT)&quot;</span>)</span><br><span class="line">conn.executemany(<span class="string">&quot;INSERT INTO accounts VALUES (?, ?)&quot;</span>, [(<span class="number">1</span>, <span class="number">100</span>), (<span class="number">2</span>, <span class="number">0</span>)])</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>transfer(conn, <span class="number">1</span>, <span class="number">2</span>, <span class="number">30</span>)</span><br><span class="line">提交成功</span><br><span class="line"><span class="meta">&gt;&gt;&gt; </span>conn.execute(<span class="string">&quot;SELECT id, balance FROM accounts&quot;</span>).fetchall()</span><br><span class="line">[(<span class="number">1</span>, <span class="number">70</span>), (<span class="number">2</span>, <span class="number">30</span>)]</span><br></pre></td></tr></table></figure>
+<p><strong>锁的正确用法</strong>——<strong>永远用 <code>with lock:</code>，不要手动 acquire/release</strong>（08 篇展开线程细节，这里先立规矩）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> threading</span><br><span class="line"></span><br><span class="line">lock = threading.Lock()</span><br><span class="line">counter = <span class="number">0</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">unsafe</span>():</span><br><span class="line">    <span class="keyword">global</span> counter</span><br><span class="line">    counter += <span class="number">1</span>                       <span class="comment"># ❌ 复合操作非原子（08 篇实测竞态）</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">safe</span>():</span><br><span class="line">    <span class="keyword">global</span> counter</span><br><span class="line">    <span class="keyword">with</span> lock:                         <span class="comment"># ✅ 异常也会释放锁，绝不死锁在手里</span></span><br><span class="line">        counter += <span class="number">1</span></span><br></pre></td></tr></table></figure>
+<p>手动 <code>acquire()</code> 后若中间抛异常且没有 finally <code>release()</code>，锁被永久持有——整个程序随后在所有 <code>acquire</code> 上卡死。<code>with</code> 把释放交给 <code>__exit__</code>，异常路径也安全。</p>
+<h2 id="常见陷阱"><a class="markdownIt-Anchor" href="#常见陷阱"></a> 常见陷阱</h2>
+<p><strong>陷阱一：把 <code>with</code> 写成 <code>with open(a), open(b) as f</code></strong>——只有最后一个有 <code>as</code> 绑定。多资源就多逗号或用 ExitStack：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">with</span> <span class="built_in">open</span>(<span class="string">&quot;a.txt&quot;</span>) <span class="keyword">as</span> fa, <span class="built_in">open</span>(<span class="string">&quot;b.txt&quot;</span>) <span class="keyword">as</span> fb:   <span class="comment"># ✅ 每个资源独立 as</span></span><br><span class="line">    ...</span><br></pre></td></tr></table></figure>
+<p><strong>陷阱二：<code>@contextmanager</code> 装饰的生成器没有 try/finally</strong>——块内抛异常时清理被跳过：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@contextlib.contextmanager</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">bad_lock</span>(<span class="params">lock</span>):</span><br><span class="line">    lock.acquire()</span><br><span class="line">    <span class="keyword">yield</span>                 <span class="comment"># ❌ 块内异常 → release 永远不执行 → 后续全部死锁</span></span><br><span class="line">    lock.release()</span><br></pre></td></tr></table></figure>
+<p><strong>陷阱三：<code>__exit__</code> 里 return True 吞掉所有异常</strong>（第 3 节）——&quot;莫名丢失错误&quot;的经典来源；要用 <code>contextlib.suppress(具体异常)</code> 表达意图。</p>
+<p><strong>陷阱四：finally 中 return/raise 覆盖真实异常</strong>——<code>__exit__</code>（或 finally）里主动 <code>raise</code>/<code>return</code> 会<strong>顶掉</strong>正在传播的原异常，堆栈里看不到真相；清理代码只做清理，想附加信息用 <code>raise NewError(...) from exc</code>（14 篇详解）。</p>
+<p><strong>陷阱五：在 <code>__exit__</code> 里引用可能已失效的资源</strong>——比如清理顺序错了（先关 conn 再关依赖 conn 的游标）。记住 LIFO，把依赖关系安排成&quot;后申请的依赖先申请的&quot;。</p>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li><code>with</code> = <code>__enter__</code>（返回值给 as）+ <code>__exit__</code>（必被调用，LIFO 逆序，参数是异常三元组）；</li>
+<li><code>@contextmanager</code>：yield 前是进入、后是清理，<strong>清理必须放 try/finally</strong>；简单逻辑用它，可复用/带状态用类；</li>
+<li><code>__exit__</code> 返回 True 抑制异常——默认返回 False；抑制必须精确到异常类型（<code>suppress</code>）；</li>
+<li>嵌套清理 LIFO；不定数量资源用 <code>ExitStack</code>（<code>enter_context</code>/<code>callback</code>/<code>pop_all</code> 提交-回滚）；</li>
+<li>实战铁律：文件/锁/事务/临时目录，<strong>一律 with</strong>；锁尤其如此——<code>with lock:</code> 是异常安全的唯一简单写法。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>手写 <code>indented(prefix)</code> 上下文管理器：进入后块内所有 <code>print</code> 输出自动带缩进前缀（提示：替换 <code>builtins.print</code> 或用 <code>redirect_stdout</code>），with 嵌套时缩进叠加。</li>
+<li>实现类版 <code>Suppressed(*exceptions)</code>：等价于 <code>contextlib.suppress</code>，并写测试证明&quot;声明外的异常正常传播&quot;。</li>
+<li>用 <code>ExitStack</code> 写 <code>temporary_env(**vars)</code>：临时设置若干环境变量，块结束精确恢复原值（先读旧值再覆盖），并保证中途抛异常也恢复。</li>
+<li>把第 5 节 sqlite 事务改为显式类实现（<code>__enter__</code> 执行 BEGIN，<code>__exit__</code> 按异常与否 COMMIT/ROLLBACK），对比标准库 <code>with conn</code> 的行为差异，说明为什么 sqlite3 官方文档提醒&quot;不要混用手动 begin 与 with&quot;。</li>
+<li>找出下面代码的两个 bug 并修复：<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@contextlib.contextmanager</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">timer</span>(<span class="params">label</span>):</span><br><span class="line">    start = time.perf_counter()</span><br><span class="line">    <span class="keyword">yield</span> start</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;<span class="subst">&#123;label&#125;</span>: <span class="subst">&#123;time.perf_counter()-start:<span class="number">.4</span>f&#125;</span>s&quot;</span>)</span><br><span class="line"><span class="comment"># 用法：with timer(&quot;x&quot;): raise ValueError(&quot;boom&quot;)  ← 问题在哪？</span></span><br></pre></td></tr></table></figure>
+</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/Python/" rel="tag"># Python</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/04-%E8%BF%AD%E4%BB%A3%E5%99%A8%E4%B8%8E%E7%94%9F%E6%88%90%E5%99%A8/" rel="prev" title="04-迭代器与生成器">
+                  <i class="fa fa-angle-left"></i> 04-迭代器与生成器
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/06-%E7%B1%BB%E5%9E%8B%E6%B3%A8%E8%A7%A3%E4%B8%8E%E7%8E%B0%E4%BB%A3%E8%AF%AD%E6%B3%95/" rel="next" title="06-类型注解与现代语法">
+                  06-类型注解与现代语法 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

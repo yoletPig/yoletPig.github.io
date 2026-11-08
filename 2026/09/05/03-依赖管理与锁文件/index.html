@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="1. 区分两个&#39;版本文件&#39;的角色：pyproject.toml（声明意图）vs uv.lock（锁定事实）； 2. 看懂 uv 的解析行为与版本规范语法； 3. 掌握依赖分组（dependency groups）与可选依赖（extras），…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="03-依赖管理与锁文件">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/05/03-%E4%BE%9D%E8%B5%96%E7%AE%A1%E7%90%86%E4%B8%8E%E9%94%81%E6%96%87%E4%BB%B6/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="1. 区分两个&#39;版本文件&#39;的角色：pyproject.toml（声明意图）vs uv.lock（锁定事实）； 2. 看懂 uv 的解析行为与版本规范语法； 3. 掌握依赖分组（dependency groups）与可选依赖（extras），…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-05T01:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.606Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Python">
+<meta property="article:tag" content="uv">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/05/03-%E4%BE%9D%E8%B5%96%E7%AE%A1%E7%90%86%E4%B8%8E%E9%94%81%E6%96%87%E4%BB%B6/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/05/03-%E4%BE%9D%E8%B5%96%E7%AE%A1%E7%90%86%E4%B8%8E%E9%94%81%E6%96%87%E4%BB%B6/","path":"2026/09/05/03-依赖管理与锁文件/","title":"03-依赖管理与锁文件"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>03-依赖管理与锁文件 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#03-%E4%BE%9D%E8%B5%96%E7%AE%A1%E7%90%86%E4%B8%8E%E9%94%81%E6%96%87%E4%BB%B6"><span class="nav-number">1.</span> <span class="nav-text"> 03 - 依赖管理与锁文件</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%B8%A4%E4%B8%AA%E6%96%87%E4%BB%B6%E4%B8%A4%E7%A7%8D%E8%AF%AD%E4%B9%89"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 两个文件，两种语义</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E8%A7%A3%E6%9E%90uv-%E5%9C%A8%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99-%E6%8C%89%E4%BB%80%E4%B9%88%E8%A7%84%E5%88%99%E7%AE%97"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 解析：uv 在什么时候、按什么规则算</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E9%94%81%E6%96%87%E4%BB%B6%E7%9A%84%E5%8D%8F%E4%BD%9C%E7%BA%AA%E5%BE%8Bgit-%E7%B3%BB%E5%88%97-02-%E7%AF%87%E7%9A%84%E8%90%BD%E5%9C%B0"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 锁文件的协作纪律（Git 系列 02 篇的落地）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E4%BE%9D%E8%B5%96%E5%88%86%E7%BB%84dev-%E4%BE%9D%E8%B5%96%E4%B8%8E%E5%85%B6%E4%BB%96%E5%9C%BA%E6%99%AF"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 依赖分组：dev 依赖与其他场景</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E8%A7%A3%E6%9E%90%E5%A4%B1%E8%B4%A5%E7%9A%84%E6%95%91%E6%8F%B4"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 解析失败的救援</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E7%BC%93%E5%AD%98%E4%B8%BA%E4%BB%80%E4%B9%88-uv-%E7%9A%84%E5%AE%89%E8%A3%85%E5%BF%AB%E4%B8%94%E7%9C%81"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 缓存：为什么 uv 的安装快且省</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%87%AA%E6%B5%8B"><span class="nav-number">1.8.</span> <span class="nav-text"> 自测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%8B%E4%B8%80%E7%AF%87"><span class="nav-number">1.9.</span> <span class="nav-text"> 下一篇</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8F%82%E8%80%83%E6%9D%A5%E6%BA%90"><span class="nav-number">1.10.</span> <span class="nav-text"> 参考来源</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/05/03-%E4%BE%9D%E8%B5%96%E7%AE%A1%E7%90%86%E4%B8%8E%E9%94%81%E6%96%87%E4%BB%B6/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="03-依赖管理与锁文件 | Yoleen的博客">
+      <meta itemprop="description" content="1. 区分两个&#39;版本文件&#39;的角色：pyproject.toml（声明意图）vs uv.lock（锁定事实）； 2. 看懂 uv 的解析行为与版本规范语法； 3. 掌握依赖分组（dependency groups）与可选依赖（extras），…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          03-依赖管理与锁文件
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-05 09:30:00" itemprop="dateCreated datePublished" datetime="2026-09-05T09:30:00+08:00">2026-09-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/uv/" itemprop="url" rel="index"><span itemprop="name">uv</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>1.4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>5 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">1. 区分两个'版本文件'的角色：pyproject.toml（声明意图）vs uv.lock（锁定事实）； 2. 看懂 uv 的解析行为与版本规范语法； 3. 掌握依赖分组（dependency groups）与可选依赖（extras），…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="03-依赖管理与锁文件"><a class="markdownIt-Anchor" href="#03-依赖管理与锁文件"></a> 03 - 依赖管理与锁文件</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ol>
+<li>区分两个&quot;版本文件&quot;的角色：<code>pyproject.toml</code>（声明意图）vs <code>uv.lock</code>（锁定事实）；</li>
+<li>看懂 uv 的解析行为与版本规范语法；</li>
+<li>掌握依赖分组（dependency groups）与可选依赖（extras），以及团队协作的锁纪律。</li>
+</ol>
+<h2 id="1-两个文件两种语义"><a class="markdownIt-Anchor" href="#1-两个文件两种语义"></a> 1. 两个文件，两种语义</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th><code>pyproject.toml</code></th>
+<th><code>uv.lock</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>谁写</td>
+<td>人（<code>uv add</code> 修改）</td>
+<td>解析器（<code>uv lock</code> 生成）</td>
+</tr>
+<tr>
+<td>内容</td>
+<td><strong>直接依赖 + 版本约束</strong>（意图）</td>
+<td><strong>完整依赖图每个包的精确版本与哈希</strong>（事实）</td>
+</tr>
+<tr>
+<td>类比</td>
+<td>菜谱（“要牛肉，要辣”）</td>
+<td>采购单（“XX 品牌牛肉 500g，批次号…”）</td>
+</tr>
+</tbody>
+</table>
+<p>为什么两者都要？只看意图文件，<code>pip install</code> 每次解析都可能拿到不同结果（传递依赖的版本漂移）——“上周能装，今天装出 bug”。锁文件把<strong>解析结果固化</strong>，<code>uv sync</code> 不再解析、只按锁安装——“任何时候任何机器，环境完全一致”。这就是可复现性的机制。</p>
+<p><strong>uv 的锁是 universal lockfile</strong>：一份锁覆盖所有平台与 Python 版本（解析时把各平台的解都算出来），不再需要 per-OS 的锁文件——对比 pip-tools 时代&quot;每个环境各自 compile&quot;的碎片化，这是 uv 锁的架构级改进。</p>
+<h2 id="2-解析uv-在什么时候-按什么规则算"><a class="markdownIt-Anchor" href="#2-解析uv-在什么时候-按什么规则算"></a> 2. 解析：uv 在什么时候、按什么规则算</h2>
+<p>解析发生的时机：<code>uv add</code>（必须，因为依赖变了）、<code>uv lock --upgrade</code>（你主动要求全面升级）、<code>uv sync</code> <strong>不解析</strong>（只按锁装——快与稳的来源）。</p>
+<p>解析器的目标（约束求解）：找到一组包版本，<strong>同时满足</strong>所有直接/传递依赖的版本要求。当&quot;不可能满足&quot;时你会看到 Conflict 报错（uv 会列出冲突链条）——这不是工具 bug，是依赖真的互斥（03 篇末给解法）。</p>
+<p>版本规范语法速查（PEP 440 标准）：</p>
+<figure class="highlight toml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">dependencies</span> = [</span><br><span class="line">  <span class="string">&quot;requests&gt;=2.31&quot;</span>,        <span class="comment"># ≥ 2.31</span></span><br><span class="line">  <span class="string">&quot;pandas&gt;=2.2,&lt;3.0&quot;</span>,      <span class="comment"># 区间约束（跨大版本要小心！）</span></span><br><span class="line">  <span class="string">&quot;httpx==0.27.*&quot;</span>,         <span class="comment"># 锁定到次版本段</span></span><br><span class="line">  <span class="string">&quot;flask~=3.0&quot;</span>,            <span class="comment"># 等价 &gt;=3.0, ==3.*（允许补丁级浮动）</span></span><br><span class="line">  <span class="string">&quot;torch&gt;=2.0; sys_platform == &#x27;linux&#x27;&quot;</span>,   <span class="comment"># 环境标记（PEP 508）</span></span><br><span class="line">]</span><br></pre></td></tr></table></figure>
+<p><strong>约束写法的团队纪律</strong>：应用项目<strong>写宽</strong>（<code>&gt;=2.31</code> 即可——真正的锁死交给 <code>uv.lock</code>，意图文件里写死版本是&quot;双重锁定&quot;，只会让依赖树更难解）；<strong>库项目更要写宽</strong>（你的下游无法满足&quot;必须是 2.31.0 整&quot;的库）。错误写法的代价：约束过紧 → 解析器无解或被迫使用旧包。</p>
+<h2 id="3-锁文件的协作纪律git-系列-02-篇的落地"><a class="markdownIt-Anchor" href="#3-锁文件的协作纪律git-系列-02-篇的落地"></a> 3. 锁文件的协作纪律（Git 系列 02 篇的落地）</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">git pull</span><br><span class="line">uv <span class="built_in">sync</span>               <span class="comment"># 拉同事更新过的 uv.lock 后：环境对齐，结束</span></span><br></pre></td></tr></table></figure>
+<ol>
+<li><strong><code>uv.lock</code> 必须提交</strong>（应用项目），且<strong>与 <code>pyproject.toml</code> 同一个 commit</strong>——否则 CI/同事会出现&quot;意图与事实不一致&quot;的中间状态；</li>
+<li><strong>锁冲突的处理</strong>：两人同时改依赖 → pull 时 uv.lock 冲突 → <strong>不要手工合并锁文件</strong>（它是生成物，合并生成物必错）：取一侧，重跑 <code>uv add</code> 补上另一侧的包，让 uv 重新生成；</li>
+<li><strong>升级策略分离</strong>：<code>uv sync</code> 永不升级（按锁装）；<code>uv lock --upgrade</code> 才升级（每周/每迭代跑一次的维护动作，配 CI 验证）。<strong>把&quot;装依赖&quot;与&quot;升级依赖&quot;分成两个动作</strong>，是稳定性纪律的核心。</li>
+</ol>
+<h2 id="4-依赖分组dev-依赖与其他场景"><a class="markdownIt-Anchor" href="#4-依赖分组dev-依赖与其他场景"></a> 4. 依赖分组：dev 依赖与其他场景</h2>
+<p>uv 支持 <strong>PEP 735 dependency groups</strong>（<code>[dependency-groups]</code> 表）——2024 年被 PyPA 接受的标准，取代各家私有的 dev 依赖写法：</p>
+<figure class="highlight toml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">[dependency-groups]</span></span><br><span class="line"><span class="attr">dev</span> = [                     <span class="comment"># uv 默认组：uv add --dev pytest 进这里</span></span><br><span class="line">  <span class="string">&quot;pytest&gt;=8.0&quot;</span>,</span><br><span class="line">  <span class="string">&quot;ruff&gt;=0.6&quot;</span>,</span><br><span class="line">]</span><br><span class="line"><span class="attr">lint</span> = [<span class="string">&quot;ruff&gt;=0.6&quot;</span>]        <span class="comment"># 自定义组：按场景分组</span></span><br><span class="line"><span class="attr">docs</span> = [<span class="string">&quot;mkdocs&gt;=1.6&quot;</span>]</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">uv <span class="built_in">sync</span> --group lint        <span class="comment"># 只装 lint 组</span></span><br><span class="line">uv <span class="built_in">sync</span> --no-group docs     <span class="comment"># 排除某组</span></span><br><span class="line">uv <span class="built_in">sync</span> --no-dev            <span class="comment"># 生产环境：不装 dev 组（08 篇部署用）</span></span><br></pre></td></tr></table></figure>
+<p>与 <strong>extras（可选依赖）</strong> 的分工：extras 是 <code>[project.optional-dependencies]</code>，<strong>面向下游使用者</strong>（<code>pip install mylib[plot]</code>）；dependency-groups 是<strong>面向开发者自己</strong>（测试/lint/文档工具）。混用的信号：下游开始装你的 “dev” 组——那它就该是 extras。</p>
+<h2 id="5-解析失败的救援"><a class="markdownIt-Anchor" href="#5-解析失败的救援"></a> 5. 解析失败的救援</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">uv add <span class="string">&quot;a-package&quot;</span>          <span class="comment"># error: Because ... conflict ...</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ① 看清冲突链：报错会列出&quot;谁要求谁≥X，谁又要求&lt;Y&quot;</span></span><br><span class="line"><span class="comment"># ② 释放空间：放宽自己过紧的约束（§2 纪律）</span></span><br><span class="line"><span class="comment"># ③ 平台冲突（如某包无 Windows wheel）：</span></span><br><span class="line">uv add <span class="string">&quot;package&quot;</span> --optional gpu ...    <span class="comment"># 或用环境标记限定平台</span></span><br><span class="line"><span class="comment"># ④ 真实的互斥：寻找替代包 / 联系上游放约束 / [tool.uv] override-dependencies</span></span><br><span class="line"><span class="comment">#    （覆盖传递依赖的约束——最后手段，会绕开上游的声明，写注释说明原因）</span></span><br></pre></td></tr></table></figure>
+<h2 id="6-缓存为什么-uv-的安装快且省"><a class="markdownIt-Anchor" href="#6-缓存为什么-uv-的安装快且省"></a> 6. 缓存：为什么 uv 的安装快且省</h2>
+<p>全局缓存（默认 <code>~/.cache/uv</code>，Linux）按内容寻址存储 wheel：<strong>同一 wheel 全机只存一份</strong>，项目环境里放的是硬链接（同盘）——10 个项目用 torch，磁盘也只有一份。缓存相关的常用操作：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">uv cache clean                <span class="comment"># 清空</span></span><br><span class="line">uv cache prune                <span class="comment"># 清理未使用的缓存项</span></span><br></pre></td></tr></table></figure>
+<p>缓存损坏的排查思路：删除缓存重试永远是安全动作（它可再生——Git 02 篇&quot;可重建的不入库&quot;的 uv 版）。</p>
+<h2 id="自测"><a class="markdownIt-Anchor" href="#自测"></a> 自测</h2>
+<ol>
+<li>两个文件各回答什么问题？为什么两个都要？</li>
+<li>“universal lockfile” 解决了什么旧痛点？</li>
+<li>应用与库项目的约束写法各应如何？双重锁定的害处？</li>
+<li>锁文件冲突为什么不能手工合并？正确流程？</li>
+<li>dependency-groups 与 extras 的分工信号？</li>
+<li><code>uv sync</code> 与 <code>uv lock --upgrade</code> 分别是什么动作？为什么必须分离？</li>
+</ol>
+<h2 id="下一篇"><a class="markdownIt-Anchor" href="#下一篇"></a> 下一篇</h2>
+<p>04 - Python 版本与虚拟环境——把解释器管理也收进来。</p>
+<h2 id="参考来源"><a class="markdownIt-Anchor" href="#参考来源"></a> 参考来源</h2>
+<ul>
+<li>uv 官方文档·The lockfile / Concepts - Dependencies: <a target="_blank" rel="noopener" href="https://docs.astral.sh/uv/concepts/projects/layout/#the-lockfile">https://docs.astral.sh/uv/concepts/projects/layout/#the-lockfile</a> 、<a target="_blank" rel="noopener" href="https://docs.astral.sh/uv/concepts/dependencies/">https://docs.astral.sh/uv/concepts/dependencies/</a></li>
+<li>PEP 440（版本规范）/ PEP 508（依赖说明与环境标记）/ PEP 735（dependency groups）: <a target="_blank" rel="noopener" href="https://peps.python.org/">https://peps.python.org/</a></li>
+<li>uv 官方文档·Cache: <a target="_blank" rel="noopener" href="https://docs.astral.sh/uv/concepts/cache/">https://docs.astral.sh/uv/concepts/cache/</a></li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/Python/" rel="tag"># Python</a>
+              <a href="/tags/uv/" rel="tag"># uv</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/05/02-%E9%A1%B9%E7%9B%AE%E7%AE%A1%E7%90%86%E5%9F%BA%E7%A1%80/" rel="prev" title="02-项目管理基础">
+                  <i class="fa fa-angle-left"></i> 02-项目管理基础
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/05/04-Python%E7%89%88%E6%9C%AC%E4%B8%8E%E8%99%9A%E6%8B%9F%E7%8E%AF%E5%A2%83/" rel="next" title="04-Python版本与虚拟环境">
+                  04-Python版本与虚拟环境 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

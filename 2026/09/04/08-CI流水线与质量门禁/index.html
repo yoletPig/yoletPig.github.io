@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="1. 理解 CI 的本质——它不是&#39;跑测试的地方&#39;，是&#39;每次提交对系统可用性的证明&#39;； 2. 拿走一套完整的 GitHub Actions 工作流（Python + C++ 双矩阵，yaml 全量可用）； 3. 建立分层策略：PR 上跑什么…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="08-CI流水线与质量门禁">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/08-CI%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E8%B4%A8%E9%87%8F%E9%97%A8%E7%A6%81/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="1. 理解 CI 的本质——它不是&#39;跑测试的地方&#39;，是&#39;每次提交对系统可用性的证明&#39;； 2. 拿走一套完整的 GitHub Actions 工作流（Python + C++ 双矩阵，yaml 全量可用）； 3. 建立分层策略：PR 上跑什么…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T20:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.562Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="测试">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/08-CI%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E8%B4%A8%E9%87%8F%E9%97%A8%E7%A6%81/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/08-CI%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E8%B4%A8%E9%87%8F%E9%97%A8%E7%A6%81/","path":"2026/09/04/08-CI流水线与质量门禁/","title":"08-CI流水线与质量门禁"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>08-CI流水线与质量门禁 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#08-ci-%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E8%B4%A8%E9%87%8F%E9%97%A8%E7%A6%81%E6%8A%8A%E7%BA%AA%E5%BE%8B%E8%87%AA%E5%8A%A8%E5%8C%96"><span class="nav-number">1.</span> <span class="nav-text"> 08 - CI 流水线与质量门禁：把纪律自动化</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-ci-%E7%9A%84%E6%9C%AC%E8%B4%A8%E6%AF%8F%E6%AC%A1%E6%8F%90%E4%BA%A4%E8%AF%81%E6%98%8E%E7%B3%BB%E7%BB%9F%E4%BB%8D%E5%8F%AF%E7%94%A8"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. CI 的本质：每次提交证明系统仍可用</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-github-actions-%E5%AE%8C%E6%95%B4%E5%B7%A5%E4%BD%9C%E6%B5%81python-c-%E5%8F%8C%E7%9F%A9%E9%98%B5"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. GitHub Actions 完整工作流：Python + C++ 双矩阵</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%88%86%E5%B1%82%E7%AD%96%E7%95%A5pr-%E6%B5%8B%E4%BB%80%E4%B9%88nightly-%E6%B5%8B%E4%BB%80%E4%B9%88"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 分层策略：PR 测什么，nightly 测什么</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E8%A6%86%E7%9B%96%E7%8E%87%E5%BD%93%E8%AF%8A%E6%96%AD%E7%94%A8%E5%88%AB%E5%BD%93-kpi"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 覆盖率：当诊断用，别当 KPI</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E7%BC%93%E5%AD%98%E4%B8%8E%E6%8F%90%E9%80%9F%E8%AE%A9%E5%BF%AB%E5%8F%8D%E9%A6%88%E5%8F%AF%E6%8C%81%E7%BB%AD"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 缓存与提速：让快反馈可持续</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%A4%B1%E8%B4%A5%E5%A4%84%E7%90%86%E7%BA%AA%E5%BE%8B%E7%BA%A2%E8%89%B2%E4%B8%8D%E5%8F%AF%E5%90%88%E5%B9%B6-flaky-%E8%BF%BD%E8%B8%AA"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 失败处理纪律：红色不可合并 + flaky 追踪</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/08-CI%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E8%B4%A8%E9%87%8F%E9%97%A8%E7%A6%81/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="08-CI流水线与质量门禁 | Yoleen的博客">
+      <meta itemprop="description" content="1. 理解 CI 的本质——它不是&#39;跑测试的地方&#39;，是&#39;每次提交对系统可用性的证明&#39;； 2. 拿走一套完整的 GitHub Actions 工作流（Python + C++ 双矩阵，yaml 全量可用）； 3. 建立分层策略：PR 上跑什么…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          08-CI流水线与质量门禁
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 04:00:00" itemprop="dateCreated datePublished" datetime="2026-09-04T04:00:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%B5%8B%E8%AF%95/" itemprop="url" rel="index"><span itemprop="name">测试</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>10 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">1. 理解 CI 的本质——它不是'跑测试的地方'，是'每次提交对系统可用性的证明'； 2. 拿走一套完整的 GitHub Actions 工作流（Python + C++ 双矩阵，yaml 全量可用）； 3. 建立分层策略：PR 上跑什么…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="08-ci-流水线与质量门禁把纪律自动化"><a class="markdownIt-Anchor" href="#08-ci-流水线与质量门禁把纪律自动化"></a> 08 - CI 流水线与质量门禁：把纪律自动化</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ol>
+<li>理解 CI 的本质——它不是&quot;跑测试的地方&quot;，是&quot;每次提交对系统可用性的证明&quot;；</li>
+<li>拿走一套完整的 GitHub Actions 工作流（Python + C++ 双矩阵，yaml 全量可用）；</li>
+<li>建立分层策略：PR 上跑什么、nightly 跑什么，以及覆盖率怎么当门禁用而不伤人；</li>
+<li>落地失败处理纪律：红色不可合并 + flaky 测试的追踪与隔离机制。</li>
+</ol>
+<h2 id="1-ci-的本质每次提交证明系统仍可用"><a class="markdownIt-Anchor" href="#1-ci-的本质每次提交证明系统仍可用"></a> 1. CI 的本质：每次提交证明系统仍可用</h2>
+<p>持续集成（CI）的最小定义只有一句：<strong>每次提交都触发一次全自动化构建与验证，并在失败时让所有人立刻知道</strong>。Martin Fowler 与 Matthew Foemmel 的经典文章《Continuous Integration》（2000 年代初成文，持续更新）强调的从来不是工具，而是两条纪律：<em>提交即验证</em>、<em>修复失败优先于一切新工作</em>。</p>
+<p>为什么这条纪律值钱？回到 01 篇的账本：没有 CI 时，“系统还能用&quot;靠的是某个人某天想起来跑一次测试——这个间隔以天/周计；有 CI 后，间隔被压到&quot;一次提交”。<strong>集成测试左移的极限形态就是 CI</strong>：bug 的发现时间从&quot;联调那天&quot;提前到&quot;写坏它的那一次 push&quot;。</p>
+<p>由此推出门禁（quality gate）的定位：CI 不是&quot;体检中心&quot;，是&quot;闸机&quot;。闸机的规则必须简单、客观、无歧义：<strong>绿的合，红的停</strong>。任何&quot;红了但先合吧&quot;的特批，都是在教整个团队&quot;红色可以商量&quot;——这个信号的破坏力比任何单个 bug 都大。</p>
+<h2 id="2-github-actions-完整工作流python-c-双矩阵"><a class="markdownIt-Anchor" href="#2-github-actions-完整工作流python-c-双矩阵"></a> 2. GitHub Actions 完整工作流：Python + C++ 双矩阵</h2>
+<p>本仓库读者常见的混合项目形态：Python 包（业务/算法）+ C++ 扩展（性能内核），双语言一起守。<code>.github/workflows/ci.yml</code> 全量：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">name:</span> <span class="string">ci</span></span><br><span class="line"></span><br><span class="line"><span class="attr">on:</span></span><br><span class="line">  <span class="attr">pull_request:</span>                    <span class="comment"># PR 触发（合并前门禁）</span></span><br><span class="line">  <span class="attr">push:</span></span><br><span class="line">    <span class="attr">branches:</span> [<span class="string">main</span>]               <span class="comment"># 主干触发（合入后兜底）</span></span><br><span class="line"></span><br><span class="line"><span class="attr">jobs:</span></span><br><span class="line">  <span class="attr">python:</span></span><br><span class="line">    <span class="attr">runs-on:</span> <span class="string">ubuntu-latest</span></span><br><span class="line">    <span class="attr">strategy:</span></span><br><span class="line">      <span class="attr">fail-fast:</span> <span class="literal">false</span>             <span class="comment"># 一个版本挂了，其他版本照跑完（拿全量信息）</span></span><br><span class="line">      <span class="attr">matrix:</span></span><br><span class="line">        <span class="attr">python-version:</span> [<span class="string">&quot;3.10&quot;</span>, <span class="string">&quot;3.12&quot;</span>]</span><br><span class="line">    <span class="attr">steps:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">uses:</span> <span class="string">actions/checkout@v4</span></span><br><span class="line"></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">uses:</span> <span class="string">astral-sh/setup-uv@v5</span>          <span class="comment"># uv 08 篇：官方 action，内置缓存</span></span><br><span class="line">        <span class="attr">with:</span></span><br><span class="line">          <span class="attr">enable-cache:</span> <span class="literal">true</span>                  <span class="comment"># 缓存键默认绑定 uv.lock 哈希</span></span><br><span class="line">          <span class="attr">python-version:</span> <span class="string">$&#123;&#123;</span> <span class="string">matrix.python-version</span> <span class="string">&#125;&#125;</span></span><br><span class="line"></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">安装依赖（只按锁装）</span></span><br><span class="line">        <span class="attr">run:</span> <span class="string">uv</span> <span class="string">sync</span> <span class="string">--frozen</span></span><br><span class="line"></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">静态检查（09</span> <span class="string">篇的主角，先于测试）</span></span><br><span class="line">        <span class="attr">run:</span> <span class="string">|</span></span><br><span class="line"><span class="string">          uv run ruff check .</span></span><br><span class="line"><span class="string">          uv run mypy src</span></span><br><span class="line"><span class="string"></span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">单元</span> <span class="string">+</span> <span class="string">集成测试（含覆盖率）</span></span><br><span class="line">        <span class="attr">run:</span> <span class="string">uv</span> <span class="string">run</span> <span class="string">pytest</span> <span class="string">-m</span> <span class="string">&quot;&quot;</span> <span class="string">--cov</span> <span class="string">--cov-report=xml</span></span><br><span class="line"></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">覆盖率门禁</span></span><br><span class="line">        <span class="attr">run:</span> <span class="string">uv</span> <span class="string">run</span> <span class="string">coverage</span> <span class="string">report</span> <span class="string">--fail-under=85</span></span><br><span class="line"></span><br><span class="line">  <span class="attr">cpp:</span></span><br><span class="line">    <span class="attr">runs-on:</span> <span class="string">ubuntu-latest</span></span><br><span class="line">    <span class="attr">steps:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">uses:</span> <span class="string">actions/checkout@v4</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">安装工具链</span></span><br><span class="line">        <span class="attr">run:</span> <span class="string">sudo</span> <span class="string">apt-get</span> <span class="string">update</span> <span class="string">&amp;&amp;</span> <span class="string">sudo</span> <span class="string">apt-get</span> <span class="string">install</span> <span class="string">-y</span> <span class="string">cmake</span> <span class="string">g++</span> <span class="string">clang-tidy</span></span><br><span class="line"></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">配置（Debug</span> <span class="string">+</span> <span class="string">测试开关</span> <span class="string">+</span> <span class="string">clang-tidy</span> <span class="string">接入）</span></span><br><span class="line">        <span class="attr">run:</span> <span class="string">&gt;</span></span><br><span class="line"><span class="string">          cmake -S . -B build</span></span><br><span class="line"><span class="string">          -DCMAKE_BUILD_TYPE=Debug</span></span><br><span class="line"><span class="string">          -DMYLIB_BUILD_TESTS=ON</span></span><br><span class="line"><span class="string">          -DCMAKE_CXX_CLANG_TIDY=&quot;clang-tidy;--warnings-as-errors=*&quot;</span></span><br><span class="line"><span class="string"></span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">构建</span></span><br><span class="line">        <span class="attr">run:</span> <span class="string">cmake</span> <span class="string">--build</span> <span class="string">build</span> <span class="string">-j$(nproc)</span></span><br><span class="line"></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">测试</span></span><br><span class="line">        <span class="attr">run:</span> <span class="string">ctest</span> <span class="string">--test-dir</span> <span class="string">build</span> <span class="string">--output-on-failure</span></span><br></pre></td></tr></table></figure>
+<p>设计说明（每条都是纪律，不是偏好）：</p>
+<ol>
+<li><strong><code>uv sync --frozen</code></strong>：CI 只按 <code>uv.lock</code> 装，锁与 pyproject 不一致就该红——在 CI 里隐式重解析等于放弃可复现性（uv 08 篇的三条 CI 纪律之一）；</li>
+<li><strong>静态检查排在测试前</strong>：类型/lint 失败 3 秒可知，没必要等 3 分钟的测试先跑完（09 篇详述这层为什么算&quot;测试&quot;）；</li>
+<li><strong><code>fail-fast: false</code></strong>：矩阵的目的是拿&quot;哪个版本挂了&quot;的<strong>全量情报</strong>，fast-fail 只省几分钟却丢信息；</li>
+<li><strong>C++ 侧 CTest 是 CMake 原生的测试入口</strong>：<code>enable_testing()</code> 后 gtest 自动注册为 ctest 用例（11 篇给全 CMake 接线）；clang-tidy 挂在 CMake 变量上，警告即错误；</li>
+<li><strong>密钥零落地</strong>：需要真实凭据的用例不进 PR 流水线（用 <code>secrets</code> 注入的 nightly 专属用例跑）。</li>
+</ol>
+<h2 id="3-分层策略pr-测什么nightly-测什么"><a class="markdownIt-Anchor" href="#3-分层策略pr-测什么nightly-测什么"></a> 3. 分层策略：PR 测什么，nightly 测什么</h2>
+<p>PR 流水线的预算是<strong>十以内分钟级</strong>——它是每个工程师每天要过几十次的闸门，慢门禁的结局是被绕过（本地 --skip、催 admin merge）。分层按&quot;价值/耗时比&quot;排：</p>
+<table>
+<thead>
+<tr>
+<th>层</th>
+<th>内容</th>
+<th>时长预算</th>
+<th>触发时机</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PR 主线</td>
+<td>lint + 类型 + 单元 + 轻集成 + 覆盖率门禁</td>
+<td>&lt; 10 min</td>
+<td>每次 push</td>
+</tr>
+<tr>
+<td>PR 补充</td>
+<td>矩阵（多 Python 版本 / 多编译器）</td>
+<td>&lt; 15 min</td>
+<td>push（并行跑）</td>
+</tr>
+<tr>
+<td>nightly</td>
+<td>全量：慢集成、testcontainers 真库、property 大样本（<code>max_examples=2000</code>）、Sanitizer 构建、性能基线对比</td>
+<td>&lt; 2 h</td>
+<td>每日定时 + 周末跑更长</td>
+</tr>
+</tbody>
+</table>
+<p>nightly 的接法（加进同一个 workflow）：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">nightly:</span></span><br><span class="line">  <span class="attr">if:</span> <span class="string">github.event_name</span> <span class="string">==</span> <span class="string">&#x27;schedule&#x27;</span></span><br><span class="line">  <span class="attr">runs-on:</span> <span class="string">ubuntu-latest</span></span><br><span class="line">  <span class="attr">steps:</span></span><br><span class="line">    <span class="bullet">-</span> <span class="attr">uses:</span> <span class="string">actions/checkout@v4</span></span><br><span class="line">    <span class="bullet">-</span> <span class="attr">uses:</span> <span class="string">astral-sh/setup-uv@v5</span></span><br><span class="line">      <span class="attr">with:</span> &#123; <span class="attr">enable-cache:</span> <span class="literal">true</span> &#125;</span><br><span class="line">    <span class="bullet">-</span> <span class="attr">run:</span> <span class="string">uv</span> <span class="string">sync</span> <span class="string">--frozen</span></span><br><span class="line">    <span class="bullet">-</span> <span class="attr">run:</span> <span class="string">uv</span> <span class="string">run</span> <span class="string">pytest</span> <span class="string">-m</span> <span class="string">&quot;slow or integration or property&quot;</span> <span class="string">--maxfail=3</span></span><br><span class="line">  <span class="attr">schedule:</span></span><br><span class="line">    <span class="bullet">-</span> <span class="attr">cron:</span> <span class="string">&quot;0 18 * * *&quot;</span>     <span class="comment"># UTC 18:00 = 北京时间凌晨 2 点</span></span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：nightly 必须有<strong>责任人通知机制</strong>（Slack/邮件 webhook 指到值班轮）——没有通知的 nightly 是花钱买心安；连红三天没人修的 nightly，团队会永远无视它。</p>
+<h2 id="4-覆盖率当诊断用别当-kpi"><a class="markdownIt-Anchor" href="#4-覆盖率当诊断用别当-kpi"></a> 4. 覆盖率：当诊断用，别当 KPI</h2>
+<p><a target="_blank" rel="noopener" href="http://coverage.py">coverage.py</a> 的最小闭环（实测输出，<code>pyproject.toml</code> 配置同下）：</p>
+<figure class="highlight toml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">[tool.coverage.run]</span></span><br><span class="line"><span class="attr">source</span> = [<span class="string">&quot;src/mylib&quot;</span>]</span><br><span class="line"></span><br><span class="line"><span class="section">[tool.coverage.report]</span></span><br><span class="line"><span class="attr">fail_under</span> = <span class="number">90</span></span><br><span class="line"><span class="attr">show_missing</span> = <span class="literal">true</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">$ uv run pytest --cov</span><br><span class="line">Name                    Stmts   Miss  Cover   Missing</span><br><span class="line">-----------------------------------------------------</span><br><span class="line">src/mylib/__init__.py       0      0   100%</span><br><span class="line">src/mylib/stats.py          6      0   100%</span><br><span class="line">-----------------------------------------------------</span><br><span class="line">TOTAL                       6      0   100%</span><br><span class="line">Required test coverage of 90.0% reached. Total coverage: 100.00%</span><br><span class="line">3 passed in 0.07s</span><br></pre></td></tr></table></figure>
+<p><code>fail_under</code> 触发时进程退出码为 1（实测），这就是 CI 里的硬门禁。但<strong>全局阈值是一把钝刀</strong>：新项目从 0 拉到 85 痛苦，老项目历史欠账大、一卡全卡。Google Testing Blog《Code Coverage Best Practices》（2020，Carlos Arguelles 等）给出的工程化答案是：<strong>关注增量（absolute coverage of changed lines），别只盯全量</strong>——代码评审时看&quot;这次改动新增的行有多少被测试执行&quot;，新代码 100%、老代码自然漂移到高位。</p>
+<p>落地工具：diff-cover（对 coverage.xml 与 git diff 求交集，输出&quot;改动行覆盖率&quot;并可与门禁联动）；PR 流水线用 diff 门禁 + 较低全局阈值（如 60），nightly 报全量趋势。<strong>误区温习（01 篇）</strong>：覆盖率是必要条件不是充分条件——它抓&quot;从未被执行的行&quot;，不抓&quot;被执行但断言为空&quot;的测试。</p>
+<h2 id="5-缓存与提速让快反馈可持续"><a class="markdownIt-Anchor" href="#5-缓存与提速让快反馈可持续"></a> 5. 缓存与提速：让快反馈可持续</h2>
+<p>三个杠杆，按收益排序：</p>
+<ol>
+<li><strong>工具链缓存</strong>（uv 的主场）：<code>setup-uv</code> 的 <code>enable-cache</code> 缓存全局缓存目录（包与 wheel），键绑定 <code>uv.lock</code> 哈希——锁没变，装依赖从分钟级到秒级（细节见 uv 08 篇）。C++ 侧对应 ccache（<code>apt install ccache</code> + CMake <code>-DCMAKE_CXX_COMPILER_LAUNCHER=ccache</code>），增量构建收益巨大；</li>
+<li><strong>测试分片</strong>：矩阵多 job 各跑一部分。pytest 生态用 pytest-split（按历史耗时均匀分组）或手工按目录分：</li>
+</ol>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">strategy:</span></span><br><span class="line">  <span class="attr">matrix:</span></span><br><span class="line">    <span class="attr">shard:</span> [<span class="number">1</span>, <span class="number">2</span>, <span class="number">3</span>, <span class="number">4</span>]</span><br><span class="line"><span class="attr">steps:</span></span><br><span class="line">  <span class="bullet">-</span> <span class="attr">run:</span> <span class="string">uv</span> <span class="string">run</span> <span class="string">pytest</span> <span class="string">--splits</span> <span class="number">4</span> <span class="string">--group</span> <span class="string">$&#123;&#123;</span> <span class="string">matrix.shard</span> <span class="string">&#125;&#125;</span></span><br></pre></td></tr></table></figure>
+<p>分片的前提是<strong>测试相互独立</strong>（01 篇 FIRST 的 I）——有顺序依赖的套件分片后必炸，这也是对独立性的免费体检；<br />
+3. <strong>并行</strong>：<code>pytest -n auto</code>（pytest-xdist）多进程；注意 07 篇的端口/路径隔离是并行化的前置条件。再配合 <code>--durations=10</code> 定期揪最慢的十个测试优化。</p>
+<h2 id="6-失败处理纪律红色不可合并-flaky-追踪"><a class="markdownIt-Anchor" href="#6-失败处理纪律红色不可合并-flaky-追踪"></a> 6. 失败处理纪律：红色不可合并 + flaky 追踪</h2>
+<p><strong>红色不可合并</strong>是硬规则：main 分支红了，修复优先级高于一切新 PR（Fowler 的 CI 纪律原文如此）。两个机制配套：</p>
+<ul>
+<li><strong>分支保护</strong>（GitHub：Settings → Branches → Require status checks）：把 <code>python</code>、<code>cpp</code> 两个 job 设为必须通过，&quot;红着合&quot;在机制上不可能；</li>
+<li><strong>本地预演</strong>：push 前跑与 CI 相同的命令（uv 08 篇的&quot;新人三行命令&quot;扩展为五行，含 lint+mypy）——CI 惊喜应该在 PR 打开前耗尽。</li>
+</ul>
+<p><strong>flaky 测试是门禁的天敌。</strong> Google Testing Blog《Flaky Tests at Google and How We Mitigate Them》（John Micco，2016）披露的数据与机制都值得直接借用：flaky 测试在谷歌规模下每天产生大量误报，开发者一旦学会&quot;红色可以点重试&quot;，门禁失效开始连锁。谷歌的处理框架可以搬到任何团队：</p>
+<ol>
+<li><strong>识别</strong>：CI 上记录&quot;同 commit 重跑后结果翻转&quot;事件（rerun 日志或专用工具 pytest-rerunfailures 的 <code>--reruns</code> 配合上报——<strong>重试只是止血，必须留下记录</strong>）；</li>
+<li><strong>隔离（quarantine）</strong>：确认 flaky 的测试移入隔离标记（如 <code>@pytest.mark.flaky(runs=3)</code> 上报 + 隔离清单），隔离集不阻塞合并但<strong>进每日报告</strong>，限时一周内修复或删除；</li>
+<li><strong>归因</strong>：07 篇稳定性四清单是第一排查表；仍无头绪的（真并发竞态、时序敏感），给测试加&quot;失败即录环境&quot;（CI 上下文日志）再分析；</li>
+<li><strong>退出机制</strong>：隔离超期未修 = 自动删除该测试并开 issue——<strong>一个长期 flaky 的测试比没有测试更糟</strong>，它持续消耗全队的信任。</li>
+</ol>
+<p><strong>经验做法</strong>：把&quot;本周新增 flaky / 修复 flaky / 隔离中&quot;三个数字放进团队周报——被看见的数字才会被治理。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<p><strong>误区一：门禁越多越好。</strong> 每条门禁都有误杀成本。原则：新门禁上线先观察两周（报告不阻塞），误杀率可接受再转硬门禁。</p>
+<p><strong>误区二：nightly 红了不管。</strong> nightly 的定位是&quot;主干的体检中心&quot;，连红说明主干在积累债务——比 PR 红更危险，因为它阻塞不了任何人。</p>
+<p><strong>误区三：覆盖率阈值定在 100%。</strong> 达成成本指数增长（异常处理/兼容分支），且逼出无断言测试。工程实践：全局 60~85 + 改动行 100%，比单看一个数字健康得多。</p>
+<p><strong>误区四：缓存把 CI 变成不可复现的。</strong> 缓存失效策略不明确（键不含 lock 哈希）会让 CI 偶尔跑在旧依赖上。所有缓存键必须能从仓库内容推导（uv 的键=lock 哈希，ccache 的键=编译输入哈希），并保留&quot;清缓存重跑&quot;的入口。</p>
+<p><strong>误区五：<code>--reruns 3</code> 挂上就算治理了。</strong> 重试掩盖红色、无记录无归因，等于给每个 flaky 发了永久通行证。重试必须与上报/隔离绑定。</p>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>CI 本质：提交即验证 + 修复优先；门禁是闸机不是体检中心，规则必须无歧义；</li>
+<li>双语言工作流四个锚点：<code>uv sync --frozen</code>、静态先于测试、<code>fail-fast: false</code> 保情报、CTest+clang-tidy 收 C++ 侧；</li>
+<li>分层：PR 十分钟内（增量价值/耗时最高），nightly 吃掉慢集成/大样本/Sanitizer/性能基线，必须有通知与责任人；</li>
+<li>覆盖率：<code>fail_under</code> 是退出码 1 的硬门禁，但工程正解是 diff-cover 增量门禁 + 全局宽松阈值；覆盖率是必要条件非充分条件；</li>
+<li>提速三杠杆：工具链缓存（uv/ccache）、分片（前提是独立性）、xdist 并行；慢门禁必被绕过；</li>
+<li>纪律：分支保护让&quot;红着合&quot;机制上不可能；flaky 治理四步——识别、隔离、归因、超期即删；重试必须留记录。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>给本章 yaml 补第三个 job <code>nightly-sanitizer</code>：C++ 侧以 ASan+UBSan 构建并跑 ctest（提示：<code>-DCMAKE_CXX_FLAGS=&quot;-fsanitize=address,undefined&quot;</code>，09 篇有完整接法），并设置 schedule。</li>
+<li>为你的项目配置 diff-cover 门禁：生成 coverage.xml → <code>diff-cover coverage.xml --compare-branch=main --fail-under=90</code>，在 PR 流水线接入并记录首轮各 PR 的数字。</li>
+<li>用 <code>pytest --durations=10</code> 找出你的套件最慢 5 个测试，逐个归因（I/O？sleep？夹具过重？），优化两个并记录前后时长。</li>
+<li>给你的套件做一次&quot;独立性体检&quot;：随机打乱执行顺序（pytest-randomly）跑 3 次，记录是否出现顺序相关失败并归因。</li>
+<li>起草你团队的 flaky 治理条款（隔离标记、责任人、时限、退出动作），对照谷歌四步补缺，写成一页 wiki。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%B5%8B%E8%AF%95/" rel="tag"># 测试</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/07-%E9%9B%86%E6%88%90%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%A4%96%E9%83%A8%E4%BE%9D%E8%B5%96/" rel="prev" title="07-集成测试与外部依赖">
+                  <i class="fa fa-angle-left"></i> 07-集成测试与外部依赖
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/09-%E9%9D%99%E6%80%81%E5%88%86%E6%9E%90%E4%B8%8EFuzzing/" rel="next" title="09-静态分析与Fuzzing">
+                  09-静态分析与Fuzzing <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

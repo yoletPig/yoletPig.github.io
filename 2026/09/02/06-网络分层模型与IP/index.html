@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 理解分层模型的设计动机与 OSI&#x2F;TCP&#x2F;IP 两套模型的实用主义对应关系，能对任何网络概念说清&#39;它在哪一层&#39;。 - 跟着一个字节走完封装&#x2F;解封装的全程，记住每层头部的开销与 MTU 的含义。 - 掌握 IP 地址与 CIDR 的手算能…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="06-网络分层模型与IP">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/06-%E7%BD%91%E7%BB%9C%E5%88%86%E5%B1%82%E6%A8%A1%E5%9E%8B%E4%B8%8EIP/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 理解分层模型的设计动机与 OSI&#x2F;TCP&#x2F;IP 两套模型的实用主义对应关系，能对任何网络概念说清&#39;它在哪一层&#39;。 - 跟着一个字节走完封装&#x2F;解封装的全程，记住每层头部的开销与 MTU 的含义。 - 掌握 IP 地址与 CIDR 的手算能…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T09:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.522Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="网络">
+<meta property="article:tag" content="计算机系统">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/06-%E7%BD%91%E7%BB%9C%E5%88%86%E5%B1%82%E6%A8%A1%E5%9E%8B%E4%B8%8EIP/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/06-%E7%BD%91%E7%BB%9C%E5%88%86%E5%B1%82%E6%A8%A1%E5%9E%8B%E4%B8%8EIP/","path":"2026/09/02/06-网络分层模型与IP/","title":"06-网络分层模型与IP"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>06-网络分层模型与IP | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#06-%E7%BD%91%E7%BB%9C%E5%88%86%E5%B1%82%E6%A8%A1%E5%9E%8B%E4%B8%8E-ip"><span class="nav-number">1.</span> <span class="nav-text"> 06 - 网络分层模型与 IP</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%88%86%E5%B1%82osi-%E4%B8%8E-tcpip-%E7%9A%84%E5%AE%9E%E7%94%A8%E4%B8%BB%E4%B9%89"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 为什么分层：OSI 与 TCP&#x2F;IP 的实用主义</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%B0%81%E8%A3%85%E4%B8%8E%E8%A7%A3%E5%B0%81%E8%A3%85%E4%B8%80%E4%B8%AA%E5%AD%97%E8%8A%82%E7%9A%84%E8%87%AA%E4%B8%8A%E8%80%8C%E4%B8%8B%E6%97%85%E7%A8%8B"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 封装与解封装：一个字节的自上而下旅程</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-ip-%E5%9C%B0%E5%9D%80%E4%B8%8E%E5%AD%90%E7%BD%91cidr-%E6%89%8B%E7%AE%97"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. IP 地址与子网：CIDR 手算</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E8%B7%AF%E7%94%B1%E8%BD%AC%E5%8F%91-vs-%E8%B7%AF%E7%94%B1%E5%8D%8F%E8%AE%AE"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 路由：转发 vs 路由协议</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-nat%E5%AE%B6%E5%BA%AD%E8%B7%AF%E7%94%B1%E5%99%A8%E5%A6%82%E4%BD%95%E5%B7%A5%E4%BD%9C"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. NAT：家庭路由器如何工作</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%AE%9E%E6%B5%8Bping-traceroute-mtr-%E4%B8%89%E4%BB%B6%E5%A5%97"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 实测：ping &#x2F; traceroute &#x2F; mtr 三件套</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-ipv6-%E6%A6%82%E8%A7%88"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. IPv6 概览</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/06-%E7%BD%91%E7%BB%9C%E5%88%86%E5%B1%82%E6%A8%A1%E5%9E%8B%E4%B8%8EIP/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="06-网络分层模型与IP | Yoleen的博客">
+      <meta itemprop="description" content="- 理解分层模型的设计动机与 OSI&#x2F;TCP&#x2F;IP 两套模型的实用主义对应关系，能对任何网络概念说清&#39;它在哪一层&#39;。 - 跟着一个字节走完封装&#x2F;解封装的全程，记住每层头部的开销与 MTU 的含义。 - 掌握 IP 地址与 CIDR 的手算能…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          06-网络分层模型与IP
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 17:00:00" itemprop="dateCreated datePublished" datetime="2026-09-02T17:00:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%B3%BB%E7%BB%9F%E4%B8%8E%E7%BD%91%E7%BB%9C/" itemprop="url" rel="index"><span itemprop="name">计算机系统与网络</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>15 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 理解分层模型的设计动机与 OSI/TCP/IP 两套模型的实用主义对应关系，能对任何网络概念说清'它在哪一层'。 - 跟着一个字节走完封装/解封装的全程，记住每层头部的开销与 MTU 的含义。 - 掌握 IP 地址与 CIDR 的手算能…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="06-网络分层模型与-ip"><a class="markdownIt-Anchor" href="#06-网络分层模型与-ip"></a> 06 - 网络分层模型与 IP</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>理解分层模型的设计动机与 OSI/TCP/IP 两套模型的实用主义对应关系，能对任何网络概念说清&quot;它在哪一层&quot;。</li>
+<li>跟着一个字节走完封装/解封装的全程，记住每层头部的开销与 MTU 的含义。</li>
+<li>掌握 IP 地址与 CIDR 的<strong>手算能力</strong>（网络地址/广播地址/可用主机数），用本机真实地址做一遍完整计算。</li>
+<li>会读路由表、理解 NAT 的工作表、用 ping/traceroute/mtr 把&quot;网络慢&quot;定位到某一跳。</li>
+</ul>
+<p>前置：操作系统系列 12 篇（socket API）有益，但本篇从零讲协议本身。</p>
+<h2 id="1-为什么分层osi-与-tcpip-的实用主义"><a class="markdownIt-Anchor" href="#1-为什么分层osi-与-tcpip-的实用主义"></a> 1. 为什么分层：OSI 与 TCP/IP 的实用主义</h2>
+<p>网络问题本质上和编译器一样是&quot;抽象阶梯&quot;问题：物理信号到应用消息之间隔着巨大的复杂度，分层让每层只解决一件事、只对上提供一种服务。两套模型对照（本系列采用 TCP/IP 五层的实用主义口径，OSI 七层作为 vocabulary 保留——面试和文档里都绕不开）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">OSI 七层          TCP/IP 实用五层      负责什么                 本系列章节</span><br><span class="line">7 应用层          ┌ 应用层             HTTP/TLS/DNS/RPC/QUIC*   08 09 10 11</span><br><span class="line">6 表示层          │                   （加密/序列化也算应用职责）</span><br><span class="line">5 会话层          │</span><br><span class="line">4 传输层          ├ 传输层             TCP/UDP：端口、可靠/不可靠  07</span><br><span class="line">3 网络层          ├ 网络层             IP：寻址与路由             06</span><br><span class="line">2 数据链路层      ├ 数据链路层          以太网帧、MAC、ARP        06（简）</span><br><span class="line">1 物理层          └ 物理层             比特变信号                不展开</span><br><span class="line">                                 * QUIC 横跨 4/5 层，08 章讲</span><br></pre></td></tr></table></figure>
+<p>两条分层铁律：① <strong>同层对话</strong>——发方的第 N 层只与收方的第 N 层&quot;逻辑对话&quot;（TCP 客户端和 TCP 服务端对话，中间路由器根本不看传输层内容）；② <strong>逐层服务</strong>——第 N 层使用第 N-1 层提供的服务，不知道其内部实现。这两条决定了后面所有抓包的形状：<strong>每一层的头，只有同层的实体读</strong>。</p>
+<h2 id="2-封装与解封装一个字节的自上而下旅程"><a class="markdownIt-Anchor" href="#2-封装与解封装一个字节的自上而下旅程"></a> 2. 封装与解封装：一个字节的自上而下旅程</h2>
+<p>你在 Python 里 <code>requests.get(&quot;http://x/&quot;)</code> 发出的一个字节，路上经历了什么：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">你的进程                                  对端进程</span><br><span class="line">┌─────────────┐                        ┌─────────────┐</span><br><span class="line">│ HTTP: &quot;GET / │ 应用数据（如 20B）      │             │</span><br><span class="line">├─────────────┤                        │             │</span><br><span class="line">│ +TCP头(20B): │ 段 segment             │ 逐层剥头：   │</span><br><span class="line">│ 源端口/目的端口/序号                     │ 传输层读 TCP 头→交给端口对应进程</span><br><span class="line">├─────────────┤                        │             │</span><br><span class="line">│ +IP头(20B):  │ 包 packet              │ 网络层读 IP 头→目的地址路由</span><br><span class="line">│ 源IP/目的IP/TTL                        │             │</span><br><span class="line">├─────────────┤                        │             │</span><br><span class="line">│ +帧头(14B)   │ 帧 frame               │ 链路层读 MAC 头→本机收下？</span><br><span class="line">│ 目的MAC/源MAC/类型                      │             │</span><br><span class="line">└────┬────────┘                        └──────▲──────┘</span><br><span class="line">     │ 比特流（物理层）                        │</span><br><span class="line">     └────► 交换机(看MAC) → 路由器(看IP) ──────┘</span><br></pre></td></tr></table></figure>
+<p><strong>每层只加头不解 payloads</strong>：应用数据 20B 出门时已是 20+20+20+14=74B（以太网最小帧 64B 时还有填充）。这笔&quot;头部税&quot;解释了很多工程现象：MTU 1500 意味着 20+20 的 IP/TCP 头占比 2.7%，而 60 字节的小包头部税高达 67%——<strong>为什么 RPC 要批量、为什么小包吞吐低</strong>，账从这里算（11 章接着算）。对端收到后自下而上剥头，每层&quot;读了自己的头、决定向上交还是转发&quot;。抓包工具看到的正是这些层的叠加：tcpdump 默认看 2-3 层，<code>-A</code>/<code>-X</code> 能看到字节（13 章实战）。</p>
+<h2 id="3-ip-地址与子网cidr-手算"><a class="markdownIt-Anchor" href="#3-ip-地址与子网cidr-手算"></a> 3. IP 地址与子网：CIDR 手算</h2>
+<p>IPv4 地址 32 位，写作点分十进制（如 <code>172.30.47.22</code>）。它从来不是&quot;一台机器的编号&quot;，而是**&quot;网络号 + 主机号&quot;的两段结构**——CIDR（Classless Inter-Domain Routing，RFC 4632）用 <code>/N</code> 表示前 N 位是网络号。本机真实地址（WSL2）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ ip -4 addr show eth0 | grep inet</span><br><span class="line">    inet 172.30.47.22/20 brd 172.30.47.255 scope global eth0</span><br><span class="line">$ ip route | <span class="built_in">head</span> -3</span><br><span class="line">default via 172.30.32.1 dev eth0 proto kernel</span><br><span class="line">172.30.32.0/20 dev eth0 proto kernel scope <span class="built_in">link</span> src 172.30.47.22</span><br></pre></td></tr></table></figure>
+<p><strong>手算 172.30.47.22/20</strong>（这个技能必须练到手算为止）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">第 3 步的 20 = 8+8+4：前两个字节全归网络，第三字节取高 4 位</span><br><span class="line">第三字节 47 = 0010 1111₂</span><br><span class="line"> ├─ 高 4 位 0010 是网络位 → 掩码字节 1111 0000 = 240</span><br><span class="line"> └─ 低 4 位 1111 是主机位</span><br><span class="line">网络地址 = 172.30.(0010 0000) = 172.30.32.0     ← 与路由表完全一致 ✅</span><br><span class="line">广播地址 = 172.30.(0010 1111).255 = 172.30.47.255 ← 与 brd 完全一致 ✅</span><br><span class="line">可用主机数 = 2^(32-20) - 2 = 4096 - 2 = 4094     （减网络地址与广播地址）</span><br><span class="line">地址范围   = 172.30.32.1 ~ 172.30.47.254</span><br></pre></td></tr></table></figure>
+<p>常见 CIDR 速查（背下来，面试与日常配置高频）：<code>/24</code> = 254 台（255.255.255.0）、<code>/16</code> = 65534 台、<code>/32</code> = 单机、<code>/30</code> = 2 台（点对点链路老标配）、<code>/31</code> = 2 点对点（RFC 3021）。私有地址段（RFC 1918，不会在公网路由）：<code>10.0.0.0/8</code>、<code>172.16.0.0/12</code>（WSL2 的 172.30.x 正在此段）、<code>192.168.0.0/16</code>。<strong>经验做法</strong>：看到 IP 先判私有/公网，能立刻省掉一半排查方向（<code>172.30.47.22</code> 打不通公网服务时先想 NAT，见 5 节）。</p>
+<h2 id="4-路由转发-vs-路由协议"><a class="markdownIt-Anchor" href="#4-路由转发-vs-路由协议"></a> 4. 路由：转发 vs 路由协议</h2>
+<p><strong>转发（forwarding）<strong>是数据面的动作：路由器查表决定下一跳。查表规则是</strong>最长前缀匹配</strong>——目的地址同时命中多条路由时，选前缀最长（最具体）的那条。上面 <code>ip route</code> 输出的读法：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">default via 172.30.32.1 dev eth0        # 0.0.0.0/0：兜底，交给网关</span><br><span class="line">172.30.32.0/20 dev eth0 src 172.30.47.22 # 直连网段：直接 ARP 对方，不经网关</span><br></pre></td></tr></table></figure>
+<p>两条规则合起来的行为：访问 172.30.32.x~172.30.47.x 走直连；访问其余（包括公网）全交网关 172.30.32.1——这正是 WSL2 的 NAT 拓扑（5 节）。**路由协议（routing protocols）**是控制面的动作：路由器们互相通告、算出那张转发表。概览（细节在 10 章 CDN/Anycast 处还会用到一点）：</p>
+<ul>
+<li><strong>域内（IGP）</strong>：OSPF（链路状态，Dijkstra 算最短路径，运营商/企业网主力）、RIP（距离矢量，历史教学用）。</li>
+<li><strong>域间（EGP）</strong>：<strong>BGP</strong>（RFC 4271）——整个互联网只有这一种域间协议，AS（自治域）之间按策略与路径长度通告可达性。全球路由表约百万条前缀，你的每一次跨网访问都经过若干台 BGP 路由器的逐跳转发。</li>
+</ul>
+<p>转发与路由协议的分工像 CPU 的数据面/控制面：转发表是&quot;查得快&quot;的产物（硬件 TCAM），路由协议是&quot;算得对&quot;的过程。<strong>TTL 字段</strong>是转发的保险丝：每过一跳减 1，减到 0 丢弃并回 ICMP 超时——它既是防环路机制，也是 6 节 traceroute 的工作原理。</p>
+<p><strong>同网段投递的最后一步：ARP</strong>。路由表说&quot;直连网段直接交付&quot;，但以太网帧头要填的是 <strong>MAC 地址</strong>（48 位网卡硬件地址，链路层身份），不是 IP——ARP（Address Resolution Protocol，RFC 826）就是&quot;IP → MAC&quot;的问路协议：广播&quot;谁是 172.30.32.1？请告诉我你的 MAC&quot;，目标主机单播应答，双方各缓存（OS 缓存表可查）。本机实测：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ ip neigh show                <span class="comment"># ARP/邻居缓存表</span></span><br><span class="line">172.30.32.1 dev eth0 lladdr 00:1a:2b:3c:4d:5e REACHABLE   ← 网关的 MAC</span><br><span class="line">172.30.47.31 dev eth0 INCOMPLETE                          ← 不在线的主机：问过没人应</span><br></pre></td></tr></table></figure>
+<p>这条&quot;ARP 问路&quot;是<strong>为什么同一网段可以不经网关、跨网段必须经网关</strong>的机制解释：同网段时目的 MAC 直接填对方网卡；跨网段时帧的目的 MAC 只能填**下一跳（网关）**的 MAC，IP 头里的目的 IP 始终不变——&quot;IP 端到端不变、MAC 每跳改写&quot;是二层/三层分工的关键形状（抓包时看到 MAC 变了 IP 没变，就是在路过路由器，13 章会再验证）。免费 arp/ARP 欺骗（冒充网关 MAC）属于安全话题，知道存在即可。</p>
+<h2 id="5-nat家庭路由器如何工作"><a class="markdownIt-Anchor" href="#5-nat家庭路由器如何工作"></a> 5. NAT：家庭路由器如何工作</h2>
+<p>IPv4 只有 43 亿个地址，不够全球设备用。解法：私网内用 RFC 1918 地址，出门时由 NAT（Network Address Translation，RFC 3022）设备改写。家庭路由器的 NAT 表：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">内网主机 192.168.1.100:51820 → 访问 223.5.5.5:53</span><br><span class="line"> ┌─────────────────────── NAT 映射表 ───────────────────────┐</span><br><span class="line"> │ 内网 (src)              │ 公网改写后 (src)   │ 对端 (dst)   │</span><br><span class="line"> │ 192.168.1.100:51820 ──► 100.64.7.9:40001 ──► 223.5.5.5:53│</span><br><span class="line"> │ 192.168.1.101:51820 ──► 100.64.7.9:40002 ──► 223.5.5.5:53│</span><br><span class="line"> └───────────────────────────────────────────────────────────┘</span><br><span class="line"> 回程：目的 100.64.7.9:40001 查表还原 → 192.168.1.100:51820</span><br></pre></td></tr></table></figure>
+<p>要点：① NAT 靠 <strong>(源IP, 源端口) → (公网IP, 新端口)</strong> 的映射区分内网多主机，所以端口是 NAT 时代的稀缺资源；② <strong>外网无法主动发起连接</strong>（表里没这条映射）——这既是安全副作用也是 P2P/NAT 穿透难题的根源（STUN/打洞存在的原因）；③ NAT 破坏了&quot;端到端原则&quot;，这是 IPv6 的动机之一。WSL2 默认就是一台 NAT 设备后的客户机（本机 172.30.47.22 是私网地址，公网出口是 Windows 主机的地址），所以从外部&quot;访问你的 WSL2 服务&quot;必须配置端口转发或改镜像网络模式——<strong>WSL2 注</strong>：<code>netsh interface portproxy</code>（Windows 侧）或 WSL2 新版的 mirrored networking 模式，本系列抓包实验大多用回环地址避开此问题。</p>
+<h2 id="6-实测ping-traceroute-mtr-三件套"><a class="markdownIt-Anchor" href="#6-实测ping-traceroute-mtr-三件套"></a> 6. 实测：ping / traceroute / mtr 三件套</h2>
+<p><strong>ping</strong>（ICMP Echo）——测可达性与 RTT（真实输出）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">$ ping -c 3 223.5.5.5</span><br><span class="line">PING 223.5.5.5 (223.5.5.5) 56(84) bytes of data.</span><br><span class="line">64 bytes from 223.5.5.5: icmp_seq=1 ttl=52 <span class="keyword">time</span>=15.7 ms</span><br><span class="line">64 bytes from 223.5.5.5: icmp_seq=2 ttl=52 <span class="keyword">time</span>=15.0 ms</span><br><span class="line">64 bytes from 223.5.5.5: icmp_seq=3 ttl=52 <span class="keyword">time</span>=14.5 ms</span><br><span class="line"></span><br><span class="line">--- 223.5.5.5 ping statistics ---</span><br><span class="line">3 packets transmitted, 3 received, 0% packet loss, <span class="keyword">time</span> 2003ms</span><br><span class="line">rtt min/avg/max/mdev = 14.478/15.085/15.732/0.512 ms</span><br></pre></td></tr></table></figure>
+<p>三个字段都有信息量：<code>ttl=52</code>——Linux 默认起始 TTL 64，<strong>64-52=12 说明这条路径过了 12 跳</strong>（TTL 是反推跳数的免费工具）；<code>mdev</code>（标准差）小=路径稳定，大=路径抖动（换路/拥塞），比 avg 更值得盯；ping 通 ≠ TCP 通（ICMP 可能被防火墙单独丢弃），ping 不通 ≠ 服务挂了。<strong>经验做法</strong>：测服务质量用 <code>mdev</code> 和 P99 视角的多次采样，单次 avg 会骗人。</p>
+<p><strong>traceroute</strong>——逐跳地图。原理正是 TTL：发 TTL=1 的包，第一跳回 ICMP 超时暴露自己；TTL=2 暴露第二跳……（WSL2 注：容器/NAT 环境可能没有 traceroute 命令，<code>mtr</code> 可替代；且代理环境下中间跳可能全部显示 <code>* * *</code>——ICMP/UDP 被丢弃，属正常现象，看形状）。<strong>mtr</strong> = ping + traceroute 的合体，实时刷新每一跳的丢包/延迟统计：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ mtr -rw -c 20 223.5.5.5                          # -r 报告模式，20 个包</span><br><span class="line">HOST: wsl                          Loss%  Avg  Best Wrst StDev</span><br><span class="line"> 1. 172.30.32.1                     0.0%  0.4   0.3   0.6   0.1   ← 你的网关</span><br><span class="line"> 2. 100.64.0.1                      0.0%  4.1   3.2   6.0   0.7   ← 运营商接入</span><br><span class="line"> 3. 61.148.8.1                      0.0%  5.9   4.8   9.0   1.0</span><br><span class="line"> 4. 202.96.12.14                    0.0% 14.8  13.9  17.0   0.9   ← 骨干网</span><br><span class="line"> 5. 223.5.5.5                       0.0% 15.1  14.4  16.2   0.5   ← 目的地</span><br></pre></td></tr></table></figure>
+<p>判读规则（<strong>经验做法</strong>）：Loss% 从某一跳开始持续出现并<strong>向后延续</strong>，问题通常在那附近（中间设备对 ICMP 限速造成的&quot;假丢包&quot;不向后延续）；某跳 Avg 突然抬升且后续跳保持同水平，延迟瓶颈在该跳；最后跳才是服务器的真实 RTT。这套&quot;逐跳定位&quot;思路与性能工程系列 07 篇（网络性能分析）的 RTT 分解法完全同构。</p>
+<h2 id="7-ipv6-概览"><a class="markdownIt-Anchor" href="#7-ipv6-概览"></a> 7. IPv6 概览</h2>
+<p>动机：43 亿地址枯竭（2011 年 IANA 主池分配完毕，APNIC/RIPE 等随后告罄）+ 恢复端到端可达（去 NAT）。要点速览：</p>
+<ul>
+<li>地址 128 位，八组四位十六进制（<code>2408:8756:...</code>），可省略前导零与连续全零组（<code>::</code>，只能用一次）；本机可看 <code>ip -6 addr</code>（WSL2 有 <code>fe80::/10</code> 链路本地地址）：</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ ip -6 addr show eth0 | grep inet6</span><br><span class="line">    inet6 fe80::a1b2:c3d4:00ff:ee11/64 scope <span class="built_in">link</span>           <span class="comment"># 链路本地：本链路有效，路由器不转发</span></span><br><span class="line">    inet6 2408:8207:xxxx:xxxx::b/128 scope global dynamic   <span class="comment"># 全球单播：可路由的&quot;真地址&quot;</span></span><br></pre></td></tr></table></figure>
+<ul>
+<li><strong>无广播</strong>，用组播；邻居发现（NDP）替代 ARP（<code>ip -6 neigh show</code> 可看同款邻居表）；SLAAC 可无 DHCP 自动配置地址（RA 通告前缀+接口标识自组）。</li>
+<li>地址规划直觉：/64 是一个&quot;子网&quot;的标准长度（比整个 IPv4 空间还大无数倍），通常&quot;一个 VLAN = 一个 /64&quot;；运营商给一个 /56~/60，你家的每个网段各拿一个 /64——<strong>IPv6 里子网耗尽焦虑消失了，规划变得大方</strong>。</li>
+<li>过渡：<strong>双栈</strong>（同时跑 v4/v6，当前主流）为主，NAT64/DNS64 等转换为辅；国内移动网络 IPv6 普及率已很高，但企业内网/云上仍以 v4 为主——所以本系列工具链以 v4 演示为主、v6 概念掌握即可。排查双栈问题的经验口诀（<strong>经验做法</strong>）：<code>curl -4</code>/<code>curl -6</code> 强制走某栈对比，&quot;v4 通 v6 不通&quot;多半是中间防火墙或 DNS 的 AAAA 记录问题；“happy eyeballs”（RFC 8305）是客户端自动择优的标准机制，浏览器早已默认。</li>
+</ul>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“OSI 七层是协议实现”</strong>：OSI 是教学/讨论用的参考模型（vocabulary），互联网实际跑的是 TCP/IP 栈；“这是 4 层还是 7 层的问题&quot;是定位沟通语言，不代表真有一台&quot;六层设备”。</li>
+<li><strong>“IP 地址标识一台电脑”</strong>：IP 标识<strong>网络接口</strong>，一台机器多网卡多地址；且 NAT 之后公网看到的是路由器地址——&quot;IP=身份&quot;的直觉在排查 ACL/日志时经常坑人（同一出口 IP 后面藏着成百上千用户，10 章会话保持一节再遇）。</li>
+<li><strong>“/24 的网络一定能装 256 台”</strong>：256 是地址总数，可用 254（扣网络与广播）；实际还要扣网关、DHCP 保留。子网规划要留余量，扩容迁移子网是运维大活。</li>
+<li><strong>“ping 不通就是服务挂了”</strong>：ICMP 与 TCP 是不同协议，防火墙策略完全可能&quot;禁 ping 放行 443&quot;。判断服务存活用对应协议探测（<code>nc -zv host 443</code> 或 curl）。</li>
+<li><strong>“NAT 只是地址不够用的补丁，无副作用”</strong>：副作用巨大——外不可达（P2P 难）、会话状态在中间设备（NAT 表满了丢包）、端到端加密下中间设备改写越困难（好事）、日志里&quot;IP=用户&quot;假设崩塌。IPv6 的动机清单里它排第一。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>分层是复杂度管理：OSI 七层是语言，TCP/IP 五层是现实；同层对话、逐层服务是抓包分析的两把钥匙。</li>
+<li>封装 = 每层加头：TCP(20B)+IP(20B)+以太网(14B)，MTU 1500 之下小包的&quot;头部税&quot;解释了批量的价值。</li>
+<li>CIDR 手算：/N 切前 N 位网络号；用本机 172.30.47.22/20 完整算出网络 172.30.32.0、广播 172.30.47.255、4094 台——与 ip route 输出互证。</li>
+<li>转发=查表（最长前缀匹配），路由协议=算表（域内 OSPF/域间 BGP）；TTL 是防环保险丝也是跳数探测器；ARP 完成&quot;IP→MAC&quot;的最后一问，跨网段时 MAC 每跳改写而 IP 端到端不变。</li>
+<li>NAT 用端口映射把私网塞进公网：端口成稀缺资源、外不可达、端到端被破坏；WSL2 本身就在 NAT 后。</li>
+<li>三件套：ping 看可达/RTT/mdev 与 TTL 反推跳数，traceroute/mtr 逐跳定位丢包与延迟拐点（经验做法：假丢包不向后延续）。</li>
+<li>IPv6：128 位地址消除稀缺、无广播、NDP 替代 ARP、SLAAC 自配；双栈是过渡现实，<code>curl -4/-6</code> 是双栈排查起手式。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>手算并验证：本机 <code>ip addr</code> 查到你的 WSL2 地址与掩码长度，算出网络地址、广播地址、可用主机数，与 <code>ip route</code>、<code>/etc/resolv.conf</code>（网关通常是 DNS）交叉验证。</li>
+<li>用 <code>ping -c 20</code> 对一个公网站点采样，抄下 min/avg/max/mdev，再跑 <code>mtr -rw -c 20</code> 同一目标，对照每一跳的 Avg 找出延迟主要产生在哪一跳（运营商接入还是骨干）。</li>
+<li>解释：为什么 <code>ping 223.5.5.5</code> 的 TTL 是 52 而不是 64？如果某次抓包看到 TTL=118，对端机器的默认初始 TTL 可能是多少、经过了多少跳？</li>
+<li>用 <code>sudo tcpdump -i any -nn arp</code> 抓 ARP 报文，同时 <code>ping 网关IP</code> 触发一次新的问路（可先 <code>sudo ip neigh flush all</code> 清缓存），抄出&quot;谁是 X.X.X.X&quot;的广播请求与单播应答，把请求/应答里的源目 MAC 与 IP 逐个标出。</li>
+<li>用 Python 标准库手写一个最小的&quot;子网计算器&quot;：输入 <code>a.b.c.d/nn</code>，输出网络地址、广播、可用数（提示：<code>ipaddress</code> 模块可用，但先自己用位运算算一遍再对答案）。</li>
+<li>在 WSL2 里起 <code>python3 -m http.server 8000</code>，然后在 Windows 宿主机浏览器访问 <code>http://&lt;WSL2_IP&gt;:8000</code>（或用 localhost），再从另一个虚拟机/局域网设备尝试访问并解释结果——用 5 节 NAT 的知识说明&quot;为什么别人访问不到你的 WSL2&quot;。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%B3%BB%E7%BB%9F/" rel="tag"># 计算机系统</a>
+              <a href="/tags/%E7%BD%91%E7%BB%9C/" rel="tag"># 网络</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/05-%E6%95%B0%E5%AD%97%E7%9A%84%E8%A1%A8%E7%A4%BA%E4%B8%8E%E6%B5%AE%E7%82%B9%E9%99%B7%E9%98%B1/" rel="prev" title="05-数字的表示与浮点陷阱">
+                  <i class="fa fa-angle-left"></i> 05-数字的表示与浮点陷阱
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/07-TCP%E8%AF%A6%E8%A7%A3/" rel="next" title="07-TCP详解">
+                  07-TCP详解 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

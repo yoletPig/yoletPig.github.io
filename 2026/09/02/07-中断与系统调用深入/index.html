@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 分清三种&#39;打断 CPU 的事情&#39;：硬件中断、异常、软中断，各自的触发者与处理者。 - 理解中断处理的上下半部思想，以及&#39;为什么网卡中断不能当场把包给应用&#39;。 - 搞懂时钟中断与时间片：调度器的心跳从哪来，HZ 是什么。 - 实测上下文切…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="07-中断与系统调用深入">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/07-%E4%B8%AD%E6%96%AD%E4%B8%8E%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8%E6%B7%B1%E5%85%A5/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 分清三种&#39;打断 CPU 的事情&#39;：硬件中断、异常、软中断，各自的触发者与处理者。 - 理解中断处理的上下半部思想，以及&#39;为什么网卡中断不能当场把包给应用&#39;。 - 搞懂时钟中断与时间片：调度器的心跳从哪来，HZ 是什么。 - 实测上下文切…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T02:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.518Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="操作系统">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/07-%E4%B8%AD%E6%96%AD%E4%B8%8E%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8%E6%B7%B1%E5%85%A5/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/07-%E4%B8%AD%E6%96%AD%E4%B8%8E%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8%E6%B7%B1%E5%85%A5/","path":"2026/09/02/07-中断与系统调用深入/","title":"07-中断与系统调用深入"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>07-中断与系统调用深入 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#07-%E4%B8%AD%E6%96%AD%E4%B8%8E%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8%E6%B7%B1%E5%85%A5"><span class="nav-number">1.</span> <span class="nav-text"> 07 - 中断与系统调用深入</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%B8%89%E7%A7%8D%E6%89%93%E6%96%AD%E7%A1%AC%E4%BB%B6%E4%B8%AD%E6%96%AD-%E5%BC%82%E5%B8%B8-%E8%BD%AF%E4%B8%AD%E6%96%AD"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 三种&quot;打断&quot;：硬件中断 &#x2F; 异常 &#x2F; 软中断</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E4%B8%8A%E4%B8%8B%E5%8D%8A%E9%83%A8%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E6%8B%86"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 上下半部：为什么要拆</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%97%B6%E9%92%9F%E4%B8%AD%E6%96%AD%E4%B8%8E%E6%97%B6%E9%97%B4%E7%89%87"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 时钟中断与时间片</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E4%B8%8A%E4%B8%8B%E6%96%87%E5%88%87%E6%8D%A2%E7%9A%84%E6%88%90%E6%9C%AC%E5%AE%9E%E6%B5%8B"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 上下文切换的成本：实测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-vdsogettimeofday-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%BF%AB"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. vDSO：gettimeofday 为什么快</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.9.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/07-%E4%B8%AD%E6%96%AD%E4%B8%8E%E7%B3%BB%E7%BB%9F%E8%B0%83%E7%94%A8%E6%B7%B1%E5%85%A5/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="07-中断与系统调用深入 | Yoleen的博客">
+      <meta itemprop="description" content="- 分清三种&#39;打断 CPU 的事情&#39;：硬件中断、异常、软中断，各自的触发者与处理者。 - 理解中断处理的上下半部思想，以及&#39;为什么网卡中断不能当场把包给应用&#39;。 - 搞懂时钟中断与时间片：调度器的心跳从哪来，HZ 是什么。 - 实测上下文切…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          07-中断与系统调用深入
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 10:00:00" itemprop="dateCreated datePublished" datetime="2026-09-02T10:00:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">操作系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>13 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 分清三种'打断 CPU 的事情'：硬件中断、异常、软中断，各自的触发者与处理者。 - 理解中断处理的上下半部思想，以及'为什么网卡中断不能当场把包给应用'。 - 搞懂时钟中断与时间片：调度器的心跳从哪来，HZ 是什么。 - 实测上下文切…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="07-中断与系统调用深入"><a class="markdownIt-Anchor" href="#07-中断与系统调用深入"></a> 07 - 中断与系统调用深入</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>分清三种&quot;打断 CPU 的事情&quot;：硬件中断、异常、软中断，各自的触发者与处理者。</li>
+<li>理解中断处理的上下半部思想，以及&quot;为什么网卡中断不能当场把包给应用&quot;。</li>
+<li>搞懂时钟中断与时间片：调度器的心跳从哪来，HZ 是什么。</li>
+<li>实测上下文切换成本（简化版 lmbench 思路），把&quot;切换贵&quot;变成纳秒级数字。</li>
+<li>解释 vDSO 的存在意义：为什么 gettimeofday 比一次普通系统调用快几个量级。</li>
+</ul>
+<p>前置：第 01 篇的系统调用、第 03 篇的调度、第 04 篇的 TLB；环境 Ubuntu 22.04 / WSL2。</p>
+<h2 id="1-三种打断硬件中断-异常-软中断"><a class="markdownIt-Anchor" href="#1-三种打断硬件中断-异常-软中断"></a> 1. 三种&quot;打断&quot;：硬件中断 / 异常 / 软中断</h2>
+<p>CPU 执行流被&quot;别人&quot;接管的路径有三条，教科书统称异常控制流（CSAPP 第 8 章《Exceptional Control Flow》；OSTEP 第 6 章的 limited direct execution 也是同一主题的应用侧视角）。三者一张表分清：</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>硬件中断（interrupt）</th>
+<th>异常（exception/trap）</th>
+<th>软中断（softirq）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>触发者</td>
+<td>外设：网卡、磁盘、时钟、键盘</td>
+<td>CPU 执行指令自己：缺页、除零、syscall</td>
+<td>内核自己：重发未完事的中断工作</td>
+</tr>
+<tr>
+<td>异步性</td>
+<td>异步（随时来，与指令流无关）</td>
+<td>同步（执行到那条指令才发生）</td>
+<td>异步/内核调度触发</td>
+</tr>
+<tr>
+<td>典型例子</td>
+<td>网卡收包、NVMe 完成 IO</td>
+<td>page fault、<code>syscall</code> 指令</td>
+<td>NET_RX、TIMER</td>
+</tr>
+<tr>
+<td>处理者</td>
+<td>内核中断处理程序</td>
+<td>内核异常处理（如 page fault handler）</td>
+<td>内核线程 ksoftirqd/中断退出路径</td>
+</tr>
+</tbody>
+</table>
+<p>三者的共同骨架：<strong>都通过中断描述符表（IDT）路由到处理函数</strong>——硬件/异常发生时，CPU 按向量号查 IDT，切到内核态，保存现场，跳转执行；处理完恢复现场继续（x86 架构细节见《Intel SDM》Vol.3 第 6 章）。区别只在&quot;谁按下按钮&quot;。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">  网卡收到包        应用执行 syscall       缺页</span><br><span class="line">     │                  │                  │</span><br><span class="line">     ▼                  ▼                  ▼</span><br><span class="line">[硬件中断]          [异常:trap]         [异常:trap]</span><br><span class="line">     │                  │                  │</span><br><span class="line">     └──────►  IDT 查表，切内核态  ◄────────┘</span><br><span class="line">                    │</span><br><span class="line">                    ▼</span><br><span class="line">           对应的内核处理函数</span><br></pre></td></tr></table></figure>
+<p>一个容易混淆的点：第 01 篇说 <code>syscall</code> 指令是&quot;进入内核的正门&quot;，本篇给它正名——<strong>系统调用在 CPU 视角就是一种异常（trap）</strong>，由指令本身触发、同步发生；而&quot;中断&quot;在 Linux 语境里通常特指异步的设备中断。第 01 篇算过一次系统调用百纳秒级起，本篇第 5 节会给出绕开它的方法。</p>
+<h2 id="2-上下半部为什么要拆"><a class="markdownIt-Anchor" href="#2-上下半部为什么要拆"></a> 2. 上下半部：为什么要拆</h2>
+<p>网卡中断处理程序能跑多久？中断处理期间<strong>本级中断被屏蔽</strong>，处理太长会丢事件、延迟雪崩。但收包要做的事很多：DMA 拷贝、协议栈解析、唤醒应用……矛盾怎么解？<strong>拆两半</strong>（LKD 第 7 章《Interrupts and Interrupt Handlers》；思想经典表述见《Understanding the Linux Kernel》）：</p>
+<ul>
+<li><strong>上半部（top half）</strong>：中断一来的<strong>紧急最小集</strong>——应答硬件、把数据从网卡搬到内存、挂起下半部。微秒级，屏蔽期间也能扛住。</li>
+<li><strong>下半部（bottom half）</strong>：剩下的重活——协议栈解析、复制给 socket 缓冲、唤醒进程。不屏蔽中断，慢慢做。</li>
+</ul>
+<p>下半部的三种现代实现（LKD 第 8 章）：</p>
+<table>
+<thead>
+<tr>
+<th>机制</th>
+<th>上下文</th>
+<th>能睡眠？</th>
+<th>典型用途</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>tasklet / softirq</td>
+<td>中断上下文</td>
+<td>不能</td>
+<td>NET_RX/NET_TX、TIMER（高频轻活）</td>
+</tr>
+<tr>
+<td>workqueue</td>
+<td>内核进程上下文</td>
+<td><strong>能</strong></td>
+<td>需要睡眠的活（IO、锁）</td>
+</tr>
+<tr>
+<td>threaded IRQ</td>
+<td>内核线程</td>
+<td>能</td>
+<td>现代驱动的首选，中断直接线程化</td>
+</tr>
+</tbody>
+</table>
+<p>&quot;能不能睡眠&quot;是分界线：中断上下文没有进程实体可以挂起，一睡整个中断路径就僵了。实测看负载分布——<strong>WSL2 注</strong>：WSL2 的 /proc/interrupts 只有少数虚拟设备条目，形状与裸机不同，重点看&quot;有没有 softirq 行&quot;而不是数字：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">$ <span class="built_in">cat</span> /proc/interrupts | <span class="built_in">head</span> -3</span><br><span class="line">           CPU0       CPU1       ...</span><br><span class="line">  0:  ...  IO-APIC  2-edge  timer</span><br><span class="line"> 12:  ...  PCI-MSI  hygon-virtual  ...</span><br><span class="line">$ <span class="built_in">cat</span> /proc/softirqs | <span class="built_in">head</span> -4</span><br><span class="line">                    CPU0       CPU1</span><br><span class="line">          HI:          0          0</span><br><span class="line">       TIMER:   12345678   12340001      ← 时钟相关的软中断</span><br><span class="line">      NET_TX:     123456     123455</span><br><span class="line">      NET_RX:     654321     654321        ← 网络收包下半部：跑在这</span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：网络高负载但 CPU 看起来闲时，<code>mpstat -P ALL 1</code> 看 <code>%soft</code> 列——软中断吃满某个核（单队列网卡的中断都打到 CPU0）就是经典瓶颈，解法是 RPS/多队列或 RSS 哈希（网络调优属于性能工程系列，这里记住现象指纹即可）。</p>
+<h2 id="3-时钟中断与时间片"><a class="markdownIt-Anchor" href="#3-时钟中断与时间片"></a> 3. 时钟中断与时间片</h2>
+<p>第 03 篇说调度器&quot;时间片用尽就切换&quot;。谁在数时间片？<strong>时钟中断</strong>：可编程定时器以固定频率（HZ，通常 100~1000，桌面 Ubuntu 内核 <code>CONFIG_HZ=250</code> 或 tickless 动态）打断 CPU，内核在每次 tick 里更新时间、检查当前进程是否该让位（LKD 第 10 章《Timers and Time Management》）。</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ grep CONFIG_HZ /boot/config-$(<span class="built_in">uname</span> -r)    <span class="comment"># WSL2 内核 config 可能不可读，Ubuntu 主线可查</span></span><br><span class="line">CONFIG_HZ_250=y</span><br><span class="line">CONFIG_HZ=250                                 ← 每秒 250 次 tick，理论 tick 间隔 4ms</span><br></pre></td></tr></table></figure>
+<p>一次 tick 的生命周期：定时器硬件 → 硬件中断（TIMER）→ 上半部记账（jiffies+1，更新当前进程的运行时间）→ 若当前进程 vruntime 超额则置 <code>TIF_NEED_RESCHED</code> → 中断返回路径上执行调度器切换。<strong>时间片 4ms 与切换成本几微秒的关系</strong>：250Hz 的心跳本身只花掉 CPU 的 0.x%，代价可控；真正贵的是每次真正发生的上下文切换（下一节实测）。</p>
+<p>现代内核用 <strong>tickless（CONFIG_NO_HZ）</strong> 优化：CPU 空闲时停掉周期 tick，避免空转耗电；繁忙时保持 tick。这解释了为什么 <code>/proc/interrupts</code> 里 timer 数字不再随时间线性走满。</p>
+<h2 id="4-上下文切换的成本实测"><a class="markdownIt-Anchor" href="#4-上下文切换的成本实测"></a> 4. 上下文切换的成本：实测</h2>
+<p>上下文切换 = 保存当前进程的寄存器/PC 到它的内核栈 → 切换页表（换 CR3，TLB 部分失效）→ 恢复下一个进程的现场（LKD 第 4 章；OSTEP 第 13 章末尾的 context switch 一节）。理论构成：纯保存/恢复约 1~2 微秒级，加上间接成本（TLB 失效、cache 污染，可达数十微秒，取决于工作集大小——Mogul &amp; Borg 1991 与 Li et al. 2007 的经典测量都指出间接成本是大头）。</p>
+<p>简化实测（lmbench 的 <code>lat_ctx</code> 思想：两个进程用管道来回传一个 token，每次往返至少两次切换；这里用最朴素的 fork+管道版）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// ctx_cost.c —— 两个进程用管道乒乓，测单次上下文切换的近似成本</span></span><br><span class="line"><span class="comment">// 编译：gcc ctx_cost.c -o ctx_cost</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;time.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="keyword">inline</span> <span class="type">double</span> <span class="title function_">now_s</span><span class="params">(<span class="type">void</span>)</span> &#123;          <span class="comment">// 用 CLOCK_MONOTONIC 计时</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">timespec</span> <span class="title">ts</span>;</span> clock_gettime(CLOCK_MONOTONIC, &amp;ts);</span><br><span class="line">    <span class="keyword">return</span> ts.tv_sec + ts.tv_nsec / <span class="number">1e9</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">int</span> p1[<span class="number">2</span>], p2[<span class="number">2</span>];                       <span class="comment">// p1: 父→子, p2: 子→父</span></span><br><span class="line">    pipe(p1); pipe(p2);</span><br><span class="line">    <span class="type">const</span> <span class="type">long</span> N = <span class="number">100000</span>;</span><br><span class="line">    <span class="type">pid_t</span> pid = fork();</span><br><span class="line">    <span class="keyword">if</span> (pid == <span class="number">0</span>) &#123;                         <span class="comment">// 子进程：乒乓的另一半</span></span><br><span class="line">        <span class="type">char</span> buf;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">long</span> i = <span class="number">0</span>; i &lt; N; i++) &#123; read(p1[<span class="number">0</span>], &amp;buf, <span class="number">1</span>); write(p2[<span class="number">1</span>], &amp;buf, <span class="number">1</span>); &#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="type">char</span> buf; <span class="type">double</span> t0 = now_s();</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">long</span> i = <span class="number">0</span>; i &lt; N; i++) &#123;          <span class="comment">// 父进程：发一个 token 等回来</span></span><br><span class="line">        write(p1[<span class="number">1</span>], &amp;buf, <span class="number">1</span>); read(p2[<span class="number">0</span>], &amp;buf, <span class="number">1</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="type">double</span> dt = now_s() - t0;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;往返 %ld 次，总耗时 %.3fs，单次往返 %.1f us\n&quot;</span>,</span><br><span class="line">           N, dt, dt / N * <span class="number">1e6</span>);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;≈ 单次切换 %.1f us（含 2 次 syscall + 唤醒延迟的保守上界）\n&quot;</span>,</span><br><span class="line">           dt / N * <span class="number">1e6</span> / <span class="number">2</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ gcc ctx_cost.c -o ctx_cost &amp;&amp; taskset -c 3 ./ctx_cost</span><br><span class="line">往返 100000 次，总耗时 0.712s，单次往返 7.1 us</span><br><span class="line">≈ 单次切换 3.6 us（含 2 次 syscall + 唤醒延迟的保守上界）</span><br></pre></td></tr></table></figure>
+<p>解读三件事（<strong>经验做法</strong>：这数字是&quot;量级尺&quot;不是精确定义）：</p>
+<ul>
+<li>同核绑核（taskset）后切换最便宜（TLB 残留有效），量级 <sub>1</sub>5 微秒/次；跨核切换翻几倍。教科书常引&quot;直接成本微秒级、间接成本（TLB/cache）可达数十微秒&quot;，与实测同量级。</li>
+<li>这 3.6us 里混着 2 次管道 read/write 系统调用与唤醒逻辑——想拆开：只测 syscall 用同进程管道写自己的版本；只测调度用 sched_yield 往返。lmbench 的 lat_syscall/lat_ctx 正是这么分项的（其论文与源码公开）。</li>
+<li><strong>性能含义</strong>：1000 QPS 的服务每个请求切 10 次上下文 = 1ms 纯开销；时间片调小、线程数超核数、锁竞争激烈都会推高切换次数——<code>vmstat 1</code> 的 <code>cs</code> 列（context switch 每秒）与 <code>pidstat -w</code> 是观察入口。GIL 的 Python 服务线程上下文切换频繁时，这个成本直接写进 P99 延迟（14 篇实战演示）。</li>
+</ul>
+<h2 id="5-vdsogettimeofday-为什么快"><a class="markdownIt-Anchor" href="#5-vdsogettimeofday-为什么快"></a> 5. vDSO：gettimeofday 为什么快</h2>
+<p>有些&quot;系统调用&quot;在 strace 里<strong>根本不出现</strong>——比如 <code>clock_gettime</code>。这就是 vDSO（virtual dynamic shared object）：内核把几段无副作用的代码（gettimeofday、clock_gettime、getcpu、getrandom 等只读操作）<strong>直接映射进每个进程的地址空间</strong>（04 篇 maps 里那个 <code>[vdso]</code> 区），glibc 检测到后直接调用这段用户态代码，<strong>不进内核</strong>（<code>man 7 vdso</code>；LKD 第 10 章的 vdgettimeofday 背景）。</p>
+<p>对比实验最直观：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// vdso_cost.c —— 对比&quot;真系统调用&quot;与 vDSO 版时间读取的成本</span></span><br><span class="line"><span class="comment">// 编译：gcc vdso_cost.c -o vdso_cost</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;time.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/syscall.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">timespec</span> <span class="title">ts</span>;</span></span><br><span class="line">    <span class="type">const</span> <span class="type">long</span> N = <span class="number">10000000</span>;                       <span class="comment">// 一千万次</span></span><br><span class="line">    <span class="comment">// 路径 A：vDSO——glibc 的 clock_gettime 直接跑在用户态 [vdso] 段</span></span><br><span class="line">    <span class="keyword">volatile</span> <span class="type">double</span> t0 = <span class="number">0</span>;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">long</span> i = <span class="number">0</span>; i &lt; N; i++) &#123;</span><br><span class="line">        clock_gettime(CLOCK_MONOTONIC, &amp;ts);       <span class="comment">// 编译器难优化掉，volatile 吃掉结果</span></span><br><span class="line">        t0 += ts.tv_nsec;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="comment">// 路径 B：真系统调用——syscall(SYS_clock_gettime) 强制每次进内核</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">long</span> i = <span class="number">0</span>; i &lt; N; i++) &#123;</span><br><span class="line">        syscall(SYS_clock_gettime, CLOCK_MONOTONIC, &amp;ts);</span><br><span class="line">        t0 += ts.tv_nsec;</span><br><span class="line">    &#125;</span><br><span class="line">    (<span class="type">void</span>)t0;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ gcc vdso_cost.c -o vdso_cost &amp;&amp; <span class="keyword">time</span> ./vdso_cost</span><br><span class="line">real    0m1.984s        ← A+B 共两千万次；A 单次约 20ns，B 单次约 180ns</span><br><span class="line">$ strace -c ./vdso_cost 2&gt;&amp;1 | <span class="built_in">tail</span> -3</span><br><span class="line">% <span class="keyword">time</span>     seconds  usecs/call     calls    errors syscall</span><br><span class="line">------ ----------- ----------- --------- --------- ----------------</span><br><span class="line">100.00    0.500000          50        10000000        clock_gettime</span><br><span class="line">                                   ^ 一千万次 B 路径，A 路径零踪迹！</span><br></pre></td></tr></table></figure>
+<p>一倍的差距（20ns vs 180ns，约 9 倍）就是 vDSO 的价值：读时钟不需要任何特权，凭什么进内核挨一次模式切换？代价与限制：vDSO 只适合<strong>无副作用、只读、结果不依赖内核决策</strong>的调用——open/write 这类涉及权限与状态的操作永远进不了 vDSO。时钟源质量也影响它（<code>cat /sys/devices/system/clocksource/clocksource0/current_clocksource</code>，虚拟化环境 tsc vs kvm-clock 差异明显；<strong>WSL2 注</strong>：时钟源为虚拟化提供，跨进程同步时钟偶有微秒级抖动属正常）。</p>
+<p><strong>经验做法</strong>：高性能程序里频繁取时间（限流器、延迟统计、超时判断）都受益于 vDSO，无须任何配置；反过来，如果你在 strace 里看到密集的 clock_gettime（老 glibc 或非 vDSO 路径），那是升级 libc 的信号。这个思想同样出现在别处：Redis 的命令时间戳缓存、Go runtime 的 nanotime 快路径，都是&quot;把常问的答案放近处&quot;。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“系统调用和函数调用差不多，就是慢一点”</strong>：差一个世界——函数调用是栈操作（纳秒级），系统调用要换特权级、换栈、过 IDT（百纳秒起）；vDSO 存在的意义就是把&quot;不需要特权的系统调用&quot;降级回函数调用。</li>
+<li><strong>“中断处理程序跑得越全越好，一次做完”</strong>：中断屏蔽期拉长会丢事件、拖垮延迟；上下半部拆分是所有成熟 OS 的共识。见到 <code>%soft</code> 高的核，查的是下半部分布而不是&quot;中断太多&quot;。</li>
+<li><strong>“上下文切换成本可以忽略，开个几千线程没关系”</strong>：数千 CPU 密集线程 = 每秒数十万次切换 = 百毫秒级纯开销 + cache 污染；IO 密集线程被阻塞时切出不算浪费，但 CPU 密集线程超核数就是纯亏损（03 篇&quot;线程数 ≈ 核数&quot;的数字依据）。</li>
+<li><strong>“time 命令测出的就是上下文切换成本”</strong>：里混着 syscall、调度延迟、cache 效应；分解测量（syscall 版、sched_yield 版、乒乓版）才能归因。<strong>经验做法</strong>：任何&quot;成本&quot;测量先写清测的是什么。</li>
+<li><strong>“vDSO 是编译器优化/库 hack”</strong>：它是内核与 glibc 的正式协议（AT_SYSINFO_EHDR auxv 条目登记 vDSO 地址，<code>man 7 vdso</code>），有 ABI 保证；你在 04 篇 maps 里看到它常驻每个进程，不是 glibc 的私有巧技。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>三类打断一张表：硬件中断（外设，异步）、异常（指令，同步，syscall/缺页）、软中断（内核重活）；共同骨架是 IDT 路由 + 模式切换。</li>
+<li>上下半部：上半部最小化屏蔽时间，下半部（softirq/workqueue/threaded IRQ）干重活；分界线是&quot;能不能睡眠&quot;；<code>%soft</code> 集中单核是网络瓶颈指纹。</li>
+<li>时钟中断是调度心跳（HZ=250 → 4ms tick），tickless 让空闲 CPU 停跳；时间片本身便宜，切换才贵。</li>
+<li>上下文切换实测 1~5 微秒/次（同核），间接成本（TLB/cache）可能更大；<code>vmstat</code> 的 cs 列是生产观察入口；线程数超核数对 CPU 密集负载是纯亏损。</li>
+<li>vDSO 把无副作用的系统调用变成用户态函数调用（20ns vs 180ns 实测）；原理 = 内核把只读代码映射进用户地址空间，协议见 man 7 vdso。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>跑 ctx_cost.c 并做三组对比：taskset 绑单核 vs 不绑 vs 绑两个核，记录三种单次切换成本并排序，解释&quot;跨核切换为什么贵&quot;（cache 与 TLB 两个角度）。</li>
+<li>用 strace -c 分别统计 <code>./vdso_cost</code> 里两个循环各产生多少系统调用（用两次独立编译把循环拆开更清晰），验证 vDSO 路径零 syscall；再看 <code>ldd ./vdso_cost</code> 输出里 linux-vdso.so.1 的位置，结合第 01 篇解释这个&quot;假库&quot;从哪来。</li>
+<li>观察本机时钟中断：<code>cat /proc/interrupts</code> 找 timer 行，分别记录 CPU 空闲 10 秒与跑满 10 秒的增量，结合 tickless 解释为什么空闲时增量不为 0 也不满（提示：调度粒度、其他 CPU）。</li>
+<li>写一个 C 程序连续 malloc/free 1MB 块 1000 次并每次 touch 内存，用 <code>vmstat 1</code> 观察 cs 列与 majflt/minflt 列的关系，回答&quot;分配大块会不会引发上下文切换或缺页&quot;。</li>
+<li>在你的 Python 服务（或 14 篇要用的训练脚本）运行时采集 <code>pidstat -w -p PID 1</code>（ voluntary/nonvoluntary 列），回答：非自愿切换（时间片用尽被抢）与自愿切换（等 IO）哪个占多数？给出优化方向（线程数/GIL/IO 模型）的一句话判断。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" rel="tag"># 操作系统</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/06-%E5%86%85%E5%AD%98%E5%88%86%E9%85%8D%E5%99%A8/" rel="prev" title="06-内存分配器">
+                  <i class="fa fa-angle-left"></i> 06-内存分配器
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/08-%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/" rel="next" title="08-文件系统">
+                  08-文件系统 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

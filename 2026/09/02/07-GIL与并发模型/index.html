@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="1. 说清 GIL 是什么、为什么存在：它锁的是&#39;字节码执行权&#39;，不是&#39;你的代码&#39;； 2. 用可复现代码实测 CPU 密集 vs IO 密集 在串行&#x2F;多线程&#x2F;多进程下的差异，得出结论而不是背结论； 3. 理解&#39;为什么 GIL 对多线程 IO…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="07-GIL与并发模型">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/07-GIL%E4%B8%8E%E5%B9%B6%E5%8F%91%E6%A8%A1%E5%9E%8B/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="1. 说清 GIL 是什么、为什么存在：它锁的是&#39;字节码执行权&#39;，不是&#39;你的代码&#39;； 2. 用可复现代码实测 CPU 密集 vs IO 密集 在串行&#x2F;多线程&#x2F;多进程下的差异，得出结论而不是背结论； 3. 理解&#39;为什么 GIL 对多线程 IO…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-01T18:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.510Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Python">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/07-GIL%E4%B8%8E%E5%B9%B6%E5%8F%91%E6%A8%A1%E5%9E%8B/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/07-GIL%E4%B8%8E%E5%B9%B6%E5%8F%91%E6%A8%A1%E5%9E%8B/","path":"2026/09/02/07-GIL与并发模型/","title":"07-GIL与并发模型"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>07-GIL与并发模型 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#07-gil-%E4%B8%8E%E5%B9%B6%E5%8F%91%E6%A8%A1%E5%9E%8B"><span class="nav-number">1.</span> <span class="nav-text"> 07 - GIL 与并发模型</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-gil-%E6%98%AF%E4%BB%80%E4%B9%88%E4%B8%80%E6%AC%A1%E5%8F%AA%E4%B8%80%E4%B8%AA%E7%BA%BF%E7%A8%8B%E6%89%A7%E8%A1%8C%E5%AD%97%E8%8A%82%E7%A0%81"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. GIL 是什么：一次只一个线程执行字节码</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%AE%9E%E6%B5%8B%E4%B8%80cpu-%E5%AF%86%E9%9B%86%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8D%E4%BB%85%E6%B2%A1%E5%BF%AB%E5%8F%8D%E8%80%8C%E6%9B%B4%E6%85%A2"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 实测一：CPU 密集——多线程不仅没快，反而更慢</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%9E%E6%B5%8B%E4%BA%8Cio-%E5%AF%86%E9%9B%86%E5%A4%9A%E7%BA%BF%E7%A8%8B%E7%9C%9F%E7%9A%84%E6%9C%89%E6%95%88"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 实测二：IO 密集——多线程真的有效</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-313-free-threading%E5%A6%82%E5%AE%9E%E4%BB%8B%E7%BB%8D%E7%8E%B0%E7%8A%B6"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 3.13 free-threading：如实介绍现状</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%B9%B6%E5%8F%91%E9%80%89%E5%9E%8B%E5%86%B3%E7%AD%96%E6%A0%91"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 并发选型决策树</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E9%99%B7%E9%98%B1"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见陷阱</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.9.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/07-GIL%E4%B8%8E%E5%B9%B6%E5%8F%91%E6%A8%A1%E5%9E%8B/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="07-GIL与并发模型 | Yoleen的博客">
+      <meta itemprop="description" content="1. 说清 GIL 是什么、为什么存在：它锁的是&#39;字节码执行权&#39;，不是&#39;你的代码&#39;； 2. 用可复现代码实测 CPU 密集 vs IO 密集 在串行&#x2F;多线程&#x2F;多进程下的差异，得出结论而不是背结论； 3. 理解&#39;为什么 GIL 对多线程 IO…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          07-GIL与并发模型
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 02:30:00" itemprop="dateCreated datePublished" datetime="2026-09-02T02:30:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Python/" itemprop="url" rel="index"><span itemprop="name">Python</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.7k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>10 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">1. 说清 GIL 是什么、为什么存在：它锁的是'字节码执行权'，不是'你的代码'； 2. 用可复现代码实测 CPU 密集 vs IO 密集 在串行/多线程/多进程下的差异，得出结论而不是背结论； 3. 理解'为什么 GIL 对多线程 IO…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="07-gil-与并发模型"><a class="markdownIt-Anchor" href="#07-gil-与并发模型"></a> 07 - GIL 与并发模型</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ol>
+<li>说清 GIL 是什么、为什么存在：它锁的是&quot;字节码执行权&quot;，不是&quot;你的代码&quot;；</li>
+<li>用可复现代码实测 <strong>CPU 密集 vs IO 密集</strong> 在串行/多线程/多进程下的差异，得出结论而不是背结论；</li>
+<li>理解&quot;为什么 GIL 对多线程 IO 程序影响小&quot;——IO 等待时线程会<strong>主动释放</strong> GIL；</li>
+<li>如实了解 3.13 free-threading 的现状，并建立<strong>并发选型决策树</strong>（threading/multiprocessing/asyncio）。</li>
+</ol>
+<h2 id="1-gil-是什么一次只一个线程执行字节码"><a class="markdownIt-Anchor" href="#1-gil-是什么一次只一个线程执行字节码"></a> 1. GIL 是什么：一次只一个线程执行字节码</h2>
+<p><strong>GIL（Global Interpreter Lock，全局解释器锁）</strong>：CPython 解释器中的一把互斥锁，<strong>同一时刻只允许一个线程执行 Python 字节码</strong>（官方文档 Glossary → GIL：“the mechanism used by the CPython interpreter to ensure that only one thread executes Python bytecode at a time”）。三个常见误解先纠正：</p>
+<ol>
+<li><strong>GIL 不是 Python 语言的特性，是 CPython 的实现细节</strong>——Jython/IronPython 没有，PyPy 有自己的 GIL，3.13+ 的 free-threading 构建可以没有；</li>
+<li><strong>GIL 锁的是&quot;字节码执行&quot;，不是所有操作</strong>——C 扩展（numpy 的大块矩阵运算）、文件读写、<code>hashlib</code> 计算等在进入 C 层时可释放 GIL；内存分配等由解释器内部更细的锁保护；</li>
+<li><strong>GIL 不保证线程安全</strong>——它保证的是&quot;单条字节码原子&quot;，而 <code>counter += 1</code> 是<strong>多条字节码</strong>（读、加、写），中间可被切换（08 篇用银行账户实测这个竞态）。</li>
+</ol>
+<p>为什么 GIL 存在：CPython 的内存管理（引用计数，01 篇）不是线程安全的，给每个对象都加细粒度锁会带来巨大开销且极易死锁，于是 1990s 选择了&quot;一把大锁&quot;这个简单方案。代价是：<strong>多线程无法利用多核并行执行 Python 代码</strong>。</p>
+<p>线程切换的时机（理解后两个小节的关键）：当前线程在以下情况会让出 GIL——① 执行了一定数量指令后（CPython 3.2 起每 5ms 检查一次切换点，<code>sys.getswitchinterval()</code> 可见）；② <strong>遇到阻塞式 IO 调用时立即释放</strong>（socket 等待数据、文件读写、<code>time.sleep</code>）；③ C 扩展显式释放（如 numpy、zlib、hashlib 的部分路径）。</p>
+<h2 id="2-实测一cpu-密集多线程不仅没快反而更慢"><a class="markdownIt-Anchor" href="#2-实测一cpu-密集多线程不仅没快反而更慢"></a> 2. 实测一：CPU 密集——多线程不仅没快，反而更慢</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;cpu_bound.py：4 个线程各做 2 次纯计算。&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"><span class="keyword">from</span> threading <span class="keyword">import</span> Thread</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">cpu_task</span>(<span class="params">n: <span class="built_in">int</span></span>) -&gt; <span class="built_in">int</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;纯 Python 计算：GIL 全程被持有。&quot;&quot;&quot;</span></span><br><span class="line">    total = <span class="number">0</span></span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n):</span><br><span class="line">        total += i * i</span><br><span class="line">    <span class="keyword">return</span> total</span><br><span class="line"></span><br><span class="line">N = <span class="number">20_000_000</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 串行 ----------</span></span><br><span class="line">t0 = time.perf_counter()</span><br><span class="line"><span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">4</span>):</span><br><span class="line">    cpu_task(N)</span><br><span class="line">serial = time.perf_counter() - t0</span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 多线程 ----------</span></span><br><span class="line">t0 = time.perf_counter()</span><br><span class="line">threads = [Thread(target=cpu_task, args=(N,)) <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">4</span>)]</span><br><span class="line"><span class="keyword">for</span> t <span class="keyword">in</span> threads: t.start()</span><br><span class="line"><span class="keyword">for</span> t <span class="keyword">in</span> threads: t.join()</span><br><span class="line">mt = time.perf_counter() - t0</span><br><span class="line"></span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;串行:   <span class="subst">&#123;serial:<span class="number">.2</span>f&#125;</span>s&quot;</span>)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;多线程: <span class="subst">&#123;mt:<span class="number">.2</span>f&#125;</span>s   ← 不是 4 倍加速，反而更慢！&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>8 核机器上的典型输出：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">串行:   4.10s</span><br><span class="line">多线程: 4.35s   ← 持平甚至更慢</span><br></pre></td></tr></table></figure>
+<p>解释：4 个线程<strong>轮流</strong>持有 GIL 执行字节码，总计算量不变，还叠加了线程切换与 GIL 争抢的开销（《Fluent Python》第 19 章给过同样的实验结论）。CPU 密集想用满多核，正解是<strong>多进程</strong>——每个进程有独立的解释器与 GIL：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;cpu_bound_mp.py：多进程版。&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"><span class="keyword">from</span> multiprocessing <span class="keyword">import</span> Pool</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">cpu_task</span>(<span class="params">n: <span class="built_in">int</span></span>) -&gt; <span class="built_in">int</span>:</span><br><span class="line">    total = <span class="number">0</span></span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n):</span><br><span class="line">        total += i * i</span><br><span class="line">    <span class="keyword">return</span> total</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:          <span class="comment"># 多进程必须有的保护（08 篇解释 spawn 机制）</span></span><br><span class="line">    N = <span class="number">20_000_000</span></span><br><span class="line">    t0 = time.perf_counter()</span><br><span class="line">    <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">4</span>):</span><br><span class="line">        cpu_task(N)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;串行:   <span class="subst">&#123;time.perf_counter()-t0:<span class="number">.2</span>f&#125;</span>s&quot;</span>)</span><br><span class="line"></span><br><span class="line">    t0 = time.perf_counter()</span><br><span class="line">    <span class="keyword">with</span> Pool(processes=<span class="number">4</span>) <span class="keyword">as</span> pool:  <span class="comment"># 4 个进程 ≈ 4 个独立 GIL</span></span><br><span class="line">        pool.<span class="built_in">map</span>(cpu_task, [N] * <span class="number">4</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;多进程: <span class="subst">&#123;time.perf_counter()-t0:<span class="number">.2</span>f&#125;</span>s&quot;</span>)   <span class="comment"># 典型 ≈ 1.2~1.4s，接近线性加速</span></span><br></pre></td></tr></table></figure>
+<p><strong>补充</strong>：numpy/pandas 这类 C 扩展在大数组运算时<strong>在 C 层释放 GIL</strong>，所以&quot;Python 写的 numpy 程序&quot;多线程可能真有加速——判据是&quot;热点在 Python 字节码还是 C 代码&quot;（13 篇的 cProfile 能告诉你）。</p>
+<h2 id="3-实测二io-密集多线程真的有效"><a class="markdownIt-Anchor" href="#3-实测二io-密集多线程真的有效"></a> 3. 实测二：IO 密集——多线程真的有效</h2>
+<p>关键机制：线程发起阻塞式 IO（网络、磁盘、sleep）时<strong>立即释放 GIL</strong>，让其他线程运行；IO 完成后重新排队抢锁。等待时间占大头的负载，多线程能把&quot;串行等待&quot;变成&quot;并行等待&quot;：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;io_bound.py：模拟 5 个 100ms 的网络请求。&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"><span class="keyword">from</span> threading <span class="keyword">import</span> Thread</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">io_task</span>(<span class="params">delay: <span class="built_in">float</span> = <span class="number">0.1</span></span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">    time.sleep(delay)                <span class="comment"># sleep 会释放 GIL，等价于真实网络等待</span></span><br><span class="line">    <span class="keyword">return</span> <span class="string">&quot;ok&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 串行 ----------</span></span><br><span class="line">t0 = time.perf_counter()</span><br><span class="line"><span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">5</span>):</span><br><span class="line">    io_task()</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;串行:   <span class="subst">&#123;time.perf_counter()-t0:<span class="number">.2</span>f&#125;</span>s&quot;</span>)    <span class="comment"># ≈ 0.50s（5 × 100ms）</span></span><br><span class="line"></span><br><span class="line"><span class="comment"># ---------- 多线程 ----------</span></span><br><span class="line">t0 = time.perf_counter()</span><br><span class="line">threads = [Thread(target=io_task) <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">5</span>)]</span><br><span class="line"><span class="keyword">for</span> t <span class="keyword">in</span> threads: t.start()</span><br><span class="line"><span class="keyword">for</span> t <span class="keyword">in</span> threads: t.join()</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;多线程: <span class="subst">&#123;time.perf_counter()-t0:<span class="number">.2</span>f&#125;</span>s&quot;</span>)    <span class="comment"># ≈ 0.10s（等待重叠了！）</span></span><br></pre></td></tr></table></figure>
+<p>典型输出：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">串行:   0.50s</span><br><span class="line">多线程: 0.10s   ← 5 倍加速，因为瓶颈是&quot;等待&quot;不是&quot;计算&quot;</span><br></pre></td></tr></table></figure>
+<p><strong>为什么 GIL 对多线程 IO 程序影响小</strong>，现在可以完整回答：IO 线程的时间主要花在<strong>不持有 GIL 的等待</strong>上；GIL 只约束&quot;执行字节码&quot;那极小的时间片。100 个线程同时等网络，GIL 空闲着谁爱用谁用。所以传统 Python 服务（DB 查询、HTTP 调用为主）用线程池一直够用。真正的短板只在：<strong>大量线程 + 每个 IO 之间仍有可观的 Python 代码</strong>——线程切换与 GIL 争抢开始吃 CPU，且每线程内存栈开销（MB 级）限制了并发规模。这正是 asyncio 出场的地方（09/10 篇）：单线程事件循环，协程只占 KB 级内存。</p>
+<h2 id="4-313-free-threading如实介绍现状"><a class="markdownIt-Anchor" href="#4-313-free-threading如实介绍现状"></a> 4. 3.13 free-threading：如实介绍现状</h2>
+<p><strong>PEP 703（Free-threading CPython）<strong>在 Python 3.13 中作为</strong>实验性</strong>特性落地：官方提供了&quot;禁用 GIL&quot;的自由线程构建（free-threaded build，<code>python3.13t</code>），核心工作是把引用计数改为**偏置引用计数（biased reference counting）<strong>并配合内部细粒度锁与延迟引用计数（PEP 703 原文），让多线程真正并行执行字节码。3.14 中该特性进入</strong>官方支持（Phase II）**阶段但仍非默认。截至本系列编写时（2026 年），需要如实记住的几点：</p>
+<ol>
+<li><strong>默认构建仍有 GIL</strong>——free-threading 是独立构建/安装选项（uv 可直接 <code>uv python install 3.13t</code> 安装试验，uv 系列 04 篇）；</li>
+<li><strong>生态在追赶</strong>：很多 C 扩展（含部分推理引擎）尚未声明兼容 free-threading；纯 Python 库大多天然可用；</li>
+<li><strong>单线程性能有代价</strong>：free-threaded 构建为线程安全引入开销，官方口径早期版本单线程有百分之几到十几的回归（3.14 已显著缩小，以 <a target="_blank" rel="noopener" href="https://py-free-threading.github.io/">py-free-threading 官方指南</a> 与 What’s New 的最新数字为准）；</li>
+<li><strong>它不解决 IO 并发编程模型问题</strong>——线程的心智负担（锁、竞态）原样存在；asyncio 的结构化并发仍是高并发 IO 的首选写法。</li>
+</ol>
+<p><strong>经验做法</strong>：2026 年的今天，生产选型<strong>默认仍按&quot;GIL 存在&quot;设计</strong>（进程池/C 扩展/asyncio），free-threading 值得在 CI 里开实验矩阵跟踪兼容性，但不押注关键路径。</p>
+<h2 id="5-并发选型决策树"><a class="markdownIt-Anchor" href="#5-并发选型决策树"></a> 5. 并发选型决策树</h2>
+<p>三种工具的本质（官方文档：concurrency 概念散布在 threading/multiprocessing/asyncio 各文档页；《Fluent Python》第 19~21 章三连）：</p>
+<table>
+<thead>
+<tr>
+<th>工具</th>
+<th>调度</th>
+<th>适用</th>
+<th>不适用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>threading</code></td>
+<td>OS 抢占式</td>
+<td>阻塞式库（requests/DB 驱动）的 IO 并发、需要共享内存</td>
+<td>CPU 密集（GIL）；上万并发（线程栈开销）</td>
+</tr>
+<tr>
+<td><code>multiprocessing</code></td>
+<td>多进程 OS 调度</td>
+<td>CPU 密集、要绕开 GIL、崩溃隔离</td>
+<td>高频小任务通信（pickle/IPC 开销大）</td>
+</tr>
+<tr>
+<td><code>asyncio</code></td>
+<td>单线程协作式</td>
+<td>万级并发 IO（Agent 工具并发、爬虫、网关）</td>
+<td>CPU 密集（会卡住整个循环）；阻塞式库（必须换异步库或 to_thread）</td>
+</tr>
+</tbody>
+</table>
+<p>决策树（从上往下问，命中即停）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">任务是什么？</span><br><span class="line">├─ CPU 密集（纯 Python 计算）</span><br><span class="line">│    ├─ 热点能换成 numpy/numba 等 C 层？→ 直接换库（顺便解决 GIL）</span><br><span class="line">│    └─ 不能 → multiprocessing / ProcessPoolExecutor</span><br><span class="line">├─ IO 密集</span><br><span class="line">│    ├─ 并发量 &lt; 几百 &amp; 用的都是阻塞库 → threading / ThreadPoolExecutor</span><br><span class="line">│    ├─ 高并发（千级+）&amp; 可用异步库 → asyncio（09/10 篇）</span><br><span class="line">│    └─ 混合 → asyncio + to_thread/run_in_executor（10 篇）</span><br><span class="line">└─ 需要崩溃隔离/多核扩展服务 → 多进程（或干脆多实例 + 负载均衡）</span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：Agent 开发方向的默认答案是 <strong>asyncio</strong>（工具调用并发、流式响应、SSE 全是 IO 等待），CPU 段（ tokenize、重计算）外包给进程池或推理服务；<strong>第一问永远是&quot;热点在等还是在算&quot;</strong>——cProfile 跑一遍再选（13 篇），不要凭感觉。</p>
+<h2 id="常见陷阱"><a class="markdownIt-Anchor" href="#常见陷阱"></a> 常见陷阱</h2>
+<p><strong>陷阱一：给 CPU 密集任务上多线程还以为会加速</strong>——实测第 2 节：不亏已是万幸。修复：进程池或换 C 扩展库。</p>
+<p><strong>陷阱二：以为 GIL 让你不需要锁</strong>——<code>counter += 1</code> 多字节码非原子，GIL 会在中途切换线程，数据照烂（08 篇银行账户实验复现）。</p>
+<p><strong>陷阱三：把 <code>time.sleep</code> 放进 asyncio 协程</strong>——阻塞整个事件循环，所有协程一起停摆；协程里要用 <code>await asyncio.sleep</code>（09 篇详解）。</p>
+<p><strong>陷阱四：<code>multiprocessing</code> 脚本没有 <code>if __name__ == &quot;__main__&quot;:</code> 保护</strong>——Windows/macOS 默认 spawn 启动方式会重新 import 主模块，无保护时无限递归开进程，直接炸（08 篇详解 spawn/fork）。</p>
+<p><strong>陷阱五：听说 free-threading 就重构全项目</strong>——实验性构建 + 生态兼容窗口期，收益不确定；按第 5 节决策树选型才是当下正解。</p>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>GIL 是 CPython 实现细节：<strong>同一时刻一个线程执行字节码</strong>；它不保证线程安全，也不阻塞 C 层释放（numpy/sleep/IO）；</li>
+<li>实测结论：CPU 密集多线程无加速（甚至更慢），<strong>多进程</strong>才有；IO 密集多线程有效，因为<strong>IO 等待时线程释放 GIL</strong>；</li>
+<li>free-threading（PEP 703）：3.13 实验性、3.14 官方支持仍非默认；生产当下按 GIL 存在来设计，CI 跟踪兼容性即可；</li>
+<li>选型一问定方向：<strong>热点在等（IO）还是在算（CPU）</strong>？等 → 线程/协程（看并发量），算 → 进程/C 扩展；</li>
+<li>Agent/推理服务方向：asyncio 是默认并发模型，CPU 段外包——08/09/10 篇把三条路逐一走通。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>运行第 2 节 cpu_bound.py（N 可调小到 5_000_000），记录你机器上串行/多线程的耗时，并用 <code>sys.getswitchinterval()</code> 查看当前切换间隔；把 N 减小 10 倍后再跑，观察&quot;多线程相对开销&quot;占比变化并解释。</li>
+<li>把第 3 节 io_task 的 <code>time.sleep(0.1)</code> 换成纯计算 <code>sum(range(5_000_000))</code>，重跑对比：多线程还有加速吗？用 GIL 机制解释差异。</li>
+<li>写实验证明&quot;<code>counter += 1</code> 在 GIL 下不原子&quot;：开 4 线程各加 100_000 次，观察最终值 &lt; 400_000（08 篇会给出加锁修复版，这里先复现问题）。</li>
+<li>检查你环境里是否有 free-threading 构建：<code>uv python list</code>（找 <code>3.13t</code>/<code>3.14t</code> 字样）；若有，用 <code>uv run --python 3.13t</code> 跑第 2 节的多线程脚本，对比普通构建的结果（差异应显著），并检查常用第三方库是否声明兼容（<code>pip index</code>/项目页）。</li>
+<li>对你手头的一个真实任务按第 5 节决策树走一遍：先回答&quot;热点在等还是在算&quot;（可用 13 篇的 cProfile 验证），写出选型结论与理由（线程/进程/协程/组合）。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/Python/" rel="tag"># Python</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/06-%E7%B1%BB%E5%9E%8B%E6%B3%A8%E8%A7%A3%E4%B8%8E%E7%8E%B0%E4%BB%A3%E8%AF%AD%E6%B3%95/" rel="prev" title="06-类型注解与现代语法">
+                  <i class="fa fa-angle-left"></i> 06-类型注解与现代语法
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/08-%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8E%E5%A4%9A%E8%BF%9B%E7%A8%8B/" rel="next" title="08-多线程与多进程">
+                  08-多线程与多进程 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

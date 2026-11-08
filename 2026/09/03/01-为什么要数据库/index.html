@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 亲手用一个 JSON 文件当&#39;数据库&#39;，复现并发写坏文件、部分失败、查询慢三大局限。 - 说清数据库提供的四件事：可靠存储、并发控制、查询语言、事务——每一件对应文件的哪个坑。 - 回顾存储层次（内存&#x2F;SSD&#x2F;HDD），记住顺序 vs …">
+<meta property="og:type" content="article">
+<meta property="og:title" content="01-为什么要数据库">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/01-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E6%95%B0%E6%8D%AE%E5%BA%93/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 亲手用一个 JSON 文件当&#39;数据库&#39;，复现并发写坏文件、部分失败、查询慢三大局限。 - 说清数据库提供的四件事：可靠存储、并发控制、查询语言、事务——每一件对应文件的哪个坑。 - 回顾存储层次（内存&#x2F;SSD&#x2F;HDD），记住顺序 vs …">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T10:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.554Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Redis">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="数据库">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/01-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E6%95%B0%E6%8D%AE%E5%BA%93/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/01-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E6%95%B0%E6%8D%AE%E5%BA%93/","path":"2026/09/03/01-为什么要数据库/","title":"01-为什么要数据库"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>01-为什么要数据库 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#01-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E6%95%B0%E6%8D%AE%E5%BA%93"><span class="nav-number">1.</span> <span class="nav-text"> 01 - 为什么要数据库</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%BB%8E%E4%B8%80%E4%B8%AA%E7%9C%9F%E5%AE%9E%E4%BA%8B%E6%95%85%E5%BC%80%E5%A7%8Bjson-%E6%96%87%E4%BB%B6%E5%BD%93%E6%95%B0%E6%8D%AE%E5%BA%93"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 从一个真实事故开始：JSON 文件当数据库</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E6%95%B0%E6%8D%AE%E5%BA%93%E6%8F%90%E4%BE%9B%E7%9A%84%E5%9B%9B%E4%BB%B6%E4%BA%8B"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 数据库提供的四件事</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AD%98%E5%82%A8%E5%B1%82%E6%AC%A1%E5%9B%9E%E9%A1%BE%E6%89%80%E6%9C%89%E6%80%A7%E8%83%BD%E9%97%AE%E9%A2%98%E7%9A%84%E7%89%A9%E7%90%86%E6%A0%B9%E6%BA%90"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 存储层次回顾：所有性能问题的物理根源</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E6%95%B0%E6%8D%AE%E5%BA%93%E5%88%86%E7%B1%BB%E5%9B%BE%E6%8C%89%E6%95%B0%E6%8D%AE%E5%BD%A2%E6%80%81%E4%B8%8E%E6%9F%A5%E8%AF%A2%E6%A8%A1%E5%BC%8F%E9%80%89%E7%B1%BB%E5%88%AB"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 数据库分类图：按数据形态与查询模式选类别</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.6.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.7.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.8.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/01-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E6%95%B0%E6%8D%AE%E5%BA%93/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="01-为什么要数据库 | Yoleen的博客">
+      <meta itemprop="description" content="- 亲手用一个 JSON 文件当&#39;数据库&#39;，复现并发写坏文件、部分失败、查询慢三大局限。 - 说清数据库提供的四件事：可靠存储、并发控制、查询语言、事务——每一件对应文件的哪个坑。 - 回顾存储层次（内存&#x2F;SSD&#x2F;HDD），记住顺序 vs …">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          01-为什么要数据库
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 18:00:00" itemprop="dateCreated datePublished" datetime="2026-09-03T18:00:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/" itemprop="url" rel="index"><span itemprop="name">数据库</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 亲手用一个 JSON 文件当'数据库'，复现并发写坏文件、部分失败、查询慢三大局限。 - 说清数据库提供的四件事：可靠存储、并发控制、查询语言、事务——每一件对应文件的哪个坑。 - 回顾存储层次（内存/SSD/HDD），记住顺序 vs …</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="01-为什么要数据库"><a class="markdownIt-Anchor" href="#01-为什么要数据库"></a> 01 - 为什么要数据库</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>亲手用一个 JSON 文件当&quot;数据库&quot;，复现并发写坏文件、部分失败、查询慢三大局限。</li>
+<li>说清数据库提供的四件事：可靠存储、并发控制、查询语言、事务——每一件对应文件的哪个坑。</li>
+<li>回顾存储层次（内存/SSD/HDD），记住顺序 vs 随机 IO 的数量级差，这是后面所有章节的物理地基。</li>
+<li>给出数据库分类图（关系/文档/KV/时序/向量/图），学会按数据形态与查询模式选类别。</li>
+</ul>
+<h2 id="1-从一个真实事故开始json-文件当数据库"><a class="markdownIt-Anchor" href="#1-从一个真实事故开始json-文件当数据库"></a> 1. 从一个真实事故开始：JSON 文件当数据库</h2>
+<p>很多 Python 初学者写过这样的代码：把用户数据存成 JSON 文件，读写都靠 <code>json.load</code>/<code>json.dump</code>。小规模（单用户、低频写）没问题，一旦两个进程同时写、或者写到一半进程挂了，事故就来了。下面这段代码可以稳定复现&quot;写坏文件&quot;：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># broken_json_db.py —— 用 JSON 文件当数据库的三大翻车现场</span></span><br><span class="line"><span class="keyword">import</span> json, os, threading, time</span><br><span class="line"></span><br><span class="line">DB = <span class="string">&quot;/tmp/broken_db.json&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">init</span>():</span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(DB, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        json.dump(&#123;<span class="string">&quot;users&quot;</span>: [&#123;<span class="string">&quot;id&quot;</span>: i, <span class="string">&quot;name&quot;</span>: <span class="string">f&quot;u<span class="subst">&#123;i&#125;</span>&quot;</span>&#125; <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">5</span>)]&#125;, f)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">read_db</span>():</span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(DB) <span class="keyword">as</span> f:                      <span class="comment"># 读之前不校验，写坏就直接崩</span></span><br><span class="line">        <span class="keyword">return</span> json.load(f)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">write_db</span>(<span class="params">data</span>):</span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(DB, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:                 <span class="comment"># 直接覆盖写：没有原子性</span></span><br><span class="line">        json.dump(data, f)                   <span class="comment"># 写一半崩溃 → 文件被截断</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">writer_bad</span>():</span><br><span class="line">    <span class="string">&quot;&quot;&quot;坏写者：写一半模拟崩溃&quot;&quot;&quot;</span></span><br><span class="line">    d = read_db(); d[<span class="string">&quot;users&quot;</span>].append(&#123;<span class="string">&quot;id&quot;</span>: <span class="number">99</span>, <span class="string">&quot;name&quot;</span>: <span class="string">&quot;new&quot;</span>&#125;)</span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(DB, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        f.write(json.dumps(d)[:<span class="number">60</span>])          <span class="comment"># 模拟&quot;写了 60 字节后进程被杀&quot;</span></span><br><span class="line">        <span class="keyword">raise</span> SystemExit                      <span class="comment"># 崩溃，后面的内容永远没写出去</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">writer_concurrent</span>():</span><br><span class="line">    <span class="string">&quot;&quot;&quot;并发写者：两个线程各读各写，互相覆盖&quot;&quot;&quot;</span></span><br><span class="line">    d = read_db()                            <span class="comment"># T1 和 T2 都读到 5 个用户</span></span><br><span class="line">    time.sleep(<span class="number">0.05</span>)                         <span class="comment"># 模拟处理耗时</span></span><br><span class="line">    d[<span class="string">&quot;users&quot;</span>].append(&#123;<span class="string">&quot;id&quot;</span>: threading.get_ident() % <span class="number">1000</span>, <span class="string">&quot;name&quot;</span>: <span class="string">&quot;lost&quot;</span>&#125;)</span><br><span class="line">    write_db(d)                              <span class="comment"># 后提交者把先提交者的写入覆盖掉</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    init()</span><br><span class="line">    <span class="comment"># 翻车一：部分失败 → 文件损坏</span></span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        writer_bad()</span><br><span class="line">    <span class="keyword">except</span> SystemExit:</span><br><span class="line">        <span class="keyword">pass</span></span><br><span class="line">    <span class="keyword">try</span>:</span><br><span class="line">        read_db()</span><br><span class="line">    <span class="keyword">except</span> json.JSONDecodeError <span class="keyword">as</span> e:</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;[翻车1] 读已损坏文件: <span class="subst">&#123;e&#125;</span>&quot;</span>)     <span class="comment"># Expecting value: line 1 column 60</span></span><br><span class="line"></span><br><span class="line">    init()</span><br><span class="line">    <span class="comment"># 翻车二：并发写 → 丢失更新</span></span><br><span class="line">    t1 = threading.Thread(target=writer_concurrent)</span><br><span class="line">    t2 = threading.Thread(target=writer_concurrent)</span><br><span class="line">    t1.start(); t2.start(); t1.join(); t2.join()</span><br><span class="line">    d = read_db()</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;[翻车2] 两个线程各加一条用户, 只剩 <span class="subst">&#123;<span class="built_in">len</span>(d[<span class="string">&#x27;users&#x27;</span>])-<span class="number">5</span>&#125;</span> 条 (期望 2)&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># 翻车三：查询慢 → 每次都全量加载</span></span><br><span class="line">    big = &#123;<span class="string">&quot;users&quot;</span>: [&#123;<span class="string">&quot;id&quot;</span>: i, <span class="string">&quot;name&quot;</span>: <span class="string">f&quot;u<span class="subst">&#123;i&#125;</span>&quot;</span>, <span class="string">&quot;age&quot;</span>: i % <span class="number">80</span>&#125; <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">2_000_000</span>)]&#125;</span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(<span class="string">&quot;/tmp/big_db.json&quot;</span>, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        json.dump(big, f)</span><br><span class="line">    t0 = time.monotonic()</span><br><span class="line">    hits = [u <span class="keyword">for</span> u <span class="keyword">in</span> json.load(<span class="built_in">open</span>(<span class="string">&quot;/tmp/big_db.json&quot;</span>))[<span class="string">&quot;users&quot;</span>] <span class="keyword">if</span> u[<span class="string">&quot;age&quot;</span>] == <span class="number">25</span>]</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;[翻车3] 200万行找 age=25, 命中<span class="subst">&#123;<span class="built_in">len</span>(hits)&#125;</span>行, 耗时 <span class="subst">&#123;time.monotonic()-t0:<span class="number">.2</span>f&#125;</span>s (每次都要读全文件+解析全部)&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>在 WSL2/Ubuntu 上实测输出（200 万行、机械盘/SSD 差异只影响量级）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[翻车1] 读已损坏文件: Expecting value: line 1 column 60 (char 59)</span><br><span class="line">[翻车2] 两个线程各加一条用户, 只剩 1 条 (期望 2)</span><br><span class="line">[翻车3] 200万行找 age=25, 命中25000行, 耗时 1.87s (每次都要读全文件+解析全部)</span><br></pre></td></tr></table></figure>
+<p>三大翻车对应三个缺失的能力：</p>
+<table>
+<thead>
+<tr>
+<th>翻车现场</th>
+<th>缺失的能力</th>
+<th>数据库的对应机制</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>写一半崩溃，文件永久损坏</td>
+<td>原子写入</td>
+<td>WAL/undo log：先写日志再改数据，崩溃后可恢复（第 06/10 章）</td>
+</tr>
+<tr>
+<td>两个线程互相覆盖</td>
+<td>并发控制</td>
+<td>锁 + MVCC：读写互不踩踏（第 04 章）</td>
+</tr>
+<tr>
+<td>2MB 文件查一次 1.87s，且随数据量线性变慢</td>
+<td>高效检索</td>
+<td>索引：B+树把 O(n) 变 O(log n)（第 03 章）</td>
+</tr>
+</tbody>
+</table>
+<p>还有一个隐藏问题：<code>json.load</code> 要把<strong>全部</strong> 2MB 数据解析成 Python 对象才能查 25 岁的人——内存与时间都被整个数据集绑架。数据库只把需要的页读进内存（缓冲池），查询的代价与命中数据量相关而非总数据量相关。</p>
+<h2 id="2-数据库提供的四件事"><a class="markdownIt-Anchor" href="#2-数据库提供的四件事"></a> 2. 数据库提供的四件事</h2>
+<p>把上面的坑逐个堵上，就是数据库（DBMS，数据库管理系统）存在的意义。拆成四件事：</p>
+<ol>
+<li><strong>可靠存储（Durability）</strong>：数据写入后，进程崩溃、甚至机器断电都不丢。核心手段是 <strong>WAL（Write-Ahead Log，预写日志）</strong>：提交时先把&quot;做了什么&quot;追加写进日志并 fsync，数据页可以慢慢刷。操作系统 08 篇讲过崩溃一致性，WAL 就是它最成功的工业实现（DDIA 第 3 章）。第 10 章你会亲手写一个。</li>
+<li><strong>并发控制（Concurrency Control）</strong>：多个连接同时读写，互不产生脏数据。两大流派：<strong>锁</strong>（悲观，写写互斥排队）与 <strong>MVCC</strong>（乐观，读者看快照、写者建新版本，互不阻塞）。第 04 章讲 MVCC 全套，第 08 章讲 Redis 单线程模型的另一种答案。</li>
+<li><strong>查询语言（Query Language）</strong>：SQL 是声明式的——你说&quot;要什么&quot;，不说&quot;怎么找&quot;。优化器决定全表扫描还是走索引、用哪种 JOIN（第 05 章）。这是文件方案完全没有的能力：你永远手写 for 循环。</li>
+<li><strong>事务（Transactions）</strong>：把多条语句捆成一个&quot;要么全成、要么全没&quot;的单元（ACID，详解见分布式系统 07 章，本系列 04 章讲实现）。转账扣钱/加钱两步，中间崩溃也不会出现&quot;钱扣了没到账&quot;。</li>
+</ol>
+<p>这四件事对应四种代价：写入变慢（要写日志）、占更多磁盘（多版本/索引）、需要学习（SQL/调优）、需要运维（备份/监控，第 12 章）。<strong>数据库不是&quot;更高级的文件&quot;，而是&quot;用可预算的代价买到四条保证&quot;的系统</strong>——记住这个定价视角，后面每个设计取舍都会回到它。</p>
+<h2 id="3-存储层次回顾所有性能问题的物理根源"><a class="markdownIt-Anchor" href="#3-存储层次回顾所有性能问题的物理根源"></a> 3. 存储层次回顾：所有性能问题的物理根源</h2>
+<p>数据库的一切设计（缓冲池、预读、索引、LSM、列存）都是在跟存储硬件的物理特性谈判。回顾三层（操作系统 01 篇有完整版，这里只留数据库相关的数字）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">寄存器/L1/L2/L3   ~1ns / ~1-10ns / ~4-20ns        (CPU 缓存，数据库管不到)</span><br><span class="line">     ↓ 100x</span><br><span class="line">内存 (DRAM)       ~100ns          8-64 GB 常见     (缓冲池/页缓存住在这里)</span><br><span class="line">     ↓ 1000x</span><br><span class="line">SSD (NVMe)        ~10-100 μs 随机   0.5-4 TB 常见   (数据库数据文件住在这里)</span><br><span class="line">     ↓ 10x</span><br><span class="line">HDD               ~10 ms 随机寻道    4-20 TB 常见   (冷数据/备份)</span><br></pre></td></tr></table></figure>
+<p>关键数字（Jeff Dean 的经典 latency numbers，2020 年代 NVMe 环境的近似值）：</p>
+<ul>
+<li>内存随机访问 ~100ns，SSD 随机读 ~100μs，差 <strong>~1000 倍</strong>。</li>
+<li><strong>顺序访问比随机访问快 1-2 个数量级</strong>：NVMe 顺序读可达 3-7 GB/s，随机 4K 读只有几百 MB/s；HDD 顺序 ~200 MB/s，随机寻道 ~10ms，差距 <strong>~100 倍</strong>。</li>
+<li>一次 fsync（强制落盘）≈ 一次 SSD 写延迟，~0.1-1ms。这就是分布式系统 07 章 fsync 实验里&quot;每条 fsync 慢几十倍&quot;的根源，也是所有数据库&quot;组提交（group commit）&quot;的动机。</li>
+</ul>
+<p>由此推出数据库设计的两条铁律（经验做法）：</p>
+<ol>
+<li><strong>把随机写变成顺序写</strong>：WAL、LSM-Tree（第 06 章）都是这句话的产物。</li>
+<li><strong>把随机读控制在少的页数内</strong>：B+树矮胖（3-4 层摸到千万行，第 03 章）、缓冲池命中、索引覆盖，全是这句话的产物。</li>
+</ol>
+<p>一个快速自查的直觉标尺：<strong>内存 100ns → SSD 100μs → 网络同机房 0.5ms → HDD 寻道 10ms → 跨地域 30-100ms</strong>。任何设计，只要能在心里沿这条标尺定位每一跳，就能看懂大多数性能取舍。</p>
+<h2 id="4-数据库分类图按数据形态与查询模式选类别"><a class="markdownIt-Anchor" href="#4-数据库分类图按数据形态与查询模式选类别"></a> 4. 数据库分类图：按数据形态与查询模式选类别</h2>
+<p>&quot;数据库&quot;是个大家族，按数据形态和查询模式分六类（DDIA 第 2 章的总览视角）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">                   数据形态 / 查询模式</span><br><span class="line">                          │</span><br><span class="line">    ┌──────────┬──────────┼──────────┬──────────┬──────────┐</span><br><span class="line">    │          │          │          │          │          │</span><br><span class="line">  关系型      文档型      KV         时序        向量        图</span><br><span class="line">(PostgreSQL  (MongoDB)  (Redis/    (InfluxDB/  (pgvector/  (Neo4j/</span><br><span class="line"> MySQL/       JSON 文档   DynamoDB)  TimescaleDB/ Faiss/     Nebula)</span><br><span class="line"> SQLite)      嵌套结构    点查/缓存   量化行情)    Milvus)    关系遍历</span><br><span class="line">    │          │          │          │          │          │</span><br><span class="line">结构化+SQL  半结构化    简单 get/  按时间范围   高维相似度   节点+边</span><br><span class="line">强事务/JOIN  无强schema  set/setex  聚合降采样   近邻检索    多跳查询</span><br><span class="line">    │          │          │          │          │          │</span><br><span class="line"> 本系列02-07  本系列不展开  第08章    第11章      第09章     按需了解</span><br></pre></td></tr></table></figure>
+<p>选类别只看两个问题（经验做法）：</p>
+<ol>
+<li><strong>数据形态</strong>：结构化、关系稳定、要多表 JOIN → 关系型；嵌套、字段经常变 → 文档型；就是&quot;键 → 值&quot; → KV；带时间戳、按时间写入和聚合 → 时序；文本/图片经 embedding 后的高维向量 → 向量库；实体间关系本身是核心（社交链路、知识图谱）→ 图。</li>
+<li><strong>查询模式</strong>：点查为主（get by key）→ KV；条件查询 + 聚合 + 事务 → 关系型；“给一个向量找最像的 k 个” → 向量库。</li>
+</ol>
+<p>常见误区是&quot;按流行度选&quot;而不是按形态选。一个典型反例：用 Redis 的 hash 存需要多条件查询的业务数据，然后手写一堆二级索引（自己再建 set 维护），最后发现自己在用 KV 库手搓关系型数据库——不如一开始就用 Postgres。<strong>本系列的立场（经验做法）：不确定时选关系型</strong>，理由在 11 章展开（&quot;先用 Postgres&quot;原则）。</p>
+<p>顺便把两个容易混淆的词钉死：**数据库（database）**指数据的集合本身，<strong>DBMS</strong> 指管理它的软件（SQLite、PostgreSQL、Redis 都是 DBMS）。口语里&quot;数据库&quot;两者混用，本系列在可能歧义处用&quot;数据库文件/数据库系统&quot;区分。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“数据量小，直接读全文件也没事”</strong>：查询代价随总数据量线性增长，而索引查询只随命中量增长。今天 200 万行 1.87s，明天 2000 万行就是 19s，而一次 cron 全量扫描任务把 IO 打满会拖垮同机的所有服务。</li>
+<li><strong>“数据库只是把数据存起来”</strong>：存只是 1/4。把它当文件用（一次写全量覆盖）等于放弃了并发控制与增量更新，也享受不到索引和事务——最贵的用法、最少的回报。</li>
+<li><strong>“越新的数据库越好”</strong>：向量库、时序库解决的是特定形态的问题，通用场景下 PostgreSQL 一个系统覆盖 80% 需求（11 章&quot;先用 Postgres&quot;原则）。选型看数据形态与查询模式，不看新闻。</li>
+<li><strong>“内存快所以把数据全放内存”</strong>：内存掉电即失，且单机内存容量/价格是硬约束。现实方案是&quot;内存做缓存层（第 08 章），磁盘做事实源&quot;——缓存可以丢，事实不能丢。</li>
+<li><strong>“JSON 文件加个文件锁就安全了”</strong>：文件锁解决不了&quot;写一半崩溃&quot;，也不解决查询。能修补的是并发覆盖（用 <code>fcntl.flock</code>），修补不了原子性与检索，边际收益递减——该换 DBMS 时就换。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>JSON 文件当数据库的三大翻车：部分失败写坏文件、并发写丢失更新、全量加载查询慢——分别对应缺失原子性、并发控制、索引。</li>
+<li>数据库提供的四件事：可靠存储（WAL）、并发控制（锁/MVCC）、查询语言（声明式 SQL + 优化器）、事务（ACID）；每一件都有对应的运行时代价。</li>
+<li>存储层次是所有设计的物理根源：内存→SSD 差 ~1000 倍，顺序比随机快 1-2 个数量级；两条铁律——随机写变顺序写、随机读控制页数。</li>
+<li>数据库六分类：关系/文档/KV/时序/向量/图，按数据形态 + 查询模式选；不确定时选关系型。</li>
+<li>下一章从 SQL 语言本体开始：先会用，后面才轮到&quot;为什么快&quot;。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>跑通 broken_json_db.py，把 <code>writer_bad</code> 的截断长度从 60 改成 120、200，观察 JSONDecodeError 位置的变化；再想一个&quot;部分失败但文件恰好仍是合法 JSON&quot;的场景（提示：截断发生在对象结束花括号之后），体会&quot;文件合法 ≠ 数据正确&quot;。</li>
+<li>用 <code>fcntl.flock</code> 给 write_db 加文件锁，验证并发丢失更新消失；然后思考：锁加上了，原子性和查询问题解决了吗？写下三者为何必须由一个系统统一解决。</li>
+<li>用 <code>dd</code> 实测你机器的存储层次：<code>dd if=/dev/zero of=/tmp/t bs=1M count=2048</code>（顺序写）与 Python 随机写 4K 块对比，记录你自己的顺序/随机比，替换 3 节的通用数字。</li>
+<li>给你手头的一个真实项目数据（Agent 的会话记录、量化行情、爬虫结果）按第 4 节的两个问题（形态/模式）归类，写出选哪类存储、为什么；如果结论是&quot;关系型&quot;，再列三个你最需要的 SQL 查询。</li>
+<li>预习题：翻车二里两个线程&quot;各读到 5 个用户、各加 1 条、只剩 1 条&quot;，如果换成两个进程（而非线程）还会发生吗？如果两个进程在不同机器上呢？（这条线索通向分布式系统 04 章的复制与 06 章的分区。）</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/" rel="tag"># 数据库</a>
+              <a href="/tags/Redis/" rel="tag"># Redis</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/%E6%95%B0%E6%8D%AE%E5%BA%93%E4%B8%8E%E5%AD%98%E5%82%A8-README/" rel="prev" title="数据库与存储 · 学习路线总览">
+                  <i class="fa fa-angle-left"></i> 数据库与存储 · 学习路线总览
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/02-SQL%E5%9F%BA%E7%A1%80/" rel="next" title="02-SQL基础">
+                  02-SQL基础 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

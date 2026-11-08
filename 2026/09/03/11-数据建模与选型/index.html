@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 快速过三范式，判断什么时候故意反范式——建模的第一决策。 - 区分读多写少 vs 写多读少的建模差异，认识 append-only 事件表的设计模式。 - 完整设计量化行情 OHLCV 表（索引&#x2F;分区&#x2F;降采样），衔接量化 02 篇的数据…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="11-数据建模与选型">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/11-%E6%95%B0%E6%8D%AE%E5%BB%BA%E6%A8%A1%E4%B8%8E%E9%80%89%E5%9E%8B/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 快速过三范式，判断什么时候故意反范式——建模的第一决策。 - 区分读多写少 vs 写多读少的建模差异，认识 append-only 事件表的设计模式。 - 完整设计量化行情 OHLCV 表（索引&#x2F;分区&#x2F;降采样），衔接量化 02 篇的数据…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T15:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.558Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Redis">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="数据库">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/11-%E6%95%B0%E6%8D%AE%E5%BB%BA%E6%A8%A1%E4%B8%8E%E9%80%89%E5%9E%8B/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/11-%E6%95%B0%E6%8D%AE%E5%BB%BA%E6%A8%A1%E4%B8%8E%E9%80%89%E5%9E%8B/","path":"2026/09/03/11-数据建模与选型/","title":"11-数据建模与选型"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>11-数据建模与选型 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#11-%E6%95%B0%E6%8D%AE%E5%BB%BA%E6%A8%A1%E4%B8%8E%E9%80%89%E5%9E%8B"><span class="nav-number">1.</span> <span class="nav-text"> 11 - 数据建模与选型</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E8%8C%83%E5%BC%8F%E4%B8%8E%E5%8F%8D%E8%8C%83%E5%BC%8F%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E6%95%85%E6%84%8F%E5%86%97%E4%BD%99"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 范式与反范式：什么时候故意冗余</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E8%AF%BB%E5%A4%9A%E5%86%99%E5%B0%91-vs-%E5%86%99%E5%A4%9A%E8%AF%BB%E5%B0%91%E4%B8%A4%E7%A7%8D%E5%BB%BA%E6%A8%A1%E4%B8%96%E7%95%8C%E8%A7%82"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 读多写少 vs 写多读少：两种建模世界观</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E4%BA%8B%E4%BB%B6%E8%A1%A8%E8%AE%BE%E8%AE%A1%E5%AE%9E%E4%BE%8B%E9%87%8F%E5%8C%96%E8%A1%8C%E6%83%85-ohlcv-%E8%A1%A8"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 事件表设计实例：量化行情 OHLCV 表</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-oltp-vs-olap%E5%88%97%E5%AD%98%E4%B8%BA%E4%BB%80%E4%B9%88%E5%BF%AB"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. OLTP vs OLAP：列存为什么快</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E6%8A%80%E6%9C%AF%E9%80%89%E5%9E%8B%E5%86%B3%E7%AD%96%E6%A0%91"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 技术选型决策树</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%85%88%E7%94%A8-postgres%E5%8E%9F%E5%88%99%E7%BB%8F%E9%AA%8C%E5%81%9A%E6%B3%95"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. &quot;先用 Postgres&quot;原则（经验做法）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/11-%E6%95%B0%E6%8D%AE%E5%BB%BA%E6%A8%A1%E4%B8%8E%E9%80%89%E5%9E%8B/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="11-数据建模与选型 | Yoleen的博客">
+      <meta itemprop="description" content="- 快速过三范式，判断什么时候故意反范式——建模的第一决策。 - 区分读多写少 vs 写多读少的建模差异，认识 append-only 事件表的设计模式。 - 完整设计量化行情 OHLCV 表（索引&#x2F;分区&#x2F;降采样），衔接量化 02 篇的数据…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          11-数据建模与选型
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 23:00:00" itemprop="dateCreated datePublished" datetime="2026-09-03T23:00:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/" itemprop="url" rel="index"><span itemprop="name">数据库</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.6k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>13 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 快速过三范式，判断什么时候故意反范式——建模的第一决策。 - 区分读多写少 vs 写多读少的建模差异，认识 append-only 事件表的设计模式。 - 完整设计量化行情 OHLCV 表（索引/分区/降采样），衔接量化 02 篇的数据…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="11-数据建模与选型"><a class="markdownIt-Anchor" href="#11-数据建模与选型"></a> 11 - 数据建模与选型</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>快速过三范式，判断什么时候<strong>故意</strong>反范式——建模的第一决策。</li>
+<li>区分读多写少 vs 写多读少的建模差异，认识 append-only 事件表的设计模式。</li>
+<li>完整设计量化行情 OHLCV 表（索引/分区/降采样），衔接量化 02 篇的数据落库。</li>
+<li>理解 OLTP vs OLAP 的存储分野（列存为什么快），拿到一张可操作的技术选型决策树，内化&quot;先用 Postgres&quot;原则。</li>
+</ul>
+<h2 id="1-范式与反范式什么时候故意冗余"><a class="markdownIt-Anchor" href="#1-范式与反范式什么时候故意冗余"></a> 1. 范式与反范式：什么时候故意冗余</h2>
+<p>三范式速览（Codd 1970 的关系模型规范化，教材定义一句话版）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">1NF: 每列原子性, 不嵌套(一个&quot;联系方式&quot;列存 &quot;电话,邮箱&quot; 违反)</span><br><span class="line">2NF: 非主属性完全依赖主键(订单表里&quot;商品名&quot;只依赖&quot;商品id&quot;→挪到商品表)</span><br><span class="line">3NF: 消除传递依赖(员工表存&quot;部门id&quot;+&quot;部门名&quot;→部门名依赖部门id, 挪出去)</span><br></pre></td></tr></table></figure>
+<p>范式化的收益：<strong>更新一处即可</strong>，不冗余、不变态。但读路径变贵——每个查询都要 JOIN。**反范式（故意冗余）**把读时 JOIN 变成写时冗余：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- 范式化: 订单与商品分表, 查询要 JOIN</span></span><br><span class="line"><span class="keyword">SELECT</span> o.id, p.name, o.qty <span class="keyword">FROM</span> orders o <span class="keyword">JOIN</span> products p <span class="keyword">ON</span> p.id <span class="operator">=</span> o.product_id;</span><br><span class="line"><span class="comment">-- 反范式: 订单表冗余商品名(写时抄一份)</span></span><br><span class="line"><span class="keyword">ALTER TABLE</span> orders <span class="keyword">ADD</span> <span class="keyword">COLUMN</span> product_name TEXT;</span><br><span class="line"><span class="keyword">UPDATE</span> orders o <span class="keyword">SET</span> product_name <span class="operator">=</span> (<span class="keyword">SELECT</span> name <span class="keyword">FROM</span> products <span class="keyword">WHERE</span> id <span class="operator">=</span> o.product_id);</span><br><span class="line"><span class="comment">-- 商品改名后旧订单还显示旧名 —— 这可能是 bug, 也可能是&quot;历史快照&quot;的正确语义!</span></span><br></pre></td></tr></table></figure>
+<p>决策清单（经验做法，逐条都是业务问题不是技术问题）：</p>
+<ol>
+<li><strong>冗余的是&quot;事实快照&quot;还是&quot;当前状态&quot;</strong>：订单里的商品名/成交价是事实快照（下单那一刻的世界），冗余是<strong>正确</strong>；用户表冗余&quot;最近订单摘要&quot;是当前状态，需要同步机制。</li>
+<li><strong>读放大的痛 vs 一致性维护的痛</strong>：读路径 QPS 高、JOIN 深达 3-4 层 → 考虑冗余或视图/物化视图；写路径要保证多表同步 → 老实范式化 + 事务。</li>
+<li><strong>谁负责同步冗余列</strong>：应用双写（易漏）、触发器（隐藏逻辑）、CDC 订阅（08 章缓存一致性的同款方案）——三选一要写进团队文档。</li>
+</ol>
+<p>一句话原则：<strong>范式化是默认，反范式是买了&quot;读性能&quot;后要自己养的一致性账单</strong>。先按范式建模拿到正确性，再按真实查询计划（05 章）决定在哪里付冗余。</p>
+<h2 id="2-读多写少-vs-写多读少两种建模世界观"><a class="markdownIt-Anchor" href="#2-读多写少-vs-写多读少两种建模世界观"></a> 2. 读多写少 vs 写多读少：两种建模世界观</h2>
+<p>同一份数据，两种负载的建模截然不同：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>读多写少（内容/配置/风控规则）</th>
+<th>写多读少（埋点/行情 tick/日志）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>表形态</td>
+<td>宽表 + 状态行（UPDATE 当前值）</td>
+<td><strong>append-only 事件表</strong>（只 INSERT 不 UPDATE）</td>
+</tr>
+<tr>
+<td>索引</td>
+<td>为查询模式精建（覆盖索引/联合索引）</td>
+<td>少建（写放大），靠分区 + 时间键</td>
+</tr>
+<tr>
+<td>更新语义</td>
+<td>幂等 upsert（ON CONFLICT）</td>
+<td>追加即事实，错了补一条更正事件</td>
+</tr>
+<tr>
+<td>典型优化</td>
+<td>缓存（08 章）、物化视图</td>
+<td>分区滚动删除、批量写入、LSM 引擎</td>
+</tr>
+<tr>
+<td>查询</td>
+<td>点查 + 短聚合</td>
+<td>时间范围扫描 + 预聚合</td>
+</tr>
+</tbody>
+</table>
+<p><strong>append-only（只追加）<strong>是写多读少的核心模式：不 UPDATE 不 DELETE，每次变化都是一条新事件。收益：写路径只有顺序追加（10 章手写引擎的原始形态）；天然审计（谁在何时改了什么全在日志里）；删除旧数据 = drop 分区（07 章分区表收益）。代价：读&quot;当前状态&quot;要按时间取最新（窗口函数 <code>ROW_NUMBER</code>，02 章）——所以常配一张&quot;物化后的状态表&quot;由后台从事件流刷新。这就是</strong>事件溯源（Event Sourcing）/ CDC 思想</strong>的表级雏形：事实只追加，状态是事实的函数。</p>
+<h2 id="3-事件表设计实例量化行情-ohlcv-表"><a class="markdownIt-Anchor" href="#3-事件表设计实例量化行情-ohlcv-表"></a> 3. 事件表设计实例：量化行情 OHLCV 表</h2>
+<p>量化 02 篇抓下来的行情怎么落库？这是事件表设计的完整实例（PG 16，07 章分区语法 + 03 章索引原则的总装）：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">-- OHLCV: 每行 = 一只股票在一个 bar 周期的开高低收与成交量</span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> kline_1min (</span><br><span class="line">    symbol   TEXT        <span class="keyword">NOT NULL</span>,          <span class="comment">-- 股票代码</span></span><br><span class="line">    ts       TIMESTAMPTZ <span class="keyword">NOT NULL</span>,          <span class="comment">-- bar 结束时间(交易所口径写进注释!)</span></span><br><span class="line">    o <span class="type">NUMERIC</span>(<span class="number">12</span>,<span class="number">4</span>), h <span class="type">NUMERIC</span>(<span class="number">12</span>,<span class="number">4</span>),      <span class="comment">-- 金额一律 NUMERIC(07 章)</span></span><br><span class="line">    l <span class="type">NUMERIC</span>(<span class="number">12</span>,<span class="number">4</span>), c <span class="type">NUMERIC</span>(<span class="number">12</span>,<span class="number">4</span>),</span><br><span class="line">    v        <span class="type">NUMERIC</span>(<span class="number">18</span>,<span class="number">2</span>),                <span class="comment">-- 成交量(股)</span></span><br><span class="line">    amount   <span class="type">NUMERIC</span>(<span class="number">20</span>,<span class="number">2</span>),                <span class="comment">-- 成交额(元)</span></span><br><span class="line">    <span class="keyword">PRIMARY KEY</span> (symbol, ts)               <span class="comment">-- 分区键必须进主键(07 章)</span></span><br><span class="line">) <span class="keyword">PARTITION</span> <span class="keyword">BY</span> <span class="keyword">RANGE</span> (ts);</span><br><span class="line"></span><br><span class="line"><span class="comment">-- 月分区 + 滚动: 老分区归档后 DROP(秒级) 而非 DELETE(千万行级 vacuum 灾难)</span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> kline_1min_2025_06 <span class="keyword">PARTITION</span> <span class="keyword">OF</span> kline_1min</span><br><span class="line">    <span class="keyword">FOR</span> <span class="keyword">VALUES</span> <span class="keyword">FROM</span> (<span class="string">&#x27;2025-06-01&#x27;</span>) <span class="keyword">TO</span> (<span class="string">&#x27;2025-07-01&#x27;</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">-- 索引: 主键已覆盖 (symbol, ts) —— &quot;取某股票某时间段K线&quot;是最热查询, 主键即答案, 零额外索引!</span></span><br><span class="line"><span class="comment">-- 反例: 单独建 ts 索引 = 白付出写放大(03 章), 因为全市场扫描&quot;某分钟所有股票&quot;的场景用 partition + (symbol,ts) 的分区内扫描更划算</span></span><br><span class="line"><span class="comment">-- 若高频查&quot;某日全市场收盘&quot;: 建日级汇总表(见下), 不给明细表加 (ts) 单列索引</span></span><br><span class="line"></span><br><span class="line"><span class="comment">-- 日级汇总表(降采样/预聚合): 读多写少的&quot;读&quot;走这里</span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> kline_1d (</span><br><span class="line">    symbol TEXT, <span class="keyword">day</span> <span class="type">DATE</span>,</span><br><span class="line">    o <span class="type">NUMERIC</span>, h <span class="type">NUMERIC</span>, l <span class="type">NUMERIC</span>, c <span class="type">NUMERIC</span>, v <span class="type">NUMERIC</span>, amount <span class="type">NUMERIC</span>,</span><br><span class="line">    <span class="keyword">PRIMARY KEY</span> (symbol, <span class="keyword">day</span>)</span><br><span class="line">);</span><br><span class="line"><span class="keyword">INSERT INTO</span> kline_1d</span><br><span class="line"><span class="keyword">SELECT</span> symbol, date_trunc(<span class="string">&#x27;day&#x27;</span>, ts), <span class="built_in">first_value</span>(o) <span class="keyword">OVER</span> w, <span class="built_in">max</span>(h), <span class="built_in">min</span>(l),</span><br><span class="line">       <span class="built_in">last_value</span>(c) <span class="keyword">OVER</span> w, <span class="built_in">sum</span>(v), <span class="built_in">sum</span>(amount)</span><br><span class="line"><span class="keyword">FROM</span> kline_1min <span class="keyword">WHERE</span> ts <span class="operator">&gt;=</span> <span class="string">&#x27;2025-06-01&#x27;</span> <span class="keyword">AND</span> ts <span class="operator">&lt;</span> <span class="string">&#x27;2025-07-01&#x27;</span></span><br><span class="line"><span class="keyword">GROUP</span> <span class="keyword">BY</span> symbol, date_trunc(<span class="string">&#x27;day&#x27;</span>, ts)</span><br><span class="line"><span class="keyword">WINDOW</span> w <span class="keyword">AS</span> (<span class="keyword">PARTITION</span> <span class="keyword">BY</span> symbol, date_trunc(<span class="string">&#x27;day&#x27;</span>, ts) <span class="keyword">ORDER</span> <span class="keyword">BY</span> ts <span class="keyword">ROWS</span> <span class="keyword">BETWEEN</span> UNBOUNDED PRECEDING <span class="keyword">AND</span> UNBOUNDED FOLLOWING);</span><br></pre></td></tr></table></figure>
+<p>设计决策逐条复盘（把前九章全用上）：</p>
+<ol>
+<li><strong>主键 (symbol, ts) 联合</strong>：热查询&quot;某股票某时段 K 线&quot; = 前缀等值 + 范围（03 章口诀：等值在前、范围在后），主键索引直接命中，<strong>不再加任何单列索引</strong>——每少一个索引，每分钟数万条 tick 插入的写放大就少一份。</li>
+<li><strong>按月 RANGE 分区</strong>：回测只扫涉及的月份（05 章分区裁剪）；一年数据 = 12 个分区文件级操作。</li>
+<li><strong>NUMERIC 存价格</strong>：07 章&quot;钱的教训&quot;；时间戳 TIMESTAMPTZ 统一时区（A股 UTC+8 的坑全在这一列的类型里）。</li>
+<li><strong>降采样表</strong>：1min 明细支撑精细回测，日级表支撑选股扫描——<strong>读形态决定要不要预聚合</strong>，而不是&quot;表越大越该建物化视图&quot;。</li>
+<li><strong>tick 级数据</strong>（每秒 3 千笔全市场）：明细表换时序库（TimescaleDB/InfluxDB，01 章分类图）或 LSM 引擎（06 章选型表）；分钟级聚合 PG 足够——<strong>量级决定引擎，形态决定建模</strong>。</li>
+</ol>
+<h2 id="4-oltp-vs-olap列存为什么快"><a class="markdownIt-Anchor" href="#4-oltp-vs-olap列存为什么快"></a> 4. OLTP vs OLAP：列存为什么快</h2>
+<p>两类负载的存储引擎分野（01 章分类图的深化，DDIA 第 3 章）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">行存(OLTP: PG/MySQL):  一行连续存放  [id|name|age|city][id|name|age|city]...</span><br><span class="line">  适合: 取整行(用户画像页/订单详情) —— 一次 IO 拿齐一行</span><br><span class="line">列存(OLAP: ClickHouse/DuckDB/Parquet): 一列连续存放  [id|id|id...][name|name...][age|age...]</span><br><span class="line">  适合: 聚合少数列 —— 只读涉及的列, 其余列零 IO</span><br></pre></td></tr></table></figure>
+<p>列存在分析查询（<code>SELECT avg(amount) FROM kline WHERE day &gt; '2025-01-01'</code>）上快 10-100 倍的原因有三，缺一不可：</p>
+<ol>
+<li><strong>只读需要的列</strong>：聚合 3 列 = 3/16 的 IO（行存必须读全行）。</li>
+<li><strong>压缩友好</strong>：同列数据类型一致、值相近（时间列游程编码、价格列字典/delta 编码），压缩比 5-10x，IO 再降一个量级。</li>
+<li><strong>向量化执行</strong>：以&quot;列块&quot;为单位批量算（SIMD 一条指令处理 8 个 float），替代逐行解释。<strong>向量化扫描演示思路</strong>（Python 直观模拟，非真实引擎）：</li>
+</ol>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># vec_scan.py —— 行式 vs 列式聚合的直观模拟</span></span><br><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np, time</span><br><span class="line">n = <span class="number">5_000_000</span></span><br><span class="line">rows = np.empty((n, <span class="number">4</span>), dtype=np.float64)          <span class="comment"># 行存: id, price, qty, pad</span></span><br><span class="line">rows[:, <span class="number">0</span>] = np.arange(n); rows[:, <span class="number">1</span>] = np.random.rand(n)*<span class="number">100</span></span><br><span class="line">rows[:, <span class="number">2</span>] = np.random.rand(n)*<span class="number">10</span>;  rows[:, <span class="number">3</span>] = rows[:, <span class="number">0</span>]</span><br><span class="line">cols = [np.ascontiguousarray(rows[:, i]) <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">4</span>)]   <span class="comment"># 列存视图</span></span><br><span class="line">t0 = time.monotonic()</span><br><span class="line">sum_row = rows[:, <span class="number">1</span>] @ rows[:, <span class="number">2</span>]                  <span class="comment"># 行存语义: 遍历行取两列(内存上跨步访问)</span></span><br><span class="line">t_row = time.monotonic() - t0</span><br><span class="line">t0 = time.monotonic()</span><br><span class="line">sum_col = cols[<span class="number">1</span>] @ cols[<span class="number">2</span>]                        <span class="comment"># 列存语义: 两列连续内存点积(SIMD 友好)</span></span><br><span class="line">t_col = time.monotonic() - t0</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;行式跨步 <span class="subst">&#123;t_row*<span class="number">1000</span>:<span class="number">.1</span>f&#125;</span>ms | 列式连续 <span class="subst">&#123;t_col*<span class="number">1000</span>:<span class="number">.1</span>f&#125;</span>ms | 比 <span class="subst">&#123;t_row/t_col:<span class="number">.1</span>f&#125;</span>x&quot;</span>)</span><br><span class="line"><span class="comment"># 实测(WSL2): 行式 ~19.8ms | 列式 ~4.2ms | ~4.7x —— 这是纯 Python/内存模型,</span></span><br><span class="line"><span class="comment"># 真实引擎再叠压缩(少IO)与 SIMD, 差距放大到 10-100x</span></span><br></pre></td></tr></table></figure>
+<p>结论不是&quot;列存替代行存&quot;：<strong>OLTP 的点查/事务在行存上是 3 次页读，在列存上要拼 16 列碎片</strong>——引擎跟着负载走。工程上常见组合：PG 扛 OLTP + 每晚 ETL 到 ClickHouse/DuckDB 扛分析；或 PG + 列存扩展（hydra/citus columnar）小规模兼营。</p>
+<h2 id="5-技术选型决策树"><a class="markdownIt-Anchor" href="#5-技术选型决策树"></a> 5. 技术选型决策树</h2>
+<p>把全系列压缩成一张决策图（按顺序问，第一个答&quot;是&quot;的分支就是答案）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">Q1 数据需要事务/复杂关联查询吗? ──是──→ 关系型(SQLite 单机小用 / PostgreSQL 主力)</span><br><span class="line">   │否</span><br><span class="line">Q2 是&quot;高维向量 + 相似度检索&quot;吗? ──是──→ pgvector(百万级) / 专用向量库(亿级+高QPS, 09章)</span><br><span class="line">   │否</span><br><span class="line">Q3 写入 &gt; 1万条/s 且以时间序列为主? ──是──→ 时序库(TimescaleDB/InfluxDB) 或 LSM 引擎</span><br><span class="line">   │                                        (ClickHouse 若聚合查询为主, 4节)</span><br><span class="line">   │否</span><br><span class="line">Q4 需要 &lt;10ms 的超热点点查/计数/锁? ──是──→ Redis(08章; 持久需求配 AOF, 状态重则换 RocksDB)</span><br><span class="line">   │否</span><br><span class="line">Q5 数据间是关系网络, 查询是多跳遍历? ──是──→ 图库(Neo4j)</span><br><span class="line">   │否</span><br><span class="line">Q6 都不是 / 拿不准 ──────────────────→ PostgreSQL  ← 默认终点</span><br></pre></td></tr></table></figure>
+<p>配套的三条否决线（经验做法，比&quot;选什么&quot;更常用）：</p>
+<ol>
+<li><strong>规模线</strong>：单表 &lt; 5000 万行且无特殊查询形态 → 任何分类都别上，PG + 索引 + 分区足够。多数&quot;要不要上 ClickHouse/Kafka&quot;的焦虑都在这条线以下。</li>
+<li><strong>一致性线</strong>：需要强事务/外键/唯一约束 → 只有关系型（或 NewSQL）给全；KV/文档/时序库都只是&quot;部分给&quot;。</li>
+<li><strong>运维线</strong>：团队没人会运维 X → 别选 X。一个养得起的 PG 优于一个玩不转的分布式集群（与分布式系统 12 章案例章的结论互证）。</li>
+</ol>
+<h2 id="6-先用-postgres原则经验做法"><a class="markdownIt-Anchor" href="#6-先用-postgres原则经验做法"></a> 6. &quot;先用 Postgres&quot;原则（经验做法）</h2>
+<p>本系列的收束性经验，如实标注来源：这是业界反复验证的默认策略（“boring technology” 运动与多个工程团队的一线共识，非论文结论）。内容三句：</p>
+<ol>
+<li><strong>新项目的存储从 PG 开始</strong>（原型期 SQLite 也可以）：事务、JSONB、全文检索、pgvector、分区、逻辑复制——一个系统覆盖 01 章分类图的四个格子，学习/运维/备份只有一套。</li>
+<li><strong>切换的触发条件是&quot;量级证据&quot;而不是&quot;焦虑&quot;</strong>：写入持续 &gt; 1 万条/s、单表 &gt; 5 亿行、分析查询拖垮 OLTP——拿到监控数字（12 章）再迁，且迁移方案见 12 章双写流程。</li>
+<li><strong>反向也是对的</strong>：数据长在专用系统里（时序/向量/图）但规模一直上不来时，收回 PG 常常是减法胜利——少一个系统 = 少一份备份/监控/故障面。</li>
+</ol>
+<p>反面清单（什么时候<strong>不该</strong>&quot;先用 PG&quot;）：极端低延迟点查（&lt;1ms 的会话存储）、不可控的第三方协议兼容（必须 Redis 协议的场景）、团队已有成熟专用栈——原则是默认值，不是教条。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“范式越高越专业”</strong>：范式是正确性工具不是勋章。报表库大量反范式（宽表/星型模型）是常态；OLTP 库保持范式。先问负载再问范式。</li>
+<li><strong>“事件表就是日志文件”</strong>：append-only 表仍然有主键/索引/分区/Schema 约束，&quot;只追加&quot;约束的是写语义不是数据治理。把事件表建成无主键无约束的堆，三个月后就是考古现场。</li>
+<li><strong>“行情数据嘛，全塞一个表就行”</strong>：tick/1min/1d 三个粒度三种命运（引擎可能都不同）——明细走时序/LSM，聚合走 PG；一锅烩的结果是明细表把聚合查询的缓存全部冲垮（05 章 BUFFERS 的证据）。</li>
+<li><strong>“列存 = 分析万能”</strong>：单行整取、高频小事务、更新密集的场景列存全是劣势。先分清负载（4 节对照表），再谈引擎。</li>
+<li><strong>“选型图走到哪算哪”</strong>：决策树的三条否决线（规模/一致性/运维）比分支更重要——多数错误选型不是选错了分支，而是跳过了否决线直接追新。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>三范式保正确性，反范式买读性能；先问&quot;冗余的是快照还是状态、谁负责同步&quot;，再决定付不付账单。</li>
+<li>读多写少=状态表+精索引；写多读少=append-only 事件表+少索引+分区滚动；事实追加、状态是事实的函数。</li>
+<li>OHLCV 完整实例：联合主键 (symbol, ts) 即热查询索引、月分区滚动、NUMERIC 存钱、降采样表承载聚合读——量级决定引擎，形态决定建模。</li>
+<li>列存快在&quot;少 IO + 压缩 + 向量化&quot;三件套，分析聚合 10-100x；OLTP 点查仍归行存；模拟实验行/列差 ~5x 是下界。</li>
+<li>选型决策树 + 三条否决线（规模/一致性/运维）；默认终点 PostgreSQL。</li>
+<li>&quot;先用 Postgres&quot;三句话：默认起点、量级证据才迁移、收回也是胜利；例外清单同样明确。</li>
+<li>下一章补生产闭环：容量规划、慢查询巡检、监控分层、备份恢复演练、迁移双写，最后 25 道面试题收束全系列。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>把 3 节 OHLCV 建表跑通（PG），插入模拟的 100 万条 1min 数据；对比&quot;按 symbol+ts 查 30 天&quot;与&quot;按 ts 单独建索引后查全市场某分钟&quot;两个查询的 EXPLAIN 与耗时，验证&quot;主键即索引&quot;的决策。</li>
+<li>用 02 章窗口函数实现&quot;从 append-only 事件表取每个 symbol 的当前状态&quot;（ROW_NUMBER=1），再设计一张物化状态表 + 刷新 SQL，对比两方案查询耗时。</li>
+<li>跑 vec_scan.py，把列数从 4 加到 16、聚合列从 2 换成 8，记录比值变化；解释为什么聚合列越多列存优势越大（IO 比例效应）。</li>
+<li>给自己的一个真实项目数据过一遍 5 节决策树，写下每层的问答与结论；若终点是 PG，再列出&quot;什么信号出现时重新走一遍决策树&quot;。</li>
+<li>反范式设计题：商品详情页需要&quot;商品信息 + 分类名 + 店铺名 + 评分汇总&quot;，画范式化的表关系图，标出你会冗余哪些列、同步机制选应用双写/触发器/CDC 的理由（提示：读 QPS、改名频率、团队规模三个变量）。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/" rel="tag"># 数据库</a>
+              <a href="/tags/Redis/" rel="tag"># Redis</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/10-%E6%89%8B%E5%86%99MiniKV%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E/" rel="prev" title="10-手写MiniKV存储引擎">
+                  <i class="fa fa-angle-left"></i> 10-手写MiniKV存储引擎
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/12-%E8%BF%90%E7%BB%B4-%E5%A4%87%E4%BB%BD%E4%B8%8E%E7%9B%91%E6%8E%A7/" rel="next" title="12-运维-备份与监控">
+                  12-运维-备份与监控 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

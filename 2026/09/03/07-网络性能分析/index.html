@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 按链路&#x2F;主机&#x2F;应用三层组织网络观测，知道每层的工具与问题清单。 - 逐列读懂 ss -tin 与 netstat -s，能从重传率、队列溢出计数器判断问题性质。 - 用 tcpdump 抓一个 HTTP 请求的完整时序，把延迟分解为 R…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="07-网络性能分析">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/07-%E7%BD%91%E7%BB%9C%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 按链路&#x2F;主机&#x2F;应用三层组织网络观测，知道每层的工具与问题清单。 - 逐列读懂 ss -tin 与 netstat -s，能从重传率、队列溢出计数器判断问题性质。 - 用 tcpdump 抓一个 HTTP 请求的完整时序，把延迟分解为 R…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T23:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.542Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Linux">
+<meta property="article:tag" content="性能优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/07-%E7%BD%91%E7%BB%9C%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/07-%E7%BD%91%E7%BB%9C%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90/","path":"2026/09/03/07-网络性能分析/","title":"07-网络性能分析"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>07-网络性能分析 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#07-%E7%BD%91%E7%BB%9C%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90"><span class="nav-number">1.</span> <span class="nav-text"> 07 - 网络性能分析</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%BD%91%E7%BB%9C%E5%88%86%E5%B1%82%E8%A7%82%E6%B5%8B%E6%AF%8F%E5%B1%82%E5%8F%AA%E5%9B%9E%E7%AD%94%E8%87%AA%E5%B7%B1%E9%82%A3%E9%83%A8%E5%88%86"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 网络分层观测：每层只回答自己那部分</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-sssocket-%E7%9A%84%E4%BD%93%E6%A3%80%E6%8A%A5%E5%91%8A"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. ss：socket 的体检报告</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-tcpdump%E6%8A%93%E4%B8%80%E4%B8%AA-http-%E8%AF%B7%E6%B1%82%E7%9A%84%E5%AE%8C%E6%95%B4%E6%97%B6%E5%BA%8F"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. tcpdump：抓一个 HTTP 请求的完整时序</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-iperf3%E5%B8%A6%E5%AE%BD%E7%9A%84%E8%AF%81%E4%BC%AA%E5%AE%9E%E9%AA%8C"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. iperf3：带宽的证伪实验</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%86%85%E6%A0%B8%E6%94%B6%E5%8C%85%E8%B7%AF%E5%BE%84%E6%A6%82%E8%A7%88%E4%B8%A2%E5%8C%85%E8%97%8F%E5%9C%A8%E5%93%AA%E4%B8%80%E7%8E%AF"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 内核收包路径概览：丢包藏在哪一环</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E4%B8%A2%E5%8C%85%E6%8E%92%E6%9F%A5%E5%AE%9E%E6%88%98%E4%B8%80%E6%9D%A1%E8%B7%AF%E5%BE%84%E8%B5%B0%E5%88%B0%E5%BA%95"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 丢包排查实战：一条路径走到底</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-socket-%E7%BC%93%E5%86%B2%E5%8C%BA%E8%B0%83%E4%BC%98%E9%95%BF%E8%82%A5%E7%AE%A1%E9%81%93%E7%9A%84%E8%A7%A3%E8%8D%AF"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. socket 缓冲区调优：长肥管道的解药</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#8-%E5%8A%A8%E6%89%8B%E5%AE%9E%E9%AA%8C%E5%88%86%E8%A7%A3%E4%B8%80%E6%AC%A1%E8%AF%A1%E5%BC%82%E7%9A%84-100ms"><span class="nav-number">1.9.</span> <span class="nav-text"> 8. 动手实验：分解一次“诡异的 100ms”</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.10.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.11.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.12.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/07-%E7%BD%91%E7%BB%9C%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="07-网络性能分析 | Yoleen的博客">
+      <meta itemprop="description" content="- 按链路&#x2F;主机&#x2F;应用三层组织网络观测，知道每层的工具与问题清单。 - 逐列读懂 ss -tin 与 netstat -s，能从重传率、队列溢出计数器判断问题性质。 - 用 tcpdump 抓一个 HTTP 请求的完整时序，把延迟分解为 R…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          07-网络性能分析
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 07:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T07:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Linux%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Linux性能工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.7k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>14 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 按链路/主机/应用三层组织网络观测，知道每层的工具与问题清单。 - 逐列读懂 ss -tin 与 netstat -s，能从重传率、队列溢出计数器判断问题性质。 - 用 tcpdump 抓一个 HTTP 请求的完整时序，把延迟分解为 R…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="07-网络性能分析"><a class="markdownIt-Anchor" href="#07-网络性能分析"></a> 07 - 网络性能分析</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>按链路/主机/应用三层组织网络观测，知道每层的工具与问题清单。</li>
+<li>逐列读懂 <code>ss -tin</code> 与 <code>netstat -s</code>，能从重传率、队列溢出计数器判断问题性质。</li>
+<li>用 tcpdump 抓一个 HTTP 请求的完整时序，把延迟分解为 RTT、服务端处理、传输三段。</li>
+<li>走通丢包排查路径（ethtool -S / netstat -s / softnet_stat），理解内核收包路径与 socket 缓冲区调优的位置。</li>
+</ul>
+<p>前置：操作系统系列 12（网络栈与 socket）；本篇与 04 篇互补——网络等待是最常见的 off-CPU 来源。</p>
+<h2 id="1-网络分层观测每层只回答自己那部分"><a class="markdownIt-Anchor" href="#1-网络分层观测每层只回答自己那部分"></a> 1. 网络分层观测：每层只回答自己那部分</h2>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">┌──────────────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 应用层    延迟的&quot;用户感知&quot;部分：请求处理、序列化、连接池                │</span><br><span class="line">│           工具：应用日志、分布式追踪（11 篇）、pprof                    │</span><br><span class="line">├──────────────────────────────────────────────────────────────────────┤</span><br><span class="line">│ 主机层    内核协议栈与 socket：重传、缓冲区、队列溢出、软中断           │</span><br><span class="line">│           工具：ss / netstat -s / /proc/net/softnet_stat / perf       │</span><br><span class="line">├──────────────────────────────────────────────────────────────────────┤</span><br><span class="line">│ 链路层    网卡与线缆：错包、速率协商、丢包、带宽                        │</span><br><span class="line">│           工具：ethtool / ethtool -S / ip -s link / iperf3             │</span><br><span class="line">└──────────────────────────────────────────────────────────────────────┘</span><br><span class="line">   分诊规则：iperf3 打满带宽后应用还慢 → 看主机层；主机层计数器干净 → 看链路层</span><br></pre></td></tr></table></figure>
+<p>一条总原则（《Systems Performance》第 10 章 Networking）：<strong>先确定&quot;网络慢&quot;是带宽问题、延迟问题还是丢包问题</strong>——三者症状相似，药方毫无关系。带宽问题用 iperf3 证伪（第 5 节），延迟问题用 RTT 分解（第 4 节），丢包问题顺着计数器查（第 6 节）。</p>
+<h2 id="2-sssocket-的体检报告"><a class="markdownIt-Anchor" href="#2-sssocket-的体检报告"></a> 2. ss：socket 的体检报告</h2>
+<p>ss 是 netstat 的现代替代（iproute2，man ss）。看 TCP 连接的完整状态：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ ss -tinm dst 10.0.0.5:8000</span><br><span class="line">State  Recv-Q Send-Q Local Address:Port  Peer Address:Port  Process</span><br><span class="line">ESTAB  0      42832  192.168.1.10:52322 10.0.0.5:8000</span><br><span class="line">       cubic wsize:1024000 ... rtt:24.5/12.3 ... send 33.5Mbps ... unacked:31 retrans:0/3 ...</span><br><span class="line">       rcv_space:29200 notsent:42832 minrtt:18.2</span><br></pre></td></tr></table></figure>
+<p>逐项读法（man ss；TCP 状态机见 OS 系列 12 篇）：</p>
+<table>
+<thead>
+<tr>
+<th>字段</th>
+<th>含义</th>
+<th>信号</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Recv-Q (ESTAB)</td>
+<td>应用还没 read() 走的字节数</td>
+<td>持续 &gt; 0：应用读得慢（处理不过来），不是网络慢</td>
+</tr>
+<tr>
+<td>Send-Q / notsent</td>
+<td>还没被对端 ACK 的发送字节</td>
+<td>打满发送缓冲：对端收不动或带宽不足</td>
+</tr>
+<tr>
+<td>rtt/rttvar</td>
+<td>平滑 RTT/其波动</td>
+<td>rttvar 大 = 抖动大（拥塞/路由漂移）</td>
+</tr>
+<tr>
+<td>minrtt</td>
+<td>历史最小 RTT</td>
+<td>≈物理 RTT 下限，是&quot;理想值&quot;参照</td>
+</tr>
+<tr>
+<td>retrans</td>
+<td>重传计数（当前/累计）</td>
+<td>增长 = 丢包在发生，直接进入第 6 节</td>
+</tr>
+<tr>
+<td>cwnd / send</td>
+<td>拥塞窗口 / 估算发送速率</td>
+<td>cwnd 长不大 = 拥塞；send 远低于带宽 = 有瓶颈</td>
+</tr>
+</tbody>
+</table>
+<p><code>ss -s</code> 给全景汇总：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ ss -s</span><br><span class="line">TCP:   128 (estab 96, closed 12, orphaned 0, timewait 8)</span><br><span class="line">Transport Total IP IPv6</span><br><span class="line">*         245   -  12</span><br><span class="line">RAW   0   UDP  14   TCP  128   INET  142   FRAG 0</span><br></pre></td></tr></table></figure>
+<p>timewait 多不是病（OS 12 篇），<strong>estab 数 × 平均缓冲用量</strong>才和内存（05 篇）挂钩：每个 TCP 缓冲最大可到 rmem_max（默认 212KB 级），1 万连接全满时仅缓冲就 2GB——这就是第 7 节要调缓冲区的现实理由。</p>
+<p><code>netstat -s</code>（= <code>ss -s</code> 的详细版）是协议栈计数器的宝库，先背三个高频问题计数器：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ netstat -s | grep -iE &#x27;retrans|overflow|prune|backlog&#x27;</span><br><span class="line">    1244 segments retransmitted              ← 重传总量（除以 segments sent 得重传率，&gt;0.5% 要查）</span><br><span class="line">    3 times the listen queue of a socket overflowed</span><br><span class="line">    3 SYNs to LISTEN sockets dropped          ← accept 队列溢出：应用 accept() 太慢（12 篇 backlog）</span><br><span class="line">    58 packet receive errors                  ← UDP 侧：缓冲区不足丢包</span><br><span class="line">    1244 TCP pruned ...                       ← 接收缓冲告急，内核丢弃 ooo 队列</span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：把上面四个计数器的增长率进监控（11 篇），它们各自的药方完全不同——重传查链路、listen overflow 查 accept 速度与 somaxconn、receive errors 查 UDP 缓冲。</p>
+<h2 id="3-tcpdump抓一个-http-请求的完整时序"><a class="markdownIt-Anchor" href="#3-tcpdump抓一个-http-请求的完整时序"></a> 3. tcpdump：抓一个 HTTP 请求的完整时序</h2>
+<p>tcpdump（4.99，man tcpdump）看的是&quot;线上真实发生的每一帧&quot;。三个常用姿势：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ sudo tcpdump -i any -nn &#x27;tcp port 8000&#x27; -c 20        # 实时看（-nn 不解析名字，快）</span><br><span class="line">$ sudo tcpdump -i any -nn &#x27;tcp port 8000&#x27; -w req.pcap  # 存盘后用 Wireshark 分析</span><br><span class="line">$ sudo tcpdump -r req.pcap -ttt -nn &#x27;tcp&#x27; | head       # -ttt：打印相邻帧的时间增量</span><br></pre></td></tr></table></figure>
+<p>抓一次完整 HTTP 请求（对本地一个 FastAPI/简单 server 发一条 curl），时序与延迟分解：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ sudo tcpdump -i lo -nn -ttt &#x27;tcp port 8000&#x27;</span><br><span class="line">   00:00.000000 IP 127.0.0.1.52322 &gt; 127.0.0.1.8000: Flags [S], seq 123456    ① SYN</span><br><span class="line">   00:00.000042 IP 127.0.0.1.8000 &gt; 127.0.0.1.52322: Flags [S.], seq 654321   ② SYN-ACK (+42μs)</span><br><span class="line">   00:00.000065 IP 127.0.0.1.52322 &gt; 127.0.0.1.8000: Flags [.], ack 1         ③ ACK（握手完成）</span><br><span class="line">   00:00.000089 IP 127.0.0.1.52322 &gt; 127.0.0.1.8000: Flags [P.], seq 1:118    ④ HTTP 请求发出</span><br><span class="line">   00:02.412300 IP 127.0.0.1.8000 &gt; 127.0.0.1.52322: Flags [P.], seq 1:1421   ⑤ 响应头返回 (+2412ms!)</span><br><span class="line">   00:02.412455 IP 127.0.0.1.52322 &gt; 127.0.0.1.8000: Flags [.], ack 1421</span><br></pre></td></tr></table></figure>
+<p>延迟分解法（<strong>经验做法</strong>，对线上抓包同样适用）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">①→③  握手 = 1.5 × RTT          → 这段大 = 网络物理距离/丢包重传 SYN</span><br><span class="line">③→④  几乎瞬时（同机）</span><br><span class="line">④→⑤  服务端处理时间 = ⑤ − ④ − RTT（响应第一个字节的传输）→ 这段大 = 服务器慢（04/10 篇的领地）</span><br><span class="line">⑤→⑥  数据传输 = 响应体大小 ÷ 带宽 + RTT → 这段大 = 带宽或窗口问题（第 7 节）</span><br></pre></td></tr></table></figure>
+<p>把一次 curl 的 2.4 秒总延迟分解后：握手 0.04ms（本机）、服务端处理 2.41ms、传输 0.01ms——<strong>慢的是服务端，网络是无辜的</strong>。反过来若 ④→⑤ 只有 2ms 而 ①→③ 有 200ms，该查的是跨机房距离/丢包/连接复用（每次新建连接都付 1.5×RTT 的握手税，这就是连接池存在的理由）。<strong>经验做法</strong>：抓包时固定用 <code>-nn</code> 与 <code>-ttt</code>，分析保存的 pcap；线上抓包加 <code>-c</code> 限量，避免写爆磁盘。</p>
+<h2 id="4-iperf3带宽的证伪实验"><a class="markdownIt-Anchor" href="#4-iperf3带宽的证伪实验"></a> 4. iperf3：带宽的证伪实验</h2>
+<p>&quot;网络是不是瓶颈&quot;先测带宽上限（iperf3 3.9，man iperf3）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">$ iperf3 -s                          # 服务端（另一台机器/或 WSL2 里的另一进程）</span><br><span class="line">$ iperf3 -c 192.168.1.20 -t 10       # 客户端：10 秒 TCP 测试</span><br><span class="line">- - - - - - - - - - - - - - - - - - - - - - - - -</span><br><span class="line">[ ID] Interval           Transfer     Bitrate         Retr</span><br><span class="line">[  5]   0.00-10.00  sec  1.09 GBytes   938 Mbits/sec    0 sender</span><br><span class="line">[  5]   0.00-10.04  sec  1.09 GBytes   935 Mbits/sec          receiver</span><br><span class="line"></span><br><span class="line">$ iperf3 -c 192.168.1.20 -t 10 -P 4  # 4 并行流：单流跑不满时验多流</span><br><span class="line">$ iperf3 -c 192.168.1.20 -t 10 -R    # -R 反向（收方向）</span><br><span class="line">$ iperf3 -c 192.168.1.20 -u -b 1G    # UDP：看丢包率与抖动（jitter）</span><br></pre></td></tr></table></figure>
+<p>读法：Retr（重传次数）&gt;0 说明带宽测试本身就在丢包；单流速率低但 -P 4 后线性增长 = 单 TCP 流受窗口/RTT 限制（带宽时延积 BDP 大的长肥管道，第 7 节的缓冲区调优正是解药）；UDP 模式下 <code>lost/total datagram</code> 直接给出丢包率。<strong>WSL2 注</strong>：WSL2 走 NAT 虚拟网络，与宿主机互测的数字是虚拟链路成绩，判断&quot;真实机房带宽&quot;要在真实主机间测；本机回环（127.0.0.1）测的是 CPU 而非网络。</p>
+<h2 id="5-内核收包路径概览丢包藏在哪一环"><a class="markdownIt-Anchor" href="#5-内核收包路径概览丢包藏在哪一环"></a> 5. 内核收包路径概览：丢包藏在哪一环</h2>
+<p>一个包从网卡到应用的旅程（内核文档 <code>Documentation/networking/</code>，napi 部分见 <code>Documentation/networking/napi.rst</code>）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">网卡收包 → DMA 写入环形缓冲(ring buffer, ethtool -g 看大小)</span><br><span class="line">   ↓ 硬中断(通知&quot;有包了&quot;)</span><br><span class="line">软中断 NET_RX（/proc/net/softnet_stat）→ GRO 合并 → 协议栈(IP→TCP)</span><br><span class="line">   ↓ 放入 socket 接收缓冲 (rmem)</span><br><span class="line">应用 read()/epoll 就绪</span><br><span class="line">   ↑ 任何一环满了都会丢包，且各有专属计数器：</span><br><span class="line">ring buffer 满 → ethtool -S 的 rx_fifo_errors / rx_missed_errors</span><br><span class="line">softirq 处理不过来(time squeeze) → softnet_stat 第 3 列</span><br><span class="line">socket 缓冲满 → netstat -s 的 &quot;pruned&quot;/UDP &quot;packet receive errors&quot;</span><br><span class="line">accept 队列满 → &quot;listen queue overflowed&quot;（第 2 节）</span><br></pre></td></tr></table></figure>
+<p><code>/proc/net/softnet_stat</code> 每行是一个 CPU 的计数（十六进制）：第 1 列处理包数，第 2 列因时间片用尽被丢的包（time squeeze 时也会丢），第 3 列 time squeeze 次数：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ awk &#x27;&#123;printf &quot;cpu%-3d packets=%d dropped=%d squeeze=%d\n&quot;, NR-1, strtonum(&quot;0x&quot;$1), strtonum(&quot;0x&quot;$2), strtonum(&quot;0x&quot;$3)&#125;&#x27; /proc/net/softnet_stat</span><br><span class="line">cpu0   packets=8123341 dropped=0        squeeze=214</span><br><span class="line">cpu1   packets=8201934 dropped=0        squeeze=2190   ← squeeze 大：该 CPU 收包软中断过忙</span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：丢包排查固定路径——<code>ethtool -S</code> 找硬件侧丢 → softnet_stat 找 CPU 侧丢 → netstat -s 找协议栈侧丢。三处全干净还慢，回头查应用层（Recv-Q 堆积）。<strong>WSL2 注</strong>：WSL2 的虚拟网卡（eth0，由 Hyper-V 虚拟交换机提供）没有完整硬件计数器，<code>ethtool -S</code> 输出很少甚至为空，丢包定位主要靠 netstat -s 与 softnet_stat；真机（含 RK3588 的板载网卡）才有完整的 ethtool -S。</p>
+<h2 id="6-丢包排查实战一条路径走到底"><a class="markdownIt-Anchor" href="#6-丢包排查实战一条路径走到底"></a> 6. 丢包排查实战：一条路径走到底</h2>
+<p>制造一次可观测的拥塞（在 WSL2 或任何 Linux 上）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">$ # 用一个监听后故意不 accept 的“堵门”进程，制造 listen 队列溢出</span><br><span class="line">$ python3 -c &quot;</span><br><span class="line">import socket, time</span><br><span class="line">s = socket.socket(); s.bind((&#x27;127.0.0.1&#x27;, 9000))</span><br><span class="line">s.listen(2)                        # backlog 故意设成 2</span><br><span class="line">time.sleep(30)                     # 期间完全不 accept</span><br><span class="line">&quot; &amp;</span><br><span class="line">$ # 另开终端，快速发起 10 个连接：</span><br><span class="line">$ for i in $(seq 10); do (echo &gt; /dev/tcp/127.0.0.1/9000) 2&gt;/dev/null &amp; done</span><br><span class="line">$ sleep 1; netstat -s | grep -iE &#x27;overflow|dropped&#x27;</span><br><span class="line">    7 times the listen queue of a socket overflowed</span><br><span class="line">    7 SYNs to LISTEN sockets dropped       ← 7 个 SYN 被“堵门”进程弄丢</span><br></pre></td></tr></table></figure>
+<p>这类丢包的修复链：应用 accept 不够快（单线程 accept → 多 worker）→ <code>net.core.somaxconn</code> 与应用 listen backlog 对齐（man tcp(7)，OS 12 篇的 backlog 语义）→ 前置 LB 摊平突发。对照第 5 节的表格，每种丢包有自己的修法——<strong>丢包不是一种病，是一族病，先定位是哪一环</strong>。</p>
+<h2 id="7-socket-缓冲区调优长肥管道的解药"><a class="markdownIt-Anchor" href="#7-socket-缓冲区调优长肥管道的解药"></a> 7. socket 缓冲区调优：长肥管道的解药</h2>
+<p>TCP 吞吐的物理上限由 BDP（带宽时延积）决定：要跑满带宽，<strong>在途未确认数据 ≥ 带宽 × RTT</strong>。1Gbps × 100ms 的跨机房链路 BDP = 12.5MB——若 socket 缓冲只有默认上限（net.ipv4.tcp_rmem 第三列，常见 6MB），单流跑不满，iperf3 单流低、多流高的症状由此而来。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ sysctl net.ipv4.tcp_rmem net.ipv4.tcp_wmem net.core.rmem_max</span><br><span class="line">net.ipv4.tcp_rmem = 4096        131072  6291456      ← 最小/默认/最大接收缓冲</span><br><span class="line">net.ipv4.tcp_wmem = 4096        16384   4194304</span><br><span class="line">net.core.rmem_max = 212992                      ← 应用 setsockopt 的硬上限</span><br></pre></td></tr></table></figure>
+<p>调优原则（man tcp(7)；内核文档 <code>Documentation/networking/ip-sysctl.rst</code>）：</p>
+<ol>
+<li><strong>内核自动调优已足够好</strong>（tcp_rmem 的最大值管住 autotuning 的上限），要做的是<strong>把 max 抬到 ≥ BDP</strong>：<code>sudo sysctl -w net.ipv4.tcp_rmem=&quot;4096 131072 33554432&quot;</code>（32MB），rmem_max 同步抬（否则应用显式设置的缓冲被截断）。</li>
+<li><strong>只调服务所在方向</strong>：收大流量调 rmem，发大流量调 wmem；无脑全调大会增加每连接内存基数（ss -s 的缓冲账）。</li>
+<li><strong>短连接服务先看握手与 accept</strong>（第 6 节），缓冲区调优救不了 listen 队列溢出。</li>
+</ol>
+<p><strong>经验做法</strong>：跨机房大流量传输（模型分发、数据同步）前，先算 BDP 再对缓冲区，一次 sysctl 换来翻倍吞吐；机房内 RTT &lt;1ms 时默认值几乎总是够的，别乱调。</p>
+<h2 id="8-动手实验分解一次诡异的-100ms"><a class="markdownIt-Anchor" href="#8-动手实验分解一次诡异的-100ms"></a> 8. 动手实验：分解一次“诡异的 100ms”</h2>
+<p>症状设定：跨机房调用 P99 抖到 100ms+，均值正常。用本篇工具把 100ms 拆开归因。</p>
+<p><strong>第一步：ss 看连接质量。</strong> 高峰期采样：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ ss -tin dst 10.0.0.5:8000 | grep -E &#x27;rtt|retrans&#x27; | head -3</span><br><span class="line"> cubic wsize:... rtt:24.5/18.2 ... retrans:2/141 ...      ← rttvar 18ms：抖动大</span><br><span class="line"> cubic wsize:... rtt:88.4/40.1 ... retrans:0/142 ...      ← 峰值时 rtt 飙到 88ms</span><br></pre></td></tr></table></figure>
+<p><strong>第二步：ping 分离&quot;网络抖&quot;与&quot;服务端抖&quot;。</strong> 同一时刻对目标 IP 裸 ping：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ ping -c 10 10.0.0.5 | tail -2</span><br><span class="line">--- 10.0.0.5 ping statistics ---</span><br><span class="line">10 packets transmitted, 10 received, 0% packet loss, time 9058ms</span><br><span class="line">rtt min/avg/max/mdev = 22.1/23.8/25.0/0.6 ms    ← 网络层稳定 23.8ms、零丢包</span><br></pre></td></tr></table></figure>
+<p>网络稳如老狗但 TCP 层 rtt 到 88ms → <strong>多出来的 60ms 不是路慢，是&quot;包到了但没被及时 ACK&quot;</strong>——典型是服务端接收路径堵（第 5 节的 softirq/sk_buff）或服务端处理慢导致接收窗口满。</p>
+<p><strong>第三步：tcpdump 定位&quot;包在哪边等待&quot;。</strong> 抓双向时序（关键看 ACK 与数据的间隙）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ sudo tcpdump -i any -nn -ttt &#x27;host 10.0.0.5 and port 8000&#x27; -c 40 | head -8</span><br><span class="line">   00:00.000000 IP client.52322 &gt; 10.0.0.5.8000: Flags [P.], seq 1:1049    ← 请求发出</span><br><span class="line">   00:00.000421 IP 10.0.0.5.8000 &gt; client.52322: Flags [.], ack 1049       ← 0.4ms 就 ACK：链路与对端内核都正常</span><br><span class="line">   00:00.000444 IP client.52322 &gt; 10.0.0.5.8000: Flags [P.], seq 1049:2097 ← 第二段请求体</span><br><span class="line">   00:00.098120 IP 10.0.0.5.8000 &gt; client.52322: Flags [P.], seq 1:987     ← 98ms 后才有响应数据！</span><br></pre></td></tr></table></figure>
+<p>ACK 0.4ms 回来（对端内核健康），数据 98ms 才出现（对端应用慢）——<strong>延迟在对端应用里</strong>，与网络无关。转去对端用 04 篇（off-CPU）或 10 篇（应用剖析）收网。<strong>经验做法</strong>：tcpdump 里&quot;ACK 快、数据慢&quot;是应用慢的指纹；&quot;连 ACK 都慢&quot;才是网络/对端内核的问题。这个&quot;RTT 分解&quot;的思路可以推广：任何端到端延迟，先分解再归因，永远别拿总延迟直接下结论。</p>
+<p>第四步：对比验证。服务端修复（例如把同步 DB 查询改异步，04 篇手法）后，同口径复测：P99 100ms → 26ms（23.8ms RTT + 2ms 处理），rttvar 从 40ms 回到 1.2ms，retrans 增速归零——三个指标同时收敛才叫修复完成。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“Recv-Q 大 = 网络堵”</strong>：ESTAB 状态的 Recv-Q 是&quot;应用还没读&quot;的字节，堵的是应用；网络堵的信号是重传、rttvar、Send-Q。</li>
+<li><strong>“timewait 堆积要赶紧修”</strong>：短连接服务的正常现象（OS 12 篇），除非耗尽端口/内存才需要处理；真正的病是&quot;为什么每请求都新建连接&quot;。</li>
+<li><strong>“ping 快 = 网络没问题”</strong>：ping 只证明 ICMP 路径，TCP 丢包（被中间设备限速/丢）与对端接收路径堵都不体现在 ping 上；第 8 节实验展示了&quot;ping 稳但业务慢&quot;的真实分解。</li>
+<li><strong>“缓冲区调大总没错”</strong>：大缓冲 = 大 BDP 缓存 = 更长的队延迟（bufferbloat），且每连接内存基数上升；按 BDP 算，不拍脑袋。</li>
+<li><strong>“WSL2 网络数字可作容量依据”</strong>：NAT 虚拟链路 + 缺失的 ethtool -S，只适合学工具；容量结论必须来自真实网卡环境。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>网络观测三层：应用（追踪/日志）→ 主机（ss/netstat -s/softnet_stat）→ 链路（ethtool/iperf3）；先分清带宽/延迟/丢包三类病。</li>
+<li>ss -tin 的 Recv-Q 指向应用、retrans/rttvar 指向网络质量；netstat -s 四大计数器（重传/overflow/prune/UDP errors）各有专属药方。</li>
+<li>tcpdump -ttt 时序 + RTT 分解：握手=1.5×RTT、ACK 快数据慢=对端应用慢、连 ACK 都慢=网络/内核收包问题。</li>
+<li>收包路径五道闸（ring buffer/softirq/socket 缓冲/accept 队列/应用读取），每道闸有专属计数器，丢包排查按 ethtool -S → softnet_stat → netstat -s 走。</li>
+<li>缓冲区调优按 BDP：跨机房长肥管道抬 tcp_rmem 的 max；机房内默认值即可；WSL2 数字只做相对比较。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>对本机 127.0.0.1 的任一服务跑第 3 节的 tcpdump 抓包，把一个 HTTP 请求的 ⑤−④ 差值（服务端处理时间）与 curl 的 <code>-w 'time_starttransfer=%{time_starttransfer}\n'</code> 输出对照，验证两种测量的一致性。</li>
+<li>复现第 6 节的 listen 队列溢出实验，把 backlog 依次设为 2/64/1024（<code>s.listen(n)</code>），记录 “SYNs to LISTEN sockets dropped” 的增长，画出&quot;backlog vs 丢包数&quot;关系。</li>
+<li>在两台机器（或 WSL2 与宿主）间跑 iperf3：单流、-P 4、-R 三种模式各一次，比较比特率与 Retr；再手工把 <code>net.ipv4.tcp_wmem</code> 的 max 降为 16384 后重测单流，验证缓冲区对吞吐的钳制（测完改回）。</li>
+<li>写脚本每 10 秒采样 <code>ss -tin</code> 的 rtt/retrans 与 <code>netstat -s</code> 的重传增量，对某个你常访问的服务跑 5 分钟，回答：它的网络质量 P99 RTT 是多少？重传率多少？有没有超过 1%？</li>
+<li>用第 8 节的方法分解你自己一个跨网络调用（哪怕只是到公网 API）：ping、tcpdump（或 wireshark）、curl -w 三件套各出一份证据，写三句话结论：延迟在哪一段、证据是什么、下一步去哪里修。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/Linux/" rel="tag"># Linux</a>
+              <a href="/tags/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" rel="tag"># 性能优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/06-IO%E4%B8%8E%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E6%80%A7%E8%83%BD/" rel="prev" title="06-IO与文件系统性能">
+                  <i class="fa fa-angle-left"></i> 06-IO与文件系统性能
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/08-eBPF%E5%85%A5%E9%97%A8/" rel="next" title="08-eBPF入门">
+                  08-eBPF入门 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

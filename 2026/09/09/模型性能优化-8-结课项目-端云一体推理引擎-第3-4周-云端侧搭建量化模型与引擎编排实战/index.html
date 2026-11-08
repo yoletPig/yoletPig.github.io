@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="本周要回答的三个问题 1. 前几个 Stage 的三块积木（量化模型、调优引擎、K8s 编排）怎么装配成一个可对外服务的云端栈？ 2. 路由层要靠什么接口调用云端？API 契约该约定哪些字段？ 3. 压测定标要测出什么数字，才能支撑路由层…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="第3-4周-云端侧搭建量化模型与引擎编排实战">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/09/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-8-%E7%BB%93%E8%AF%BE%E9%A1%B9%E7%9B%AE-%E7%AB%AF%E4%BA%91%E4%B8%80%E4%BD%93%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E-%E7%AC%AC3-4%E5%91%A8-%E4%BA%91%E7%AB%AF%E4%BE%A7%E6%90%AD%E5%BB%BA%E9%87%8F%E5%8C%96%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%BC%95%E6%93%8E%E7%BC%96%E6%8E%92%E5%AE%9E%E6%88%98/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="本周要回答的三个问题 1. 前几个 Stage 的三块积木（量化模型、调优引擎、K8s 编排）怎么装配成一个可对外服务的云端栈？ 2. 路由层要靠什么接口调用云端？API 契约该约定哪些字段？ 3. 压测定标要测出什么数字，才能支撑路由层…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-08T23:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.790Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="推理优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/09/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-8-%E7%BB%93%E8%AF%BE%E9%A1%B9%E7%9B%AE-%E7%AB%AF%E4%BA%91%E4%B8%80%E4%BD%93%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E-%E7%AC%AC3-4%E5%91%A8-%E4%BA%91%E7%AB%AF%E4%BE%A7%E6%90%AD%E5%BB%BA%E9%87%8F%E5%8C%96%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%BC%95%E6%93%8E%E7%BC%96%E6%8E%92%E5%AE%9E%E6%88%98/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/09/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-8-%E7%BB%93%E8%AF%BE%E9%A1%B9%E7%9B%AE-%E7%AB%AF%E4%BA%91%E4%B8%80%E4%BD%93%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E-%E7%AC%AC3-4%E5%91%A8-%E4%BA%91%E7%AB%AF%E4%BE%A7%E6%90%AD%E5%BB%BA%E9%87%8F%E5%8C%96%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%BC%95%E6%93%8E%E7%BC%96%E6%8E%92%E5%AE%9E%E6%88%98/","path":"2026/09/09/模型性能优化-8-结课项目-端云一体推理引擎-第3-4周-云端侧搭建量化模型与引擎编排实战/","title":"第3-4周-云端侧搭建量化模型与引擎编排实战"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>第3-4周-云端侧搭建量化模型与引擎编排实战 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#%E7%AC%AC-3-4-%E5%91%A8%E6%95%99%E7%A8%8B%E4%BA%91%E7%AB%AF%E4%BE%A7%E6%90%AD%E5%BB%BA%E9%87%8F%E5%8C%96%E6%A8%A1%E5%9E%8B-%E5%BC%95%E6%93%8E-%E7%BC%96%E6%8E%92%E5%AE%9E%E6%88%98"><span class="nav-number">1.</span> <span class="nav-text"> 第 3-4 周教程：云端侧搭建——量化模型 + 引擎 + 编排实战</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AC%AC%E4%B8%80%E6%80%A7%E5%8E%9F%E7%90%86%E4%BA%91%E7%AB%AF%E4%BE%A7%E6%98%AF%E8%83%BD%E5%8A%9B%E5%A4%A9%E8%8A%B1%E6%9D%BF"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 第一性原理：云端侧是&quot;能力天花板&quot;</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-%E4%BA%91%E7%AB%AF%E5%9C%A8%E7%AB%AF%E4%BA%91%E5%8D%8F%E5%90%8C%E4%B8%AD%E7%9A%84%E8%A7%92%E8%89%B2"><span class="nav-number">1.1.1.</span> <span class="nav-text"> 1.1 云端在端云协同中的角色</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-%E4%B8%89%E5%9D%97%E7%A7%AF%E6%9C%A8%E7%9A%84%E8%A1%94%E6%8E%A5"><span class="nav-number">1.1.2.</span> <span class="nav-text"> 1.2 三块积木的衔接</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E4%BA%91%E7%AB%AF%E6%A0%88%E8%A3%85%E9%85%8D"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 云端栈装配</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E9%87%8F%E5%8C%96%E6%A8%A1%E5%9E%8B-%E5%BC%95%E6%93%8E"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 量化模型 + 引擎</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E5%8C%85%E4%B8%80%E5%B1%82%E6%9C%8D%E5%8A%A1%E5%B1%82%E4%BE%9B%E8%B7%AF%E7%94%B1%E5%B1%82%E8%B0%83%E7%94%A8"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 包一层服务层（供路由层调用）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-sse-%E6%B5%81%E5%BC%8F%E6%8E%A5%E5%8F%A3"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 SSE 流式接口</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#24-%E7%BC%96%E6%8E%92%E5%A4%8D%E7%94%A8-stage-7"><span class="nav-number">1.2.4.</span> <span class="nav-text"> 2.4 编排（复用 Stage 7）</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-api-%E5%A5%91%E7%BA%A6%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83%E4%BA%8C"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. API 契约（本周交付核心二）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%8E%8B%E6%B5%8B%E5%AE%9A%E6%A0%87%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%A0%B8%E5%BF%83%E4%B8%89"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 压测定标（本周交付核心三）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#41-%E8%A6%81%E6%B5%8B%E5%87%BA%E4%BB%80%E4%B9%88"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 4.1 要测出什么</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#42-%E6%A0%87%E5%87%86%E5%8E%8B%E6%B5%8B%E6%8A%A5%E5%91%8A"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 4.2 标准压测报告</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%B7%A5%E7%A8%8B%E6%9D%83%E8%A1%A1%E4%B8%8E%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 工程权衡与失效模式</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#51-%E6%9D%83%E8%A1%A1"><span class="nav-number">1.5.1.</span> <span class="nav-text"> 5.1 权衡</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#52-%E5%A4%B1%E6%95%88%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.5.2.</span> <span class="nav-text"> 5.2 失效模式</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%BB%B6%E4%BC%B8%E6%80%9D%E8%80%83%E9%A2%98%E5%90%AB%E8%A7%A3%E6%9E%90"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 延伸思考题（含解析）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E5%91%A8%E4%BA%A4%E4%BB%98%E6%B8%85%E5%8D%95"><span class="nav-number">1.7.</span> <span class="nav-text"> 本周交付清单</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/09/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-8-%E7%BB%93%E8%AF%BE%E9%A1%B9%E7%9B%AE-%E7%AB%AF%E4%BA%91%E4%B8%80%E4%BD%93%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E-%E7%AC%AC3-4%E5%91%A8-%E4%BA%91%E7%AB%AF%E4%BE%A7%E6%90%AD%E5%BB%BA%E9%87%8F%E5%8C%96%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%BC%95%E6%93%8E%E7%BC%96%E6%8E%92%E5%AE%9E%E6%88%98/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="第3-4周-云端侧搭建量化模型与引擎编排实战 | Yoleen的博客">
+      <meta itemprop="description" content=" 本周要回答的三个问题 1. 前几个 Stage 的三块积木（量化模型、调优引擎、K8s 编排）怎么装配成一个可对外服务的云端栈？ 2. 路由层要靠什么接口调用云端？API 契约该约定哪些字段？ 3. 压测定标要测出什么数字，才能支撑路由层…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          第3-4周-云端侧搭建量化模型与引擎编排实战
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-09 07:00:00" itemprop="dateCreated datePublished" datetime="2026-09-09T07:00:00+08:00">2026-09-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" itemprop="url" rel="index"><span itemprop="name">模型性能优化</span></a>
+        </span>
+          ，
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/Stage-8-%E7%BB%93%E8%AF%BE%E9%A1%B9%E7%9B%AE-%E7%AB%AF%E4%BA%91%E4%B8%80%E4%BD%93%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E/" itemprop="url" rel="index"><span itemprop="name">Stage 8-结课项目-端云一体推理引擎</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>1.8k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>7 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 本周要回答的三个问题 1. 前几个 Stage 的三块积木（量化模型、调优引擎、K8s 编排）怎么装配成一个可对外服务的云端栈？ 2. 路由层要靠什么接口调用云端？API 契约该约定哪些字段？ 3. 压测定标要测出什么数字，才能支撑路由层…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="第-3-4-周教程云端侧搭建量化模型-引擎-编排实战"><a class="markdownIt-Anchor" href="#第-3-4-周教程云端侧搭建量化模型-引擎-编排实战"></a> 第 3-4 周教程：云端侧搭建——量化模型 + 引擎 + 编排实战</h1>
+<blockquote>
+<p><strong>本周要回答的三个问题</strong></p>
+<ol>
+<li>前几个 Stage 的三块积木（量化模型、调优引擎、K8s 编排）怎么装配成一个可对外服务的云端栈？</li>
+<li>路由层要靠什么接口调用云端？API 契约该约定哪些字段？</li>
+<li>压测定标要测出什么数字，才能支撑路由层的分流决策？</li>
+</ol>
+</blockquote>
+<p>对应学习计划：第 3-4 周。交付物：云上完成云端推理服务部署（量化模型 + 调优引擎 + K8s 编排），输出标准压测报告（吞吐、TTFT/TPOT、自动扩缩验证），并定义好对路由层暴露的 API 契约。</p>
+<hr />
+<h2 id="1-第一性原理云端侧是能力天花板"><a class="markdownIt-Anchor" href="#1-第一性原理云端侧是能力天花板"></a> 1. 第一性原理：云端侧是&quot;能力天花板&quot;</h2>
+<h3 id="11-云端在端云协同中的角色"><a class="markdownIt-Anchor" href="#11-云端在端云协同中的角色"></a> 1.1 云端在端云协同中的角色</h3>
+<p>端侧管隐私、低延迟、兜底；<strong>云端管能力上限</strong>——复杂推理、长文、知识密集问题都靠它。所以云端侧要用<strong>最强配置</strong>：最优量化模型 + 调优引擎 + 弹性编排。</p>
+<h3 id="12-三块积木的衔接"><a class="markdownIt-Anchor" href="#12-三块积木的衔接"></a> 1.2 三块积木的衔接</h3>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math xmlns="http://www.w3.org/1998/Math/MathML" display="block"><semantics><mrow><mtext>Stage 2 量化模型（AWQ-4bit 7B）</mtext><mtext>  </mtext><mo>+</mo><mtext>  </mtext><mtext>Stage 5 调优 vLLM</mtext><mtext>  </mtext><mo>+</mo><mtext>  </mtext><mtext>Stage 7 编排</mtext><mtext>  </mtext><mo>=</mo><mtext>  </mtext><mtext>云端服务</mtext></mrow><annotation encoding="application/x-tex">\text{Stage 2 量化模型（AWQ-4bit 7B）} \;+\; \text{Stage 5 调优 vLLM} \;+\; \text{Stage 7 编排} \;=\; \text{云端服务}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8888799999999999em;vertical-align:-0.19444em;"></span><span class="mord text"><span class="mord">Stage 2 </span><span class="mord cjk_fallback">量化模型（</span><span class="mord">AWQ-4bit 7B</span><span class="mord cjk_fallback">）</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.8777699999999999em;vertical-align:-0.19444em;"></span><span class="mord text"><span class="mord">Stage 5 </span><span class="mord cjk_fallback">调优</span><span class="mord"> vLLM</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:0.8777699999999999em;vertical-align:-0.19444em;"></span><span class="mord text"><span class="mord">Stage 7 </span><span class="mord cjk_fallback">编排</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.68333em;vertical-align:0em;"></span><span class="mord text"><span class="mord cjk_fallback">云端服务</span></span></span></span></span></span></p>
+<p>本周就是把这三块焊起来并压测定标。</p>
+<hr />
+<h2 id="2-云端栈装配"><a class="markdownIt-Anchor" href="#2-云端栈装配"></a> 2. 云端栈装配</h2>
+<h3 id="21-量化模型-引擎"><a class="markdownIt-Anchor" href="#21-量化模型-引擎"></a> 2.1 量化模型 + 引擎</h3>
+<p>用 Stage 2 横评选出的最优量化模型（如 AWQ-4bit 7B），配 Stage 5 调优的引擎参数：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">vllm serve &lt;模型&gt;-AWQ \</span><br><span class="line">    --quantization awq \</span><br><span class="line">    --max-model-len 8192 \</span><br><span class="line">    --max-num-seqs 64 \                    <span class="comment"># Stage 5 调优值</span></span><br><span class="line">    --gpu-memory-utilization 0.9 \         <span class="comment"># Stage 5 调优值</span></span><br><span class="line">    --enable-chunked-prefill \</span><br><span class="line">    --api-key <span class="variable">$KEY</span></span><br></pre></td></tr></table></figure>
+<h3 id="22-包一层服务层供路由层调用"><a class="markdownIt-Anchor" href="#22-包一层服务层供路由层调用"></a> 2.2 包一层服务层（供路由层调用）</h3>
+<p>引擎的 OpenAI 接口之上，包一个<strong>业务服务层</strong>，加路由层需要的字段：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># cloud_service.py（FastAPI）</span></span><br><span class="line"><span class="comment"># 注意：OpenAI 同步客户端在 async 处理器里会阻塞事件循环，</span></span><br><span class="line"><span class="comment"># 生产请改用 AsyncOpenAI（await engine.chat.completions.create(...)）</span></span><br><span class="line"><span class="keyword">from</span> fastapi <span class="keyword">import</span> FastAPI</span><br><span class="line"><span class="keyword">from</span> openai <span class="keyword">import</span> AsyncOpenAI</span><br><span class="line"></span><br><span class="line">app = FastAPI()</span><br><span class="line">engine = AsyncOpenAI(base_url=<span class="string">&quot;http://localhost:8000/v1&quot;</span>, api_key=KEY)</span><br><span class="line"></span><br><span class="line"><span class="meta">@app.post(<span class="params"><span class="string">&quot;/infer&quot;</span></span>)</span></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">infer</span>(<span class="params">req: <span class="built_in">dict</span></span>):</span><br><span class="line">    resp = <span class="keyword">await</span> engine.chat.completions.create(</span><br><span class="line">        model=req[<span class="string">&quot;model&quot;</span>],</span><br><span class="line">        messages=req[<span class="string">&quot;messages&quot;</span>],</span><br><span class="line">        max_tokens=req.get(<span class="string">&quot;max_tokens&quot;</span>, <span class="number">512</span>),</span><br><span class="line">        stream=<span class="literal">False</span>,</span><br><span class="line">        extra_headers=&#123;<span class="string">&quot;X-Request-Id&quot;</span>: req[<span class="string">&quot;request_id&quot;</span>]&#125;,  <span class="comment"># 追踪用，见下方说明</span></span><br><span class="line">    )</span><br><span class="line">    <span class="keyword">return</span> &#123;</span><br><span class="line">        <span class="string">&quot;request_id&quot;</span>: req[<span class="string">&quot;request_id&quot;</span>],</span><br><span class="line">        <span class="string">&quot;text&quot;</span>: resp.choices[<span class="number">0</span>].message.content,</span><br><span class="line">        <span class="string">&quot;source&quot;</span>: <span class="string">&quot;cloud&quot;</span>,                     <span class="comment"># 标记来源（端云对比用）</span></span><br><span class="line">        <span class="string">&quot;latency_ms&quot;</span>: ...,                     <span class="comment"># 实现时用 time.perf_counter() 计算</span></span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<blockquote>
+<p><strong>request_id 怎么传</strong>：vLLM 的 OpenAI 兼容服务支持 <code>X-Request-Id</code> 请求头（需启动参数 <code>--enable-request-id-headers</code> 打开，默认关闭——官方提示高 QPS 下有一定性能开销），并会在响应中回传该 ID，可用于全链路追踪。但<strong>幂等去重不能指望引擎</strong>——vLLM 不会对重复 request_id 去重，去重逻辑必须做在你的业务服务层（如 Redis <code>SETNX</code>）。</p>
+</blockquote>
+<h3 id="23-sse-流式接口"><a class="markdownIt-Anchor" href="#23-sse-流式接口"></a> 2.3 SSE 流式接口</h3>
+<p>供路由层把云端输出<strong>边生成边转发</strong>给用户：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">from</span> fastapi.responses <span class="keyword">import</span> StreamingResponse</span><br><span class="line"></span><br><span class="line"><span class="meta">@app.post(<span class="params"><span class="string">&quot;/infer/stream&quot;</span></span>)</span></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">infer_stream</span>(<span class="params">req: <span class="built_in">dict</span></span>):</span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">gen</span>():</span><br><span class="line">        stream = <span class="keyword">await</span> engine.chat.completions.create(</span><br><span class="line">            model=req[<span class="string">&quot;model&quot;</span>], messages=req[<span class="string">&quot;messages&quot;</span>], stream=<span class="literal">True</span>)</span><br><span class="line">        <span class="keyword">async</span> <span class="keyword">for</span> chunk <span class="keyword">in</span> stream:</span><br><span class="line">            delta = chunk.choices[<span class="number">0</span>].delta.content <span class="keyword">or</span> <span class="string">&quot;&quot;</span></span><br><span class="line">            <span class="comment"># 教学版直接转发纯文本增量；若要严格对齐 OpenAI SSE 协议，</span></span><br><span class="line">            <span class="comment"># 每个 data: 里应是完整 JSON chunk</span></span><br><span class="line">            <span class="keyword">yield</span> <span class="string">f&quot;data: <span class="subst">&#123;delta&#125;</span>\n\n&quot;</span></span><br><span class="line">        <span class="keyword">yield</span> <span class="string">&quot;data: [DONE]\n\n&quot;</span></span><br><span class="line">    <span class="keyword">return</span> StreamingResponse(gen(), media_type=<span class="string">&quot;text/event-stream&quot;</span>)</span><br></pre></td></tr></table></figure>
+<h3 id="24-编排复用-stage-7"><a class="markdownIt-Anchor" href="#24-编排复用-stage-7"></a> 2.4 编排（复用 Stage 7）</h3>
+<p>把服务容器化，用 Stage 7 的 K8s（Kind 模拟）或 Ray Serve 编排，配自动扩缩。<strong>云端侧 = 引擎 + 业务服务层 + 编排</strong>，三层各司其职。</p>
+<hr />
+<h2 id="3-api-契约本周交付核心二"><a class="markdownIt-Anchor" href="#3-api-契约本周交付核心二"></a> 3. API 契约（本周交付核心二）</h2>
+<p>路由层与云端服务之间的接口约定，必须显式定义：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">POST /infer</span><br><span class="line">请求：</span><br><span class="line">  request_id: string      # 全局唯一，去重 + 追踪</span><br><span class="line">  messages: [...]         # OpenAI 格式</span><br><span class="line">  model: string</span><br><span class="line">  max_tokens: int</span><br><span class="line">  timeout_ms: int         # 路由层的等待预算</span><br><span class="line"></span><br><span class="line">响应：</span><br><span class="line">  request_id: string</span><br><span class="line">  text: string            # 完整回答</span><br><span class="line">  source: &quot;cloud&quot;</span><br><span class="line">  confidence: float       # 云端自评置信度（可选）</span><br><span class="line">  latency_ms: int</span><br><span class="line"></span><br><span class="line">流式：POST /infer/stream（SSE）</span><br><span class="line">错误：503（过载）/ 504（超时）——路由层据此触发降级</span><br></pre></td></tr></table></figure>
+<p><strong>关键约定</strong>：</p>
+<ul>
+<li><code>request_id</code> 贯穿端云，用于去重与全链路追踪；</li>
+<li><code>timeout_ms</code> 让云端知道路由层的预算，避免白算；</li>
+<li>过载返回 503（而非排队卡死），让路由层能切端侧兜底。</li>
+</ul>
+<hr />
+<h2 id="4-压测定标本周交付核心三"><a class="markdownIt-Anchor" href="#4-压测定标本周交付核心三"></a> 4. 压测定标（本周交付核心三）</h2>
+<h3 id="41-要测出什么"><a class="markdownIt-Anchor" href="#41-要测出什么"></a> 4.1 要测出什么</h3>
+<p>压测不是为了好看，是给<strong>路由层提供分流依据</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">路由层需要知道：</span><br><span class="line">- 云端当前队列长度（是否过载 → 端侧兜底）</span><br><span class="line">- 云端典型延迟（决定能接受的请求类型）</span><br><span class="line">- 云端吞吐上限（容量规划）</span><br></pre></td></tr></table></figure>
+<h3 id="42-标准压测报告"><a class="markdownIt-Anchor" href="#42-标准压测报告"></a> 4.2 标准压测报告</h3>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">python benchmark_serving.py \</span><br><span class="line">    --backend openai-chat --base-url http://&lt;云端&gt;:8080 \</span><br><span class="line">    --model &lt;模型&gt; --dataset-name sharegpt \</span><br><span class="line">    --num-prompts 200 --request-rate 8</span><br></pre></td></tr></table></figure>
+<p>报告模板：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">《云端服务压测定标报告》</span><br><span class="line">配置：AWQ-4bit 7B，vLLM 调优配置，K8s N 副本</span><br><span class="line">负载：ShareGPT 200 条，request-rate 8</span><br><span class="line">结果：</span><br><span class="line">  吞吐：__ tokens/s（单副本 / 集群）</span><br><span class="line">  TTFT P50/P99：__ / __ ms</span><br><span class="line">  TPOT P50/P99：__ / __ ms</span><br><span class="line">  满足 SLO 的最大并发：__</span><br><span class="line">自动扩缩验证：负载翻倍时副本从 N → 2N，延迟回落</span><br></pre></td></tr></table></figure>
+<p><strong>这份报告的&quot;满足 SLO 的最大并发&quot;就是路由层判断&quot;云端是否过载&quot;的阈值依据</strong>。</p>
+<hr />
+<h2 id="5-工程权衡与失效模式"><a class="markdownIt-Anchor" href="#5-工程权衡与失效模式"></a> 5. 工程权衡与失效模式</h2>
+<h3 id="51-权衡"><a class="markdownIt-Anchor" href="#51-权衡"></a> 5.1 权衡</h3>
+<ul>
+<li><strong>量化激进程度</strong>：云端是能力天花板，量化别太狠伤质量（用横评结论）；</li>
+<li><strong>流式缓冲</strong>：SSE 转发有缓冲延迟，调小提升体验但增网络开销；</li>
+<li><strong>副本数</strong>：多则抗载但成本高，按定标的单副本能力算。</li>
+</ul>
+<h3 id="52-失效模式"><a class="markdownIt-Anchor" href="#52-失效模式"></a> 5.2 失效模式</h3>
+<ol>
+<li><strong>无 request_id 去重</strong>：级联升级时重复请求重复计费。修复：全局 request_id + 云端去重。</li>
+<li><strong>过载返回 200 排队</strong>：路由层以为正常、用户干等。修复：过载明确返回 503 触发降级。</li>
+<li><strong>timeout 不一致</strong>：云端算得比路由层等得久，白算。修复：请求带 <code>timeout_ms</code>，云端尊重。</li>
+<li><strong>流式断流</strong>：网络抖动 SSE 中断。修复：客户端重连 + 断点续传（带已生成偏移）。</li>
+</ol>
+<hr />
+<h2 id="6-延伸思考题含解析"><a class="markdownIt-Anchor" href="#6-延伸思考题含解析"></a> 6. 延伸思考题（含解析）</h2>
+<p><strong>Q1</strong>：云端侧为什么用&quot;最强配置&quot;而不是省钱配置？<br />
+<strong>A</strong>：云端承载的是端侧答不了的复杂请求，是能力天花板。这里省质量 = 系统上限降低。成本优化靠&quot;把简单请求拦在端侧&quot;，而不是削弱云端。</p>
+<p><strong>Q2</strong>：API 契约里为什么必须有 request_id？<br />
+<strong>A</strong>：① 去重——级联升级可能重复提交，云端据此幂等处理避免重复计费；② 全链路追踪——贯穿端侧→路由→云端的追踪标识。</p>
+<p><strong>Q3</strong>：云端过载为什么返回 503 而不是排队？<br />
+<strong>A</strong>：排队会让路由层误以为&quot;正常处理中&quot;，用户无限等待。明确 503 让路由层立即感知并触发降级（切端侧兜底），保住可用性。</p>
+<p><strong>Q4</strong>：压测定标对路由层有什么用？<br />
+<strong>A</strong>：定标给出&quot;云端满足 SLO 的最大并发/队列阈值&quot;，路由层用它判断云端是否过载、决定是否端侧兜底。没有定标，分流就是盲目的。</p>
+<p><strong>Q5</strong>：流式转发相比整句返回，端云链路多了什么复杂度？<br />
+<strong>A</strong>：要处理 SSE 的转发缓冲、断流重连、断点续传。换来的是首字延迟大幅降低（边生成边到用户）。体验收益通常值得这个复杂度。</p>
+<hr />
+<h2 id="本周交付清单"><a class="markdownIt-Anchor" href="#本周交付清单"></a> 本周交付清单</h2>
+<ul>
+<li>[ ] 装配云端栈：量化模型 + 调优引擎 + 业务服务层 + 编排。</li>
+<li>[ ] 实现 <code>/infer</code> 与 <code>/infer/stream</code>（SSE）接口。</li>
+<li>[ ] 定义 API 契约（含 request_id、timeout_ms、503 语义）。</li>
+<li>[ ] 完成压测定标报告（吞吐/延迟/最大并发）。</li>
+<li>[ ] 验证自动扩缩（负载翻倍副本加倍）。</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%8E%A8%E7%90%86%E4%BC%98%E5%8C%96/" rel="tag"># 推理优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/09/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-8-%E7%BB%93%E8%AF%BE%E9%A1%B9%E7%9B%AE-%E7%AB%AF%E4%BA%91%E4%B8%80%E4%BD%93%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E-%E7%AC%AC1-2%E5%91%A8-%E7%AB%AF%E4%BA%91%E5%8D%8F%E5%90%8C%E6%9E%B6%E6%9E%84%E8%AE%BE%E8%AE%A1%E4%B8%8E%E5%88%86%E6%B5%81%E7%AD%96%E7%95%A5/" rel="prev" title="第1-2周-端云协同架构设计与分流策略">
+                  <i class="fa fa-angle-left"></i> 第1-2周-端云协同架构设计与分流策略
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/09/%E6%A8%A1%E5%9E%8B%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96-8-%E7%BB%93%E8%AF%BE%E9%A1%B9%E7%9B%AE-%E7%AB%AF%E4%BA%91%E4%B8%80%E4%BD%93%E6%8E%A8%E7%90%86%E5%BC%95%E6%93%8E-%E7%AC%AC5-6%E5%91%A8-%E8%B7%AF%E7%94%B1%E5%B1%82%E4%B8%8E%E7%AB%AF%E4%BE%A7%E9%9B%86%E6%88%90%E7%BA%A7%E8%81%94%E9%97%AD%E7%8E%AF%E5%AE%9E%E6%88%98/" rel="next" title="第5-6周-路由层与端侧集成级联闭环实战">
+                  第5-6周-路由层与端侧集成级联闭环实战 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

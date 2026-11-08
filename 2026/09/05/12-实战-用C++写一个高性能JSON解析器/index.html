@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 把全系列串起来：模板（第 02 章）、SIMD（第 03 章）、内存序（第 04&#x2F;05 章）、性能工程（第 06 章）、模糊测试（衔接《测试》系列 09），产出一个 ~600 行、可测可跑的完整项目。 - 理解 JSON 解析的核心设计…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="12-实战-用C++写一个高性能JSON解析器">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/05/12-%E5%AE%9E%E6%88%98-%E7%94%A8C++%E5%86%99%E4%B8%80%E4%B8%AA%E9%AB%98%E6%80%A7%E8%83%BDJSON%E8%A7%A3%E6%9E%90%E5%99%A8/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 把全系列串起来：模板（第 02 章）、SIMD（第 03 章）、内存序（第 04&#x2F;05 章）、性能工程（第 06 章）、模糊测试（衔接《测试》系列 09），产出一个 ~600 行、可测可跑的完整项目。 - 理解 JSON 解析的核心设计…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-04T18:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.598Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="C++">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/05/12-%E5%AE%9E%E6%88%98-%E7%94%A8C++%E5%86%99%E4%B8%80%E4%B8%AA%E9%AB%98%E6%80%A7%E8%83%BDJSON%E8%A7%A3%E6%9E%90%E5%99%A8/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/05/12-%E5%AE%9E%E6%88%98-%E7%94%A8C++%E5%86%99%E4%B8%80%E4%B8%AA%E9%AB%98%E6%80%A7%E8%83%BDJSON%E8%A7%A3%E6%9E%90%E5%99%A8/","path":"2026/09/05/12-实战-用C++写一个高性能JSON解析器/","title":"12-实战-用C++写一个高性能JSON解析器"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>12-实战-用C++写一个高性能JSON解析器 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#12-%E5%AE%9E%E6%88%98%E7%94%A8-c-%E5%86%99%E4%B8%80%E4%B8%AA%E9%AB%98%E6%80%A7%E8%83%BD-json-%E8%A7%A3%E6%9E%90%E5%99%A8"><span class="nav-number">1.</span> <span class="nav-text"> 12 - 实战：用 C++ 写一个高性能 JSON 解析器</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E9%9C%80%E6%B1%82%E5%AE%9A%E4%B9%89"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 需求定义</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E8%AE%BE%E8%AE%A1%E5%86%B3%E7%AD%96%E5%8D%95%E9%81%8D-vs-%E4%B8%A4%E9%81%8D"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 设计决策：单遍 vs 两遍</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%A0%B8%E5%BF%83%E5%AE%9E%E7%8E%B0%E9%80%92%E5%BD%92%E4%B8%8B%E9%99%8D%E8%A7%A3%E6%9E%90%E5%99%A8"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 核心实现：递归下降解析器</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%AD%97%E7%AC%A6%E4%B8%B2%E8%BD%AC%E4%B9%89%E4%B8%A4%E5%A4%84%E5%AE%B9%E6%98%93%E5%86%99%E9%94%99%E7%9A%84%E7%BB%86%E8%8A%82"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 字符串转义：两处容易写错的细节</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E6%95%B0%E5%80%BC%E8%A7%A3%E6%9E%90strtod-%E7%9A%84%E6%AD%A3%E7%A1%AE%E7%94%A8%E6%B3%95"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 数值解析：strtod 的正确用法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96%E4%B8%89%E5%9B%9E%E5%90%88%E7%9C%9F%E5%AE%9E%E6%95%B0%E5%AD%97"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 性能优化三回合（真实数字）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E4%B8%8E-nlohmannjson-simdjson-%E5%AF%B9%E6%AF%94%E5%85%AC%E5%B9%B3%E5%9F%BA%E5%87%86%E6%96%B9%E6%B3%95%E5%AD%A6"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 与 nlohmann&#x2F;json、simdjson 对比：公平基准方法学</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#8-%E6%A8%A1%E7%B3%8A%E6%B5%8B%E8%AF%95%E9%AA%8C%E8%AF%81%E8%A1%94%E6%8E%A5%E6%B5%8B%E8%AF%95%E7%B3%BB%E5%88%97-09"><span class="nav-number">1.9.</span> <span class="nav-text"> 8. 模糊测试验证（衔接《测试》系列 09）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#9-%E9%94%99%E8%AF%AF%E5%A4%84%E7%90%86%E4%B8%8E%E4%BD%8D%E7%BD%AE%E6%8A%A5%E5%91%8A"><span class="nav-number">1.10.</span> <span class="nav-text"> 9. 错误处理与位置报告</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#10-%E5%A4%8D%E7%9B%98%E4%BB%8E%E8%BF%99-~600-%E8%A1%8C%E5%AD%A6%E5%88%B0%E4%BB%80%E4%B9%88"><span class="nav-number">1.11.</span> <span class="nav-text"> 10. 复盘：从这 ~600 行学到什么</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.12.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.13.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.14.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/05/12-%E5%AE%9E%E6%88%98-%E7%94%A8C++%E5%86%99%E4%B8%80%E4%B8%AA%E9%AB%98%E6%80%A7%E8%83%BDJSON%E8%A7%A3%E6%9E%90%E5%99%A8/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="12-实战-用C++写一个高性能JSON解析器 | Yoleen的博客">
+      <meta itemprop="description" content="- 把全系列串起来：模板（第 02 章）、SIMD（第 03 章）、内存序（第 04&#x2F;05 章）、性能工程（第 06 章）、模糊测试（衔接《测试》系列 09），产出一个 ~600 行、可测可跑的完整项目。 - 理解 JSON 解析的核心设计…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          12-实战-用C++写一个高性能JSON解析器
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-05 02:00:00" itemprop="dateCreated datePublished" datetime="2026-09-05T02:00:00+08:00">2026-09-05</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/C-%E8%BF%9B%E9%98%B6/" itemprop="url" rel="index"><span itemprop="name">C++进阶</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>5.1k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>19 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 把全系列串起来：模板（第 02 章）、SIMD（第 03 章）、内存序（第 04/05 章）、性能工程（第 06 章）、模糊测试（衔接《测试》系列 09），产出一个 ~600 行、可测可跑的完整项目。 - 理解 JSON 解析的核心设计…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="12-实战用-c-写一个高性能-json-解析器"><a class="markdownIt-Anchor" href="#12-实战用-c-写一个高性能-json-解析器"></a> 12 - 实战：用 C++ 写一个高性能 JSON 解析器</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>把全系列串起来：模板（第 02 章）、SIMD（第 03 章）、内存序（第 04/05 章）、性能工程（第 06 章）、模糊测试（衔接《测试》系列 09），产出一个 ~600 行、可测可跑的完整项目。</li>
+<li>理解 JSON 解析的核心设计决策：单遍 vs 两遍、递归下降、<code>string_view</code> 零拷贝、arena。</li>
+<li>用<strong>诚实的三回合优化</strong>走一遍性能工程流程——包括&quot;直觉优化没用上&quot;和&quot;分配计数推翻假设&quot;两个反面案例。</li>
+<li>学会公平对比 nlohmann/json 与 simdjson 的方法学，以及&quot;堆布局让同一二进制 ±35%&quot;的基准陷阱。</li>
+</ul>
+<p>本章所有代码在 g++ 11.4 / Ubuntu 22.04（i5-12600K）实测编译运行；数字为该环境实测，绝对值因机器而异。</p>
+<h2 id="1-需求定义"><a class="markdownIt-Anchor" href="#1-需求定义"></a> 1. 需求定义</h2>
+<p>支持 <strong>RFC 8259 的常用子集</strong>：</p>
+<ul>
+<li>六种值：<code>null</code>、<code>true</code>/<code>false</code>、数字（double 承载）、字符串、数组、对象；</li>
+<li>字符串转义：<code>\&quot; \\ \/ \b \f \n \r \t \uXXXX</code>（<code>\u</code> 只做 BMP 的 UTF-8 编码，代理对合并不支持——明确写进文档）；</li>
+<li>严格模式细节：数字前导零/小数点后必须跟数字（[RFC 8259 §6]），控制字符必须转义；</li>
+<li>明确<strong>不做</strong>：大整数（&gt;2^53 精度丢失，需要 i64 路径是另一个项目）、键重复检测、流式解析。</li>
+</ul>
+<p>输出形态选 <strong>DOM（整棵树）</strong>：调用方拿到 <code>Value</code> 随意遍历。放弃 SAX/on-demand 是有意识的取舍——教学目标是&quot;完整可用的解析器&quot;而不是打榜（第 7 节会看到这个取舍的代价）。</p>
+<h2 id="2-设计决策单遍-vs-两遍"><a class="markdownIt-Anchor" href="#2-设计决策单遍-vs-两遍"></a> 2. 设计决策：单遍 vs 两遍</h2>
+<p>高性能 JSON 解析器有两种主流架构：</p>
+<table>
+<thead>
+<tr>
+<th>架构</th>
+<th>流程</th>
+<th>代表</th>
+<th>特点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>单遍</td>
+<td>一边扫一边建树（递归下降）</td>
+<td>nlohmann、RapidJSON</td>
+<td>简单、错误即停、DOM 友好</td>
+</tr>
+<tr>
+<td>两遍</td>
+<td>第一遍 SIMD 扫描预解析结构（找引号/花括号位图），第二遍按需取值</td>
+<td>simdjson</td>
+<td>吞吐 GB/s 级，但要先扫全输入</td>
+</tr>
+</tbody>
+</table>
+<p>我们选<strong>单遍递归下降</strong>：教学清晰、代码量可控，且单遍对小文档的&quot;首 token 延迟&quot;更好（simdjson 的第一遍要扫完全部输入）。simdjson 的优势来自第二遍的&quot;按需&quot;（on-demand）——只解析你实际访问的字段，很多字段根本不建对象，这是它吞吐量级的真正来源（见第 7 节）。</p>
+<h2 id="3-核心实现递归下降解析器"><a class="markdownIt-Anchor" href="#3-核心实现递归下降解析器"></a> 3. 核心实现：递归下降解析器</h2>
+<p>完整头文件如下（<code>json.hpp</code>，288 行；测试与基准代码见第 6/8 节）：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br><span class="line">143</span><br><span class="line">144</span><br><span class="line">145</span><br><span class="line">146</span><br><span class="line">147</span><br><span class="line">148</span><br><span class="line">149</span><br><span class="line">150</span><br><span class="line">151</span><br><span class="line">152</span><br><span class="line">153</span><br><span class="line">154</span><br><span class="line">155</span><br><span class="line">156</span><br><span class="line">157</span><br><span class="line">158</span><br><span class="line">159</span><br><span class="line">160</span><br><span class="line">161</span><br><span class="line">162</span><br><span class="line">163</span><br><span class="line">164</span><br><span class="line">165</span><br><span class="line">166</span><br><span class="line">167</span><br><span class="line">168</span><br><span class="line">169</span><br><span class="line">170</span><br><span class="line">171</span><br><span class="line">172</span><br><span class="line">173</span><br><span class="line">174</span><br><span class="line">175</span><br><span class="line">176</span><br><span class="line">177</span><br><span class="line">178</span><br><span class="line">179</span><br><span class="line">180</span><br><span class="line">181</span><br><span class="line">182</span><br><span class="line">183</span><br><span class="line">184</span><br><span class="line">185</span><br><span class="line">186</span><br><span class="line">187</span><br><span class="line">188</span><br><span class="line">189</span><br><span class="line">190</span><br><span class="line">191</span><br><span class="line">192</span><br><span class="line">193</span><br><span class="line">194</span><br><span class="line">195</span><br><span class="line">196</span><br><span class="line">197</span><br><span class="line">198</span><br><span class="line">199</span><br><span class="line">200</span><br><span class="line">201</span><br><span class="line">202</span><br><span class="line">203</span><br><span class="line">204</span><br><span class="line">205</span><br><span class="line">206</span><br><span class="line">207</span><br><span class="line">208</span><br><span class="line">209</span><br><span class="line">210</span><br><span class="line">211</span><br><span class="line">212</span><br><span class="line">213</span><br><span class="line">214</span><br><span class="line">215</span><br><span class="line">216</span><br><span class="line">217</span><br><span class="line">218</span><br><span class="line">219</span><br><span class="line">220</span><br><span class="line">221</span><br><span class="line">222</span><br><span class="line">223</span><br><span class="line">224</span><br><span class="line">225</span><br><span class="line">226</span><br><span class="line">227</span><br><span class="line">228</span><br><span class="line">229</span><br><span class="line">230</span><br><span class="line">231</span><br><span class="line">232</span><br><span class="line">233</span><br><span class="line">234</span><br><span class="line">235</span><br><span class="line">236</span><br><span class="line">237</span><br><span class="line">238</span><br><span class="line">239</span><br><span class="line">240</span><br><span class="line">241</span><br><span class="line">242</span><br><span class="line">243</span><br><span class="line">244</span><br><span class="line">245</span><br><span class="line">246</span><br><span class="line">247</span><br><span class="line">248</span><br><span class="line">249</span><br><span class="line">250</span><br><span class="line">251</span><br><span class="line">252</span><br><span class="line">253</span><br><span class="line">254</span><br><span class="line">255</span><br><span class="line">256</span><br><span class="line">257</span><br><span class="line">258</span><br><span class="line">259</span><br><span class="line">260</span><br><span class="line">261</span><br><span class="line">262</span><br><span class="line">263</span><br><span class="line">264</span><br><span class="line">265</span><br><span class="line">266</span><br><span class="line">267</span><br><span class="line">268</span><br><span class="line">269</span><br><span class="line">270</span><br><span class="line">271</span><br><span class="line">272</span><br><span class="line">273</span><br><span class="line">274</span><br><span class="line">275</span><br><span class="line">276</span><br><span class="line">277</span><br><span class="line">278</span><br><span class="line">279</span><br><span class="line">280</span><br><span class="line">281</span><br><span class="line">282</span><br><span class="line">283</span><br><span class="line">284</span><br><span class="line">285</span><br><span class="line">286</span><br><span class="line">287</span><br><span class="line">288</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// json.hpp —— 教学版高性能 JSON 解析器（RFC 8259 子集）</span></span><br><span class="line"><span class="comment">// 设计要点：单遍递归下降 + string_view 零拷贝 + arena 承接字符串</span></span><br><span class="line"><span class="meta">#<span class="keyword">pragma</span> once</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cctype&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cerrno&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdint&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdlib&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string_view&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;utility&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;variant&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;vector&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">namespace</span> minijson &#123;</span><br><span class="line"></span><br><span class="line"><span class="comment">// ---------- 错误类型：带行列位置 ----------</span></span><br><span class="line"><span class="keyword">struct</span> <span class="title class_">ParseError</span> &#123;</span><br><span class="line">    std::string_view msg; <span class="comment">// 错误描述</span></span><br><span class="line">    <span class="type">size_t</span> offset;        <span class="comment">// 在输入中的字节偏移</span></span><br><span class="line">    <span class="type">size_t</span> line, col;     <span class="comment">// 1-based 行列号</span></span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// ---------- AST：对象用 vector&lt;pair&gt; 而不是 map（更快，允许重复键）----------</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Value</span>;</span><br><span class="line"><span class="keyword">using</span> Array  = std::vector&lt;Value&gt;;</span><br><span class="line"><span class="keyword">using</span> Member = std::pair&lt;std::string_view, Value&gt;; <span class="comment">// 键是原文/arena 里的 string_view</span></span><br><span class="line"><span class="keyword">using</span> Object = std::vector&lt;Member&gt;;</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Value</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="keyword">using</span> Rep = std::variant&lt;std::<span class="type">nullptr_t</span>, <span class="type">bool</span>, <span class="type">double</span>, std::string_view, Array, Object&gt;;</span><br><span class="line">    Rep rep;</span><br><span class="line">    <span class="built_in">Value</span>() : <span class="built_in">rep</span>(<span class="literal">nullptr</span>) &#123;&#125;</span><br><span class="line">    <span class="built_in">Value</span>(std::<span class="type">nullptr_t</span>) : <span class="built_in">rep</span>(<span class="literal">nullptr</span>) &#123;&#125;</span><br><span class="line">    <span class="built_in">Value</span>(<span class="type">bool</span> b) : <span class="built_in">rep</span>(b) &#123;&#125;</span><br><span class="line">    <span class="built_in">Value</span>(<span class="type">double</span> d) : <span class="built_in">rep</span>(d) &#123;&#125;</span><br><span class="line">    <span class="built_in">Value</span>(std::string_view s) : <span class="built_in">rep</span>(s) &#123;&#125;</span><br><span class="line">    <span class="built_in">Value</span>(Array a) : <span class="built_in">rep</span>(std::<span class="built_in">move</span>(a)) &#123;&#125;</span><br><span class="line">    <span class="built_in">Value</span>(Object o) : <span class="built_in">rep</span>(std::<span class="built_in">move</span>(o)) &#123;&#125;</span><br><span class="line">    <span class="function"><span class="type">bool</span> <span class="title">is_null</span><span class="params">()</span>   <span class="type">const</span> </span>&#123; <span class="keyword">return</span> std::<span class="built_in">holds_alternative</span>&lt;std::<span class="type">nullptr_t</span>&gt;(rep); &#125;</span><br><span class="line">    <span class="function"><span class="type">bool</span> <span class="title">is_bool</span><span class="params">()</span>   <span class="type">const</span> </span>&#123; <span class="keyword">return</span> std::<span class="built_in">holds_alternative</span>&lt;<span class="type">bool</span>&gt;(rep); &#125;</span><br><span class="line">    <span class="function"><span class="type">bool</span> <span class="title">is_number</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> std::<span class="built_in">holds_alternative</span>&lt;<span class="type">double</span>&gt;(rep); &#125;</span><br><span class="line">    <span class="function"><span class="type">bool</span> <span class="title">is_string</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> std::<span class="built_in">holds_alternative</span>&lt;std::string_view&gt;(rep); &#125;</span><br><span class="line">    <span class="function"><span class="type">bool</span> <span class="title">is_array</span><span class="params">()</span>  <span class="type">const</span> </span>&#123; <span class="keyword">return</span> std::<span class="built_in">holds_alternative</span>&lt;Array&gt;(rep); &#125;</span><br><span class="line">    <span class="function"><span class="type">bool</span> <span class="title">is_object</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> std::<span class="built_in">holds_alternative</span>&lt;Object&gt;(rep); &#125;</span><br><span class="line">    <span class="function"><span class="type">const</span> Object&amp; <span class="title">as_object</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> std::<span class="built_in">get</span>&lt;Object&gt;(rep); &#125;</span><br><span class="line">    <span class="function"><span class="type">const</span> Array&amp;  <span class="title">as_array</span><span class="params">()</span>  <span class="type">const</span> </span>&#123; <span class="keyword">return</span> std::<span class="built_in">get</span>&lt;Array&gt;(rep); &#125;</span><br><span class="line">    <span class="function"><span class="type">double</span>           <span class="title">as_number</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> std::<span class="built_in">get</span>&lt;<span class="type">double</span>&gt;(rep); &#125;</span><br><span class="line">    <span class="function">std::string_view <span class="title">as_string</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> std::<span class="built_in">get</span>&lt;std::string_view&gt;(rep); &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// ---------- Arena：解析期字符串的内存池（第 06 章同款思想）----------</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Arena</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="function"><span class="keyword">explicit</span> <span class="title">Arena</span><span class="params">(<span class="type">size_t</span> chunk = <span class="number">1</span> &lt;&lt; <span class="number">20</span>)</span> : chunk_(chunk) &#123;</span>&#125;</span><br><span class="line">    ~<span class="built_in">Arena</span>() &#123; <span class="keyword">for</span> (<span class="keyword">auto</span>&amp; c : chunks_) ::<span class="function"><span class="keyword">operator</span> <span class="title">delete</span><span class="params">(c)</span></span>; &#125;</span><br><span class="line">    <span class="built_in">Arena</span>(<span class="type">const</span> Arena&amp;) = <span class="keyword">delete</span>;</span><br><span class="line">    Arena&amp; <span class="keyword">operator</span>=(<span class="type">const</span> Arena&amp;) = <span class="keyword">delete</span>;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="type">char</span>* <span class="title">allocate</span><span class="params">(<span class="type">size_t</span> n, <span class="type">size_t</span> align = <span class="number">16</span>)</span> </span>&#123;</span><br><span class="line">        <span class="type">uintptr_t</span> cur = <span class="keyword">reinterpret_cast</span>&lt;<span class="type">uintptr_t</span>&gt;(cur_);</span><br><span class="line">        <span class="type">uintptr_t</span> base = (cur + align - <span class="number">1</span>) &amp; ~(<span class="type">uintptr_t</span>)(align - <span class="number">1</span>); <span class="comment">// 对齐</span></span><br><span class="line">        <span class="keyword">if</span> (n &gt; <span class="keyword">static_cast</span>&lt;<span class="type">size_t</span>&gt;(<span class="keyword">reinterpret_cast</span>&lt;<span class="type">uintptr_t</span>&gt;(end_) - base)) &#123;</span><br><span class="line">            <span class="built_in">grow</span>(n);                                                   <span class="comment">// 先扩块再取新基址</span></span><br><span class="line">            base = <span class="keyword">reinterpret_cast</span>&lt;<span class="type">uintptr_t</span>&gt;(cur_);</span><br><span class="line">        &#125;</span><br><span class="line">        cur_ = <span class="keyword">reinterpret_cast</span>&lt;<span class="type">char</span>*&gt;(base) + n;</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">reinterpret_cast</span>&lt;<span class="type">char</span>*&gt;(base);</span><br><span class="line">    &#125;</span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">grow</span><span class="params">(<span class="type">size_t</span> need)</span> </span>&#123;</span><br><span class="line">        <span class="type">size_t</span> cap = chunk_;</span><br><span class="line">        <span class="keyword">while</span> (cap &lt; need) cap *= <span class="number">2</span>;</span><br><span class="line">        <span class="type">char</span>* c = <span class="keyword">static_cast</span>&lt;<span class="type">char</span>*&gt;(::<span class="keyword">operator</span> <span class="keyword">new</span>(cap));</span><br><span class="line">        chunks_.<span class="built_in">push_back</span>(c);</span><br><span class="line">        cur_ = c;</span><br><span class="line">        end_ = c + cap;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="type">size_t</span> chunk_;</span><br><span class="line">    std::vector&lt;<span class="type">char</span>*&gt; chunks_;</span><br><span class="line">    <span class="type">char</span>* cur_ = <span class="literal">nullptr</span>;</span><br><span class="line">    <span class="type">char</span>* end_ = <span class="literal">nullptr</span>;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line"><span class="comment">// ---------- 解析器 ----------</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Parser</span> &#123;</span><br><span class="line"><span class="keyword">public</span>:</span><br><span class="line">    <span class="comment">// 输入必须比返回的 Value 活得久（string_view 只引用不拷贝）</span></span><br><span class="line">    <span class="comment">// 出错时返回 null 并填 err_out；约定：错误走 ParseError，不向外抛</span></span><br><span class="line">    <span class="function"><span class="type">static</span> Value <span class="title">parse</span><span class="params">(std::string_view input, Arena&amp; arena, ParseError* err_out = <span class="literal">nullptr</span>)</span> </span>&#123;</span><br><span class="line">        <span class="function">Parser <span class="title">p</span><span class="params">(input, arena)</span></span>;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            Value v = p.<span class="built_in">parse_value</span>();</span><br><span class="line">            p.<span class="built_in">skip_ws</span>();</span><br><span class="line">            <span class="keyword">if</span> (p.pos_ != input.<span class="built_in">size</span>()) p.<span class="built_in">fail</span>(<span class="string">&quot;文档结束后有多余字符&quot;</span>);</span><br><span class="line">            <span class="keyword">return</span> v;</span><br><span class="line">        &#125; <span class="keyword">catch</span> (<span class="type">const</span> ParseError&amp; e) &#123;</span><br><span class="line">            <span class="keyword">if</span> (err_out) *err_out = e;</span><br><span class="line">            <span class="keyword">return</span> Value&#123;&#125;;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">private</span>:</span><br><span class="line">    <span class="built_in">Parser</span>(std::string_view s, Arena&amp; a) : <span class="built_in">s_</span>(s), <span class="built_in">arena_</span>(a) &#123;&#125;</span><br><span class="line"></span><br><span class="line">    std::string_view s_;</span><br><span class="line">    Arena&amp; arena_;</span><br><span class="line">    <span class="type">size_t</span> pos_ = <span class="number">0</span>;</span><br><span class="line"></span><br><span class="line">    [[noreturn]] <span class="function"><span class="type">void</span> <span class="title">fail</span><span class="params">(<span class="type">const</span> <span class="type">char</span>* msg)</span> <span class="type">const</span> </span>&#123;</span><br><span class="line">        <span class="type">size_t</span> line = <span class="number">1</span>, col = <span class="number">1</span>;                 <span class="comment">// 行列号：从头数换行（错误路径不追求快）</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="type">size_t</span> i = <span class="number">0</span>; i &lt; pos_ &amp;&amp; i &lt; s_.<span class="built_in">size</span>(); ++i) &#123;</span><br><span class="line">            <span class="keyword">if</span> (s_[i] == <span class="string">&#x27;\n&#x27;</span>) &#123; ++line; col = <span class="number">1</span>; &#125; <span class="keyword">else</span> ++col;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">throw</span> ParseError&#123;msg, pos_, line, col&#125;;   <span class="comment">// 内部用异常做回退，边界处转成错误码</span></span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 跳过空白：常见情形是 0~4 个，先快路径再循环</span></span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">skip_ws</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (pos_ &lt; s_.<span class="built_in">size</span>()) &#123;</span><br><span class="line">            <span class="type">char</span> c = s_[pos_];</span><br><span class="line">            <span class="keyword">if</span> (c != <span class="string">&#x27; &#x27;</span> &amp;&amp; c != <span class="string">&#x27;\t&#x27;</span> &amp;&amp; c != <span class="string">&#x27;\n&#x27;</span> &amp;&amp; c != <span class="string">&#x27;\r&#x27;</span>) <span class="keyword">return</span>;</span><br><span class="line">            ++pos_;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">while</span> (pos_ &lt; s_.<span class="built_in">size</span>()) &#123;</span><br><span class="line">            <span class="type">char</span> c = s_[pos_];</span><br><span class="line">            <span class="keyword">if</span> (c == <span class="string">&#x27; &#x27;</span> || c == <span class="string">&#x27;\t&#x27;</span> || c == <span class="string">&#x27;\n&#x27;</span> || c == <span class="string">&#x27;\r&#x27;</span>) ++pos_;</span><br><span class="line">            <span class="keyword">else</span> <span class="keyword">break</span>;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="type">char</span> <span class="title">peek</span><span class="params">()</span> <span class="type">const</span> </span>&#123; <span class="keyword">return</span> s_[pos_]; &#125;</span><br><span class="line">    <span class="function"><span class="type">char</span> <span class="title">next</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (pos_ &gt;= s_.<span class="built_in">size</span>()) <span class="built_in">fail</span>(<span class="string">&quot;输入提前结束&quot;</span>);</span><br><span class="line">        <span class="keyword">return</span> s_[pos_++];</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">expect</span><span class="params">(<span class="type">char</span> c)</span> </span>&#123;</span><br><span class="line">        <span class="keyword">if</span> (<span class="built_in">next</span>() != c) &#123; --pos_; <span class="built_in">fail</span>(<span class="string">&quot;期望字符不匹配&quot;</span>); &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function">Value <span class="title">parse_value</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="built_in">skip_ws</span>();</span><br><span class="line">        <span class="keyword">if</span> (pos_ &gt;= s_.<span class="built_in">size</span>()) <span class="built_in">fail</span>(<span class="string">&quot;缺少值&quot;</span>);</span><br><span class="line">        <span class="keyword">switch</span> (s_[pos_]) &#123;</span><br><span class="line">            <span class="keyword">case</span> <span class="string">&#x27;&#123;&#x27;</span>: <span class="keyword">return</span> <span class="built_in">parse_object</span>();</span><br><span class="line">            <span class="keyword">case</span> <span class="string">&#x27;[&#x27;</span>: <span class="keyword">return</span> <span class="built_in">parse_array</span>();</span><br><span class="line">            <span class="keyword">case</span> <span class="string">&#x27;&quot;&#x27;</span>: <span class="keyword">return</span> <span class="built_in">Value</span>(<span class="built_in">parse_string</span>());</span><br><span class="line">            <span class="keyword">case</span> <span class="string">&#x27;t&#x27;</span>: <span class="built_in">parse_lit</span>(<span class="string">&quot;true&quot;</span>,  <span class="built_in">Value</span>(<span class="literal">true</span>));  <span class="keyword">return</span> <span class="built_in">Value</span>(<span class="literal">true</span>);</span><br><span class="line">            <span class="keyword">case</span> <span class="string">&#x27;f&#x27;</span>: <span class="built_in">parse_lit</span>(<span class="string">&quot;false&quot;</span>, <span class="built_in">Value</span>(<span class="literal">false</span>)); <span class="keyword">return</span> <span class="built_in">Value</span>(<span class="literal">false</span>);</span><br><span class="line">            <span class="keyword">case</span> <span class="string">&#x27;n&#x27;</span>: <span class="built_in">parse_lit</span>(<span class="string">&quot;null&quot;</span>,  <span class="built_in">Value</span>(<span class="literal">nullptr</span>)); <span class="keyword">return</span> <span class="built_in">Value</span>(<span class="literal">nullptr</span>);</span><br><span class="line">            <span class="keyword">default</span>:  <span class="keyword">return</span> <span class="built_in">Value</span>(<span class="built_in">parse_number</span>());</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="type">void</span> <span class="title">parse_lit</span><span class="params">(<span class="type">const</span> <span class="type">char</span>* lit, Value)</span> </span>&#123;</span><br><span class="line">        <span class="type">const</span> <span class="type">size_t</span> n = std::char_traits&lt;<span class="type">char</span>&gt;::<span class="built_in">length</span>(lit);</span><br><span class="line">        <span class="keyword">if</span> (s_.<span class="built_in">compare</span>(pos_, n, lit) != <span class="number">0</span>) <span class="built_in">fail</span>(<span class="string">&quot;字面量拼写错误&quot;</span>);</span><br><span class="line">        pos_ += n;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function">Value <span class="title">parse_object</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="built_in">expect</span>(<span class="string">&#x27;&#123;&#x27;</span>);</span><br><span class="line">        Object members; members.<span class="built_in">reserve</span>(<span class="number">8</span>);   <span class="comment">// 启发式：小对象最常见（见第 6 节剖析）</span></span><br><span class="line">        <span class="built_in">skip_ws</span>();</span><br><span class="line">        <span class="keyword">if</span> (<span class="built_in">peek</span>() == <span class="string">&#x27;&#125;&#x27;</span>) &#123; ++pos_; <span class="keyword">return</span> <span class="built_in">Value</span>(std::<span class="built_in">move</span>(members)); &#125;</span><br><span class="line">        <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">            <span class="built_in">skip_ws</span>();</span><br><span class="line">            std::string_view key = <span class="built_in">parse_string</span>();</span><br><span class="line">            <span class="built_in">skip_ws</span>();</span><br><span class="line">            <span class="built_in">expect</span>(<span class="string">&#x27;:&#x27;</span>);</span><br><span class="line">            members.<span class="built_in">emplace_back</span>(key, <span class="built_in">parse_value</span>());</span><br><span class="line">            <span class="built_in">skip_ws</span>();</span><br><span class="line">            <span class="type">char</span> c = <span class="built_in">next</span>();</span><br><span class="line">            <span class="keyword">if</span> (c == <span class="string">&#x27;&#125;&#x27;</span>) <span class="keyword">break</span>;</span><br><span class="line">            <span class="keyword">if</span> (c != <span class="string">&#x27;,&#x27;</span>) <span class="built_in">fail</span>(<span class="string">&quot;对象成员后应为 , 或 &#125;&quot;</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">Value</span>(std::<span class="built_in">move</span>(members));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function">Value <span class="title">parse_array</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="built_in">expect</span>(<span class="string">&#x27;[&#x27;</span>);</span><br><span class="line">        Array items; items.<span class="built_in">reserve</span>(<span class="number">4</span>);</span><br><span class="line">        <span class="built_in">skip_ws</span>();</span><br><span class="line">        <span class="keyword">if</span> (<span class="built_in">peek</span>() == <span class="string">&#x27;]&#x27;</span>) &#123; ++pos_; <span class="keyword">return</span> <span class="built_in">Value</span>(std::<span class="built_in">move</span>(items)); &#125;</span><br><span class="line">        <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">            items.<span class="built_in">push_back</span>(<span class="built_in">parse_value</span>());</span><br><span class="line">            <span class="built_in">skip_ws</span>();</span><br><span class="line">            <span class="type">char</span> c = <span class="built_in">next</span>();</span><br><span class="line">            <span class="keyword">if</span> (c == <span class="string">&#x27;]&#x27;</span>) <span class="keyword">break</span>;</span><br><span class="line">            <span class="keyword">if</span> (c != <span class="string">&#x27;,&#x27;</span>) <span class="built_in">fail</span>(<span class="string">&quot;数组元素后应为 , 或 ]&quot;</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">Value</span>(std::<span class="built_in">move</span>(items));</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 快路径：不含转义时直接引用原文（零拷贝）</span></span><br><span class="line">    <span class="function">std::string_view <span class="title">parse_string</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="built_in">expect</span>(<span class="string">&#x27;&quot;&#x27;</span>);</span><br><span class="line">        <span class="type">size_t</span> start = pos_;</span><br><span class="line">        <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">            <span class="keyword">if</span> (pos_ &gt;= s_.<span class="built_in">size</span>()) <span class="built_in">fail</span>(<span class="string">&quot;字符串未闭合&quot;</span>);</span><br><span class="line">            <span class="type">char</span> c = s_[pos_];</span><br><span class="line">            <span class="keyword">if</span> (c == <span class="string">&#x27;&quot;&#x27;</span>) &#123;</span><br><span class="line">                std::string_view raw = s_.<span class="built_in">substr</span>(start, pos_ - start);</span><br><span class="line">                ++pos_;                                            <span class="comment">// 越过结束引号</span></span><br><span class="line">                <span class="keyword">if</span> (raw.<span class="built_in">find</span>(<span class="string">&#x27;\\&#x27;</span>) == std::string_view::npos) <span class="keyword">return</span> raw;</span><br><span class="line">                <span class="keyword">return</span> <span class="built_in">unescape</span>(start - <span class="number">1</span>, pos_);                  <span class="comment">// 有转义：整段交给解码</span></span><br><span class="line">            &#125;</span><br><span class="line">            <span class="keyword">if</span> (c == <span class="string">&#x27;\\&#x27;</span>) &#123; pos_ += <span class="number">2</span>; <span class="keyword">continue</span>; &#125;                <span class="comment">// 转义对整体跳过，\&quot; 不误判</span></span><br><span class="line">            <span class="keyword">if</span> (<span class="keyword">static_cast</span>&lt;<span class="type">unsigned</span> <span class="type">char</span>&gt;(c) &lt; <span class="number">0x20</span>) <span class="built_in">fail</span>(<span class="string">&quot;字符串中出现未转义控制字符&quot;</span>);</span><br><span class="line">            ++pos_;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">// 把 [begin,end) 内含转义的原文解码进 arena</span></span><br><span class="line">    <span class="function">std::string_view <span class="title">unescape</span><span class="params">(<span class="type">size_t</span> begin, <span class="type">size_t</span> end)</span> </span>&#123;</span><br><span class="line">        <span class="type">char</span>* out = arena_.<span class="built_in">allocate</span>(end - begin);   <span class="comment">// 上界即原文长度，一次预留</span></span><br><span class="line">        <span class="type">size_t</span> o = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">size_t</span> i = begin + <span class="number">1</span>; i &lt; end - <span class="number">1</span>; ++i) &#123;             <span class="comment">// 跳过首尾引号</span></span><br><span class="line">            <span class="type">char</span> c = s_[i];</span><br><span class="line">            <span class="keyword">if</span> (c != <span class="string">&#x27;\\&#x27;</span>) &#123; out[o++] = c; <span class="keyword">continue</span>; &#125;</span><br><span class="line">            <span class="type">char</span> e = s_[++i];</span><br><span class="line">            <span class="keyword">switch</span> (e) &#123;</span><br><span class="line">                <span class="keyword">case</span> <span class="string">&#x27;&quot;&#x27;</span>:  out[o++] = <span class="string">&#x27;&quot;&#x27;</span>;  <span class="keyword">break</span>;</span><br><span class="line">                <span class="keyword">case</span> <span class="string">&#x27;\\&#x27;</span>: out[o++] = <span class="string">&#x27;\\&#x27;</span>; <span class="keyword">break</span>;</span><br><span class="line">                <span class="keyword">case</span> <span class="string">&#x27;/&#x27;</span>:  out[o++] = <span class="string">&#x27;/&#x27;</span>;  <span class="keyword">break</span>;</span><br><span class="line">                <span class="keyword">case</span> <span class="string">&#x27;b&#x27;</span>:  out[o++] = <span class="string">&#x27;\b&#x27;</span>; <span class="keyword">break</span>;</span><br><span class="line">                <span class="keyword">case</span> <span class="string">&#x27;f&#x27;</span>:  out[o++] = <span class="string">&#x27;\f&#x27;</span>; <span class="keyword">break</span>;</span><br><span class="line">                <span class="keyword">case</span> <span class="string">&#x27;n&#x27;</span>:  out[o++] = <span class="string">&#x27;\n&#x27;</span>; <span class="keyword">break</span>;</span><br><span class="line">                <span class="keyword">case</span> <span class="string">&#x27;r&#x27;</span>:  out[o++] = <span class="string">&#x27;\r&#x27;</span>; <span class="keyword">break</span>;</span><br><span class="line">                <span class="keyword">case</span> <span class="string">&#x27;t&#x27;</span>:  out[o++] = <span class="string">&#x27;\t&#x27;</span>; <span class="keyword">break</span>;</span><br><span class="line">                <span class="keyword">case</span> <span class="string">&#x27;u&#x27;</span>: &#123;                        <span class="comment">// \uXXXX：仅 BMP，不做代理对合并</span></span><br><span class="line">                    <span class="keyword">if</span> (i + <span class="number">4</span> &gt;= end) <span class="built_in">fail</span>(<span class="string">&quot;\\u 转义不完整&quot;</span>);</span><br><span class="line">                    <span class="type">unsigned</span> cp = <span class="number">0</span>;</span><br><span class="line">                    <span class="keyword">for</span> (<span class="type">int</span> k = <span class="number">1</span>; k &lt;= <span class="number">4</span>; ++k) &#123;</span><br><span class="line">                        <span class="type">char</span> h = s_[i + k];</span><br><span class="line">                        cp &lt;&lt;= <span class="number">4</span>;</span><br><span class="line">                        <span class="keyword">if</span> (h &gt;= <span class="string">&#x27;0&#x27;</span> &amp;&amp; h &lt;= <span class="string">&#x27;9&#x27;</span>) cp |= <span class="keyword">static_cast</span>&lt;<span class="type">unsigned</span>&gt;(h - <span class="string">&#x27;0&#x27;</span>);</span><br><span class="line">                        <span class="keyword">else</span> <span class="keyword">if</span> (h &gt;= <span class="string">&#x27;a&#x27;</span> &amp;&amp; h &lt;= <span class="string">&#x27;f&#x27;</span>) cp |= <span class="keyword">static_cast</span>&lt;<span class="type">unsigned</span>&gt;(h - <span class="string">&#x27;a&#x27;</span> + <span class="number">10</span>);</span><br><span class="line">                        <span class="keyword">else</span> <span class="keyword">if</span> (h &gt;= <span class="string">&#x27;A&#x27;</span> &amp;&amp; h &lt;= <span class="string">&#x27;F&#x27;</span>) cp |= <span class="keyword">static_cast</span>&lt;<span class="type">unsigned</span>&gt;(h - <span class="string">&#x27;A&#x27;</span> + <span class="number">10</span>);</span><br><span class="line">                        <span class="keyword">else</span> <span class="built_in">fail</span>(<span class="string">&quot;\\u 中有非法十六进制字符&quot;</span>);</span><br><span class="line">                    &#125;</span><br><span class="line">                    i += <span class="number">4</span>;</span><br><span class="line">                    <span class="keyword">if</span> (cp &lt; <span class="number">0x80</span>) out[o++] = <span class="keyword">static_cast</span>&lt;<span class="type">char</span>&gt;(cp);</span><br><span class="line">                    <span class="keyword">else</span> <span class="keyword">if</span> (cp &lt; <span class="number">0x800</span>) &#123;</span><br><span class="line">                        out[o++] = <span class="keyword">static_cast</span>&lt;<span class="type">char</span>&gt;(<span class="number">0xC0</span> | (cp &gt;&gt; <span class="number">6</span>));</span><br><span class="line">                        out[o++] = <span class="keyword">static_cast</span>&lt;<span class="type">char</span>&gt;(<span class="number">0x80</span> | (cp &amp; <span class="number">0x3F</span>));</span><br><span class="line">                    &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                        out[o++] = <span class="keyword">static_cast</span>&lt;<span class="type">char</span>&gt;(<span class="number">0xE0</span> | (cp &gt;&gt; <span class="number">12</span>));</span><br><span class="line">                        out[o++] = <span class="keyword">static_cast</span>&lt;<span class="type">char</span>&gt;(<span class="number">0x80</span> | ((cp &gt;&gt; <span class="number">6</span>) &amp; <span class="number">0x3F</span>));</span><br><span class="line">                        out[o++] = <span class="keyword">static_cast</span>&lt;<span class="type">char</span>&gt;(<span class="number">0x80</span> | (cp &amp; <span class="number">0x3F</span>));</span><br><span class="line">                    &#125;</span><br><span class="line">                    <span class="keyword">break</span>;</span><br><span class="line">                &#125;</span><br><span class="line">                <span class="keyword">default</span>: <span class="built_in">fail</span>(<span class="string">&quot;非法转义字符&quot;</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> &#123;out, o&#125;;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="function"><span class="type">double</span> <span class="title">parse_number</span><span class="params">()</span> </span>&#123;</span><br><span class="line">        <span class="type">size_t</span> start = pos_;</span><br><span class="line">        <span class="keyword">if</span> (<span class="built_in">peek</span>() == <span class="string">&#x27;-&#x27;</span>) ++pos_;</span><br><span class="line">        <span class="keyword">if</span> (pos_ &gt;= s_.<span class="built_in">size</span>()) <span class="built_in">fail</span>(<span class="string">&quot;数字不完整&quot;</span>);</span><br><span class="line">        <span class="keyword">if</span> (<span class="built_in">peek</span>() == <span class="string">&#x27;0&#x27;</span>) ++pos_;                              <span class="comment">// 前导零：只允许单独一个 0</span></span><br><span class="line">        <span class="keyword">else</span> <span class="keyword">if</span> (<span class="built_in">peek</span>() &gt;= <span class="string">&#x27;1&#x27;</span> &amp;&amp; <span class="built_in">peek</span>() &lt;= <span class="string">&#x27;9&#x27;</span>) &#123; <span class="keyword">while</span> (pos_ &lt; s_.<span class="built_in">size</span>() &amp;&amp; <span class="built_in">isdigit</span>(s_[pos_])) ++pos_; &#125;</span><br><span class="line">        <span class="keyword">else</span> <span class="built_in">fail</span>(<span class="string">&quot;非法数字起始&quot;</span>);</span><br><span class="line">        <span class="keyword">if</span> (pos_ &lt; s_.<span class="built_in">size</span>() &amp;&amp; <span class="built_in">peek</span>() == <span class="string">&#x27;.&#x27;</span>) &#123;</span><br><span class="line">            ++pos_;</span><br><span class="line">            <span class="keyword">if</span> (pos_ &gt;= s_.<span class="built_in">size</span>() || !<span class="built_in">isdigit</span>(s_[pos_])) <span class="built_in">fail</span>(<span class="string">&quot;小数点后必须有数字&quot;</span>);</span><br><span class="line">            <span class="keyword">while</span> (pos_ &lt; s_.<span class="built_in">size</span>() &amp;&amp; <span class="built_in">isdigit</span>(s_[pos_])) ++pos_;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span> (pos_ &lt; s_.<span class="built_in">size</span>() &amp;&amp; (<span class="built_in">peek</span>() == <span class="string">&#x27;e&#x27;</span> || <span class="built_in">peek</span>() == <span class="string">&#x27;E&#x27;</span>)) &#123;</span><br><span class="line">            ++pos_;</span><br><span class="line">            <span class="keyword">if</span> (pos_ &lt; s_.<span class="built_in">size</span>() &amp;&amp; (<span class="built_in">peek</span>() == <span class="string">&#x27;+&#x27;</span> || <span class="built_in">peek</span>() == <span class="string">&#x27;-&#x27;</span>)) ++pos_;</span><br><span class="line">            <span class="keyword">if</span> (pos_ &gt;= s_.<span class="built_in">size</span>() || !<span class="built_in">isdigit</span>(s_[pos_])) <span class="built_in">fail</span>(<span class="string">&quot;指数后必须有数字&quot;</span>);</span><br><span class="line">            <span class="keyword">while</span> (pos_ &lt; s_.<span class="built_in">size</span>() &amp;&amp; <span class="built_in">isdigit</span>(s_[pos_])) ++pos_;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">// strtod 的正确用法：endptr 校验整段被吃掉 + errno 查溢出（第 5 节）</span></span><br><span class="line">        <span class="type">char</span>* endp = <span class="literal">nullptr</span>;</span><br><span class="line">        std::string_view num = s_.<span class="built_in">substr</span>(start, pos_ - start);</span><br><span class="line">        errno = <span class="number">0</span>;</span><br><span class="line">        <span class="type">double</span> d = std::<span class="built_in">strtod</span>(num.<span class="built_in">data</span>(), &amp;endp);</span><br><span class="line">        <span class="keyword">if</span> (endp != num.<span class="built_in">data</span>() + num.<span class="built_in">size</span>()) <span class="built_in">fail</span>(<span class="string">&quot;数字解析意外截断&quot;</span>);</span><br><span class="line">        <span class="keyword">if</span> (errno == ERANGE) <span class="built_in">fail</span>(<span class="string">&quot;数字溢出/下溢&quot;</span>);</span><br><span class="line">        <span class="keyword">return</span> d;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;;</span><br><span class="line"></span><br><span class="line">&#125; <span class="comment">// namespace minijson</span></span><br></pre></td></tr></table></figure>
+<p>结构一目了然：<code>parse → parse_value → {parse_object, parse_array, parse_string, parse_number, parse_lit}</code>，文法与 [RFC 8259 §2] 的 ABNF 一一对应——<strong>递归下降的本质是&quot;文法即代码&quot;</strong>。三个实现要点：</p>
+<ol>
+<li><strong><code>string_view</code> 零拷贝快路径</strong>：不含转义的字符串（绝大多数）直接引用原文，不分配不拷贝——这是本实现相对朴素版的第一支柱。</li>
+<li><strong>对象/数组用 <code>vector</code> 而不是 <code>map</code></strong>：查找 O(n) 但 n 是小常数（JSON 对象平均 5-10 键），换来连续内存与 3 倍少的分配；还天然允许重复键（与 RFC 一致：重复键行为未定义，由调用方处理）。</li>
+<li><strong><code>Value</code> 用 <code>std::variant</code></strong>（第 06 章）：闭集类型的正确工具；<code>variant</code> 大小 = 最大成员（Object 的 vector 24 字节）+ 4 字节索引。</li>
+</ol>
+<h2 id="4-字符串转义两处容易写错的细节"><a class="markdownIt-Anchor" href="#4-字符串转义两处容易写错的细节"></a> 4. 字符串转义：两处容易写错的细节</h2>
+<p>第 3 节代码里有两处值得单独讲：</p>
+<ul>
+<li><strong>转义对的原子跳过</strong>：快路径扫描里 <code>if (c == '\\') { pos_ += 2; continue; }</code>——没有这行，<code>&quot;a\&quot;b&quot;</code> 会在第一个 <code>\&quot;</code> 的引号处误判为字符串结束，剩余 <code>b&quot;</code> 变成&quot;文档结束后有多余字符&quot;（这是本项目开发中真实踩过并修掉的 bug，也正是模糊测试最擅长抓的类别）。</li>
+<li><strong><code>\uXXXX</code> 只做 BMP</strong>：D800–DFFF 是代理对（surrogate pair），正确做法是检测高位代理后与下一个 <code>\uXXXX</code> 合成 4 字节 UTF-8。教学版遇到代理对会编码成 3 字节 CESU-8 式错误结果——这是<strong>已声明的功能边界</strong>，模糊测试用例生成器不应把代理对当作&quot;必须正确&quot;的输入。真实项目（如 simdjson）会补全这一步，工作量约 20 行。</li>
+</ul>
+<h2 id="5-数值解析strtod-的正确用法"><a class="markdownIt-Anchor" href="#5-数值解析strtod-的正确用法"></a> 5. 数值解析：strtod 的正确用法</h2>
+<p>自己写 float 解析是著名深坑（正确处理舍入需要大数运算，参考 Clinger/ Gay 的论文与 fast_float 库）。<strong>正确姿势是让 <code>strtod</code> 干活，自己把三件配套事做对</strong>：</p>
+<ol>
+<li><strong>先手动扫描出数字的完整词素</strong>（<code>-12.5e2</code> 的字符范围）：strtod 会&quot;贪婪吃到非数字为止&quot;，若不先扫边界，<code>12abc</code> 会被它吃成 12 而不报错；</li>
+<li><strong><code>endptr</code> 校验</strong>：<code>endp != num.data() + num.size()</code> 说明词素内有意外的解析中断—— fail；</li>
+<li><strong><code>errno == ERANGE</code></strong>：溢出（±inf）与下溢（0）按规范报错。</li>
+</ol>
+<p>一个隐蔽细节：<code>strtod</code> 的输入必须以 <code>'\0'</code> 结尾或&quot;后面恰好不是数字&quot;——我们传 <code>string_view</code> 的 <code>data()</code> 直接指原文，若原文是 <code>123456</code> 且后面紧跟另一个数字 token，strtod 可能多读一位。本实现不会踩到，因为<strong>词素扫描保证了 num 末尾必是 <code>,</code>/<code>}</code>/<code>]</code>/空白等非数字字符</strong>；但把 <code>num.data()</code> 指向无后续保护内存时要有这个意识（经验做法：给 <code>parse_number</code> 的单元测试专门覆盖&quot;文档末尾是数字&quot;用例）。</p>
+<h2 id="6-性能优化三回合真实数字"><a class="markdownIt-Anchor" href="#6-性能优化三回合真实数字"></a> 6. 性能优化三回合（真实数字）</h2>
+<p>基准：20 万条记录的合成文档 18.0 MB（紧凑格式，每条 <code>{&quot;id&quot;:..,&quot;score&quot;:..,&quot;label&quot;:..,&quot;flag&quot;:..,&quot;sub&quot;:{..}}</code>），每回合跑 10 轮取 best 与 median。</p>
+<p><strong>回合 1：朴素实现</strong>（<code>std::string</code> 值、<code>std::map</code> 对象、逐字符 append、<code>substr</code> 喂 strtod）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">回合1 朴素: best=177.3  median=173.5 MB/s</span><br></pre></td></tr></table></figure>
+<p><strong>回合 2：<code>string_view</code> 零拷贝 + <code>vector&lt;pair&gt;</code> + arena</strong>（即第 3 节最终代码）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">回合2 最终版: best=191.4  median=190.5 MB/s     （+9%）</span><br></pre></td></tr></table></figure>
+<p><strong>回合 3：SIMD 跳空白</strong>（第 03 章 SSE2 手法：<code>_mm_cmpeq_epi8</code> 四路比较 + <code>movemask</code> + <code>ctz</code>，16 字节一批）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">回合3 SIMD（紧凑文档）: best≈189  median≈190 MB/s   —— 没有收益！</span><br></pre></td></tr></table></figure>
+<p>为什么没收益：统计一下就知道，紧凑 JSON 里空白只占 ~0.4% 字节，跳空白本来就不是热点。换 36 空格深缩进文档再测：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">标量 skip_ws: best=226.0 MB/s</span><br><span class="line">SSE2  skip_ws: best=243.4 MB/s     （+7.7%——仍然不是数量级）</span><br></pre></td></tr></table></figure>
+<p><strong>剖析驱动的补测：分配计数</strong>。直觉说&quot;回合 2 的大头是消灭字符串拷贝&quot;，实测只 +9%——用全局 <code>operator new</code> 计数器找真相：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// bench_alloc.cpp 节选</span></span><br><span class="line"><span class="type">static</span> std::atomic&lt;<span class="type">long</span>&gt; g_allocs&#123;<span class="number">0</span>&#125;;</span><br><span class="line"><span class="function"><span class="type">void</span>* <span class="keyword">operator</span> <span class="title">new</span><span class="params">(std::<span class="type">size_t</span> n)</span> </span>&#123;</span><br><span class="line">    g_allocs.<span class="built_in">fetch_add</span>(<span class="number">1</span>, std::memory_order_relaxed);</span><br><span class="line">    <span class="keyword">return</span> std::<span class="built_in">malloc</span>(n ? n : <span class="number">1</span>);</span><br><span class="line">&#125;</span><br><span class="line"><span class="comment">// 解析一次 18MB 文档：</span></span><br><span class="line"><span class="comment">// new 次数=1200020, 累计字节=180.8 MB        ← 输入的 10 倍堆流量！</span></span><br></pre></td></tr></table></figure>
+<p>120 万次 new 来自哪：20 万条记录 × 每条对象的 member vector 扩容链（cap 1→2→4→8，4 次分配）。加启发式 <code>reserve(8)/reserve(4)</code>（已并入第 3 节代码）后分配降到 ~40 万次，但吞吐只到：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">回合2+reserve: best=195.5  median=193.2 MB/s     （再 +2.5%）</span><br></pre></td></tr></table></figure>
+<p><strong>分配次数 −67% 只换来 +2.5%</strong>——瓶颈既不是字符串拷贝、也不是分配次数，而是 <strong>DOM 树在堆上的散布本身</strong>（180MB 工作集对缓存/TLB 的冲击）。三个&quot;直觉失效&quot;连在一起，正是第 06 章&quot;没有剖析数据不动手&quot;的最好注脚。</p>
+<h2 id="7-与-nlohmannjson-simdjson-对比公平基准方法学"><a class="markdownIt-Anchor" href="#7-与-nlohmannjson-simdjson-对比公平基准方法学"></a> 7. 与 nlohmann/json、simdjson 对比：公平基准方法学</h2>
+<p>同机、同文档、同口径（10 轮取 median）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">回合1 朴素          : median ≈174 MB/s</span><br><span class="line">nlohmann/json (DOM) : median ≈176 MB/s   （best 183；官方 -O2 无特殊编译选项）</span><br><span class="line">本实现 (DOM)        : median ≈190 MB/s</span><br><span class="line">simdjson (按需)     : 公开数据 GB/s 量级（非本机复测，见下）</span><br></pre></td></tr></table></figure>
+<p>三条方法学纪律（经验做法）：</p>
+<ol>
+<li><strong>同一进程内先跑正确性测试再跑基准会污染堆布局</strong>——本项目实测：同一二进制，干净进程 258 MB/s，先跑过 tests() 的进程 190 MB/s（<strong>±35%！</strong>）。原因：120 万次分配的堆地址分布决定缓存/TLB 行为。所以对比必须在<strong>同一 harness、同一启动条件</strong>下进行，报 median 并做多次进程级重跑。</li>
+<li><strong>nlohmann 打平不是&quot;它慢&quot;</strong>：它同样做 DOM+map/vector 混合，且内置了 SSE2 空白跳过；我们略胜来自零拷贝字符串与更小的节点。真实项目选它毫无问题——易用性、完备性、异常安全远比 8% 重要。</li>
+<li><strong>simdjson 的 GB/s 不是&quot;解析得快&quot;，是&quot;少解析&quot;</strong>：on-demand 模式只解析被访问的字段，未访问的数组元素根本不建对象。拿我们的&quot;全量 DOM&quot;和它的&quot;按需&quot;比吞吐是不公平的；正确对比要么它开 DOM 模式，要么我们也做 on-demand（那是另一个项目）。它的公开基准（ simdjson README / benchmarks 目录）报告解析速度 2-4 GB/s 量级（x86 AVX2），作为方向参考即可。</li>
+</ol>
+<h2 id="8-模糊测试验证衔接测试系列-09"><a class="markdownIt-Anchor" href="#8-模糊测试验证衔接测试系列-09"></a> 8. 模糊测试验证（衔接《测试》系列 09）</h2>
+<p>两个工具。<strong>libFuzzer harness</strong>（需要 clang，GCC 不带 libFuzzer）：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// fuzz_harness.cpp —— clang++ -std=c++20 -O1 -g -fsanitize=fuzzer,address fuzz_harness.cpp</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;json.hpp&quot;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdint&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string_view&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="keyword">extern</span> <span class="string">&quot;C&quot;</span> <span class="function"><span class="type">int</span> <span class="title">LLVMFuzzerTestOneInput</span><span class="params">(<span class="type">const</span> <span class="type">uint8_t</span>* data, <span class="type">size_t</span> size)</span> </span>&#123;</span><br><span class="line">    <span class="keyword">if</span> (size &gt; (<span class="number">1u</span> &lt;&lt; <span class="number">20</span>)) <span class="keyword">return</span> <span class="number">0</span>;                 <span class="comment">// 限制单输入大小</span></span><br><span class="line">    std::string_view in&#123;<span class="keyword">reinterpret_cast</span>&lt;<span class="type">const</span> <span class="type">char</span>*&gt;(data), size&#125;;</span><br><span class="line">    <span class="function">minijson::Arena <span class="title">arena</span><span class="params">(<span class="number">1</span> &lt;&lt; <span class="number">16</span>)</span></span>;</span><br><span class="line">    minijson::ParseError err&#123;&#125;;</span><br><span class="line">    minijson::Value v = minijson::Parser::<span class="built_in">parse</span>(in, arena, &amp;err);</span><br><span class="line">    (<span class="type">void</span>)v;                                          <span class="comment">// 契约：任何输入都不得崩溃/挂起/逃逸异常</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>GCC 环境的替代——<strong>随机变异循环 + ASan</strong>（已跑）：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// rnd.cpp 节选：以合法文档为种子，随机替换/删除/插入片段，20 万次</span></span><br><span class="line"><span class="comment">// g++ -std=c++20 -O1 -g -fsanitize=address -I. rnd.cpp -o rnd &amp;&amp; ./rnd</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">20 万次变异: 异常逃逸 0 次        （ASan 全程无越界/UAF 报告）</span><br></pre></td></tr></table></figure>
+<p>契约明确才测得动：<code>parse</code> 的约定是&quot;错误以 <code>ParseError</code> 形式返回（不抛）、任何输入不崩溃&quot;。变异循环里出现的 <code>catch (...)</code> 命中即 bug。开发过程中这套循环真实抓到过一个 bug——第 4 节的转义误判（修复前 <code>&quot;a\&quot;b&quot;</code> 类输入直接解析错乱）。</p>
+<h2 id="9-错误处理与位置报告"><a class="markdownIt-Anchor" href="#9-错误处理与位置报告"></a> 9. 错误处理与位置报告</h2>
+<p>错误路径的三个设计点：</p>
+<ul>
+<li><strong>边界把异常转成值</strong>：<code>parse</code> 内部用 C++ 异常做栈回退（递归下降报错最省事的机制），边界捕获后填 <code>ParseError</code> 返回 null——调用方零异常负担，也兼容 <code>-fno-exceptions</code> 的上层（第 10 章）。</li>
+<li><strong>行列号在错误时才算</strong>：<code>fail()</code> 里从头数换行，O(错误位置)——错误是罕见路径，热路径零开销。行号算法：遇到 <code>'\n'</code> 行 +1 列归 1，否则列 +1。</li>
+<li><strong>错误信息分层</strong>：<code>msg</code> 指静态字符串（“字面量拼写错误”），<code>offset</code> 给精确字节位置，<code>line/col</code> 给人看——日志里三样都打：</li>
+</ul>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">minijson::ParseError err&#123;&#125;;</span><br><span class="line"><span class="keyword">auto</span> v = minijson::Parser::<span class="built_in">parse</span>(<span class="string">&quot;&#123;\n  \&quot;k\&quot;: tru,\n&#125;&quot;</span>, arena, &amp;err);</span><br><span class="line"><span class="comment">// err.msg=&quot;字面量拼写错误&quot;, err.line=2, err.col=8</span></span><br></pre></td></tr></table></figure>
+<h2 id="10-复盘从这-~600-行学到什么"><a class="markdownIt-Anchor" href="#10-复盘从这-~600-行学到什么"></a> 10. 复盘：从这 ~600 行学到什么</h2>
+<p>行数账：<code>json.hpp</code> 288 + <code>test_json.cpp</code> 58 + <code>naive_json.cpp</code> 144（回合 1 对照）+ <code>bench_alloc.cpp</code> 37 + <code>rnd.cpp</code> 32 + libFuzzer harness ~15 + <code>CMakeLists.txt</code> ~30 ≈ <strong>600 行</strong>。</p>
+<ol>
+<li><strong>文法即代码</strong>：递归下降把 ABNF 直接翻译成函数调用关系，正确性靠&quot;结构对齐文法&quot;而不是小心；改需求（加一种类型）= 加一个 case。</li>
+<li><strong>性能直觉三连败</strong>：string_view 拷贝消除 +9%（SSO 早把短字符串兜住了）、reserve 省 67% 分配只 +2.5%、SIMD 跳空白在紧凑文档上零收益——<strong>每一步都必须测量，直觉只是假设</strong>。</li>
+<li><strong>真瓶颈藏在分配的&quot;布局&quot;里</strong>：180MB 堆流量的缓存/TLB 冲击 + 堆地址分布让同一二进制 ±35%。DOM 型解析器要再上台阶，路只有两条：arena 上挂 vector（彻底消灭散布，参考 RapidJSON 的 MemoryPoolAllocator）或转 on-demand（simdjson 路线）。</li>
+<li><strong>正确性是测出来的</strong>：20 万次变异 0 逃逸 + 转义误判案例说明，解析器这类&quot;输入即攻击面&quot;的代码，模糊测试不是可选项。</li>
+<li><strong>与成熟库的差距是设计哲学差距</strong>：nlohmann 赢在易用性，simdjson 赢在按需解析，我们 600 行赢在&quot;每一步都知道为什么&quot;。读 simdjson 源码前先写过自己的解析器，收获翻倍。</li>
+</ol>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>拿 libFuzzer 硬上 GCC</strong>：<code>-fsanitize=fuzzer</code> 是 clang 专属；GCC 用户用 AFL++ 或本章的随机变异循环， harness 结构完全一样。</li>
+<li><strong>strtod 不查 endptr/errno</strong>：<code>12abc</code> 静默变 12、<code>1e999</code> 静默变 inf——两行校验省掉一类整类 bug。</li>
+<li><strong>递归下降无深度限制</strong>：<code>[[[[[...</code> 深嵌套会打爆调用栈（MCU 上就是第 10 章的栈溢出）。生产版加 <code>depth</code> 计数上限（如 128 层）——留作练习 4。</li>
+<li><strong>基准忘了控制堆状态</strong>：第 7 节的 ±35% 案例。基准程序应尽量在&quot;冷启动后固定流程&quot;下多次重跑，报中位数，警惕首轮。</li>
+<li><strong><code>\u</code> 转义当小事</strong>：代理对、UTF-8 校验是 JSON 解析器正确性的重灾区；功能边界要写进文档而不是留给用户发现。</li>
+<li><strong>错误信息只给&quot;invalid json&quot;</strong>：没有 offset/line/col 的解析错误在生产环境等于没有错误信息——调试配置文件的人会恨你。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>单遍递归下降 + <code>string_view</code> 零拷贝 + arena + <code>vector&lt;pair&gt;</code> DOM，~600 行完成 RFC 8259 子集解析器，median 190 MB/s（18MB 合成文档）。</li>
+<li>转义对的原子跳过、<code>\u</code> 的 BMP 边界、strtod 的 endptr/errno 配套——三处细节决定解析器&quot;能不能上生产&quot;。</li>
+<li>三回合优化实测 +9% / +0% / +2.5%，分配计数揭示真瓶颈是 DOM 树的堆散布；堆布局让同一二进制 ±35%，基准方法学与优化本身同等重要。</li>
+<li>模糊测试（libFuzzer 或随机变异 + ASan）是解析器的标配验证；20 万次变异 0 异常逃逸是本实现的及格线。</li>
+<li>与 nlohmann（易用性）和 simdjson（按需解析）的对比要&quot;同口径&quot;，差距是设计哲学而非代码质量。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>给 <code>Parser</code> 加 <code>size_t depth_</code> 与上限 128，超限 <code>fail(&quot;嵌套过深&quot;)</code>；用 1000 层 <code>[[[...</code> 输入验证修复前后行为（修复前大概率段错误——注意用 ASan 构建）。</li>
+<li>把 <code>Object</code>/<code>Array</code> 的内存改为从 Arena 分配（给 <code>std::vector</code> 传自定义 allocator，复用第 06 章 Arena），重测吞吐与 <code>operator new</code> 计数，验证&quot;消灭堆散布&quot;假设。</li>
+<li>补全 <code>\u</code> 代理对：检测 D800–DBFF 后读取下一个 <code>\uXXXX</code> 合成码点，UTF-8 编码 4 字节；为合法/非法代理对各写 3 个测试用例。</li>
+<li>用 libFuzzer（clang）跑 harness 10 分钟，把 crash 输入保存下来写成回归测试；对比随机变异循环 20 万次与 libFuzzer 同时间 discovering 的输入数。</li>
+<li>实现&quot;按需&quot;接口的雏形：<code>find(doc, &quot;records[3].label&quot;)</code> 路径直取、跳过无关子树，测量&quot;只取一个字段&quot;场景下与全量 DOM 的吞吐比，解释与 simdjson 的差距还剩什么。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/C/" rel="tag"># C++</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/05/11-C++%E5%AE%9E%E7%8E%B0%E7%BB%8F%E5%85%B8%E8%AE%BE%E8%AE%A1%E6%A8%A1%E5%BC%8F%E7%B2%BE%E9%80%89/" rel="prev" title="11-C++实现经典设计模式精选">
+                  <i class="fa fa-angle-left"></i> 11-C++实现经典设计模式精选
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/05/Git-README/" rel="next" title="Git · 学习路线总览">
+                  Git · 学习路线总览 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

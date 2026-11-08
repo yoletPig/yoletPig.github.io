@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 理解优化器做什么：基于代价（CBO）的估算流程，统计信息在其中的角色。 - 逐字段读懂 EXPLAIN &#x2F; EXPLAIN ANALYZE：cost、rows、actual time、loops、扫描节点。 - 掌握常见&#39;索引失效&#39;原因…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="05-查询优化与执行计划">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/05-%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96%E4%B8%8E%E6%89%A7%E8%A1%8C%E8%AE%A1%E5%88%92/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 理解优化器做什么：基于代价（CBO）的估算流程，统计信息在其中的角色。 - 逐字段读懂 EXPLAIN &#x2F; EXPLAIN ANALYZE：cost、rows、actual time、loops、扫描节点。 - 掌握常见&#39;索引失效&#39;原因…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T12:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.554Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Redis">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="数据库">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/05-%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96%E4%B8%8E%E6%89%A7%E8%A1%8C%E8%AE%A1%E5%88%92/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/05-%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96%E4%B8%8E%E6%89%A7%E8%A1%8C%E8%AE%A1%E5%88%92/","path":"2026/09/03/05-查询优化与执行计划/","title":"05-查询优化与执行计划"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>05-查询优化与执行计划 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#05-%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96%E4%B8%8E%E6%89%A7%E8%A1%8C%E8%AE%A1%E5%88%92"><span class="nav-number">1.</span> <span class="nav-text"> 05 - 查询优化与执行计划</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%BC%98%E5%8C%96%E5%99%A8%E5%81%9A%E4%BB%80%E4%B9%88%E5%9F%BA%E4%BA%8E%E4%BB%A3%E4%BB%B7%E7%9A%84%E4%BC%B0%E7%AE%97"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 优化器做什么：基于代价的估算</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-explain-%E4%B8%8E-explain-analyze%E9%80%90%E5%AD%97%E6%AE%B5%E8%A7%A3%E8%AF%BB"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. EXPLAIN 与 EXPLAIN ANALYZE：逐字段解读</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%B8%B8%E8%A7%81%E7%B4%A2%E5%BC%95%E5%A4%B1%E6%95%88%E4%B8%8E%E5%85%A8%E8%A1%A8%E6%89%AB%E6%8F%8F%E5%8E%9F%E5%9B%A0"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 常见&quot;索引失效&quot;与全表扫描原因</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E7%BB%9F%E8%AE%A1%E4%BF%A1%E6%81%AF%E4%B8%8E-analyze%E4%BC%B0%E7%AE%97%E7%9A%84%E5%9C%B0%E5%9F%BA"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 统计信息与 ANALYZE：估算的地基</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-join-%E4%B8%89%E7%AE%97%E6%B3%95%E4%BB%80%E4%B9%88%E6%97%B6%E5%80%99%E7%94%A8%E5%93%AA%E7%A7%8D"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. JOIN 三算法：什么时候用哪种</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E6%85%A2%E6%9F%A5%E8%AF%A2%E6%8E%92%E6%9F%A5%E5%AE%8C%E6%95%B4%E6%B5%81%E7%A8%8B%E7%BB%8F%E9%AA%8C%E5%81%9A%E6%B3%95"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 慢查询排查完整流程（经验做法）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/05-%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96%E4%B8%8E%E6%89%A7%E8%A1%8C%E8%AE%A1%E5%88%92/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="05-查询优化与执行计划 | Yoleen的博客">
+      <meta itemprop="description" content="- 理解优化器做什么：基于代价（CBO）的估算流程，统计信息在其中的角色。 - 逐字段读懂 EXPLAIN &#x2F; EXPLAIN ANALYZE：cost、rows、actual time、loops、扫描节点。 - 掌握常见&#39;索引失效&#39;原因…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          05-查询优化与执行计划
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 20:00:00" itemprop="dateCreated datePublished" datetime="2026-09-03T20:00:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/" itemprop="url" rel="index"><span itemprop="name">数据库</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.1k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>15 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 理解优化器做什么：基于代价（CBO）的估算流程，统计信息在其中的角色。 - 逐字段读懂 EXPLAIN / EXPLAIN ANALYZE：cost、rows、actual time、loops、扫描节点。 - 掌握常见'索引失效'原因…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="05-查询优化与执行计划"><a class="markdownIt-Anchor" href="#05-查询优化与执行计划"></a> 05 - 查询优化与执行计划</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>理解优化器做什么：基于代价（CBO）的估算流程，统计信息在其中的角色。</li>
+<li>逐字段读懂 EXPLAIN / EXPLAIN ANALYZE：cost、rows、actual time、loops、扫描节点。</li>
+<li>掌握常见&quot;索引失效&quot;原因（函数包裹/隐式转换/低选择性）的识别与修复。</li>
+<li>对比三种 JOIN 算法的适用场景，并把慢查询排查整理成一条可复用的流程（经验做法）。</li>
+</ul>
+<h2 id="1-优化器做什么基于代价的估算"><a class="markdownIt-Anchor" href="#1-优化器做什么基于代价的估算"></a> 1. 优化器做什么：基于代价的估算</h2>
+<p>SQL 是声明式的：<code>SELECT ... WHERE user_id=42</code> 不指定&quot;怎么找&quot;。把&quot;要什么&quot;翻译成&quot;怎么做&quot;的是<strong>优化器</strong>，主流 OLTP 数据库（PostgreSQL、MySQL 8、SQLite）都是<strong>基于代价的优化器（Cost-Based Optimizer, CBO）</strong>：枚举可行的执行方式，给每种算一个代价分，挑最低的（System R 项目 1970 年代开创的方法论，Selinger et al. 1979 <em>Access Path Selection in a Relational Database Management System</em>）。</p>
+<p>代价主要两项：<strong>IO 代价</strong>（读多少页，顺序读 vs 随机读系数不同）与 <strong>CPU 代价</strong>（比较/投影/哈希多少行）。估算的原料是<strong>统计信息</strong>：每表的行数、每列的直方图与不同值数（NDV）、索引的聚簇程度。看一眼 PG 的统计：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ANALYZE orders;                                       <span class="comment">-- 采样收集统计信息</span></span><br><span class="line"><span class="keyword">SELECT</span> relname, n_live_tup, n_dead_tup <span class="keyword">FROM</span> pg_stat_user_tables <span class="keyword">WHERE</span> relname<span class="operator">=</span><span class="string">&#x27;orders&#x27;</span>;</span><br><span class="line"><span class="comment">-- 行数、死元组数——优化器估算 rows 的地基</span></span><br></pre></td></tr></table></figure>
+<p>优化的两个朴素判断（面试常考）：<strong>索引查找的代价 ≈ 树高×随机读系数 + 命中行数×回表</strong>；当估算命中行数超过总行数一定比例（PG 经验阈值约 5-10%，低选择性时更高），顺序扫描整表反而更便宜——<strong>全表扫描不是错误，是选择</strong>。这也解释了低选择性列（性别/状态）建了索引优化器也不用的现象（03 章预告过）。</p>
+<h2 id="2-explain-与-explain-analyze逐字段解读"><a class="markdownIt-Anchor" href="#2-explain-与-explain-analyze逐字段解读"></a> 2. EXPLAIN 与 EXPLAIN ANALYZE：逐字段解读</h2>
+<p>两级的用法：<code>EXPLAIN</code> 只给计划不执行（估算）；<code>EXPLAIN ANALYZE</code> 真执行并回报实际数据（<strong>小心</strong>：EXPLAIN ANALYZE 会真的跑 UPDATE/DELETE，排查写语句时包一层 <code>BEGIN; ... ROLLBACK;</code>）。PG 示例（SQLite 的 <code>EXPLAIN QUERY PLAN</code> 粗粒度得多，MySQL 的 EXPLAIN 有 type/key/rows 列，思路相同）：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">EXPLAIN ANALYZE</span><br><span class="line"><span class="keyword">SELECT</span> o.amt <span class="keyword">FROM</span> orders o <span class="keyword">JOIN</span> users u <span class="keyword">ON</span> u.id <span class="operator">=</span> o.user_id</span><br><span class="line"><span class="keyword">WHERE</span> u.city <span class="operator">=</span> <span class="string">&#x27;hangzhou&#x27;</span> <span class="keyword">AND</span> o.status <span class="operator">=</span> <span class="string">&#x27;ok&#x27;</span>;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">                                                              QUERY PLAN</span><br><span class="line">----------------------------------------------------------------------------------------------------------------------</span><br><span class="line">Nested Loop  (cost=0.43..831.12 rows=210 width=8) (actual time=0.031..3.214 rows=203 loops=1)</span><br><span class="line">  -&gt;  Seq Scan on users u  (cost=0.00..16.50 rows=42 width=4) (actual time=0.011..0.188 rows=44 loops=1)</span><br><span class="line">        Filter: (city = &#x27;hangzhou&#x27;::text)</span><br><span class="line">        Rows Removed by Filter: 956</span><br><span class="line">      -&gt;  Index Scan using ix_us on orders o  (cost=0.43..19.62 rows=8 width=12) (actual time=0.069..0.068 rows=5 loops=44)</span><br><span class="line">            Index Cond: ((user_id = u.id) AND (status = &#x27;ok&#x27;::text))</span><br><span class="line">Planning Time: 0.412 ms</span><br><span class="line">Execution Time: 3.298 ms</span><br></pre></td></tr></table></figure>
+<p>逐字段解读（这一段值得逐行看）：</p>
+<ul>
+<li><strong>cost=0.43…831.12</strong>：<code>启动代价..总代价</code>，单位是&quot;代价单位&quot;（1 页顺序读 ≈ 1.0），不是毫秒。两个计划比大小用总代价；同库内可比，跨库无意义。</li>
+<li><strong>rows=210</strong>：优化器<strong>估算</strong>的输出行数。估算靠统计信息，错得离谱时（实际 20 万，估 210）优化器会连环选错 JOIN 顺序——stats 过期是&quot;昨天还好好的今天突然慢&quot;的第一嫌疑。</li>
+<li><strong>actual time=0.031…3.214</strong>：真实执行数据（ANALYZE 才有）。<code>0.031..3.214</code> 是&quot;输出第一行/全部行&quot;的毫秒——第一行快不等于整体快（排序类节点要把所有行吃完才有第一行）。</li>
+<li><strong>rows=203 vs 估算 210</strong>：估算贴近实际，计划可信；偏差两个数量级就该 ANALYZE。</li>
+<li><strong>loops=44</strong>：该子节点被执行 44 次（外层每行驱动一次）。看总耗时要把 actual time × loops 一起看——单次 0.068ms × 44 次是这条查询的大头。</li>
+<li><strong>Seq Scan / Index Scan / Bitmap Heap Scan</strong>：顺序扫描 / 索引扫描 / “索引找到一堆 ctid 聚成位图再批量回堆”（随机 IO 换顺序 IO 的折中，大范围命中时优化器爱用）。</li>
+<li><strong>Rows Removed by Filter: 956</strong>：过滤掉 956 行才留 44 行——<strong>过滤比 &gt;20:1 说明索引缺席</strong>，这是 Seq Scan 上最重要的信号。</li>
+</ul>
+<p>经验校准（经验做法）：读计划先看三处——顶层节点类型（有没有意外全表扫）、rows 估算 vs 实际（统计信息准不准）、loops 乘出来的热点子节点。三处扫完，八成问题已定位。</p>
+<p>SQLite 的计划器输出粗粒度得多——<code>EXPLAIN QUERY PLAN</code> 只报&quot;用什么扫描、用什么索引&quot;，没有 cost/rows（SQLite 是嵌入式引擎，估算逻辑内置但不对用户展示）。拿 03 章的联合索引实验直接对照（实测输出，SQLite 3.37）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> sqlite3</span><br><span class="line">conn = sqlite3.connect(<span class="string">&quot;:memory:&quot;</span>)</span><br><span class="line">conn.execute(<span class="string">&quot;CREATE TABLE orders(id INTEGER PRIMARY KEY, user_id INT, amt REAL, status TEXT)&quot;</span>)</span><br><span class="line">conn.execute(<span class="string">&quot;CREATE INDEX ix_us ON orders(user_id, status)&quot;</span>)</span><br><span class="line">plan = <span class="keyword">lambda</span> q: conn.execute(<span class="string">&quot;EXPLAIN QUERY PLAN &quot;</span> + q).fetchall()[<span class="number">0</span>][<span class="number">3</span>]</span><br><span class="line"></span><br><span class="line"><span class="built_in">print</span>(plan(<span class="string">&quot;SELECT * FROM orders WHERE user_id=42 AND status=&#x27;ok&#x27;&quot;</span>))</span><br><span class="line"><span class="built_in">print</span>(plan(<span class="string">&quot;SELECT * FROM orders WHERE status=&#x27;ok&#x27;&quot;</span>))            <span class="comment"># 跳过最左列</span></span><br><span class="line"><span class="built_in">print</span>(plan(<span class="string">&quot;SELECT amt FROM orders WHERE user_id=42&quot;</span>))           <span class="comment"># 覆盖索引</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">SEARCH orders USING INDEX ix_us (user_id=? AND status=?)</span><br><span class="line">SCAN orders</span><br><span class="line">SEARCH orders USING COVERING INDEX ix_us (user_id=?)</span><br></pre></td></tr></table></figure>
+<p>三个词翻译过来就是 2 节的全部语义：<code>SEARCH</code> = 索引定位（Index Scan），<code>SCAN</code> = 全表扫描（Seq Scan），<code>COVERING INDEX</code> = 索引即答案（Index Only Scan）。<strong>同一个查询，在 SQLite 看结构、在 PG 看代价与真实数字</strong>——两边的输出对齐到同一套概念，你在任何数据库前都不会慌。</p>
+<h2 id="3-常见索引失效与全表扫描原因"><a class="markdownIt-Anchor" href="#3-常见索引失效与全表扫描原因"></a> 3. 常见&quot;索引失效&quot;与全表扫描原因</h2>
+<p>索引在但优化器不用/不能用，四大主因（每条配识别方法）：</p>
+<ol>
+<li><strong>函数包裹列</strong>：<code>WHERE lower(name)='alice'</code>、<code>WHERE date(created_at)=CURRENT_DATE</code>。列被函数处理后，索引里的原始值帮不上忙。修复：改写成对<strong>常量</strong>做函数——<code>WHERE created_at &gt;= CURRENT_DATE AND created_at &lt; CURRENT_DATE + 1</code>；确实要对函数查询就建<strong>表达式索引</strong>：<code>CREATE INDEX ON orders (lower(name))</code>（PG 支持，SQLite 支持表达式索引，MySQL 8 支持函数索引）。</li>
+<li><strong>隐式类型转换</strong>：<code>WHERE phone = 13800138000</code>（phone 是 TEXT）——整列被隐式 cast 成数字再比较，与函数包裹等价，且结果可能错（前导 0、溢出）。修复：字面量类型与列一致（<code>'13800138000'</code>）。识别：PG 计划里出现 <code>Filter: ((phone)::numeric = ...)</code>。</li>
+<li><strong>低选择性</strong>：<code>WHERE status='ok'</code> 命中 90% 行，索引查找 + 海量随机回表，比顺序扫贵。优化器自动放弃是<strong>正确行为</strong>。修复：换更窄的过滤列，或做联合索引让&quot;状态+时间&quot;共同收窄，或干脆认命全表扫（把 5 节的流程走完再下结论）。</li>
+<li><strong>统计信息缺失/过期</strong>：大批量导入后没 ANALYZE，估算全错。PG 有 autovacuum 自动收集（阈值 10% 变更），大导入后手动 <code>ANALYZE 表名</code> 是肌肉记忆。识别：rows 估算与 actual 差 10 倍以上。</li>
+</ol>
+<p>附带两个书写层陷阱：<strong>前导通配 <code>LIKE '%xx'</code></strong>（无法用 B+树定位起点）；<strong>OR 混用无索引列</strong>（<code>WHERE a=1 OR b=2</code> 中 b 无索引 → 整体退化为扫描；PG 有 Bitmap Or 兜底，MySQL 老版本直接放弃）。</p>
+<h2 id="4-统计信息与-analyze估算的地基"><a class="markdownIt-Anchor" href="#4-统计信息与-analyze估算的地基"></a> 4. 统计信息与 ANALYZE：估算的地基</h2>
+<p>优化器的 rows 估算全部来自<strong>统计信息</strong>。PG 的 <code>ANALYZE</code> 采样表的一部分行（默认 300×100 = 3 万行级样本），为每列记录：不同值数（n_distinct）、最常用值及其频率（MCV）、等高直方图（把非 MCV 值域切成 100 段）、相关系数（物理顺序与逻辑顺序的相关性，估随机 IO 用）。这些数字都能直接查：</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">ANALYZE orders;</span><br><span class="line"><span class="keyword">SELECT</span> attname, n_distinct, most_common_vals, most_common_freqs</span><br><span class="line"><span class="keyword">FROM</span> pg_stats <span class="keyword">WHERE</span> tablename <span class="operator">=</span> <span class="string">&#x27;orders&#x27;</span> <span class="keyword">AND</span> attname <span class="operator">=</span> <span class="string">&#x27;status&#x27;</span>;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"> attname | n_distinct | most_common_vals | most_common_freqs</span><br><span class="line">---------+------------+------------------+-------------------</span><br><span class="line"> status  |          2 | &#123;ok,paid&#125;        | &#123;0.667,0.333&#125;</span><br><span class="line">                                              ← 优化器看到&quot;ok 占 66.7%&quot;,</span><br><span class="line">                                                所以 status=&#x27;ok&#x27; 的条件几乎不缩小结果集</span><br></pre></td></tr></table></figure>
+<p>估算怎么发生（一行直觉）：<strong>选择率 × 表行数</strong>。<code>status='ok'</code> 的选择率取 MCV 频率 0.667；<code>user_id=42</code> 在 1000 个不同值上估 1/1000；两个 AND 条件的选择率<strong>相乘</strong>（独立性假设）——所以&quot;数据倾斜/列间相关&quot;时估算会系统性失真（比如 user_id=42 恰好全是 ‘ok’，真实选择率不是 0.001×0.667）。识别与修复：</p>
+<ol>
+<li><strong>估算失真的信号</strong>：EXPLAIN ANALYZE 里 rows 估算与 actual 差一个数量级以上。</li>
+<li><strong>过期统计</strong>：批量导入/大规模删除后手动 <code>ANALYZE 表名</code>（autovacuum 的触发阈值是 10% 行变更，亿级表 10% 也要很久才到——大导入后别等）。</li>
+<li><strong>倾斜列</strong>：MCV 已经覆盖最常用的值，估算大体靠谱；真正坑的是<strong>列间相关性</strong>——PG 用 <code>CREATE STATISTICS</code>（extended statistics，声明列间函数依赖/相关性）让优化器把选择率算对，PG 16 文档 14.2 节。</li>
+<li><strong>代价常数可调</strong>：<code>SHOW seq_page_cost;</code>（默认 1.0）、<code>random_page_cost</code>（默认 4.0，SSD 上常调到 1.1——优化器会因此更倾向索引扫描）。改的是&quot;你机器上随机读与顺序读的真实比值&quot;，这是 01 章存储层次在优化器里的投影。</li>
+</ol>
+<p>MySQL 的对应物：<code>ANALYZE TABLE</code> + <code>information_schema</code> 的统计、<code>EXPLAIN</code> 的 rows 列 + <code>EXPLAIN ANALYZE</code>（8.0+）；SQLite：<code>ANALYZE;</code> 建 sqlite_stat1 表，供查询计划器做粗选择（跑一次 ANALYZE 常能&quot;修好&quot;莫名其妙的 SCAN 选择）。共同点：<strong>统计是估算的地基，地基歪了优化器不是变慢，是选错路</strong>。</p>
+<h2 id="5-join-三算法什么时候用哪种"><a class="markdownIt-Anchor" href="#5-join-三算法什么时候用哪种"></a> 5. JOIN 三算法：什么时候用哪种</h2>
+<p>优化器手里只有三种连接积木（DDIA 第 3 章 / PostgreSQL 文档 52.6 节）：</p>
+<table>
+<thead>
+<tr>
+<th>算法</th>
+<th>思路</th>
+<th>复杂度</th>
+<th>适用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Nested Loop</td>
+<td>外表每行在内表查一次（内表侧走索引）</td>
+<td>外表行数 × 索引查找</td>
+<td>内表有索引、外表小（OLTP 典型：1 行驱动几十行）</td>
+</tr>
+<tr>
+<td>Hash Join</td>
+<td>内表整表建哈希表，外表逐行探测</td>
+<td>两表各扫一遍 + O(1) 探测</td>
+<td>大表×大表、等值连接、无可用索引（OLAP 主力）</td>
+</tr>
+<tr>
+<td>Merge Join</td>
+<td>两输入先按连接键排序，再同步归并</td>
+<td>O(n+m)（若已排序）</td>
+<td>连接键已有序（索引现成/输出本要排序）、大数据等值</td>
+</tr>
+</tbody>
+</table>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">Nested Loop:  for row in 外表: for row in 内表索引查找(外表.键)   ← 好比&quot;拿着名单去档案室一人一查&quot;</span><br><span class="line">Hash Join:    内表 → 哈希表&#123;键→行&#125;; for row in 外表: probe(哈希表) ← &quot;先把档案室按拼音上架, 再扫名单&quot;</span><br><span class="line">Merge Join:   两摞已排序的纸, 双指针同步前进                       ← &quot;两份都排好序, 对着翻&quot;</span><br></pre></td></tr></table></figure>
+<p>选择逻辑（优化器替你做，但要能看懂它的选择）：<strong>等值连接 + 一大一小 + 内表键有索引 → Nested Loop</strong>；<strong>等值 + 两大 → Hash Join</strong>（注意内存：哈希表装不下会落盘 spill）；<strong>范围连接（<code>BETWEEN</code>）或输入已排序 → Merge Join</strong>。在 EXPLAIN 里看 <code>Join Type</code> 节点，问三个问题：外表选的是谁（小驱动大原则）、内表有没有 Index Scan、Hash Join 的内存是否溢出（PG 计划里 <code>Buckets/Batches&gt;1</code> 说明落盘）。</p>
+<p>一个反直觉点收尾：<strong>OLTP 里 JOIN 不慢，慢的是&quot;外表没走索引&quot;或&quot;驱动表选错&quot;</strong>。把&quot;JOIN 慢就拆成应用层循环&quot;当默认方案，多数时候是放弃了让数据库一次 IO 拉回多行的机会——除非跨库/跨服务，才轮到应用层 JOIN。</p>
+<h2 id="6-慢查询排查完整流程经验做法"><a class="markdownIt-Anchor" href="#6-慢查询排查完整流程经验做法"></a> 6. 慢查询排查完整流程（经验做法）</h2>
+<p>把前五节串成一条流水线——这条流程来自一线排查的反复打磨（经验做法，照抄即可用）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">第0步 定位: 慢查询日志 / pg_stat_statements 找出 TOP SQL(别靠感觉猜)</span><br><span class="line">      MySQL: SET GLOBAL slow_query_log=ON, long_query_time=1</span><br><span class="line">      PG:    shared_preload_libraries=&#x27;pg_stat_statements&#x27; → SELECT * FROM pg_stat_statements ORDER BY total_exec_time DESC;</span><br><span class="line">第1步 看计划: EXPLAIN (ANALYZE, BUFFERS) &lt;SQL&gt;</span><br><span class="line">      注意: 写语句包 BEGIN...ROLLBACK; BUFFERS 显示共享块读/命中, 直接对应 IO</span><br><span class="line">第2步 三看: ① 顶层是否有意外 Seq Scan   ② rows 估算 vs actual(差&gt;10x → ANALYZE)</span><br><span class="line">            ③ loops×actual 找热点子节点;  Rows Removed by Filter 比例过高 → 缺索引</span><br><span class="line">第3步 对照 3 节清单: 函数包裹? 隐式转换? 低选择性? 统计过期?</span><br><span class="line">第4步 改法优先级(经验做法, 从便宜到贵):</span><br><span class="line">      a. 改写 SQL(表达式移到常量侧/收窄 SELECT 列/拆 OR 为 UNION)</span><br><span class="line">      b. 补/改索引(联合索引, 等值在前范围在后; 宁改一个老索引不滥加新索引)</span><br><span class="line">      c. ANALYZE 刷统计</span><br><span class="line">      d. 都无效 → 数据形态问题: 考虑分区/预聚合/物化视图(11 章)</span><br><span class="line">第5步 验证: 改后 EXPLAIN ANALYZE 对比 Execution Time 与 Buffers read</span><br><span class="line">      并确认没把别的查询弄慢(索引变化是全局的)</span><br><span class="line">第6步 固化: 把改写与理由写进代码注释/PR, 慢查询是资产不是垃圾(踩过的坑要能查到)</span><br></pre></td></tr></table></figure>
+<p>给一个端到端的小例子收束全章：查询 <code>SELECT * FROM orders WHERE date(created_at)='2025-06-01'</code> 走 Seq Scan、Rows Removed 90%+ → 改写为 <code>WHERE created_at &gt;= '2025-06-01' AND created_at &lt; '2025-06-02'</code> → 计划变 Index Scan using ix_created_at，Buffers read 从 8 万块降到 300 块，执行时间 900ms → 6ms。<strong>全程没建新索引</strong>——一半的&quot;索引问题&quot;其实是写法问题（经验做法）。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“EXPLAIN 的 cost 是毫秒”</strong>：cost 是无量纲代价分，1 顺序页读 ≈ 1.0；和真实时间的换算关系随硬件/配置浮动。耗时只看 ANALYZE 的 actual time / Execution Time。</li>
+<li><strong>“rows=1000 就会返回 1000 行”</strong>：估算不是承诺。估算与实际的偏差本身就是诊断信号——大偏差先怀疑统计信息与数据倾斜。</li>
+<li><strong>“全表扫描一定是错的”</strong>：低选择性与小表上，全扫是最优解。优化器选 Seq Scan 不代表出 bug，先看 Rows Removed by Filter 与表行数再下判断。</li>
+<li><strong>“加索引是慢查询的万能药”</strong>：先确认失效原因（3 节四主因），很多场景改写 SQL 或刷统计就解决；乱加索引的账单（写放大/空间/优化器干扰）在 03 章已实测。</li>
+<li><strong>“优化一次就一劳永逸”</strong>：计划是<strong>每次执行现场决定</strong>的（PG 有计划缓存但代价仍重算），数据分布变化、参数值变化都可能让计划翻转。生产对关键 SQL 用固定计划手段（PG 的 plan_cache_mode、MySQL 的 optimizer hints）是防翻转，不是防笨。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>优化器 = 基于统计信息的代价估算器；索引查找与全表扫描的分界由选择性与随机读代价决定，全表扫描是选择不是错误。</li>
+<li>EXPLAIN ANALYZE 四件套：cost（估算）、rows（估算 vs 实际偏差看统计）、actual time × loops（真实热点）、节点类型（Seq/Index/Bitmap）；SQLite 的 SEARCH/SCAN/COVERING 是同一套概念的结构版。</li>
+<li>索引失效四主因：函数包裹列、隐式转换、低选择性、统计过期；修复优先&quot;改写 SQL&quot;而非&quot;加索引&quot;。</li>
+<li>统计信息（n_distinct/MCV/直方图）决定选择率估算，选择率相乘的独立性假设在倾斜与相关列上失真；大导入后手动 ANALYZE，<code>random_page_cost</code> 按硬件调。</li>
+<li>JOIN 三算法：Nested Loop（小驱动大+内表索引，OLTP）、Hash Join（大等值，OLAP）、Merge Join（已有序/范围）；&quot;JOIN 慢&quot;先查驱动表与索引。</li>
+<li>慢查询六步流程：定位→看计划→三看→四因对照→分级改法→验证固化；从 EXPLAIN 到索引/改写的路要形成肌肉记忆。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>建一张 100 万行 orders（user_id 1-1000 均匀、status 两值、created_at 随机一年），对 <code>WHERE user_id=42 AND status='ok'</code> 与 <code>WHERE status='ok'</code> 各跑 EXPLAIN ANALYZE，记录估算/实际偏差与扫描方式。</li>
+<li>复现函数失效：对比 <code>WHERE date(created_at)='2025-06-01'</code> 与范围写法的计划与耗时；再用表达式索引让第一种写法也走索引，比较两种解法的代价。</li>
+<li>构造三种 JOIN 场景（小×大有索引 / 大×大无索引 / 连接键已排序），让 PG 分别选出 Nested Loop / Hash Join / Merge Join，截图记录计划里每种算法的触发条件。</li>
+<li>人为搞坏统计：大表批量 INSERT 100 万行后不 ANALYZE，跑一个&quot;该走索引&quot;的查询看优化器选错；执行 ANALYZE 后重跑对比——记录你机器上的翻转过程；再查 <code>pg_stats</code> 看 status 列的 MCV 与频率，手算 <code>status='ok'</code> 的选择率并与计划里的估算对照。</li>
+<li>把 <code>random_page_cost</code> 从 4.0 改成 1.1（<code>SET random_page_cost=1.1</code>），重跑练习 1 的两条查询，观察哪些计划翻转了；用 01 章的存储层次数字解释为什么 SSD 机器上这个默认值偏保守。</li>
+<li>拿你项目里一条真实慢 SQL 走完 6 节六步流程，把&quot;第 0 步之前的凭感觉猜测&quot;与&quot;第 2 步三看的结论&quot;并排写下，体会流程与直觉的差距。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/" rel="tag"># 数据库</a>
+              <a href="/tags/Redis/" rel="tag"># Redis</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/04-%E4%BA%8B%E5%8A%A1%E4%B8%8EMVCC/" rel="prev" title="04-事务与MVCC">
+                  <i class="fa fa-angle-left"></i> 04-事务与MVCC
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/06-SQLite%E5%86%85%E5%B9%95%E4%B8%8E%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E/" rel="next" title="06-SQLite内幕与存储引擎">
+                  06-SQLite内幕与存储引擎 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="1. 理解断言重写机制——为什么 pytest 的裸 assert 远强于 unittest 的 assertEqual 家族； 2. 掌握组织结构：文件命名、目录布局、conftest.py 的角色； 3. 熟练使用参数化与 skip&#x2F;x…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="02-pytest基础">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/02-pytest%E5%9F%BA%E7%A1%80/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="1. 理解断言重写机制——为什么 pytest 的裸 assert 远强于 unittest 的 assertEqual 家族； 2. 掌握组织结构：文件命名、目录布局、conftest.py 的角色； 3. 熟练使用参数化与 skip&#x2F;x…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T17:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.558Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="测试">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/02-pytest%E5%9F%BA%E7%A1%80/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/02-pytest%E5%9F%BA%E7%A1%80/","path":"2026/09/04/02-pytest基础/","title":"02-pytest基础"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>02-pytest基础 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#02-pytest-%E5%9F%BA%E7%A1%80%E4%BB%8E%E6%96%AD%E8%A8%80%E5%88%B0%E6%97%A5%E5%B8%B8%E5%B7%A5%E4%BD%9C%E6%B5%81"><span class="nav-number">1.</span> <span class="nav-text"> 02 - pytest 基础：从断言到日常工作流</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E6%96%AD%E8%A8%80%E9%87%8D%E5%86%99%E4%B8%BA%E4%BB%80%E4%B9%88-pytest-%E7%9A%84-assert-%E6%AF%94-unittest-%E5%BC%BA"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 断言重写：为什么 pytest 的 assert 比 unittest 强</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E7%BB%84%E7%BB%87%E7%BB%93%E6%9E%84%E5%91%BD%E5%90%8D-%E5%B8%83%E5%B1%80%E4%B8%8E-conftestpy"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 组织结构：命名、布局与 conftest.py</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%8F%82%E6%95%B0%E5%8C%96%E6%8A%8A%E7%9B%B8%E4%BC%BC%E7%94%A8%E4%BE%8B%E5%86%99%E6%88%90%E6%95%B0%E6%8D%AE"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 参数化：把相似用例写成数据</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-skip-%E4%B8%8E-xfail%E6%AD%A3%E7%A1%AE%E8%A1%A8%E8%BE%BE%E6%9A%82%E6%97%B6%E4%B8%8D%E7%BB%BF"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. skip 与 xfail：正确表达&quot;暂时不绿&quot;</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E8%BF%90%E8%A1%8C%E4%B8%8E%E9%80%89%E6%8B%A9%E6%97%A5%E5%B8%B8%E5%91%BD%E4%BB%A4%E5%B7%A5%E4%BD%9C%E6%B5%81"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 运行与选择：日常命令工作流</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-fixture-%E5%85%A5%E9%97%A8setupteardown-%E7%9A%84%E7%8E%B0%E4%BB%A3%E5%86%99%E6%B3%95"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. fixture 入门：setup&#x2F;teardown 的现代写法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/02-pytest%E5%9F%BA%E7%A1%80/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="02-pytest基础 | Yoleen的博客">
+      <meta itemprop="description" content="1. 理解断言重写机制——为什么 pytest 的裸 assert 远强于 unittest 的 assertEqual 家族； 2. 掌握组织结构：文件命名、目录布局、conftest.py 的角色； 3. 熟练使用参数化与 skip&#x2F;x…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          02-pytest基础
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 01:00:00" itemprop="dateCreated datePublished" datetime="2026-09-04T01:00:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%B5%8B%E8%AF%95/" itemprop="url" rel="index"><span itemprop="name">测试</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>11 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">1. 理解断言重写机制——为什么 pytest 的裸 assert 远强于 unittest 的 assertEqual 家族； 2. 掌握组织结构：文件命名、目录布局、conftest.py 的角色； 3. 熟练使用参数化与 skip/x…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="02-pytest-基础从断言到日常工作流"><a class="markdownIt-Anchor" href="#02-pytest-基础从断言到日常工作流"></a> 02 - pytest 基础：从断言到日常工作流</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ol>
+<li>理解断言重写机制——为什么 pytest 的裸 <code>assert</code> 远强于 <code>unittest</code> 的 <code>assertEqual</code> 家族；</li>
+<li>掌握组织结构：文件命名、目录布局、<a target="_blank" rel="noopener" href="http://conftest.py">conftest.py</a> 的角色；</li>
+<li>熟练使用参数化与 skip/xfail，把&quot;相似用例&quot;写成数据而不是复制粘贴；</li>
+<li>建立运行与选择的工作流（<code>-k</code>/<code>-m</code>），并用 fixture 写出第一版现代 setup/teardown。</li>
+</ol>
+<h2 id="1-断言重写为什么-pytest-的-assert-比-unittest-强"><a class="markdownIt-Anchor" href="#1-断言重写为什么-pytest-的-assert-比-unittest-强"></a> 1. 断言重写：为什么 pytest 的 assert 比 unittest 强</h2>
+<p>同一个失败，两种报法。先看 unittest 风格（pytest 可以直接跑 unittest 用例，所以两者输出可以直接对比）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># test_uni.py —— unittest 风格</span></span><br><span class="line"><span class="keyword">import</span> unittest</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">T</span>(unittest.TestCase):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">test_eq</span>(<span class="params">self</span>):</span><br><span class="line">        x, y = <span class="number">2</span>, <span class="number">3</span></span><br><span class="line">        <span class="variable language_">self</span>.assertEqual(x * y + <span class="number">1</span>, <span class="number">8</span>)</span><br></pre></td></tr></table></figure>
+<p>失败输出只有一行结论：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">E       AssertionError: 7 != 8</span><br></pre></td></tr></table></figure>
+<p><code>7</code> 从哪来的？你得回脑袋里展开 <code>x * y + 1</code>。再看 pytest 原生写法：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># test_demo.py —— pytest 原生</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_assert_rewrite</span>():</span><br><span class="line">    x, y = <span class="number">2</span>, <span class="number">3</span></span><br><span class="line">    <span class="keyword">assert</span> x * y + <span class="number">1</span> == <span class="number">8</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">&gt;       assert x * y + 1 == 8</span><br><span class="line">E       assert ((2 * 3) + 1) == 8</span><br></pre></td></tr></table></figure>
+<p>pytest 把<strong>中间表达式的求值结果</strong>直接标了出来：<code>((2 * 3) + 1)</code>。对字典、列表、长字符串，重写机制还能把&quot;哪一部分不一致&quot;指出来（比如断言两个 dict 相等时，会单独显示差异的键）。</p>
+<p><strong>机制</strong>：这不是运行时魔法。pytest 在<strong>收集（导入）测试模块时做 AST 级别的改写</strong>（assertion rewriting）——把每条 <code>assert</code> 语句重写成一系列带钩子的语句，缓存各子表达式的中间值，失败时按原始源码位置拼出可读的diff。官方文档《How to use assertions》的&quot;Assertion rewriting details&quot;一节给出了完整过程；重写发生在导入时、只对<strong>测试模块与 pytest 注册的模块</strong>生效。</p>
+<p>由此推出两个实用结论：</p>
+<ol>
+<li><strong>自定义的辅助断言函数不会自动享受重写</strong>——如果你把 <code>assert</code> 藏进一个普通 helper 模块，失败信息会退化成普通 AssertionError。解决：在模块顶部用 <code>pytest.register_assert_rewrite(&quot;helpers.assertions&quot;)</code> 注册，让 pytest 在导入它之前也做重写；</li>
+<li><strong>不要用 <code>assert (a == b, &quot;msg&quot;)</code> 当&quot;带消息的断言&quot;</strong>——这是 tuple，永远为真。pytest 8 已经会在收集期警告你（实测）：</li>
+</ol>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">test_gotcha</span>():</span><br><span class="line">    <span class="keyword">assert</span> (<span class="number">2</span> == <span class="number">3</span>, <span class="string">&quot;2 和 3 不相等&quot;</span>)   <span class="comment"># 期望失败，实际通过！</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">PytestAssertRewriteWarning: assertion is always true, perhaps remove parentheses?</span><br><span class="line">============== 1 passed, 1 skipped, 1 xfailed, 1 warning in 0.08s ==============</span><br></pre></td></tr></table></figure>
+<p>带消息的正确姿势是 <code>assert a == b, f&quot;a={a} b={b}&quot;</code>（消息在逗号后）——而且重写后的输出通常已经足够好，多数时候根本不需要自定义消息。</p>
+<h2 id="2-组织结构命名-布局与-conftestpy"><a class="markdownIt-Anchor" href="#2-组织结构命名-布局与-conftestpy"></a> 2. 组织结构：命名、布局与 <a target="_blank" rel="noopener" href="http://conftest.py">conftest.py</a></h2>
+<p><strong>命名规范</strong>（均可配置，但先遵守默认再谈定制）：</p>
+<table>
+<thead>
+<tr>
+<th>对象</th>
+<th>默认规则</th>
+<th>配置项</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>测试文件</td>
+<td><code>test_*.py</code> 或 <code>*_test.py</code></td>
+<td><code>python_files</code></td>
+</tr>
+<tr>
+<td>测试函数</td>
+<td><code>test_</code> 开头</td>
+<td><code>python_functions</code></td>
+</tr>
+<tr>
+<td>测试类</td>
+<td><code>Test</code> 开头、<strong>无</strong> <code>__init__</code></td>
+<td><code>python_classes</code></td>
+</tr>
+</tbody>
+</table>
+<p><strong>经验做法</strong>：全库统一 <code>test_*.py</code> + <code>test_</code> 前缀，<code>*_test.py</code> 属于历史兼容，混用会让 <code>-k</code> 与脚本选择变得混乱。一个常见翻车现场：把测试写成 <code>def check_xxx():</code> 或文件叫 <code>utils_test.py</code>（同项目其他文件都是 <code>test_</code> 开头），pytest 静默不收集——怀疑&quot;测试没跑&quot;时，第一反应是 <code>pytest --collect-only -q</code> 看收集到了什么。</p>
+<p><strong>目录布局</strong>（本系列统一约定，src 布局 + tests 镜像）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">mylib/</span><br><span class="line">├── pyproject.toml</span><br><span class="line">├── src/</span><br><span class="line">│   └── mylib/</span><br><span class="line">│       ├── __init__.py</span><br><span class="line">│       ├── parser.py       # 被测代码</span><br><span class="line">│       └── client.py</span><br><span class="line">└── tests/</span><br><span class="line">    ├── conftest.py         # 本层 fixture 与配置，无 __init__.py</span><br><span class="line">    ├── test_parser.py      # 与被测模块镜像命名</span><br><span class="line">    ├── test_client.py</span><br><span class="line">    └── integration/</span><br><span class="line">        ├── conftest.py     # 子目录私有 fixture</span><br><span class="line">        └── test_client_api.py</span><br></pre></td></tr></table></figure>
+<p>镜像命名的价值：<code>grep parser</code> 时测试与实现成对出现；<code>pytest tests/test_parser.py</code> 天然是&quot;一个模块的回归命令&quot;。</p>
+<p><strong><a target="_blank" rel="noopener" href="http://conftest.py">conftest.py</a></strong> 的两条核心规则：</p>
+<ol>
+<li>pytest 启动时按<strong>目录层级</strong>自动加载它，路径上所有 conftest（根 → 子目录）依次生效，<strong>不需要、也不应该被 import</strong>；</li>
+<li>它是 fixture 的家（03 篇的主角），也常放 <code>pytest_addoption</code>、<code>pytest.ini</code> 级别的钩子。子目录 conftest 里的同名 fixture 会<strong>覆盖</strong>上层——这是分层复用的机制，也是意外的来源，03 篇 6 节细讲。</li>
+</ol>
+<h2 id="3-参数化把相似用例写成数据"><a class="markdownIt-Anchor" href="#3-参数化把相似用例写成数据"></a> 3. 参数化：把相似用例写成数据</h2>
+<p>三个参数以上还一个函数一个用例地复制粘贴，是测试代码腐化的第一现场。<code>parametrize</code> 用数据表替代复制：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># test_param.py</span></span><br><span class="line"><span class="keyword">import</span> pytest</span><br><span class="line"><span class="keyword">from</span> mylib.parser <span class="keyword">import</span> retry_delay   <span class="comment"># 01 篇修好 ms bug 的版本</span></span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.mark.parametrize(<span class="params"><span class="string">&quot;raw, seconds&quot;</span>, [</span></span></span><br><span class="line"><span class="params"><span class="meta">    (<span class="params"><span class="number">30</span>, <span class="number">30</span></span>),</span></span></span><br><span class="line"><span class="params"><span class="meta">    (<span class="params"><span class="string">&quot;2.5s&quot;</span>, <span class="number">2.5</span></span>),</span></span></span><br><span class="line"><span class="params"><span class="meta">    (<span class="params"><span class="string">&quot;5m&quot;</span>, <span class="number">300</span></span>),</span></span></span><br><span class="line"><span class="params"><span class="meta">    (<span class="params"><span class="string">&quot;1h&quot;</span>, <span class="number">3600</span></span>),</span></span></span><br><span class="line"><span class="params"><span class="meta">    pytest.param(<span class="params"><span class="string">&quot;500ms&quot;</span>, <span class="number">0.5</span>, <span class="built_in">id</span>=<span class="string">&quot;millis&quot;</span></span>),   <span class="comment"># 单个用例指定 id</span></span></span></span><br><span class="line"><span class="params"><span class="meta">]</span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_retry_delay</span>(<span class="params">raw, seconds</span>):</span><br><span class="line">    <span class="keyword">assert</span> retry_delay(&#123;<span class="string">&quot;retry_delay&quot;</span>: raw&#125;) == seconds</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ pytest test_param.py -v</span><br><span class="line">test_param.py::test_retry_delay[30-30] PASSED                    [ 20%]</span><br><span class="line">test_param.py::test_retry_delay[2.5s-2.5] PASSED                 [ 40%]</span><br><span class="line">test_param.py::test_retry_delay[5m-300] PASSED                   [ 60%]</span><br><span class="line">test_param.py::test_retry_delay[1h-3600] PASSED                  [ 80%]</span><br><span class="line">test_param.py::test_retry_delay[millis] PASSED                   [100%]</span><br></pre></td></tr></table></figure>
+<p>四个要点：</p>
+<ol>
+<li><strong>自动 id</strong>：pytest 把参数值拼进用例名（<code>[30-30]</code>）。浮点、对象会得到难读的名字（<code>raw3</code> 之类），可读场景显式传 <code>ids=</code> 列表或用 <code>pytest.param(..., id=)</code>——id 可读的直接收益是 <code>-k</code> 选择（第 5 节）与失败报告；</li>
+<li><strong>一组参数装饰器是笛卡尔积</strong>：叠两个 <code>@parametrize</code> 得到 3×4=12 条用例，适合&quot;所有输入形态 × 所有处理模式&quot;的组合测试；</li>
+<li><strong>单条用例特殊化</strong>：<code>pytest.param(值, marks=pytest.mark.xfail(...), id=...)</code> 可以给数据表里的某一格单独打标记（上面 <code>millis</code> 格演示过 xfail 的接法）；</li>
+<li><strong>失败时数据在报告里</strong>：参数化失败的报告会展开 raw 与 seconds 的实际值（01 篇的输出就是实例），不用再复现输入。</li>
+</ol>
+<p><strong>经验做法</strong>：参数化表里<strong>故意放边界值</strong>（空串、0、负数、超长、Unicode、<code>None</code>）——这些正是手工测试永远懒得点的地方；以及&quot;已知 bug 的回归值&quot;：修过的每个 bug 都把它的输入形态补进表里。</p>
+<h2 id="4-skip-与-xfail正确表达暂时不绿"><a class="markdownIt-Anchor" href="#4-skip-与-xfail正确表达暂时不绿"></a> 4. skip 与 xfail：正确表达&quot;暂时不绿&quot;</h2>
+<p>两者常被混用，语义完全不同：</p>
+<ul>
+<li><strong>skip</strong>：<em>这条测试根本不跑</em>。适用于条件性平台差异、待修复的环境依赖。测试代码照样会被收集，但函数体不执行；</li>
+<li><strong>xfail</strong>：<em>这条测试会跑，且我预期它失败</em>。适用于&quot;已知 bug 未修&quot;“功能未实现”——它和&quot;注释掉&quot;的差别是：<strong>一旦突然变绿（bug 被顺手修好），pytest 会报 XPASS 提醒你解除标记</strong>。</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> sys</span><br><span class="line"><span class="keyword">import</span> pytest</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.mark.skip(<span class="params">reason=<span class="string">&quot;等待上游接口修复&quot;</span></span>)          </span><span class="comment"># 无条件跳过</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_skip_plain</span>(): ...</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.mark.skipif(<span class="params">sys.platform != <span class="string">&quot;linux&quot;</span>,</span></span></span><br><span class="line"><span class="params"><span class="meta">                    reason=<span class="string">&quot;仅 Linux 验证文件权限语义&quot;</span></span>)  </span><span class="comment"># 条件跳过</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_skipif_linux</span>(): ...</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.mark.xfail(<span class="params">reason=<span class="string">&quot;issue #42：并发下计数可能少一&quot;</span>, strict=<span class="literal">True</span></span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_increment_race</span>():</span><br><span class="line">    ...</span><br></pre></td></tr></table></figure>
+<p><code>strict=True</code> 让 xfail 变成&quot;双向断言&quot;：失败=XFAIL（不算红），通过=<strong>直接红</strong>（XFAIL strict），防止&quot;已知 bug&quot;悄悄修好了却没人摘标记。官方文档《skipping》建议：对绑定具体 issue 的 xfail 一律加 strict。</p>
+<p><strong>经验做法</strong>：skip 的 reason 里写清楚&quot;复活条件&quot;（哪个 issue 修复后必须解除），CI 里加一条自定义检查：存在超过 30 天的 skip/xfail 就在流水线里打 warning（08 篇的失败纪律配合使用）。skip 和 xfail 都是<strong>有息负债</strong>，要记账。</p>
+<h2 id="5-运行与选择日常命令工作流"><a class="markdownIt-Anchor" href="#5-运行与选择日常命令工作流"></a> 5. 运行与选择：日常命令工作流</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">pytest                          <span class="comment"># 全量（默认在当前目录收集）</span></span><br><span class="line">pytest tests/test_parser.py     <span class="comment"># 按文件</span></span><br><span class="line">pytest tests/test_parser.py::test_retry_delay[<span class="string">&quot;5m-300&quot;</span>]   <span class="comment"># 精确到用例</span></span><br><span class="line">pytest -k <span class="string">&quot;millis and not slow&quot;</span> <span class="comment"># 按用例名表达式选择（对 id 生效）</span></span><br><span class="line">pytest -m <span class="string">&quot;not slow&quot;</span>            <span class="comment"># 按标记选择（需注册标记，见下）</span></span><br><span class="line">pytest --collect-only -q        <span class="comment"># 只收集不执行：检查命名/收集问题</span></span><br><span class="line">pytest -x --lf -q               <span class="comment"># 首败即停 + 只重跑上次失败（--last-failed）</span></span><br><span class="line">pytest -s                       <span class="comment"># 禁用输出捕获，看 print/stdout</span></span><br><span class="line">pytest -vv --tb=short           <span class="comment"># 详细名 + 短回溯</span></span><br></pre></td></tr></table></figure>
+<p><code>-k</code> 的匹配对象是<strong>整个用例名（含参数化 id）</strong>——实测 <code>&quot;30 or millis&quot;</code> 会同时命中 <code>[30-30]</code> 与 <code>[5m-300]</code>（因为后者 id 里含 “30”），id 命名时要有这个意识。<code>-m</code> 按 mark 选择，前提是在 <code>pyproject.toml</code> 里注册（否则 warning）：</p>
+<figure class="highlight toml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">[tool.pytest.ini_options]</span></span><br><span class="line"><span class="attr">markers</span> = [<span class="string">&quot;slow: 超过 1s 的测试&quot;</span>, <span class="string">&quot;integration: 需要真实依赖&quot;</span>]</span><br><span class="line"><span class="attr">addopts</span> = <span class="string">&quot;-m &#x27;not slow and not integration&#x27;&quot;</span>   <span class="comment"># 本地默认只跑单元层</span></span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：<code>addopts</code> 里放&quot;日常 90% 场景的默认集&quot;，CI 里显式 <code>-m &quot;&quot;</code>（清空过滤）跑全量——本地快反馈、CI 兜底，两层各司其职。</p>
+<h2 id="6-fixture-入门setupteardown-的现代写法"><a class="markdownIt-Anchor" href="#6-fixture-入门setupteardown-的现代写法"></a> 6. fixture 入门：setup/teardown 的现代写法</h2>
+<p>unittest 时代每个类要写 <code>setUp</code>/<code>tearDown</code>，类一多，&quot;每个测试各建一份昂贵资源&quot;与&quot;共享一份全局资源&quot;之间没有中间态。pytest 的答案是 fixture：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># test_tmpfile.py</span></span><br><span class="line"><span class="keyword">import</span> pytest</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">log_file</span>(<span class="params">tmp_path</span>):                 <span class="comment"># 依赖 pytest 内置 fixture（03 篇细讲）</span></span><br><span class="line">    path = tmp_path / <span class="string">&quot;app.log&quot;</span></span><br><span class="line">    path.write_text(<span class="string">&quot;&quot;</span>, encoding=<span class="string">&quot;utf-8&quot;</span>)</span><br><span class="line">    <span class="keyword">yield</span> path                          <span class="comment"># yield 前=setup，后=teardown</span></span><br><span class="line">    <span class="comment"># 收尾代码：teardown 阶段执行（此处 tmp_path 自带清理，无需手写）</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_append</span>(<span class="params">log_file</span>):              <span class="comment"># 测试函数按名声明依赖</span></span><br><span class="line">    log_file.write_text(<span class="string">&quot;hello\n&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> <span class="string">&quot;hello&quot;</span> <span class="keyword">in</span> log_file.read_text()</span><br></pre></td></tr></table></figure>
+<p>对比 unittest 的三处进步：</p>
+<ol>
+<li><strong>按需注入</strong>：只把需要的东西作为参数传进来，不需要的测试零成本（unittest 的 setUp 对全类无差别执行）；</li>
+<li><strong>yield 分段</strong>：setup/teardown 写在一个函数里，视线不用上下跳；teardown 即使测试失败也会执行；</li>
+<li><strong>可组合可分层</strong>：fixture 可以依赖 fixture、可以按目录覆盖（03 篇整章展开）。</li>
+</ol>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<p><strong>误区一：测试函数里写 <code>print</code> 调试后忘了删。</strong> pytest 默认捕获 stdout，绿了什么也看不见；但失败回溯里会<strong>回放</strong>捕获的输出——所以 print 不算害群之马，可临时保留；要主动看输出用 <code>-s</code> 或 <code>capsys</code> 断言（03 篇）。</p>
+<p><strong>误区二：测试类加了 <code>__init__</code>。</strong> pytest 见到带 <code>__init__</code> 的 Test 类会拒绝收集并警告。需要每用例的初始化，用 fixture；需要共享状态，用类属性 + autouse fixture。</p>
+<p><strong>误区三：参数化 id 用默认浮点串。</strong> <code>[raw2-0.5]</code> 这类自动 id 在 <code>-k</code> 选择与 CI 报告里难以定位，养成显式 id 的习惯。</p>
+<p><strong>误区四：把断言写进 helper 却没注册重写。</strong> 失败信息只剩 <code>AssertionError</code>，等于回到 unittest 时代。记得 <code>pytest.register_assert_rewrite()</code>。</p>
+<p><strong>误区五：把 <code>--lf</code> 当全量回归用。</strong> <code>--lf</code>（只重跑上次失败的）语义实测：上次有失败→只跑失败的；上次全绿或缓存被清→<strong>退化为全量</strong>。它是&quot;本地快速反馈&quot;工具，不是回归保障——CI 里不要依赖它（缓存目录在 CI 上不跨任务持久），CI 永远全量。</p>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>断言重写是 pytest 的核心竞争力：导入时 AST 改写让裸 <code>assert</code> 输出中间值；helper 里的断言要 <code>register_assert_rewrite</code>；<code>assert (a, msg)</code> 是永真陷阱；</li>
+<li>布局：<code>test_*.py</code> + <code>test_</code> 前缀 + src/tests 镜像；<a target="_blank" rel="noopener" href="http://conftest.py">conftest.py</a> 按层级自动加载、专放 fixture 与钩子；</li>
+<li>参数化用数据表消灭复制粘贴：显式 id、笛卡尔积、单格 marks、边界值进表；</li>
+<li>skip=不跑，xfail=预期失败且 strict 双向；两者都是要记账的负债；</li>
+<li>命令工作流：<code>-k</code>/<code>-m</code> 选择、<code>--collect-only</code> 排查收集、<code>-x --lf</code> 快反馈；本地默认集与 CI 全量分层；</li>
+<li>fixture 的 yield 模式是现代 setup/teardown——下一章把它讲透。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>把 01 章的 <code>retry_delay</code> 参数化表再扩 5 行：大写单位、末尾空格、复合时长 <code>&quot;1m30s&quot;</code>、超长字符串、<code>None</code>——先猜每个的行为再跑，对照你猜的输出写 100 字。</li>
+<li>写一个 helper 模块 <code>tests/helpers/assertions.py</code>（内含 <code>assert_valid_config(cfg)</code>），分别用&quot;不注册&quot;与 <code>register_assert_rewrite</code> 两种方式跑出失败，对比两条失败信息的差异。</li>
+<li>用两个 <code>@parametrize</code> 叠出笛卡尔积（3 种输入形态 × 4 种分隔符），显式 id 规则自定，然后用 <code>-k</code> 精确选出其中 2 条运行。</li>
+<li>把项目里某个&quot;注释掉的测试&quot;改成 <code>xfail(strict=True)</code>，体验它变 XPASS 时的报错；在 pyproject 里注册 <code>slow</code> 标记并用 <code>-m</code> 验证过滤。</li>
+<li>用 <code>yield</code> fixture 写一个&quot;临时环境变量注入 + 恢复&quot;的 setup/teardown（提示：可先手写，03 篇会介绍内置的 <code>monkeypatch</code> 更简写法）。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%B5%8B%E8%AF%95/" rel="tag"># 测试</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/01-%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B5%8B%E8%AF%95%E6%98%AF%E9%A1%B6%E7%BA%A7%E5%B7%A5%E7%A8%8B%E5%B8%88%E7%9A%84%E5%8A%A0%E9%80%9F%E5%99%A8/" rel="prev" title="01-为什么测试是顶级工程师的加速器">
+                  <i class="fa fa-angle-left"></i> 01-为什么测试是顶级工程师的加速器
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/03-fixture%E4%B8%8E%E6%B5%8B%E8%AF%95%E6%9E%B6%E6%9E%84/" rel="next" title="03-fixture与测试架构">
+                  03-fixture与测试架构 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

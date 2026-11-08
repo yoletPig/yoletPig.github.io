@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 理解 SQLite 为什么是学存储引擎的最佳教具（单文件&#x2F;零配置&#x2F;代码即文档）。 - 亲手 hexdump 数据库文件，认识页结构与 B-tree 页类型。 - 实测 WAL 模式 vs journal 模式的并发读写差异，理解单写者模…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="06-SQLite内幕与存储引擎">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/06-SQLite%E5%86%85%E5%B9%95%E4%B8%8E%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 理解 SQLite 为什么是学存储引擎的最佳教具（单文件&#x2F;零配置&#x2F;代码即文档）。 - 亲手 hexdump 数据库文件，认识页结构与 B-tree 页类型。 - 实测 WAL 模式 vs journal 模式的并发读写差异，理解单写者模…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T12:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.554Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Redis">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="数据库">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/06-SQLite%E5%86%85%E5%B9%95%E4%B8%8E%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/06-SQLite%E5%86%85%E5%B9%95%E4%B8%8E%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E/","path":"2026/09/03/06-SQLite内幕与存储引擎/","title":"06-SQLite内幕与存储引擎"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>06-SQLite内幕与存储引擎 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#06-sqlite%E5%86%85%E5%B9%95%E4%B8%8E%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E"><span class="nav-number">1.</span> <span class="nav-text"> 06 - SQLite内幕与存储引擎</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%B8%BA%E4%BB%80%E4%B9%88%E7%94%A8-sqlite-%E5%AD%A6%E5%8E%9F%E7%90%86"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 为什么用 SQLite 学原理</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E9%A1%B5%E9%9D%A2%E7%BB%93%E6%9E%84hexdump-%E4%BA%B2%E7%9C%BC%E7%9C%8B%E6%95%B0%E6%8D%AE%E5%BA%93%E6%96%87%E4%BB%B6"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 页面结构：hexdump 亲眼看数据库文件</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-wal-%E6%A8%A1%E5%BC%8F%E5%AE%9E%E6%B5%8B%E5%B9%B6%E5%8F%91%E8%AF%BB%E5%86%99%E5%B7%AE%E5%BC%82"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. WAL 模式：实测并发读写差异</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%8D%95%E5%86%99%E8%80%85%E6%A8%A1%E5%9E%8Bsqlite-%E7%9A%84%E5%B9%B6%E5%8F%91%E5%93%B2%E5%AD%A6"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 单写者模型：SQLite 的并发哲学</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%AF%B9%E6%AF%94-lsm-tree%E5%8F%A6%E4%B8%80%E5%A4%A7%E6%B5%81%E6%B4%BE"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 对比 LSM-Tree：另一大流派</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.9.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/06-SQLite%E5%86%85%E5%B9%95%E4%B8%8E%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="06-SQLite内幕与存储引擎 | Yoleen的博客">
+      <meta itemprop="description" content="- 理解 SQLite 为什么是学存储引擎的最佳教具（单文件&#x2F;零配置&#x2F;代码即文档）。 - 亲手 hexdump 数据库文件，认识页结构与 B-tree 页类型。 - 实测 WAL 模式 vs journal 模式的并发读写差异，理解单写者模…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          06-SQLite内幕与存储引擎
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 20:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T20:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/" itemprop="url" rel="index"><span itemprop="name">数据库</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>11 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 理解 SQLite 为什么是学存储引擎的最佳教具（单文件/零配置/代码即文档）。 - 亲手 hexdump 数据库文件，认识页结构与 B-tree 页类型。 - 实测 WAL 模式 vs journal 模式的并发读写差异，理解单写者模…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="06-sqlite内幕与存储引擎"><a class="markdownIt-Anchor" href="#06-sqlite内幕与存储引擎"></a> 06 - SQLite内幕与存储引擎</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>理解 SQLite 为什么是学存储引擎的最佳教具（单文件/零配置/代码即文档）。</li>
+<li>亲手 hexdump 数据库文件，认识页结构与 B-tree 页类型。</li>
+<li>实测 WAL 模式 vs journal 模式的并发读写差异，理解单写者模型。</li>
+<li>系统对比 LSM-Tree（memtable/SSTable/compaction），建立&quot;B+树 vs LSM&quot;的选型框架，看懂 RocksDB/Cassandra 的选择。</li>
+</ul>
+<h2 id="1-为什么用-sqlite-学原理"><a class="markdownIt-Anchor" href="#1-为什么用-sqlite-学原理"></a> 1. 为什么用 SQLite 学原理</h2>
+<p>SQLite 是世界上部署最广的数据库（每个手机、每个浏览器里都有），也是教学友好的存储引擎标本：</p>
+<ul>
+<li><strong>单文件</strong>：整个数据库就是一个文件（外加可能的 <code>-wal</code>），01 章&quot;数据库是个黑盒&quot;的盒子，这里可以直接拆。</li>
+<li><strong>零配置</strong>：无服务进程、无用户权限、无网络协议，<code>sqlite3.connect(&quot;file.db&quot;)</code> 即用——学习成本只剩原理本身。</li>
+<li><strong>文档即实现</strong>：官方 <em>How SQLite Works / File Format</em> 文档精确到字节，本文实验全部可对照验证（<a target="_blank" rel="noopener" href="http://sqlite.org/fileformat2.html%EF%BC%89%E3%80%82">sqlite.org/fileformat2.html）。</a></li>
+<li><strong>地位</strong>：它是 B+树存储引擎的完整实现——页面、缓冲池、WAL、MVCC（简化版）、单写者模型，样样都有，只是比例尺缩小了。</li>
+</ul>
+<p>适用边界也要说清（经验做法）：SQLite 适合嵌入式/单机/移动端/原型，以及&quot;一个写者多个读者&quot;的本地服务；不适合高并发写（单写者模型）与网络多客户端访问。<strong>学它不是用它替换 Postgres，而是用它的文件当显微镜</strong>。</p>
+<h2 id="2-页面结构hexdump-亲眼看数据库文件"><a class="markdownIt-Anchor" href="#2-页面结构hexdump-亲眼看数据库文件"></a> 2. 页面结构：hexdump 亲眼看数据库文件</h2>
+<p>SQLite 文件的基本单位是<strong>页（page）</strong>，默认 4096B（01 章 B+树推导用的 P 就是它）。整库 = 页的序列，页号从 1 开始。每个 B-tree 节点占一页，页头第一个字节是页类型：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">页类型(页头首字节):</span><br><span class="line">0x02 内部索引页   0x05 内部表页(路由节点)</span><br><span class="line">0x0a 叶子索引页   0x0d 叶子表页(真正存数据行)</span><br></pre></td></tr></table></figure>
+<p>亲手实验（Python 生成库 + hexdump 看文件头，在 Ubuntu 直接可跑）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># make_db.py</span></span><br><span class="line"><span class="keyword">import</span> sqlite3, os</span><br><span class="line">db = <span class="string">&quot;/tmp/demo.db&quot;</span></span><br><span class="line">os.path.exists(db) <span class="keyword">and</span> os.remove(db)</span><br><span class="line">conn = sqlite3.connect(db)</span><br><span class="line">conn.execute(<span class="string">&quot;PRAGMA page_size=4096&quot;</span>)</span><br><span class="line">conn.execute(<span class="string">&quot;CREATE TABLE users(id INTEGER PRIMARY KEY, name TEXT, age INT)&quot;</span>)</span><br><span class="line">conn.executemany(<span class="string">&quot;INSERT INTO users(name, age) VALUES(?,?)&quot;</span>, [(<span class="string">f&quot;u<span class="subst">&#123;i&#125;</span>&quot;</span>, <span class="number">20</span>+i%<span class="number">50</span>) <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">100</span>)])</span><br><span class="line">conn.commit(); conn.close()</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexdump -C /tmp/demo.db | <span class="built_in">head</span> -4</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">00000000  53 51 4c 69 74 65 20 66 6f 72 6d 61 74 20 33 00  |SQLite format 3.|</span><br><span class="line">00000010  10 00 01 01 00 40 20 20 00 00 00 02 00 00 00 02  |.....@   ..... .|</span><br><span class="line">00000020  00 00 00 00 00 00 00 00 ...</span><br></pre></td></tr></table></figure>
+<p>逐字节解读文件头（前 100B 是全库头，官方文档 <em>Database Header</em> 一节逐项列全）：</p>
+<ul>
+<li>偏移 0-15：魔法串 <code>SQLite format 3\0</code>——文件身份证。</li>
+<li>偏移 16-17：页大小大端 <code>0x1000</code> = 4096。</li>
+<li>偏移 18：文件格式写版本，偏移 19：读版本——<strong><code>01</code>=journal（回滚日志），<code>02</code>=WAL</strong>（下节实测切换）。</li>
+<li>偏移 24-27：文件变更计数器；偏移 28-31：数据库页数——实测 <code>00 00 00 02</code>：<strong>100 行数据只占 2 页</strong>（1 页元数据 + 1 页表数据），这就是&quot;查询按页算账&quot;的微观证据。</li>
+</ul>
+<p>再看数据页本身：用页号 × 4096 定位，首字节 <code>0x0d</code> 是叶子表页（数据行住在这里），页头后是单元指针数组，每个单元（cell）= 一行 [变长头 | rowid | 列数据]。<code>INTEGER PRIMARY KEY</code> 列不重复存储——它就是 rowid（03 章&quot;SQLite 与 InnoDB 同路&quot;的物证）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexdump -C -s 4096 -n 64 /tmp/demo.db     <span class="comment"># 第2页开头</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">00001000  0d 00 00 00 64 03 b4 00 ...     ← 0x0d 叶子表页 | 单元数 0x64=100 行</span><br></pre></td></tr></table></figure>
+<p>对照工具：<code>PRAGMA page_count; PRAGMA freelist_count;</code>（已用页/空闲页）；<code>PRAGMA integrity_check;</code> 校验 B 树完整性。把行数加到几千再看，会观察到页数增长、可能出现的内部表页（0x05）——树长高了一层。</p>
+<h2 id="3-wal-模式实测并发读写差异"><a class="markdownIt-Anchor" href="#3-wal-模式实测并发读写差异"></a> 3. WAL 模式：实测并发读写差异</h2>
+<p>SQLite 有两种崩溃恢复机制，行为差异巨大：</p>
+<ul>
+<li><strong>journal（回滚日志，默认历史模式）</strong>：改页前先把<strong>旧内容</strong>备份到 <code>-journal</code> 文件，然后原地改库文件；提交后删 journal。崩溃时用 journal 回滚未提交的修改。<strong>写者写哪页，读者就不能读那页</strong>——读写互斥。</li>
+<li><strong>WAL（预写日志）</strong>：修改<strong>追加</strong>进 <code>-wal</code> 文件，主库文件不动；checkpoint 时才把 WAL 内容合并回主库。读者读库文件+WAL 并按快照挑版本，<strong>读写不互斥</strong>（04 章 MVCC 的 SQLite 版）。代价：WAL 要 fsync、checkpoint 有停顿，且 WAL 依赖共享内存（跨机网络文件系统不可用）。</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># wal_test.py —— 两种模式的并发读实验: 写者狂写, 读者同时读</span></span><br><span class="line"><span class="keyword">import</span> sqlite3, threading, time, os</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">bench</span>(<span class="params">mode, path=<span class="string">&quot;/tmp/wal_demo.db&quot;</span></span>):</span><br><span class="line">    <span class="keyword">for</span> p <span class="keyword">in</span> [path, path+<span class="string">&quot;-wal&quot;</span>, path+<span class="string">&quot;-journal&quot;</span>]:</span><br><span class="line">        os.path.exists(p) <span class="keyword">and</span> os.remove(p)</span><br><span class="line">    w = sqlite3.connect(path, timeout=<span class="number">5</span>)</span><br><span class="line">    w.execute(<span class="string">f&quot;PRAGMA journal_mode=<span class="subst">&#123;mode&#125;</span>&quot;</span>)     <span class="comment"># DELETE(=journal) 或 WAL</span></span><br><span class="line">    w.execute(<span class="string">&quot;CREATE TABLE t(k INTEGER PRIMARY KEY, v INT)&quot;</span>)</span><br><span class="line">    stop = time.monotonic() + <span class="number">1.0</span></span><br><span class="line">    errors, reads = [], [<span class="number">0</span>]</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">reader</span>():</span><br><span class="line">        r = sqlite3.connect(path, timeout=<span class="number">5</span>)</span><br><span class="line">        <span class="keyword">while</span> time.monotonic() &lt; stop:</span><br><span class="line">            <span class="keyword">try</span>:</span><br><span class="line">                r.execute(<span class="string">&quot;SELECT count(*) FROM t&quot;</span>).fetchone()</span><br><span class="line">                reads[<span class="number">0</span>] += <span class="number">1</span></span><br><span class="line">            <span class="keyword">except</span> sqlite3.OperationalError <span class="keyword">as</span> e:</span><br><span class="line">                errors.append(<span class="built_in">str</span>(e))             <span class="comment"># database is locked 等</span></span><br><span class="line">    ts = [threading.Thread(target=reader) <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">4</span>)]</span><br><span class="line">    [t.start() <span class="keyword">for</span> t <span class="keyword">in</span> ts]</span><br><span class="line">    writes = <span class="number">0</span></span><br><span class="line">    <span class="keyword">while</span> time.monotonic() &lt; stop:</span><br><span class="line">        w.execute(<span class="string">&quot;INSERT INTO t(v) VALUES(1)&quot;</span>)</span><br><span class="line">        w.commit(); writes += <span class="number">1</span>                   <span class="comment"># 单写者持续写</span></span><br><span class="line">    [t.join() <span class="keyword">for</span> t <span class="keyword">in</span> ts]</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;<span class="subst">&#123;mode:&lt;<span class="number">7</span>&#125;</span> 写入 <span class="subst">&#123;writes:&gt;<span class="number">4</span>&#125;</span> 次/s | 读取 <span class="subst">&#123;reads[<span class="number">0</span>]:&gt;<span class="number">5</span>&#125;</span> 次 | 读失败 <span class="subst">&#123;<span class="built_in">len</span>(errors)&#125;</span> 次&quot;</span>)</span><br><span class="line"></span><br><span class="line">bench(<span class="string">&quot;DELETE&quot;</span>)</span><br><span class="line">bench(<span class="string">&quot;WAL&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>实测输出（WSL2，4 读者 + 1 写者各跑 1 秒；绝对值看你的机器，看相对差异）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">DELETE  写入  612 次/s | 读取   231 次 | 读失败 48 次</span><br><span class="line">WAL     写入  940 次/s | 读取  3856 次 | 读失败  0 次</span><br></pre></td></tr></table></figure>
+<p>两个结论：<strong>WAL 下读者吞吐高一个数量级且零失败</strong>（读写不互斥），<strong>journal 下读者频繁撞锁</strong>（database is locked）。生产建议（经验做法）：SQLite 常驻服务一律 <code>PRAGMA journal_mode=WAL;</code> + <code>PRAGMA busy_timeout=3000;</code>（拿不到锁时等 3 秒而不是立刻报错）；WAL 模式设置一次持久生效（写进文件头），busy_timeout 是连接级的每次要设。</p>
+<p>注意 WAL 的边界：<strong>它只提升读并发，写仍串行</strong>——下一节的单写者模型。</p>
+<h2 id="4-单写者模型sqlite-的并发哲学"><a class="markdownIt-Anchor" href="#4-单写者模型sqlite-的并发哲学"></a> 4. 单写者模型：SQLite 的并发哲学</h2>
+<p>SQLite 的并发协议：<strong>任意时刻至多一个写事务；读事务在 WAL 下可与写事务并存</strong>。写锁在 WAL 下通过&quot;写者独占 WAL 追加位 + 提交时推进 mxFrame&quot;实现，本质是把串行化窗口压到最小，但从未允许多写者。这是与 PG/MySQL（多写者+行锁）最本质的架构差异，取舍链条：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">单写者的收益: 无锁管理器、无死锁检测、崩溃恢复简单、文件格式紧凑 → 全库一个小文件</span><br><span class="line">单写者的代价: 写吞吐封顶(一秒几千事务, fsync/组提交决定), 写并发高时排队(busy_timeout)</span><br><span class="line">适用: 嵌入式/桌面/边缘/单机后台服务; 不适用: 多客户端高并发写(那是 07 章 PG 的领地)</span><br></pre></td></tr></table></figure>
+<p>对照记忆三种数据库的并发哲学（也回应 04 章）：<strong>SQLite = 单写者 + WAL 快照</strong>（简单到极致）；<strong>PostgreSQL = 多写者 + 堆内多版本 + VACUUM</strong>；<strong>MySQL InnoDB = 多写者 + undo 链多版本 + 间隙锁</strong>。选型第一问从来是&quot;并发写什么量级&quot;，而不是&quot;哪个更流行&quot;。</p>
+<h2 id="5-对比-lsm-tree另一大流派"><a class="markdownIt-Anchor" href="#5-对比-lsm-tree另一大流派"></a> 5. 对比 LSM-Tree：另一大流派</h2>
+<p>B+树不是唯一答案。<strong>LSM-Tree（Log-Structured Merge-Tree）</strong>（O’Neil et al. 1996, <em>The Log-Structured Merge-Tree</em>）把 01 章的&quot;随机写变顺序写&quot;推到极致，是 RocksDB、Cassandra、HBase、LevelDB 的引擎：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">写入路径:   PUT(k,v) → 追加 WAL → 内存 memtable(有序结构,如跳表)</span><br><span class="line">                      ↓ memtable 满了</span><br><span class="line">            冻结为 SSTable(磁盘上不可变的有序文件,分层的 L0..L6)</span><br><span class="line">                      ↓ 后台 compaction</span><br><span class="line">            多层 SSTable 反复合并, 同 key 只留最新, 删除=tombstone 标记</span><br><span class="line">读取路径:   memtable → L0 → L1 → ... → L6 逐层找(每层一个/若干有序文件, 布隆过滤器挡住&quot;没有&quot;)</span><br></pre></td></tr></table></figure>
+<p>工作方式与 B+树逐一对照：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>B+树（InnoDB/SQLite/PG）</th>
+<th>LSM-Tree（RocksDB/Cassandra）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>写入</td>
+<td>原地改页+写 WAL，页分裂搬键</td>
+<td>纯顺序追加，memtable 满了整体刷盘</td>
+</tr>
+<tr>
+<td>读取</td>
+<td>一次树下降 3-4 页，稳定快</td>
+<td>逐层查找，最坏要翻所有层（布隆过滤器救场）</td>
+</tr>
+<tr>
+<td>空间</td>
+<td>原地更新，页半满 ~1.3-2 倍放大</td>
+<td>多层同 key 暂存 + tombstone 未清，~2-10 倍放大</td>
+</tr>
+<tr>
+<td>后台工作</td>
+<td>少（偶尔 checkpoint）</td>
+<td>compaction 持续进行，抢占 IO 带宽</td>
+</tr>
+<tr>
+<td>读放大</td>
+<td>低（3-4 次页读）</td>
+<td>中-高（层数决定，过滤器可压）</td>
+</tr>
+<tr>
+<td>写放大</td>
+<td>中（页级重写，随机写）</td>
+<td>高（每条数据被 compaction 反复重写，实测 5-10x 常见）</td>
+</tr>
+<tr>
+<td>空间放大</td>
+<td>低</td>
+<td>高</td>
+</tr>
+</tbody>
+</table>
+<p><strong>写放大 vs 读放大的权衡表</strong>（这是两流派合同的核心条款）：</p>
+<ul>
+<li>B+树：<strong>读友好</strong>——定点即达；写时&quot;原地更新&quot;必然产生随机 IO + 页分裂，写放大集中在数据页本身（写 1 条 ≈ 改 1-2 页 + WAL）。</li>
+<li>LSM：<strong>写友好</strong>——一切写入都是顺序追加；代价是读要跨层找 + compaction 永不停歇（每条数据平均被重写数次）。SSTable = 排序字符串表，不可变文件天生对缓存/压缩/并行友好。</li>
+</ul>
+<p><strong>选型口诀</strong>（经验做法）：<strong>写多读少、扫描吞吐优先 → LSM</strong>（日志、指标、时序、消息流——Cassandra 为写而生，RocksDB 塞满了 TiDB/ClickHouse 的存储底座）；<strong>读多写少、点查延迟敏感 → B+树</strong>（用户表、订单表）。LSM 读放大靠布隆过滤器缓解（08 章缓存穿透会讲同一个结构），空间放大靠 compaction 策略（size-tiered vs leveled）调——每个 LSM 生产问题都能从&quot;读/写/空间三放大&quot;里找到坐标。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“SQLite 是玩具”</strong>：它是通过海量测试的严肃存储引擎（官方测试哲学是&quot;比客户更怕 bug&quot;）， aviation 级场景也在用。它的限制是单写者，不是可靠性。</li>
+<li><strong>“WAL = 任何情况都更快”</strong>：WAL 提升的是<strong>读并发</strong>；写路径上每提交多一次 WAL fsync，纯写负载与 journal 模式接近甚至受 checkpoint 拖累。网络文件系统（NFS/SMB）上 WAL 有已知的正确性风险，官方文档明确警告。</li>
+<li><strong>“journal 文件在就能恢复”</strong>：回滚日志只在<strong>崩溃时</strong>有用，正常提交后即删除；看到 <code>-journal</code> 常驻说明有事务没结束或上次崩溃残留——别手删，让 SQLite 自己处理。</li>
+<li><strong>“LSM 写快是免费的”</strong>：快在<strong>前台</strong>。compaction 在后台烧 IO/CPU，高峰期与业务抢带宽造成延迟毛刺——生产 LSM 的容量规划必须给 compaction 留 30-50% 的 IO 余量（经验做法）。</li>
+<li><strong>“B+树读快所以永远选 B+树”</strong>：当写入是主流（每秒十万级点写、点查比例低），B+树的随机写页分裂会成为瓶颈，LSM 的顺序写优势碾压。没有全场景冠军，只有场景匹配。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>SQLite = 单文件 + 页式 + B+树 + 单写者 + WAL，是比例尺缩小的完整存储引擎，文档精确到字节，适合当显微镜。</li>
+<li>页类型一眼可辨（0x0d 叶子表页/0x05 内部页/0x0a/0x02 索引页）；文件头魔串、页大小、变更计数、页数可直接 hexdump 验证；<code>INTEGER PRIMARY KEY</code> 即 rowid。</li>
+<li>WAL 把&quot;读写互斥&quot;变&quot;读写并存&quot;：实测读者吞吐差一个数量级、失败归零；写仍串行（单写者），busy_timeout 是常驻服务的标配。</li>
+<li>LSM = memtable + 不可变 SSTable + 分层 compaction：写放大转读放大+空间放大；B+树反之。三放大的权衡表是选型的地图。</li>
+<li>写多读少选 LSM（RocksDB/Cassandra），读多点查选 B+树；布隆过滤器与 compaction 策略是 LSM 的两个调节旋钮。</li>
+<li>下一章进入生产主力 PostgreSQL：把本篇的页面/日志/并发概念放进真实服务的语境。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>hexdump 作业：建一个 10000 行的库，统计 <code>PRAGMA page_count</code>；修改 <code>PRAGMA page_size=8192</code> 重建，对比页数与文件大小；找出&quot;哪个页是 0x05 内部页&quot;并解释树为什么长高。</li>
+<li>跑通 wal_test.py，把读者数从 4 调到 16，记录两种模式的读失败数变化；再给写者加 <code>PRAGMA synchronous=NORMAL</code>（WAL 推荐配置），对比写入吞吐并解释 fsync 策略的影响。</li>
+<li>崩溃实验：WAL 模式下 <code>INSERT</code> 1000 条不 checkpoint，kill -9 Python 进程后重新打开数据库验证数据完整（WAL 恢复）；然后手删 <code>-wal</code> 文件再打开，观察丢失了什么——体会&quot;主库文件 + WAL&quot;两件套的关系。</li>
+<li>画图作业：不看本篇，默画 B+树与 LSM 的写入/读取路径图，并在图上标出各自&quot;放大&quot;发生的位置（B+树的页分裂/LSM 的 compaction）。</li>
+<li>调研题：查 LevelDB 或 RocksDB 文档中 compaction 一节，列出 leveled compaction 的层数与每层大小比例（通常是 10 倍），解释为什么 L0 允许文件重叠而 L1+ 不允许——与 03 章 B+树&quot;每层有序&quot;的约束对照。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/" rel="tag"># 数据库</a>
+              <a href="/tags/Redis/" rel="tag"># Redis</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/05-%E6%9F%A5%E8%AF%A2%E4%BC%98%E5%8C%96%E4%B8%8E%E6%89%A7%E8%A1%8C%E8%AE%A1%E5%88%92/" rel="prev" title="05-查询优化与执行计划">
+                  <i class="fa fa-angle-left"></i> 05-查询优化与执行计划
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/07-PostgreSQL%E5%AE%9E%E6%88%98/" rel="next" title="07-PostgreSQL实战">
+                  07-PostgreSQL实战 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

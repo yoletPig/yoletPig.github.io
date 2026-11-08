@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 用流水线的眼光重新理解&#39;CPU 主频&#39;：一条指令的延迟没变，吞吐为什么翻了数倍；时钟周期为什么由最慢一级决定。 - 认识三类流水线冒险（结构&#x2F;数据&#x2F;控制），重点吃透控制冒险：分支预测为什么&#39;值得猜&#39;、误预测惩罚 15~20 周期从哪来。…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="04-流水线与分支预测">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/04-%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E5%88%86%E6%94%AF%E9%A2%84%E6%B5%8B/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 用流水线的眼光重新理解&#39;CPU 主频&#39;：一条指令的延迟没变，吞吐为什么翻了数倍；时钟周期为什么由最慢一级决定。 - 认识三类流水线冒险（结构&#x2F;数据&#x2F;控制），重点吃透控制冒险：分支预测为什么&#39;值得猜&#39;、误预测惩罚 15~20 周期从哪来。…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T08:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.522Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="网络">
+<meta property="article:tag" content="计算机系统">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/04-%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E5%88%86%E6%94%AF%E9%A2%84%E6%B5%8B/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/04-%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E5%88%86%E6%94%AF%E9%A2%84%E6%B5%8B/","path":"2026/09/02/04-流水线与分支预测/","title":"04-流水线与分支预测"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>04-流水线与分支预测 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#04-%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E5%88%86%E6%94%AF%E9%A2%84%E6%B5%8B"><span class="nav-number">1.</span> <span class="nav-text"> 04 - 流水线与分支预测</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E6%B5%81%E6%B0%B4%E7%BA%BF%E6%80%9D%E6%83%B3%E6%B4%97%E8%A1%A3%E5%BA%97%E7%BB%99%E4%BD%A0%E7%9A%84%E5%90%AF%E7%A4%BA"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 流水线思想：洗衣店给你的启示</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%86%92%E9%99%A9%E6%B5%81%E6%B0%B4%E7%BA%BF%E7%9A%84%E4%B8%89%E7%A7%8D%E5%A0%B5%E8%BD%A6"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 冒险：流水线的三种&quot;堵车&quot;</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%88%86%E6%94%AF%E9%A2%84%E6%B5%8B%E4%B8%BA%E4%BB%80%E4%B9%88%E7%8C%9C%E6%98%AF%E7%90%86%E6%80%A7%E7%AD%96%E7%95%A5"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 分支预测：为什么&quot;猜&quot;是理性策略</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%AE%9E%E9%AA%8C%E6%9C%89%E5%BA%8F-vs-%E6%97%A0%E5%BA%8F%E6%95%B0%E7%BB%84%E6%B1%82%E5%92%8C"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 实验：有序 vs 无序数组求和</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E4%B9%B1%E5%BA%8F%E6%89%A7%E8%A1%8C%E4%B8%8E%E8%B6%85%E6%A0%87%E9%87%8F%E6%B5%81%E6%B0%B4%E7%BA%BF%E7%9A%84%E7%8E%B0%E4%BB%A3%E5%BD%A2%E6%80%81"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 乱序执行与超标量：流水线的现代形态</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-simd%E4%B8%80%E6%9D%A1%E6%8C%87%E4%BB%A4%E4%B8%80%E6%8E%92%E6%95%B0%E5%AD%97"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. SIMD：一条指令，一排数字</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E8%B6%85%E7%BA%BF%E7%A8%8B%E4%B8%8E%E5%A4%9A%E6%A0%B8%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B9%8B%E5%90%8E%E7%9A%84%E5%B9%B6%E8%A1%8C%E5%B1%82%E7%BA%A7"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 超线程与多核：流水线之后的并行层级</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/04-%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E5%88%86%E6%94%AF%E9%A2%84%E6%B5%8B/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="04-流水线与分支预测 | Yoleen的博客">
+      <meta itemprop="description" content="- 用流水线的眼光重新理解&#39;CPU 主频&#39;：一条指令的延迟没变，吞吐为什么翻了数倍；时钟周期为什么由最慢一级决定。 - 认识三类流水线冒险（结构&#x2F;数据&#x2F;控制），重点吃透控制冒险：分支预测为什么&#39;值得猜&#39;、误预测惩罚 15~20 周期从哪来。…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          04-流水线与分支预测
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 16:00:00" itemprop="dateCreated datePublished" datetime="2026-09-02T16:00:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%B3%BB%E7%BB%9F%E4%B8%8E%E7%BD%91%E7%BB%9C/" itemprop="url" rel="index"><span itemprop="name">计算机系统与网络</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>16 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 用流水线的眼光重新理解'CPU 主频'：一条指令的延迟没变，吞吐为什么翻了数倍；时钟周期为什么由最慢一级决定。 - 认识三类流水线冒险（结构/数据/控制），重点吃透控制冒险：分支预测为什么'值得猜'、误预测惩罚 15~20 周期从哪来。…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="04-流水线与分支预测"><a class="markdownIt-Anchor" href="#04-流水线与分支预测"></a> 04 - 流水线与分支预测</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>用流水线的眼光重新理解&quot;CPU 主频&quot;：一条指令的延迟没变，吞吐为什么翻了数倍；时钟周期为什么由最慢一级决定。</li>
+<li>认识三类流水线冒险（结构/数据/控制），重点吃透控制冒险：分支预测为什么&quot;值得猜&quot;、误预测惩罚 15~20 周期从哪来。</li>
+<li>做分支预测实验：有序 vs 无序数组求和实测 3.4 倍差距，并理解 -O2 下编译器用 cmov 把整个效应抹掉的现场。</li>
+<li>建立 SIMD 与乱序执行的正确直觉：一条指令算多个数、IPC 可以大于 1，以及 Python 代码为什么吃不到这些红利。</li>
+</ul>
+<p>前置：01 章（抽象阶梯）、03 章（缓存延迟）；02 章的指令知识会在反汇编处用到。</p>
+<h2 id="1-流水线思想洗衣店给你的启示"><a class="markdownIt-Anchor" href="#1-流水线思想洗衣店给你的启示"></a> 1. 流水线思想：洗衣店给你的启示</h2>
+<p>洗一批衣服要走四道工序：洗（30 分钟）、烘（30）、叠（30）、放（30）。串行做 4 批要 8 小时；<strong>流水线</strong>做法是第 1 批洗完进烘干时，第 2 批立刻进洗衣机——4 批只要 3.5 小时（P&amp;H 第 4 章的标准类比）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">时间 →  0   30   60   90   120  150  180 分钟</span><br><span class="line">批1:   洗   烘   叠   放</span><br><span class="line">批2:        洗   烘   叠   放</span><br><span class="line">批3:             洗   烘   叠   放</span><br><span class="line">批4:                  洗   烘   叠   放</span><br><span class="line">第一件完成于 120 分（延迟没变！），之后每 30 分钟出一批（吞吐 ×4）</span><br></pre></td></tr></table></figure>
+<p>CPU 把&quot;取指→译码→执行→访存→写回&quot;当作五道工序（P&amp;H 第 4.5 节的经典五级：IF/ID/EX/MEM/WB），同一时刻五条指令分别处在五级。关键账本：</p>
+<ul>
+<li><strong>单条指令延迟没变</strong>（甚至因流水线寄存器开销略变长），变的是<strong>吞吐率</strong>：理想情况下每个周期都有一条指令&quot;出炉&quot;。</li>
+<li><strong>时钟周期由最慢一级决定</strong>：若 EX 要 300ps、其他级 100ps，时钟就得起 300ps。这就是 01 章说&quot;主频有物理上限&quot;的另一半原因——级切得越细主频能越高，但级间寄存器开销占比越大，所以主频换 IPC 有个工程甜点区。</li>
+<li>流水线的理想加速比 ≈ 级数（5 级理想 ×5）。现代 x86 流水线 <strong>14~20 级</strong>（Intel SDM/各家优化手册），理想吞吐 = 每周期完成接近 1 条——然后，现实立刻用&quot;冒险&quot;砸场子。</li>
+</ul>
+<h2 id="2-冒险流水线的三种堵车"><a class="markdownIt-Anchor" href="#2-冒险流水线的三种堵车"></a> 2. 冒险：流水线的三种&quot;堵车&quot;</h2>
+<p><strong>结构冒险（structural hazard）</strong>：两条指令同一周期抢同一硬件。例：取指和访存都用一个指令/数据存储器——解决方案是分立 L1i/L1d（03 章你已在 lscpu 里见过这两个实例），现代主流 ISA 里结构冒险基本已被硬件预算消灭。</p>
+<p><strong>数据冒险（data hazard）</strong>：后一条指令需要前一条还没写完的结果。<code>add %rax,%rbx</code> 后紧接 <code>sub %rbx,%rcx</code>，按&quot;写回后才读&quot;的严格时序，sub 要空转 2 拍。解决方案是<strong>转发（forwarding/bypassing）</strong>：EX 结果一出来直接从流水线寄存器拉给下一级的输入端，不必等写回——</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">add:  IF  ID  EX  MEM  WB</span><br><span class="line">sub:      IF  ID  EX*  ...        EX* 直接引用 add 的 EX 输出（转发）</span><br><span class="line">mul:          IF  ID  EX stall 1 拍   ← load-use 冒险：数据在 MEM 级才出现</span><br></pre></td></tr></table></figure>
+<p>只剩<strong>load-use</strong> 这一种典型停顿：load 的数据 MEM 级才可得，紧跟的使用者（即使转发）也要多等 1 拍。编译器靠<strong>指令调度</strong>（把无关指令填进这个洞）缓解——02 章说 -O2 会&quot;改变程序形状&quot;，这就是形状之一。</p>
+<p><strong>控制冒险（control hazard）</strong>：<code>je</code> 要到 EX/MEM 级才知道跳不跳，但流水线前端<strong>早就</strong>按顺序预取了后面的指令——若跳转成立，已取的 15~20 条指令全部作废。这是现代 CPU 最大的性能洞，下一节专门讲。</p>
+<h2 id="3-分支预测为什么猜是理性策略"><a class="markdownIt-Anchor" href="#3-分支预测为什么猜是理性策略"></a> 3. 分支预测：为什么&quot;猜&quot;是理性策略</h2>
+<p>先算账：现代流水线 ~20 级，分支结果要到第 4~6 级才确定，误预测要冲刷的指令窗口约 <strong>15~20 周期</strong>（Intel 优化手册给出典型分支误预测惩罚约 15~20 cycles）。典型代码里分支每 5~6 条指令出现一次——如果每次都停 15 周期，流水线约一半时间在空转。所以设计者选择<strong>赌</strong>：预测它不跳（或按历史跳），赌错再冲刷。</p>
+<p><strong>为什么猜得准？</strong> 因为分支行为有强规律。预测器进化史（P&amp;H 4.8；Hennessy &amp; Patterson《计算机体系结构：量化研究方法》第 3 章有完整综述）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">1. 静态预测：向后跳 = 循环 → 猜跳；向前 = 猜不跳。准确率 ~65-85%</span><br><span class="line">2. 2-bit 饱和计数器：每分支一个计数器，连错 2 次才改主意</span><br><span class="line">       00 强不跳 → 01 弱不跳 → 10 弱跳 → 11 强跳（循环边缘不再抖动）</span><br><span class="line">3. BTB（分支目标缓冲）：缓存&quot;这个地址的分支上次跳去了哪&quot;，取指级直接用</span><br><span class="line">4. 现代主力 TAGE/感知机混合：用长历史模式匹配，典型准确率 95~99%</span><br></pre></td></tr></table></figure>
+<p>预测的精度是以&quot;历史会重复&quot;为前提的。<strong>分支可预测性的直觉</strong>：错误检查、边界判断这类分支接近 50/50（不可预测）；循环、类型标签、热路径条件高度偏斜（可预测）。这也预告了 5 节实验的形状：把一个 50/50 的分支序列换成 100% 可预测序列，差的就是那 15~20 周期/次。</p>
+<p>预测器的资源账（理解&quot;为什么能猜这么准&quot;的硬件视角）：2-bit 计数器通常以 2 的幂次规模成组放置（如 4K 个表项，用分支地址低位索引——<strong>不同分支可能撞同一表项，别名干扰是预测精度的重要损失源</strong>）；BTB 只缓存&quot;跳过&quot;的分支（不跳的分支不需要目标）；现代 TAGE 用多档历史长度（4~200+ 位）做模式匹配，长历史捕捉周期性模式、短历史兜底。由此得出可操作推论：<strong>分支越少、行为越规律的代码对预测器越友好</strong>；大量 switch/间接调用的解释器循环（Python 解释器本身就是！）是预测压力最大的负载——这也是 CPython 3.11 加&quot;自适应专用解释器&quot;（给热点字节码做特化）能提速 25% 的底层原因之一：把多态分派变成单一模式。</p>
+<h2 id="4-实验有序-vs-无序数组求和"><a class="markdownIt-Anchor" href="#4-实验有序-vs-无序数组求和"></a> 4. 实验：有序 vs 无序数组求和</h2>
+<p>经典实验（源自 McVoy/Stu 的 stackoverflow 名题&quot;Why is processing a sorted array faster&quot;）：随机数求和 vs 排序后求和，代码一字不改：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// branch.c —— 同一段代码，只差&quot;数组是否有序&quot;</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;time.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> N 32768</span></span><br><span class="line"><span class="type">double</span> <span class="title function_">now</span><span class="params">()</span>&#123;<span class="class"><span class="keyword">struct</span> <span class="title">timespec</span> <span class="title">t</span>;</span>clock_gettime(CLOCK_MONOTONIC,&amp;t);<span class="keyword">return</span> t.tv_sec+t.tv_nsec/<span class="number">1e9</span>;&#125;</span><br><span class="line"><span class="type">int</span> <span class="title function_">cmp</span><span class="params">(<span class="type">const</span> <span class="type">void</span>*x,<span class="type">const</span> <span class="type">void</span>*y)</span>&#123;<span class="keyword">return</span> *(<span class="type">int</span>*)x-*(<span class="type">int</span>*)y;&#125;</span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">()</span>&#123;</span><br><span class="line">    <span class="type">static</span> <span class="type">int</span> data[N];</span><br><span class="line">    srand(<span class="number">42</span>);</span><br><span class="line">    <span class="keyword">for</span>(<span class="type">int</span> i=<span class="number">0</span>;i&lt;N;i++) data[i]=rand()%<span class="number">256</span>;      <span class="comment">// 0~255，≥128 的概率约 50%</span></span><br><span class="line">    <span class="type">long</span> sum=<span class="number">0</span>; <span class="type">double</span> t0,t1;</span><br><span class="line">    t0=now();</span><br><span class="line">    <span class="keyword">for</span>(<span class="type">int</span> r=<span class="number">0</span>;r&lt;<span class="number">2000</span>;r++)&#123;sum=<span class="number">0</span>;</span><br><span class="line">        <span class="keyword">for</span>(<span class="type">int</span> i=<span class="number">0</span>;i&lt;N;i++) <span class="keyword">if</span>(data[i]&gt;=<span class="number">128</span>) sum+=data[i];&#125;</span><br><span class="line">    t1=now(); <span class="built_in">printf</span>(<span class="string">&quot;unordered: %.4f s (sum=%ld)\n&quot;</span>, t1-t0, sum);</span><br><span class="line">    qsort(data,N,<span class="keyword">sizeof</span>(<span class="type">int</span>),cmp);                 <span class="comment">// 排序：分支变可预测</span></span><br><span class="line">    t0=now();</span><br><span class="line">    <span class="keyword">for</span>(<span class="type">int</span> r=<span class="number">0</span>;r&lt;<span class="number">2000</span>;r++)&#123;sum=<span class="number">0</span>;</span><br><span class="line">        <span class="keyword">for</span>(<span class="type">int</span> i=<span class="number">0</span>;i&lt;N;i++) <span class="keyword">if</span>(data[i]&gt;=<span class="number">128</span>) sum+=data[i];&#125;</span><br><span class="line">    t1=now(); <span class="built_in">printf</span>(<span class="string">&quot;sorted:    %.4f s (sum=%ld)\n&quot;</span>, t1-t0, sum);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ gcc -O0 branch.c -o branch_O0 &amp;&amp; ./branch_O0</span><br><span class="line">unordered: 0.2444 s (<span class="built_in">sum</span>=3149529)</span><br><span class="line">sorted:    0.0709 s (<span class="built_in">sum</span>=3149529)        <span class="comment"># 3.4 倍！</span></span><br><span class="line">$ gcc -O2 branch.c -o branch &amp;&amp; ./branch</span><br><span class="line">unordered: 0.0298 s (<span class="built_in">sum</span>=3149529)</span><br><span class="line">sorted:    0.0296 s (<span class="built_in">sum</span>=3149529)        <span class="comment"># 差距消失了？！</span></span><br></pre></td></tr></table></figure>
+<p>两段结果都要会读：</p>
+<ul>
+<li><strong>-O0 的 3.4 倍</strong>：随机数据让 <code>if (data[i]&gt;=128)</code> 这条分支变成抛硬币，预测器理论上限 50%，每次错的代价 ~15-20 周期；排序后分支变成&quot;前半永远不跳、后半永远跳&quot;，预测器近乎 100%。差距 = 误预测次数 × 惩罚。</li>
+<li><strong>-O2 差距消失</strong>：看反汇编（02 章技能）：</li>
+</ul>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ gcc -O2 -S branch.c -o - | grep -A3 <span class="string">&quot;cmov\|cmove&quot;</span> | <span class="built_in">head</span> -6</span><br><span class="line">	movl	(%rax), %edx</span><br><span class="line">	leal	(%rdx,%rcx), %eax      <span class="comment"># sum+data[i] 先算好</span></span><br><span class="line">	testl	%edx, %edx</span><br><span class="line">	cmovns	%eax, %r8d             <span class="comment"># 符号位为正才采纳，否则保留旧 sum</span></span><br></pre></td></tr></table></figure>
+<p>编译器把 <code>if (cond) sum += x</code> 改写成了<strong>条件传送（cmov）</strong>：两条路径都算好，用一条指令按条件挑选结果——<strong>没有跳转就没有冲刷</strong>，控制冒险被消灭。代价是&quot;无条件多算了一次加法&quot;，但换来确定性。这是&quot;无分支编程&quot;的核心思想：<strong>误预测贵，就买确定</strong>。注意 cmov 不是万能药（两侧计算都贵时反而亏、且可能引入除零等副作用风险），编译器只在收益明确时使用。<strong>经验做法</strong>：热循环里把&quot;不可预测分支&quot;改写成算术（<code>sum += data[i] &gt;= 128 ? data[i] : 0</code> 是起点，但以编译器实际产物为准）或查表，先用反汇编确认分支真被消除了。</p>
+<h2 id="5-乱序执行与超标量流水线的现代形态"><a class="markdownIt-Anchor" href="#5-乱序执行与超标量流水线的现代形态"></a> 5. 乱序执行与超标量：流水线的现代形态</h2>
+<p>五级流水线是教学模型。真实 x86 核心是<strong>超标量 + 乱序</strong>（out-of-order）机器（P&amp;H 4.10 与《量化研究方法》第 3 章）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">前端（顺序）：取指 → 译码（每周期 4~6 条）→ 重命名（消除假依赖）</span><br><span class="line">                                       ↓</span><br><span class="line">保留站：就绪的微操作乱序发射到多个执行端口（ALU×2~3、load×2、store、FP…）</span><br><span class="line">                                       ↓</span><br><span class="line">重排序缓冲 ROB：按原始程序顺序提交结果（保持程序语义）</span><br></pre></td></tr></table></figure>
+<p>三个要点：① <strong>乱序但不违法</strong>——提交永远按程序序，指令间的真实数据依赖绝不被打破，乱序只是&quot;找无关的活先干&quot;；② <strong>IPC 可以大于 1</strong>：一周期发射/提交多条指令，<code>perf stat</code> 里的 IPC（instructions per cycle）超过 4 都常见（性能工程 03 篇教你读它）；③ <strong>前端口径</strong>：IPC 低不一定是执行慢，可能是前端取指/译码瓶颈（iCache 未命中、分支预测失败）或后端等待（缓存未命中停顿）——perf 的 topdown 分析法把 IPC 拆成 frontend-bound / backend-bound / bad-speculation（含分支误预测）/ retiring 四桶，这就是性能工程 03 篇&quot;IPC 数字背后&quot;的原理课。</p>
+<p>乱序与分支预测是一对搭档：预测器赌一个方向让流水线继续灌（speculation），赌错了靠 ROB 撤销所有推测结果——<strong>预测是油门，ROB 是安全气囊</strong>。</p>
+<h2 id="6-simd一条指令一排数字"><a class="markdownIt-Anchor" href="#6-simd一条指令一排数字"></a> 6. SIMD：一条指令，一排数字</h2>
+<p>超标量之外还有一条并行维度：<strong>SIMD（单指令多数据）</strong>。x86 的向量扩展：SSE（128 位）/ AVX2（256 位）/ AVX-512（512 位）——一个 256 位寄存器装 <strong>8 个 float</strong>，一条 <code>vaddps %ymm1,%ymm0,%ymm2</code> 同时算 8 对加法（CSAPP 3.13 与《Optimization Manual》第 12~15 章）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">标量:  vaddss:  [a0]      + [b0]      → [c0]          1 个/条</span><br><span class="line">向量:  vaddps:  [a0 a1 ... a7] + [b0 b1 ... b7] → [c0 ... c7]   8 个/条</span><br><span class="line">       （AVX2 256bit = 8×float32）</span><br></pre></td></tr></table></figure>
+<p>这直接改写 03 章的算术强度账本：同样的访存次数，算力上限 ×8。NumPy/PyTorch 的底层 kernel 全靠它——<code>np.dot</code>、<code>torch.nn.Linear</code> 在 CPU 上跑的就是 AVX 指令。<strong>ARM 注</strong>：ARM 的对应物是 NEON（128 位）与 SVE/SVE2（可变长 128~2048 位），RK3588 的 4×A76 支持 NEON——端侧部署查算子速度时先确认 NEON 路径有没有走通。</p>
+<p>那 Python 能吃到吗？<strong>解释器本身吃不到</strong>：<code>for i in range(n): s += a[i]</code> 每次迭代要执行上百条字节码/对象操作，算术只占其中几条——SIMD 加速的那部分被 Python 对象开销淹没（这就是 NumPy 存在的理由：把循环沉到底层 C/SIMD）。判断一段 C 代码有没有被自动向量化（<strong>经验做法</strong>）：<code>gcc -O2 -fopt-info-vec</code> 会打印哪些循环向量化成功；没成功时检查访问步长、条件分支（可用 cmov/掩码改写）和别名问题（<code>restrict</code> 关键字）。</p>
+<h2 id="7-超线程与多核流水线之后的并行层级"><a class="markdownIt-Anchor" href="#7-超线程与多核流水线之后的并行层级"></a> 7. 超线程与多核：流水线之后的并行层级</h2>
+<p>超标量+乱序把一个核内部填满了，但填满只是&quot;理想态&quot;——现实中 load 未命中停顿、分支冲刷都会让执行端口空转。**超线程（SMT，Simultaneous Multi-Threading）**的思路：一个物理核伪装成两个逻辑核，<strong>共享</strong>执行端口/缓存/分支预测器，只是各自维护一套架构状态（通用寄存器组、PC）——线程 A 等 load 时，线程 B 的指令填进空闲端口。本机 <code>lscpu</code> 的证据：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Thread(s) per core:  2      ← 每物理核 2 个逻辑线程（SMT 开启）</span><br><span class="line">Core(s) per socket:  8      ← 8 个物理核（6P+4E 混合架构）</span><br></pre></td></tr></table></figure>
+<p>性能预期要摆正（P&amp;H 4.10 与 Intel 优化手册的口径）：SMT 收益通常 <strong>15~30%</strong>，远不到&quot;两个核&quot;的 2 倍——因为执行资源是共享的，两个线程是<strong>分时复用</strong>流水线而非各占一半。两线程跑同一热点代码（抢同一资源）时 SMT 甚至可能负收益。<strong>经验做法</strong>：计算密集且互相独立的负载开 SMT 有收益；内存带宽已打满的负载（03 章的边界）开 SMT 几乎无收益；对延迟敏感的单线程任务，用 <code>taskset</code> 独占物理核（连同关闭其 SMT 兄弟）是推理服务的常见做法。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">并行的四个层级（本章视角的地图，从细到粗）：</span><br><span class="line">SIMD        一条指令 8 个数     （数据级并行，本篇 6 节）</span><br><span class="line">乱序/超标量  一个核一周期多条指令（指令级并行 ILP，本篇 5 节）</span><br><span class="line">SMT         一个核跑两个线程    （线程级并行 TLP 的资源共享版，本节）</span><br><span class="line">多核        多个独立核          （TLP 的完整版，OS 系列 02/11 篇）</span><br></pre></td></tr></table></figure>
+<p>层级越粗，程序员要操心的事越多：SIMD 与 ILP 基本由编译器+硬件自动兑现，SMT 由操作系统调度，多核才真正把&quot;同步与一致性&quot;推给程序员（OS 系列 11 篇的锁与内存序）。本系列 01–05 章的边界也在此画清：<strong>03 章讲数据怎么被搬到核，04 章讲指令怎么在核里流动，多核协同属于 OS 系列</strong>。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“流水线级数越多越快”</strong>：级数提升主频（每级更短），但误预测惩罚 ≈ 级数 × 周期，级数越深赌错的代价越大；Pentium 4 的 31 级就是历史上为高主频付出的预测代价。级数是频率与误预测风险的平衡，不是越大越好。</li>
+<li><strong>“只有 if 语句才有分支”</strong>：循环回边（<code>jne</code>）、函数调用的间接目标（switch 表、虚函数、函数指针）都经过预测器；间接目标 BTB miss 的代价同样高昂。热路径上的多态虚函数调用是 C++ 常见坑（C++ 系列与 devirtualization 话题呼应）。</li>
+<li><strong>“乱序执行会改变程序结果”</strong>：不会。ROB 保证按程序序提交，数据依赖被尊重；只有可观察的副作用顺序保持不变，程序语义才成立。乱序只是调度，不是改写。</li>
+<li><strong>“分支预测是编译器的事”</strong>：预测器在硬件里，编译器帮不上&quot;猜得准&quot;，但能帮你&quot;少猜&quot;（cmov、查表、循环不变量外提）。两边分工，别混。</li>
+<li><strong>“SIMD 自动向量化开了 -O2 就一定有”</strong>：访问模式不规则、存在别名、循环内有依赖时自动向量化会放弃；显式 intrinsics 或编译指示（<code>#pragma omp simd</code>）是兜底。以 <code>-fopt-info-vec</code> 的输出为准，别靠信仰。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>流水线不缩短单条延迟，只提升吞吐（每周期出一条）；时钟周期由最慢一级决定，主频与流水线深度是同一枚硬币的两面。</li>
+<li>三类冒险：结构（用分立资源消灭）、数据（转发消灭，剩 load-use 停 1 拍靠编译器调度）、控制（预测器 + 冲刷，误预测 ~15-20 周期）。</li>
+<li>预测器赌&quot;历史重演&quot;：2-bit 饱和计数器防抖、BTB 记目标、TAGE 长历史匹配，典型准确率 95-99%；分支越规律越好猜。</li>
+<li>实验：-O0 下有序 vs 无序 3.4 倍；-O2 下编译器用 cmov 把分支变成无条件算术，差距归零——“误预测贵就买确定”（经验做法）。</li>
+<li>现代核 = 超标量（多端口）+ 乱序（ROB 保序提交）+ SIMD（一次 8 个 float）；IPC&gt;1 是常态，IPC 低要先分清前端/后端瓶颈（衔接性能工程 03 的 topdown）。</li>
+<li>Python 吃不到 SIMD 的原因：解释器开销淹没算术收益；把循环沉到 NumPy/C 层才有红利。</li>
+<li>并行四层级：SIMD（数据级）→ 乱序超标量（指令级）→ SMT（一核双线程，共享执行资源，收益 15-30%）→ 多核（OS 系列接管）；层级越粗，越需要程序员操心同步。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>用洗衣店模型算一笔账：4 级流水、每级 1 周期，处理 100 条指令的总周期是多少（含首次填充 3 拍）？若有 10 个分支各误预测 15 拍，总周期变成多少，吞吐下降百分比是多少？</li>
+<li>在 branch.c 里把 <code>data[i]&gt;=128</code> 改成 <code>data[i]&gt;=32</code>（阈值改变数据分布），-O0 下重测 unordered/sorted，解释为什么 sorted 的时间不变而 unordered 可能略有变化（数据分布 → 误预测次数）。</li>
+<li>用 <code>gcc -O2 -fopt-info-vec</code> 编译一个 <code>for(i) c[i]=a[i]+b[i]</code> 循环，观察向量化提示；再加一个 <code>a[i*3]</code> 步长访问重试，记录编译器为什么放弃。</li>
+<li><code>perf stat -e branches,branch-misses ./branch_O0</code>（WSL2 无 PMU 时改用 <code>ltrace</code>/估算或真机运行），算出 unordered 与 sorted 两次运行的 branch-miss 率，与 3 节&quot;抛硬币 50%&quot;的理论对照。</li>
+<li>阅读本机 <code>gcc -O2 -S</code> 生成的任意热点函数汇编，找出 3 条 <code>lea</code>、1 条 <code>cmov</code>（若存在），逐条注释它替代的 C 语义——把 02 章与本章的技能连起来。</li>
+<li>写两个独立的热点循环（各自操作不同数组），分别以&quot;同线程顺序执行&quot;与&quot;两个 SMT 线程并行&quot;运行（<code>taskset -c 0</code> vs <code>taskset -c 0,1</code>，注意先确认 0/1 是否同一物理核的兄弟线程：<code>cat /sys/devices/system/cpu/cpu0/topology/thread_siblings_list</code>），对比总耗时并解释 SMT 收益/损失的来源。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%B3%BB%E7%BB%9F/" rel="tag"># 计算机系统</a>
+              <a href="/tags/%E7%BD%91%E7%BB%9C/" rel="tag"># 网络</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/03-%E7%BC%93%E5%AD%98%E5%B1%82%E7%BA%A7%E4%B8%8E%E5%B1%80%E9%83%A8%E6%80%A7/" rel="prev" title="03-缓存层级与局部性">
+                  <i class="fa fa-angle-left"></i> 03-缓存层级与局部性
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/05-%E6%95%B0%E5%AD%97%E7%9A%84%E8%A1%A8%E7%A4%BA%E4%B8%8E%E6%B5%AE%E7%82%B9%E9%99%B7%E9%98%B1/" rel="next" title="05-数字的表示与浮点陷阱">
+                  05-数字的表示与浮点陷阱 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

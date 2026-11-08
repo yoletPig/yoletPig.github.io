@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 定义共识问题，理解 Paxos 为什么&#39;正确但难懂&#39;，以及 Raft 的设计立场（可理解性优先）。 - 掌握 Raft 三角色、任期、领导者选举的完整规则，并用 Python 模拟选举与脑裂避免。 - 讲透日志复制与提交规则，论证&#39;为什…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="05-共识-Raft详解">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/05-%E5%85%B1%E8%AF%86-Raft%E8%AF%A6%E8%A7%A3/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 定义共识问题，理解 Paxos 为什么&#39;正确但难懂&#39;，以及 Raft 的设计立场（可理解性优先）。 - 掌握 Raft 三角色、任期、领导者选举的完整规则，并用 Python 模拟选举与脑裂避免。 - 讲透日志复制与提交规则，论证&#39;为什…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T05:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.546Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/05-%E5%85%B1%E8%AF%86-Raft%E8%AF%A6%E8%A7%A3/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/05-%E5%85%B1%E8%AF%86-Raft%E8%AF%A6%E8%A7%A3/","path":"2026/09/03/05-共识-Raft详解/","title":"05-共识-Raft详解"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>05-共识-Raft详解 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#05-%E5%85%B1%E8%AF%86-raft%E8%AF%A6%E8%A7%A3"><span class="nav-number">1.</span> <span class="nav-text"> 05 - 共识-Raft详解</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%85%B1%E8%AF%86%E9%97%AE%E9%A2%98%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F%E7%9A%84%E7%9A%87%E5%86%A0"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 共识问题：分布式系统的皇冠</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-paxos-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9A%BE%E6%87%82%E7%9B%B4%E8%A7%89%E7%89%88"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. Paxos 为什么难懂（直觉版）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-raft-%E4%B8%89%E8%A7%92%E8%89%B2%E4%B8%8E%E4%BB%BB%E6%9C%9F"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. Raft 三角色与任期</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E9%A2%86%E5%AF%BC%E8%80%85%E9%80%89%E4%B8%BE%E8%A7%84%E5%88%99-python-%E6%A8%A1%E6%8B%9F"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 领导者选举：规则 + Python 模拟</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E6%97%A5%E5%BF%97%E5%A4%8D%E5%88%B6%E4%B8%8E%E6%8F%90%E4%BA%A4%E8%A7%84%E5%88%99"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 日志复制与提交规则</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%AE%89%E5%85%A8%E6%80%A7%E8%AE%BA%E8%AF%81%E4%B8%8E%E6%88%90%E5%91%98%E5%8F%98%E6%9B%B4"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 安全性论证与成员变更</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/05-%E5%85%B1%E8%AF%86-Raft%E8%AF%A6%E8%A7%A3/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="05-共识-Raft详解 | Yoleen的博客">
+      <meta itemprop="description" content="- 定义共识问题，理解 Paxos 为什么&#39;正确但难懂&#39;，以及 Raft 的设计立场（可理解性优先）。 - 掌握 Raft 三角色、任期、领导者选举的完整规则，并用 Python 模拟选举与脑裂避免。 - 讲透日志复制与提交规则，论证&#39;为什…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          05-共识-Raft详解
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 13:00:00" itemprop="dateCreated datePublished" datetime="2026-09-03T13:00:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">分布式系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.6k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>17 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 定义共识问题，理解 Paxos 为什么'正确但难懂'，以及 Raft 的设计立场（可理解性优先）。 - 掌握 Raft 三角色、任期、领导者选举的完整规则，并用 Python 模拟选举与脑裂避免。 - 讲透日志复制与提交规则，论证'为什…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="05-共识-raft详解"><a class="markdownIt-Anchor" href="#05-共识-raft详解"></a> 05 - 共识-Raft详解</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>定义共识问题，理解 Paxos 为什么&quot;正确但难懂&quot;，以及 Raft 的设计立场（可理解性优先）。</li>
+<li>掌握 Raft 三角色、任期、领导者选举的完整规则，并用 Python 模拟选举与脑裂避免。</li>
+<li>讲透日志复制与提交规则，论证&quot;为什么必须多数派提交&quot;与两条安全性子问题（选举限制、日志匹配）。</li>
+<li>了解成员变更与日志压缩的概念，能说出生产 Raft 系统（etcd）对这些点的处理。</li>
+</ul>
+<h2 id="1-共识问题分布式系统的皇冠"><a class="markdownIt-Anchor" href="#1-共识问题分布式系统的皇冠"></a> 1. 共识问题：分布式系统的皇冠</h2>
+<p>共识（consensus）：<strong>N 个节点对&quot;某个值&quot;达成一致，且该值必须由某个节点提议过</strong>。更实用的形式是<strong>状态机复制（replicated state machine）</strong>：让 N 个节点以<strong>相同的顺序</strong>执行<strong>相同的命令序列</strong>，则它们的状态永远一致——共识算法的任务就是对这个命令序列达成一致。</p>
+<p>为什么它难？因为 02 章的两个事实叠加：节点会宕机（可能永远回不来，也可能 5 秒后复活且不知中间发生了什么）+ 网络会分区（消息任意延迟/丢失）。在这个世界里，你要防的是：</p>
+<ul>
+<li>两个节点同时认为自己是&quot;决定者&quot;（脑裂）。</li>
+<li>一个决定在部分节点生效、部分节点不知道。</li>
+<li>节点宕机重启后与系统状态脱节。</li>
+</ul>
+<p>FLP 不可能性（Fischer, Lynch, Paterson, 1985）：在<strong>异步</strong>系统（消息延迟无上界）+ 哪怕只有一个节点可能崩溃的前提下，不存在保证 termination 的确定性共识算法。工程共识算法的出路：引入<strong>超时/随机化</strong>（把&quot;异步&quot;弱化为&quot;部分同步&quot;），放弃&quot;最坏情况下必然终止&quot;而保证&quot;概率上快速终止&quot;。Raft 的随机选举超时、Paxos 的 proposer 冲突退避，都是对 FLP 的工程回应。</p>
+<h2 id="2-paxos-为什么难懂直觉版"><a class="markdownIt-Anchor" href="#2-paxos-为什么难懂直觉版"></a> 2. Paxos 为什么难懂（直觉版）</h2>
+<p>Paxos（Leslie Lamport, <em>The Part-Time Parliament</em>, 1998；由于行文用虚构的希腊议会写成、晦涩难懂，业界哀嚎一片，Lamport 又写了 <em>Paxos Made Simple</em>, 2001，全文 13 页没有一条图）。它由两阶段组成：</p>
+<ul>
+<li><strong>Prepare(n)</strong>：提议者选一个编号 n，问大家&quot;你们见过比 n 更大的提议吗？&quot;多数派承诺不再接受 &lt; n 的提议，并回报自己已接受的最大提议。</li>
+<li><strong>Accept(n, v)</strong>：若 prepare 过半通过，提议者用 prepare 中见到的最高提议的值 v（没有则自选），发出 accept，过半通过则被选定。</li>
+</ul>
+<p>它正确，但直接工程化时问题成堆：单值 Paxos 如何扩展成日志（Multi-Paxos）需要自己补工程细节（leader 选举、日志空洞、leader 变更期间的日志对齐），论文几乎没写；状态机多、正确性论证绕；<code>Paxos 的活人实现少得可怜</code>（Ongaro 的博士论文原话之一：<em>There are significant gaps between the description of the Paxos algorithm and the needs of a real-world system</em>）。</p>
+<p>Raft 的回答（Ongaro &amp; Ousterhout, <em>In Search of an Understandable Consensus Algorithm</em>, USENIX ATC 2014；Ongaro 博士论文 <em>Consensus: Bridging Theory and Practice</em>, 2014）：<strong>问题分解 + 状态空间缩减</strong>。把共识拆成三个相对独立的子问题（领导者选举、日志复制、安全性），每个都有清晰的直觉；再用&quot;强 leader&quot;模型把一切都归到单一决策点，减少需要同时思考的状态组合。</p>
+<h2 id="3-raft-三角色与任期"><a class="markdownIt-Anchor" href="#3-raft-三角色与任期"></a> 3. Raft 三角色与任期</h2>
+<p>节点任一时刻处于三种角色之一：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">     ┌────────────── 超时未收到心跳 ──────────────┐</span><br><span class="line">     ▼                                            │</span><br><span class="line">[Follower] ──── 任期内收到多数派投票 ────► [Leader]</span><br><span class="line">     ▲                                            │</span><br><span class="line">     │  发现更高任期      发现更高任期               │ 心跳(空AppendEntries)持续发给所有人</span><br><span class="line">     └────── [Candidate] ◄────────────────────────┘</span><br><span class="line">               选举超时后 term+1，投自己，</span><br><span class="line">               并行拉票(RequestVote)</span><br></pre></td></tr></table></figure>
+<ul>
+<li><strong>Follower</strong>：被动接受一切；只响应来自 leader/candidate 的请求。</li>
+<li><strong>Candidate</strong>：选举超时后自增任期 term，投自己一票，向所有节点拉票；收到多数派票 → Leader；收到别人更高任期的消息 → 退回 Follower。</li>
+<li><strong>Leader</strong>：处理所有客户端请求，通过心跳维持权威。</li>
+</ul>
+<p>**任期（term）**是 Raft 的逻辑时钟（02 章逻辑时钟的应用）：每次选举 term+1。任期是全局的&quot;第几届政府&quot;编号，<strong>任何消息都携带任期，接收方发现消息任期比自己小就直接拒绝</strong>——这一条规则挡住了绝大多数脑裂场景（旧 leader 复活后它还带着旧 term，所有新请求都会被拒）。网络分区中被隔离的旧 leader 心跳发不进多数派，新区很快选出新 leader（term 更高），旧 leader 即使继续给 follower 发心跳也会因任期过小被拒。</p>
+<p>Raft 的核心不变量（可以背下来作为检验理解的标尺）：</p>
+<ol>
+<li><strong>选举安全</strong>：一个任期内每个节点至多投一票（先到先得 + 日志检查），多数派 + 一票限制 ⇒ 每任期至多一个 leader。</li>
+<li><strong>日志匹配</strong>：若两日志同 index 处 term 相同，则该位置及之前的所有条目全部相同。</li>
+<li><strong>Leader 完备性</strong>：term T 当选的 leader 拥有此前所有已提交的日志（靠选举限制保证）。</li>
+</ol>
+<h2 id="4-领导者选举规则-python-模拟"><a class="markdownIt-Anchor" href="#4-领导者选举规则-python-模拟"></a> 4. 领导者选举：规则 + Python 模拟</h2>
+<p>选举规则清单（Raft 论文 Figure 2 的 RequestVote 部分）：</p>
+<ol>
+<li>Follower 在 <code>election_timeout</code>（<strong>随机化</strong>在 150~300ms，论文建议值）内没听到 leader 心跳 → 自增 term、转 Candidate、投自己。</li>
+<li>Candidate 并行向所有节点发 RequestVote(term, candidateId, lastLogIndex, lastLogTerm)。</li>
+<li>投票人决策（<strong>选举限制</strong>，防&quot;日志不全者当选&quot;）：
+<ul>
+<li>我的 term 更大 → 拒绝（你过时了）；</li>
+<li>本任期我已投过别人 → 拒绝（一票限制）；</li>
+<li>候选人日志<strong>不比我的新</strong> → 拒绝（比较规则：先比最后一条的 term，再比 index）；</li>
+<li>否则投给候选人。</li>
+</ul>
+</li>
+<li>Candidate 收到多数派票 → 成为 Leader，立即广播心跳宣示权威。</li>
+</ol>
+<p><strong>为什么必须随机化超时</strong>：如果所有节点超时相同，同时超时、同时拉票、互相投自己 → 活锁（每个任期都选不出）。随机错开让&quot;先醒的那个&quot;大概率在别人超时前拉到多数派。<strong>经验做法</strong>：随机化是分布式避免同步活锁的通用手段，凡&quot;超时触发竞争&quot;的场景都该随机抖动（第 10 章重试抖动同源）。</p>
+<p><strong>为什么必须多数派</strong>：两个 leader（不同分区各一个）必然各持有少于半数的票，而一票限制保证同一任期内票不重复 → 两个多数派集合必相交 → 交点不可能投两票 → 矛盾。多数派相交同时保证了&quot;新 leader 的票箱里有旧 leader 提交过的所有日志&quot;（Leader 完备性），这是数据不丢的根。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># raft_election.py —— 3 节点 Raft 选举模拟：随机超时、一票限制、日志新旧检查、脑裂避免</span></span><br><span class="line"><span class="keyword">import</span> asyncio, random</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">RaftNode</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, name, peers, bus, election_range=(<span class="params"><span class="number">0.15</span>, <span class="number">0.30</span></span>)</span>):</span><br><span class="line">        <span class="variable language_">self</span>.name, <span class="variable language_">self</span>.peers, <span class="variable language_">self</span>.bus = name, peers, bus   <span class="comment"># bus: 共享消息总线(模拟网络)</span></span><br><span class="line">        <span class="variable language_">self</span>.role = <span class="string">&quot;follower&quot;</span></span><br><span class="line">        <span class="variable language_">self</span>.term = <span class="number">0</span></span><br><span class="line">        <span class="variable language_">self</span>.voted_for = <span class="literal">None</span>          <span class="comment"># 本任期投给谁（一票限制）</span></span><br><span class="line">        <span class="variable language_">self</span>.log = []                  <span class="comment"># [(term, cmd)] —— 仅用于&quot;日志新旧&quot;比较</span></span><br><span class="line">        <span class="variable language_">self</span>.election_range = election_range</span><br><span class="line">        <span class="variable language_">self</span>.election_deadline = <span class="number">0.0</span></span><br><span class="line">        <span class="variable language_">self</span>._task = asyncio.create_task(<span class="variable language_">self</span>._loop())</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">log_is_newer_than</span>(<span class="params">self, last_idx, last_term</span>):</span><br><span class="line">        <span class="string">&quot;&quot;&quot;候选日志是否不比我的旧：先比最后条目的term，再比index&quot;&quot;&quot;</span></span><br><span class="line">        my_last_term = <span class="variable language_">self</span>.log[-<span class="number">1</span>][<span class="number">0</span>] <span class="keyword">if</span> <span class="variable language_">self</span>.log <span class="keyword">else</span> <span class="number">0</span></span><br><span class="line">        <span class="keyword">if</span> last_term != my_last_term:</span><br><span class="line">            <span class="keyword">return</span> last_term &gt; my_last_term</span><br><span class="line">        <span class="keyword">return</span> last_idx &gt;= <span class="built_in">len</span>(<span class="variable language_">self</span>.log)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">_loop</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">while</span> <span class="literal">True</span>:</span><br><span class="line">            <span class="keyword">await</span> asyncio.sleep(<span class="number">0.01</span>)</span><br><span class="line">            now = asyncio.get_event_loop().time()</span><br><span class="line">            <span class="keyword">if</span> <span class="variable language_">self</span>.role != <span class="string">&quot;leader&quot;</span> <span class="keyword">and</span> now &gt;= <span class="variable language_">self</span>.election_deadline:</span><br><span class="line">                <span class="keyword">await</span> <span class="variable language_">self</span>.start_election()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">start_election</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="variable language_">self</span>.term += <span class="number">1</span></span><br><span class="line">        <span class="variable language_">self</span>.role, <span class="variable language_">self</span>.voted_for = <span class="string">&quot;candidate&quot;</span>, <span class="variable language_">self</span>.name</span><br><span class="line">        <span class="variable language_">self</span>.election_deadline = asyncio.get_event_loop().time() + random.uniform(*<span class="variable language_">self</span>.election_range)</span><br><span class="line">        votes = &#123;<span class="variable language_">self</span>.name&#125;</span><br><span class="line">        last_term = <span class="variable language_">self</span>.log[-<span class="number">1</span>][<span class="number">0</span>] <span class="keyword">if</span> <span class="variable language_">self</span>.log <span class="keyword">else</span> <span class="number">0</span></span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;  <span class="subst">&#123;self.name&#125;</span>: 超时 → 竞选 term=<span class="subst">&#123;self.term&#125;</span>&quot;</span>)</span><br><span class="line">        <span class="keyword">for</span> p <span class="keyword">in</span> <span class="variable language_">self</span>.peers:</span><br><span class="line">            <span class="keyword">await</span> <span class="variable language_">self</span>.bus.send(p.name, (<span class="string">&quot;req_vote&quot;</span>, <span class="variable language_">self</span>.term, <span class="built_in">len</span>(<span class="variable language_">self</span>.log), last_term, <span class="variable language_">self</span>.name))</span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">on_request_vote</span>(<span class="params">self, term, last_idx, last_term, cand</span>):</span><br><span class="line">        <span class="keyword">if</span> term &gt; <span class="variable language_">self</span>.term:                       <span class="comment"># 看到更大任期：更新并退回 follower</span></span><br><span class="line">            <span class="variable language_">self</span>.term, <span class="variable language_">self</span>.role = term, <span class="string">&quot;follower&quot;</span></span><br><span class="line">            <span class="variable language_">self</span>.voted_for = <span class="literal">None</span></span><br><span class="line">        <span class="keyword">if</span> term == <span class="variable language_">self</span>.term <span class="keyword">and</span> <span class="variable language_">self</span>.voted_for <span class="keyword">is</span> <span class="literal">None</span> <span class="keyword">and</span> <span class="variable language_">self</span>.log_is_newer_than(last_idx, last_term):</span><br><span class="line">            <span class="variable language_">self</span>.voted_for = cand                  <span class="comment"># 一票限制 + 日志检查，先到先得</span></span><br><span class="line">            <span class="keyword">await</span> <span class="variable language_">self</span>.bus.send(cand, (<span class="string">&quot;vote&quot;</span>, <span class="variable language_">self</span>.term, <span class="variable language_">self</span>.name))</span><br><span class="line">        <span class="keyword">elif</span> term &lt; <span class="variable language_">self</span>.term:</span><br><span class="line">            <span class="keyword">await</span> <span class="variable language_">self</span>.bus.send(cand, (<span class="string">&quot;reject&quot;</span>, <span class="variable language_">self</span>.term, <span class="variable language_">self</span>.name))  <span class="comment"># 旧任期拉票：拒绝</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">on_vote</span>(<span class="params">self, term, voter</span>):</span><br><span class="line">        <span class="keyword">if</span> <span class="variable language_">self</span>.role != <span class="string">&quot;candidate&quot;</span> <span class="keyword">or</span> term != <span class="variable language_">self</span>.term:</span><br><span class="line">            <span class="keyword">return</span></span><br><span class="line">        votes = <span class="built_in">getattr</span>(<span class="variable language_">self</span>, <span class="string">&quot;_votes&quot;</span>, &#123;<span class="variable language_">self</span>.name&#125;); votes.add(voter); <span class="variable language_">self</span>._votes = votes</span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">len</span>(votes) &gt; (<span class="built_in">len</span>(<span class="variable language_">self</span>.peers) + <span class="number">1</span>) // <span class="number">2</span>:   <span class="comment"># 多数派：n=3 → 2票</span></span><br><span class="line">            <span class="variable language_">self</span>.role = <span class="string">&quot;leader&quot;</span></span><br><span class="line">            <span class="built_in">print</span>(<span class="string">f&quot;  <span class="subst">&#123;self.name&#125;</span>: 当选 term=<span class="subst">&#123;self.term&#125;</span> 的 leader（票:<span class="subst">&#123;<span class="built_in">sorted</span>(votes)&#125;</span>）&quot;</span>)</span><br><span class="line">            <span class="keyword">for</span> p <span class="keyword">in</span> <span class="variable language_">self</span>.peers:                     <span class="comment"># 立即广播心跳宣示权威</span></span><br><span class="line">                <span class="keyword">await</span> <span class="variable language_">self</span>.bus.send(p.name, (<span class="string">&quot;heartbeat&quot;</span>, <span class="variable language_">self</span>.term, <span class="variable language_">self</span>.name))</span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">on_heartbeat</span>(<span class="params">self, term, leader</span>):</span><br><span class="line">        <span class="keyword">if</span> term &gt;= <span class="variable language_">self</span>.term:                        <span class="comment"># 认可权威：更新任期、重置选举计时</span></span><br><span class="line">            <span class="variable language_">self</span>.term, <span class="variable language_">self</span>.role = <span class="built_in">max</span>(term, <span class="variable language_">self</span>.term), <span class="string">&quot;follower&quot;</span></span><br><span class="line">            <span class="variable language_">self</span>.election_deadline = asyncio.get_event_loop().time() + random.uniform(*<span class="variable language_">self</span>.election_range)</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Bus</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;极简消息总线：按节点名投递，模拟网络（丢消息可扩展）&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, nodes</span>): <span class="variable language_">self</span>.nodes = nodes</span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">send</span>(<span class="params">self, to, msg</span>):</span><br><span class="line">        node = <span class="variable language_">self</span>.nodes[to]</span><br><span class="line">        kind = msg[<span class="number">0</span>]</span><br><span class="line">        <span class="keyword">await</span> node.on_request_vote(*msg[<span class="number">1</span>:]) <span class="keyword">if</span> kind == <span class="string">&quot;req_vote&quot;</span> <span class="keyword">else</span> (</span><br><span class="line">            node.on_vote(*msg[<span class="number">1</span>:]) <span class="keyword">if</span> kind == <span class="string">&quot;vote&quot;</span> <span class="keyword">else</span> (</span><br><span class="line">            node.on_heartbeat(*msg[<span class="number">1</span>:]) <span class="keyword">if</span> kind == <span class="string">&quot;heartbeat&quot;</span> <span class="keyword">else</span> <span class="literal">None</span>))</span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    names = [<span class="string">&quot;A&quot;</span>, <span class="string">&quot;B&quot;</span>, <span class="string">&quot;C&quot;</span>]</span><br><span class="line">    nodes = &#123;n: RaftNode(n, [], <span class="literal">None</span>) <span class="keyword">for</span> n <span class="keyword">in</span> names&#125;</span><br><span class="line">    <span class="keyword">for</span> n <span class="keyword">in</span> nodes.values(): n.peers = [x <span class="keyword">for</span> x <span class="keyword">in</span> nodes.values() <span class="keyword">if</span> x <span class="keyword">is</span> <span class="keyword">not</span> n]</span><br><span class="line">    <span class="keyword">for</span> n <span class="keyword">in</span> nodes.values(): n.bus = Bus(nodes)   <span class="comment"># 补上总线</span></span><br><span class="line">    <span class="keyword">await</span> asyncio.sleep(<span class="number">1.0</span>)</span><br><span class="line">    leader = [n <span class="keyword">for</span> n <span class="keyword">in</span> nodes.values() <span class="keyword">if</span> n.role == <span class="string">&quot;leader&quot;</span>]</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;1秒后 leader:&quot;</span>, [(n.name, n.term) <span class="keyword">for</span> n <span class="keyword">in</span> leader])</span><br><span class="line"></span><br><span class="line">asyncio.run(main())</span><br></pre></td></tr></table></figure>
+<p>多跑几次可以观察到：几乎每次都在一个任期选出 leader；偶尔出现&quot;瓜分选票&quot;（两个 candidate 各得 1 票）但随机超时让下一轮几乎必然选出——这就是随机化对 FLP 活锁的工程破解。</p>
+<h2 id="5-日志复制与提交规则"><a class="markdownIt-Anchor" href="#5-日志复制与提交规则"></a> 5. 日志复制与提交规则</h2>
+<p>Leader 收到客户端命令后的流程：</p>
+<ol>
+<li>追加到本地日志（未提交状态）。</li>
+<li>并行发 AppendEntries 给所有 follower（携带前一条日志的 index/term 做一致性检查）。</li>
+<li>follower 一致性检查通过 → 追加本地 → 回 ack；检查失败 → leader 递减 nextIndex 重试（日志回溯对齐，修复 follower 缺日志/冲突日志）。</li>
+<li><strong>多数派 ack → leader 提交</strong>（应用到状态机）→ 后续心跳携带 commitIndex → follower 也提交。</li>
+<li>回复客户端成功。</li>
+</ol>
+<p><strong>为什么必须多数派才能提交</strong>（本节核心论证，面试高频）：</p>
+<ul>
+<li>若允许少数派提交：分区期间，少数派侧 leader 把命令&quot;提交&quot;了（只有 1/3 节点有）；多数派侧同时选出新 leader 也提交了不同命令 → 同一 index 出现两个不同命令 → 日志匹配性质被破坏 → 状态机分叉，永不可修复。多数派 + 单调 term 保证：<strong>任何已提交的条目必然存在于所有未来 leader 的日志里</strong>（提交过半 ⇒ 任何未来多数派当选票箱与之相交 ⇒ 交点节点持有该条目 ⇒ 选举限制使日志更旧者无法当选）。</li>
+<li>推论（Raft 论文第 5.4.2 节的提交规则）：<strong>leader 不直接提交前任任期的条目</strong>——只通过提交&quot;自己任期内的新条目&quot;间接把旧条目带过去（因为旧条目即使过半复制，也无法证明&quot;没有更新的 leader 会覆盖它&quot;，新条目的提交才隐含了这一点）。这是 Raft 与直觉差异最大的一条规则。</li>
+</ul>
+<p>故障场景走查（思考题格式，先自己推再往下看）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">场景：3 节点 [A(旧leader, term=1), B, C]，A 与 B/C 分区</span><br><span class="line">1. A 还活着，继续当&quot;它以为的 leader&quot;，但它发不出多数派</span><br><span class="line">2. B/C 在随机超时后选出新 leader（term=2，比如 B）</span><br><span class="line">3. 客户端连 A 写入 x=1 → A 记日志但永远凑不齐多数派 ack → 无法提交 → 不回成功</span><br><span class="line">4. 客户端连 B 写入 y=2 → 多数派(B,C) → 提交成功</span><br><span class="line">5. 分区恢复：A 发心跳(term=1) → B/C 发现 term 更小 → 拒绝并回 term=2</span><br><span class="line">6. A 退回 follower，回滚未提交的 x=1，从 B 同步 y=2</span><br><span class="line">结论：x=1 从未&quot;成功&quot;过（未提交），系统仍然一致；A 的幽灵权威被任期挡住</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># raft_append.py —— 日志复制与提交规则的最小模拟（单 leader 正常路径 + 未过半不提交）</span></span><br><span class="line"><span class="keyword">import</span> asyncio, random</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">AppendNode</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, name</span>):</span><br><span class="line">        <span class="variable language_">self</span>.name, <span class="variable language_">self</span>.log, <span class="variable language_">self</span>.commit = name, [], -<span class="number">1</span>   <span class="comment"># log: [(term,cmd)], commit: 已提交index</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">majority_of</span>(<span class="params">self, total</span>): <span class="keyword">return</span> total // <span class="number">2</span> + <span class="number">1</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">replicate_command</span>(<span class="params">leader: AppendNode, followers: <span class="built_in">list</span>, cmd, term</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;leader 追加 → 并行复制 → 多数派才提交（Raft 提交规则）&quot;&quot;&quot;</span></span><br><span class="line">    leader.log.append((term, cmd))</span><br><span class="line">    my_idx = <span class="built_in">len</span>(leader.log) - <span class="number">1</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">send_to</span>(<span class="params">f</span>):</span><br><span class="line">        <span class="keyword">if</span> f.log <span class="keyword">and</span> my_idx &gt; <span class="number">0</span> <span class="keyword">and</span> <span class="built_in">len</span>(f.log) &lt;= my_idx:</span><br><span class="line">            <span class="comment"># 一致性检查：前一条不匹配则拒绝（真实 Raft 会回溯对齐，这里简化为拒绝）</span></span><br><span class="line">            <span class="keyword">return</span> <span class="literal">False</span></span><br><span class="line">        f.log = f.log[:my_idx] + [leader.log[my_idx]]      <span class="comment"># 截断冲突 + 追加</span></span><br><span class="line">        <span class="keyword">return</span> <span class="literal">True</span></span><br><span class="line"></span><br><span class="line">    acks = <span class="built_in">sum</span>(<span class="keyword">await</span> asyncio.gather(*[send_to(f) <span class="keyword">for</span> f <span class="keyword">in</span> followers])) + <span class="number">1</span></span><br><span class="line">    <span class="keyword">if</span> acks &gt;= leader.majority_of(<span class="built_in">len</span>(followers) + <span class="number">1</span>):</span><br><span class="line">        leader.commit = my_idx                              <span class="comment"># 多数派：提交</span></span><br><span class="line">        <span class="keyword">for</span> f <span class="keyword">in</span> followers:</span><br><span class="line">            f.commit = <span class="built_in">min</span>(f.commit, my_idx) <span class="keyword">if</span> <span class="built_in">len</span>(f.log) &gt; my_idx <span class="keyword">else</span> f.commit</span><br><span class="line">        <span class="keyword">return</span> <span class="string">f&quot;已提交 index=<span class="subst">&#123;my_idx&#125;</span>（<span class="subst">&#123;acks&#125;</span> acks）&quot;</span></span><br><span class="line">    <span class="keyword">return</span> <span class="string">f&quot;未提交 index=<span class="subst">&#123;my_idx&#125;</span>（仅 <span class="subst">&#123;acks&#125;</span> acks &lt; 多数派）——客户端不得视为成功&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    a, b, c = AppendNode(<span class="string">&quot;A&quot;</span>), AppendNode(<span class="string">&quot;B&quot;</span>), AppendNode(<span class="string">&quot;C&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;正常:&quot;</span>, <span class="keyword">await</span> replicate_command(a, [b, c], <span class="string">&quot;set x=1&quot;</span>, term=<span class="number">1</span>))</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;A/B 日志:&quot;</span>, a.log, b.log, <span class="string">&quot;commit:&quot;</span>, a.commit, b.commit)</span><br><span class="line">    <span class="comment"># 分区模拟：C 掉线，2/3 仍多数 → 提交成功；再让 B 也掉线 → 1/3 不提交</span></span><br><span class="line">    c.log, c.commit = [], -<span class="number">1</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;C 掉线后写:&quot;</span>, <span class="keyword">await</span> replicate_command(a, [b], <span class="string">&quot;set y=2&quot;</span>, term=<span class="number">1</span>))</span><br><span class="line">    b.log, b.commit = [], -<span class="number">1</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;B也掉线后写:&quot;</span>, <span class="keyword">await</span> replicate_command(a, [], <span class="string">&quot;set z=3&quot;</span>, term=<span class="number">1</span>))</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;A 的 commit:&quot;</span>, a.commit, <span class="string">&quot;← 未过半的 z=3 不会被应用&quot;</span>)</span><br><span class="line"></span><br><span class="line">asyncio.run(main())</span><br></pre></td></tr></table></figure>
+<h2 id="6-安全性论证与成员变更"><a class="markdownIt-Anchor" href="#6-安全性论证与成员变更"></a> 6. 安全性论证与成员变更</h2>
+<p>Raft 正确性由五条性质支撑（论文第 5 节），前两条靠选举，后两条靠复制规则：</p>
+<ol>
+<li><strong>选举安全</strong>（一票限制 + 多数派）。</li>
+<li><strong>Leader 只追加（Leader Append-Only）</strong>：leader 不删不改自己日志，只追加。</li>
+<li><strong>日志匹配</strong>（AppendEntries 的一致性检查 + 回溯对齐）。</li>
+<li><strong>Leader 完备性</strong>（选举限制：日志旧者选不上）。</li>
+<li><strong>状态机安全</strong>：同 index 同命令应用到所有状态机（4 + 提交规则的推论）。</li>
+</ol>
+<p><strong>成员变更</strong>（集群增删节点）概念：朴素做法&quot;全体同时换配置&quot;有致命缺陷——旧配置 3 节点（AB C 多数派 A,B）与新配置 4 节点（A B C D 多数派 A,B,C… 实际 C,D）可能选出两个不相交多数派的 leader。Raft 论文用<strong>联合共识（joint consensus）<strong>两阶段切换；工程上更常用</strong>单节点变更（single-server change）</strong>（etcd/raft 实现采用，见 <em>Consensus: Bridging Theory and Practice</em> 第 4 章）：一次只加/删一个节点，数学上保证新旧配置多数派必相交（3→4：任何旧多数派 {2} 与新多数派 {3} 在 4 节点里必交）。<strong>经验做法</strong>：生产变更一律单节点逐步做，不要一次换一批。</p>
+<p><strong>日志压缩/快照</strong>：日志无限增长会撑爆磁盘并拖慢重启恢复；做法是状态机定期打快照，快照之前的日志整段丢弃， follower 落后太多时 leader 直接发快照（InstallSnapshot RPC）而不是逐条补日志。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“Raft 是强一致的，所以读写都走 leader 就万事大吉”</strong>：leader 可能已换人（客户端缓存了旧 leader 地址）；读到已复制未提交的数据也可能发生。要线性一致读需要额外动作：ReadIndex 或 Lease Read（etcd 的实现，阅读 etcd 文档《Raft 协议》章节；Lease Read 依赖时钟假设，ReadIndex 不依赖）。直接读 leader 本地状态机是常见的一致性漏洞。</li>
+<li><strong>“选举超时随机区间越大越好”</strong>：区间大了故障检测慢（可用性下降），小了容易连续瓜分选票。经验做法：取心跳间隔的 5~10 倍，并保证&quot;最快者完成拉票&quot;的概率压倒性（Raft 论文给出数学分析，结论 150~300ms 对 1ms 心跳够用）。</li>
+<li><strong>“分区时少数派也会响应写请求，所以有脑裂”</strong>：少数派 leader 写不进去（凑不齐多数派 ack），客户端得不到成功确认；它唯一能&quot;破坏&quot;的是承诺语义——只要存储端只认&quot;已提交&quot;状态，分区自愈后它会回滚。真正的脑裂防护=任期/纪元 + 多数派，二者缺一不可。</li>
+<li><strong>“收到多数派 ack 就可以回复客户端了，无论是谁的 ack”</strong>：必须是<strong>当前任期</strong>的多数派。旧任期里复制出去的多数派 ack 不能直接算提交（第 5 节提交规则）。这条错了会引入已提交条目被覆盖的窗口。</li>
+<li><strong>“日志匹配性质天然成立，不用检查”</strong>：它靠 AppendEntries 的一致性检查（带前一条 index/term）+ 失败时回溯来<strong>维护</strong>；跳过检查，follower 上的冲突旧日志（前任 leader 留下的未提交条目）不会被截断，分叉就发生了。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>共识 = 状态机复制的排序问题；FLP 证明纯异步下不可能，工程解=超时+随机化。</li>
+<li>Paxos 正确但工程空洞；Raft 用问题分解 + 强 leader 换可理解性（ATC 2014 论文标题即立场）。</li>
+<li>任期是逻辑时钟；&quot;消息任期小即拒绝&quot;一条规则挡掉绝大多数脑裂；随机选举超时破解选票瓜分活锁。</li>
+<li>选举限制（日志新旧检查）+ 一票限制 + 多数派 ⇒ Leader 完备性 ⇒ 已提交条目永不被覆盖。</li>
+<li>提交必须当前任期多数派；leader 不直接提交旧任期条目；日志匹配靠一致性检查维护。</li>
+<li>成员变更用单节点变更（etcd 实践）；日志用快照压缩——这两个工程点 13 章实战会用。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>跑通 raft_election.py：把随机超时区间改成固定值（比如全部 0.2s），统计 100 次实验中出现&quot;任期递增多次才选出 leader&quot;（活锁迹象）的次数；再恢复随机化对比——用数据说明随机化的必要性。</li>
+<li>在 raft_election.py 里给节点加日志：给 A 两条 term=1 的日志、B/C 空。模拟&quot;日志最旧的 C 先超时拉票&quot;，验证 on_request_vote 的日志检查会拒绝 C；然后让 B（日志与 A 同新）当选。</li>
+<li>用 raft_append.py 构造&quot;前任任期条目&quot;场景：term=1 时 A 复制 x=1 给 B（C 掉线，未过半不提交）；C 回来后 B 当选 term=2，写下&quot;为什么 B 必须先提交一条 term=2 的命令才能安全提交 x=1&quot;。</li>
+<li>把 raft_election.py 与 raft_append.py 合并：当选 leader 后持续接收 3 条客户端命令并复制提交，打印三个节点最终的 log 与 commit，验证状态机一致。</li>
+<li>阅读题：读 Raft 论文第 5.4 节（安全性）与 etcd 文档的学习页（<a target="_blank" rel="noopener" href="http://raft.sourceforge.io">raft.sourceforge.io</a> 若失效则读 etcd raft README），用自己的话写出&quot;Lease Read 与 ReadIndex 的区别&quot;及各自依赖的假设（提示：时钟假设、quorum 读确认）。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/04-%E5%A4%8D%E5%88%B6/" rel="prev" title="04-复制">
+                  <i class="fa fa-angle-left"></i> 04-复制
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/06-%E5%88%86%E5%8C%BA%E4%B8%8E%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C/" rel="next" title="06-分区与一致性哈希">
+                  06-分区与一致性哈希 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

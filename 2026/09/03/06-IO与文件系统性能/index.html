@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 建立 IO 全链路地图：应用 write → 页缓存 → 脏页回写 → 块层调度 → 设备，知道每层能优化什么。 - 逐列读懂 iostat -x，并识破 %util&#x2F;await 两大陷阱。 - 会用 fio 做规范的磁盘基准（顺序&#x2F;随…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="06-IO与文件系统性能">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/06-IO%E4%B8%8E%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E6%80%A7%E8%83%BD/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 建立 IO 全链路地图：应用 write → 页缓存 → 脏页回写 → 块层调度 → 设备，知道每层能优化什么。 - 逐列读懂 iostat -x，并识破 %util&#x2F;await 两大陷阱。 - 会用 fio 做规范的磁盘基准（顺序&#x2F;随…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T23:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.542Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Linux">
+<meta property="article:tag" content="性能优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/06-IO%E4%B8%8E%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E6%80%A7%E8%83%BD/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/06-IO%E4%B8%8E%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E6%80%A7%E8%83%BD/","path":"2026/09/03/06-IO与文件系统性能/","title":"06-IO与文件系统性能"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>06-IO与文件系统性能 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#06-io%E4%B8%8E%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E6%80%A7%E8%83%BD"><span class="nav-number">1.</span> <span class="nav-text"> 06 - IO与文件系统性能</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%9D%97%E5%B1%82%E5%85%A8%E6%99%AF%E4%BD%A0%E7%9A%84-write-%E5%88%B0%E4%BA%86%E7%9B%98%E4%B8%8A%E5%90%97"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 块层全景：你的 write 到了盘上吗</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-iostat-%E9%80%90%E5%88%97%E8%A7%A3%E8%AF%BB%E4%B8%8E%E4%B8%A4%E5%A4%A7%E9%99%B7%E9%98%B1"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. iostat 逐列解读与两大陷阱</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-fio-%E5%9F%BA%E5%87%86%E6%B5%8B%E8%AF%95%E7%BB%99%E7%9B%98%E5%8A%9E%E4%BD%93%E6%A3%80"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. fio 基准测试：给盘&quot;办体检&quot;</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E9%80%89%E6%8B%A9%E5%B8%B8%E8%AF%86%E4%B8%8E%E6%8C%82%E8%BD%BD%E9%80%89%E9%A1%B9"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 文件系统选择常识与挂载选项</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-mmap-vs-read%E4%B8%A4%E6%9D%A1%E8%AF%BB%E6%96%87%E4%BB%B6%E7%9A%84%E8%B7%AF%E7%BA%BF"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. mmap vs read：两条读文件的路线</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E9%A1%B5%E7%BC%93%E5%AD%98%E8%A7%82%E6%B5%8B%E4%B8%8E%E5%B0%8F%E6%96%87%E4%BB%B6%E9%97%AE%E9%A2%98"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 页缓存观测与“小文件问题”</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%8A%A8%E6%89%8B%E5%AE%9E%E9%AA%8C%E4%B8%80%E4%B8%AA%E6%AF%8F%E6%9D%A1%E4%B8%80-flush%E7%9A%84%E6%97%A5%E5%BF%97%E5%99%A8"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 动手实验：一个“每条一 flush”的日志器</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/06-IO%E4%B8%8E%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E6%80%A7%E8%83%BD/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="06-IO与文件系统性能 | Yoleen的博客">
+      <meta itemprop="description" content="- 建立 IO 全链路地图：应用 write → 页缓存 → 脏页回写 → 块层调度 → 设备，知道每层能优化什么。 - 逐列读懂 iostat -x，并识破 %util&#x2F;await 两大陷阱。 - 会用 fio 做规范的磁盘基准（顺序&#x2F;随…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          06-IO与文件系统性能
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 07:00:00" itemprop="dateCreated datePublished" datetime="2026-09-03T07:00:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Linux%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Linux性能工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>15 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 建立 IO 全链路地图：应用 write → 页缓存 → 脏页回写 → 块层调度 → 设备，知道每层能优化什么。 - 逐列读懂 iostat -x，并识破 %util/await 两大陷阱。 - 会用 fio 做规范的磁盘基准（顺序/随…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="06-io与文件系统性能"><a class="markdownIt-Anchor" href="#06-io与文件系统性能"></a> 06 - IO与文件系统性能</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>建立 IO 全链路地图：应用 write → 页缓存 → 脏页回写 → 块层调度 → 设备，知道每层能优化什么。</li>
+<li>逐列读懂 <code>iostat -x</code>，并识破 %util/await 两大陷阱。</li>
+<li>会用 fio 做规范的磁盘基准（顺序/随机 × 读/写 × 队列深度），写出可复现的基准报告。</li>
+<li>实测 mmap vs read 的取舍，理解页缓存观测与小文件问题的药方。</li>
+</ul>
+<p>前置：04 篇（同步 IO 等待案例）；操作系统系列 08（文件系统）。本篇是&quot;量化磁盘&quot;的一章：磁盘是六大资源里&quot;谎言最多&quot;的（页缓存、预读、调度器都在中间搅局），所以先把链条理清楚再谈数字。</p>
+<h2 id="1-块层全景你的-write-到了盘上吗"><a class="markdownIt-Anchor" href="#1-块层全景你的-write-到了盘上吗"></a> 1. 块层全景：你的 write 到了盘上吗</h2>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line">应用 write(fd, buf, 4096)</span><br><span class="line">   │ ① 先查页缓存：命中 → 直接从内存返回（读场景）/ 覆盖脏页（写场景）</span><br><span class="line">   ▼</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 页缓存 (page cache)：文件的内存影子，读加速靠它，写缓冲也在这  │</span><br><span class="line">│   脏页(dirty page)：改了还没写盘的页                          │</span><br><span class="line">│   回写(writeback)策略（Documentation/admin-guide/sysctl/vm.rst）│</span><br><span class="line">│     vm.dirty_ratio=20        脏页占比 20%：新写入阻塞直到回写   │</span><br><span class="line">│     vm.dirty_background_ratio=10  脏页占比 10%：后台线程开始回写 │</span><br><span class="line">│     vm.dirty_expire_centisecs=3000  脏页 30s 后“到期”必回写     │</span><br><span class="line">└─────────────────────────────────────────────────────────────┘</span><br><span class="line">   ▼ ② 触发回写或 direct IO</span><br><span class="line">┌─────────────────────────────────────────────────────────────┐</span><br><span class="line">│ 块层：IO 调度器（/sys/block/nvme0n1/queue/scheduler 可选）     │</span><br><span class="line">│   mq-deadline：保时延（读写分开、按期限）——通用默认             │</span><br><span class="line">│   none：NVMe 直通（队列已并行，调度器多余）——NVMe 常见默认      │</span><br><span class="line">│   bfq：公平份额（交互体验优先）                                │</span><br><span class="line">└─────────────────────────────────────────────────────────────┘</span><br><span class="line">   ▼ ③ 提交请求队列（queue depth）</span><br><span class="line">  NVMe/SSD（并行 10k+ 队列）/ HDD（磁头顺序敏感，约 100~200 IOPS 顺序、1~2 IOPS 随机）</span><br></pre></td></tr></table></figure>
+<p>三个对性能有直接后果的结论：</p>
+<ol>
+<li><strong>write 成功 ≠ 数据在盘上</strong>。write 只进了页缓存；进程崩溃缓存还在（数据不丢），<strong>机器断电缓存没了</strong>（数据丢）——所以要落盘必须 fsync（04 篇案例的价格）或 O_DIRECT/O_SYNC。数据库与推理服务的 checkpoint 逻辑全围绕这个分界。</li>
+<li><strong>读有缓存、写也有缓存</strong>。第一次慢第二次快是页缓存在工作；基准测试不加 <code>direct=1</code> 测的是&quot;缓存的速度&quot;而不是&quot;盘的速度&quot;。</li>
+<li><strong>顺序与随机的差距在 HDD 上是天堑，在 NVMe 上明显缩小</strong>。HDD 随机 4K 读约 100~200 IOPS，顺序写可达 200MB/s；NVMe 随机 4K 可到数十万 IOPS。<strong>经验做法</strong>：选型前先问负载是顺序大块还是随机小块，这决定了&quot;换盘能不能救命&quot;。</li>
+</ol>
+<h2 id="2-iostat-逐列解读与两大陷阱"><a class="markdownIt-Anchor" href="#2-iostat-逐列解读与两大陷阱"></a> 2. iostat 逐列解读与两大陷阱</h2>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ iostat -x 1 2</span><br><span class="line">avg-cpu:  %user   %nice %system %iowait  %steal   %idle</span><br><span class="line">           2.10    0.00    1.80    5.60    0.00   90.50</span><br><span class="line"></span><br><span class="line">Device     r/s    w/s    rkB/s    wkB/s rrqm/s wrqm/s %rrqm %wrqm r_await w_await aqu-sz rareq-sz wareq-sz svctm %util</span><br><span class="line">nvme0n1   12.0 840.0     96.0  26880.0   0.00 380.00  0.00 31.1    0.45    3.20   2.71    8.0     32.0  0.05  68.40</span><br></pre></td></tr></table></figure>
+<p>逐列含义（man iostat；sysstat 12.5.2）：</p>
+<table>
+<thead>
+<tr>
+<th>列</th>
+<th>含义</th>
+<th>怎么用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>r/s, w/s</td>
+<td>每秒读/写请求数（合并前）</td>
+<td>IOPS 负载形状</td>
+</tr>
+<tr>
+<td>rkB/s, wkB/s</td>
+<td>带宽</td>
+<td>与设备规格对比定饱和</td>
+</tr>
+<tr>
+<td>rrqm/s, %rrqm</td>
+<td>读请求被合并的比例</td>
+<td>顺序负载合并率高是好事</td>
+</tr>
+<tr>
+<td>r_await / w_await</td>
+<td>读/写平均耗时（<strong>含排队</strong>）</td>
+<td>分读写看瓶颈；&gt;10ms 意味着明显排队</td>
+</tr>
+<tr>
+<td>aqu-sz</td>
+<td>平均队列深度（在途请求数）</td>
+<td>Little’s Law 的 L：aqu-sz = IOPS × await/1000，可互相验算</td>
+</tr>
+<tr>
+<td>rareq-sz/wareq-sz</td>
+<td>平均单请求大小</td>
+<td>8KB vs 1MB 是两种完全不同的负载</td>
+</tr>
+<tr>
+<td>%util</td>
+<td>设备忙（有在途请求）的时间占比</td>
+<td><strong>陷阱见下</strong></td>
+</tr>
+</tbody>
+</table>
+<p><strong>陷阱一：%util 100% ≠ 盘饱和。</strong> %util 是&quot;时间窗口里有请求在途的时间占比&quot;。串行设备（单队列 HDD）上它≈饱和度；但 SSD/NVMe 并行处理请求，<code>%util 100%</code> 只说明&quot;任意时刻都有请求在飞&quot;，实际吞吐可能离上限还很远（man iostat 的说明：‘for devices serving requests in parallel… this figure may be misleading’）。正确判据组合（<strong>经验做法</strong>）：<code>aqu-sz</code>（排队深度，持续 &gt; 队列上限的 50% 才谈饱和）+ <code>await</code> 趋势（排队加深则 await 上涨）+ fio 实测上限（下一节）。就 HHD 而言 %util 依然好用。</p>
+<p><strong>陷阱二：await 大 ≠ 盘慢。</strong> await 含排队时间与请求合并效应；一次&quot;10ms 的 await&quot;可能是一次 fsync 冲刷的物理延迟，也可能是 1000 个请求排队。拆分方法：看 <code>aqu-sz</code> 与请求速率的乘除关系（Little’s Law），并用 fio 空载测一次&quot;裸延迟&quot;做基线。空载 NVMe 的 await 应该在 0.1~0.5ms，若空载就 &gt;5ms，查盘本身（SMART/厂商工具）。</p>
+<p>另注意 <code>svctm</code> 列已被 sysstat 废弃（输出里保留但不可信），别用它做判断。</p>
+<h2 id="3-fio-基准测试给盘办体检"><a class="markdownIt-Anchor" href="#3-fio-基准测试给盘办体检"></a> 3. fio 基准测试：给盘&quot;办体检&quot;</h2>
+<p>fio（flexible I/O tester，man fio，本文 3.28）是事实标准的磁盘基准工具。四条最常用的&quot;体检单&quot;（<strong>先确认测试盘可破坏！fio 会写满指定文件/设备</strong>）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"># 1) 顺序写（模拟日志/checkpoint 落盘）</span><br><span class="line">$ fio --name=seqwrite --filename=/tmp/fio.test --size=2G --rw=write \</span><br><span class="line">      --bs=1M --direct=1 --numjobs=1 --iodepth=1 --group_reporting</span><br><span class="line"></span><br><span class="line"># 2) 顺序读（模拟模型加载——Stage 4 端侧加载 4GB 模型就是这个形状）</span><br><span class="line">$ fio --name=seqread --filename=/tmp/fio.test --size=2G --rw=read \</span><br><span class="line">      --bs=1M --direct=1 --numjobs=1 --iodepth=1 --group_reporting</span><br><span class="line"></span><br><span class="line"># 3) 随机读 4K、队列深度 32（数据库/ KV 存储的典型形状，也是“盘的极限能力”指标）</span><br><span class="line">$ fio --name=randread --filename=/tmp/fio.test --size=2G --rw=randread \</span><br><span class="line">      --bs=4k --direct=1 --ioengine=libaio --iodepth=32 --group_reporting</span><br><span class="line"></span><br><span class="line"># 4) 随机写 4K（KV 写入/元数据更新）</span><br><span class="line">$ fio --name=randwrite --filename=/tmp/fio.test --size=2G --rw=randwrite \</span><br><span class="line">      --bs=4k --direct=1 --ioengine=libaio --iodepth=32 --group_reporting</span><br></pre></td></tr></table></figure>
+<p>参数读法：<code>--direct=1</code> 绕过页缓存直写设备（测盘不测缓存，第 1 节的结论）；<code>--iodepth=N</code> 提交 N 个在途请求（NVMe 深队列才能跑满，iodepth=1 会严重低估；HDD 则相反，深队列只会制造寻道）；<code>--ioengine=libaio</code> 用异步 IO 真正灌满队列；<code>--numjobs=4</code> 模拟 4 个并发任务。读输出（randread 示例，节选）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">randread: (groupid=0, jobs=1): err= 0: pid=52301: Tue Nov  4 15:12:01 2025</span><br><span class="line">  read: IOPS=82.4k, BW=322MiB/s (337MB/s)(2048MiB/6364msec)</span><br><span class="line">    slat (usec): min=2, max=182, avg= 4.10, stdev= 1.23     ← 提交延迟（应用→内核）</span><br><span class="line">    clat (usec): min=180, max=1240, avg=383.21, stdev=45.67 ← 完成延迟（设备处理）</span><br><span class="line">     lat (usec): min=190, max=1260, avg=387.31, stdev=45.80 ← 总延迟 = slat+clat</span><br><span class="line">    clat percentiles (usec):</span><br><span class="line">     |  1.00th=[  231],  5.00th=[  268], 10.00th=[  285], 20.00th=[  309],</span><br><span class="line">     | 50.00th=[  359], 75.00th=[  416], 90.00th=[  469], 95.00th=[  516],</span><br><span class="line">     | 99.00th=[  660], 99.90th=[  924], 99.95th=[ 1044], 99.99th=[ 1236]</span><br><span class="line">  ...</span><br><span class="line">   iodepth=32 的在途分布应集中在上层（说明队列真的灌满了）</span><br></pre></td></tr></table></figure>
+<p><strong>解读模板</strong>（抄进你的报告）：设备型号/内核/命令 → 每场景一行 IOPS 与 BW → 延迟分位数（P99 比 avg 重要，01 篇）→ 结论句式：“本盘 4K 随机读在 iodepth=32 下可达 82k IOPS，P99 延迟 660μs；业务需要 50k IOPS 时余量 64%”。<strong>经验做法</strong>：每次换盘/换云机型/内核升级都重跑同一组命令留档，基准是复数不是单数；跑 3 次取中位数，别信单次。</p>
+<h2 id="4-文件系统选择常识与挂载选项"><a class="markdownIt-Anchor" href="#4-文件系统选择常识与挂载选项"></a> 4. 文件系统选择常识与挂载选项</h2>
+<ul>
+<li><strong>ext4</strong>：久经考验、行为可预期，绝大多数场景的默认答案。<strong>xfs</strong>：大文件/高并发 IO、大容量盘表现稳，RHEL 系默认。<strong>btrfs/ZFS</strong>：快照/校验/压缩能力换性能开销，存档与备份场景再考虑。选型一句话：不确定就 ext4/xfs，&quot;新潮特性&quot;要先想清楚回滚方案（《Systems Performance》第 9 章有各 FS 特性对比）。</li>
+<li><strong>noatime</strong>：读文件不再更新访问时间，减少一次元数据写。挂载选项 <code>noatime</code> 是几乎无代价的常规优化（<strong>经验做法</strong>；atime 的存在感来自 <code>Documentation/filesystems/</code> 与 man mount）。</li>
+<li><strong>日志代价</strong>：ext4 数据模式默认 <code>data=ordered</code>（先写数据后提交元数据），崩溃一致性的代价就是写放大；<code>data=writeback</code> 更快但崩溃后数据可能旧——数据库类应用宁可要 ordered。</li>
+<li><strong>WSL2 注</strong>：WSL2 根文件系统是 ext4 虚拟盘（VHD），跨文件系统操作（访问 /mnt/c，即 Windows 的 NTFS，走 9P 协议）<strong>慢一个数量级</strong>，重 IO 的实验（如 fio、编译）务必在 WSL 文件系统内做（~/ 下），这也是新手&quot;WSL2 慢&quot;的最大原因。</li>
+</ul>
+<h2 id="5-mmap-vs-read两条读文件的路线"><a class="markdownIt-Anchor" href="#5-mmap-vs-read两条读文件的路线"></a> 5. mmap vs read：两条读文件的路线</h2>
+<p>同一份文件数据进内存有两条路：<code>read()</code> 拷贝到用户缓冲区，或 <code>mmap()</code> 建立映射后直接解引用（缺页时装载）。取舍（OS 系列 05 篇的概念落地）：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>read</th>
+<th>mmap</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>顺序大文件流式读</td>
+<td>快且稳（预读、无需缺页开销）</td>
+<td>首次访问逐页缺页，反而慢</td>
+</tr>
+<tr>
+<td>随机访问热点页</td>
+<td>每次都要 syscall+拷贝</td>
+<td>命中页缓存后零拷贝直达指针</td>
+</tr>
+<tr>
+<td>内存开销</td>
+<td>需要用户态缓冲区</td>
+<td>映射本身几乎免费（页缓存共享）</td>
+</tr>
+<tr>
+<td>复杂度</td>
+<td>简单、可预期</td>
+<td>信号处理（SIGBUS）、同步麻烦</td>
+</tr>
+</tbody>
+</table>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* bench_read.c —— 1GB 文件两种读法对比（顺序流式 + 随机跳读） */</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;fcntl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/mman.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;time.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">double</span> <span class="title function_">now</span><span class="params">(<span class="type">void</span>)</span> &#123; <span class="class"><span class="keyword">struct</span> <span class="title">timespec</span> <span class="title">ts</span>;</span> clock_gettime(CLOCK_MONOTONIC, &amp;ts);</span><br><span class="line">                          <span class="keyword">return</span> ts.tv_sec + ts.tv_nsec / <span class="number">1e9</span>; &#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">const</span> <span class="type">char</span> *path = <span class="string">&quot;/tmp/fio.test&quot;</span>;           <span class="comment">// 用第 3 节 fio 留下的 2G 文件</span></span><br><span class="line">    <span class="type">int</span> fd = open(path, O_RDONLY);</span><br><span class="line">    <span class="type">double</span> t0 = now();</span><br><span class="line">    <span class="type">char</span> buf[<span class="number">4096</span>];</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">off_t</span> off = <span class="number">0</span>; off &lt; (<span class="number">1L</span> &lt;&lt; <span class="number">30</span>); off += <span class="number">4096</span>) &#123;   <span class="comment">// 顺序流式读 1GB</span></span><br><span class="line">        <span class="keyword">if</span> (pread(fd, buf, <span class="number">4096</span>, off) &lt; <span class="number">0</span>) <span class="keyword">return</span> <span class="number">1</span>;</span><br><span class="line">        buf[<span class="number">0</span>];</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;pread  sequential 1GB : %.3f s\n&quot;</span>, now() - t0);</span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">stat</span> <span class="title">st</span>;</span> fstat(fd, &amp;st);</span><br><span class="line">    <span class="type">char</span> *m = mmap(<span class="literal">NULL</span>, st.st_size, PROT_READ, MAP_PRIVATE, fd, <span class="number">0</span>);</span><br><span class="line">    t0 = now();</span><br><span class="line">    <span class="keyword">volatile</span> <span class="type">long</span> acc = <span class="number">0</span>;                        <span class="comment">// volatile 防止被优化掉</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; <span class="number">1000000</span>; i++) &#123;           <span class="comment">// 随机跳读 100 万次</span></span><br><span class="line">        <span class="type">off_t</span> off = (<span class="type">off_t</span>)(rand() % (st.st_size / <span class="number">4096</span>)) * <span class="number">4096</span>;</span><br><span class="line">        acc += m[off];</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;mmap   random  1M hits: %.3f s (acc=%ld)\n&quot;</span>, now() - t0, acc);</span><br><span class="line">    munmap(m, st.st_size); close(fd);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ gcc -O2 bench_read.c -o bench_read &amp;&amp; ./bench_read</span><br><span class="line">pread  sequential 1GB : 0.312 s          ← 流式读走 read 路线：预读友好</span><br><span class="line">mmap   random  1M hits: 0.680 s          ← 随机热点读走 mmap：命中后零 syscall</span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：模型加载这类&quot;大文件顺序读一遍&quot;用 read/预读（或 <code>posix_fadvise(WILLNEED)</code> 提前热缓存）；KV/索引这类&quot;随机反复读&quot;用 mmap。llama.cpp 加载 GGUF 走 mmap（模型性能优化 Stage 4 的实际案例）正是看重&quot;首次缺页流式装入 + 之后随机访问零拷贝&quot;的双重好处。</p>
+<h2 id="6-页缓存观测与小文件问题"><a class="markdownIt-Anchor" href="#6-页缓存观测与小文件问题"></a> 6. 页缓存观测与“小文件问题”</h2>
+<p>页缓存命中率用两个工具观测：</p>
+<ul>
+<li><strong>cachestat（BCC）</strong>：按时间窗打印命中/未命中计数（原理是 eBPF，08 篇）：</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ sudo /usr/share/bcc/tools/cachestat 1</span><br><span class="line">    TOTAL   MISSES     HITS     DIRTIES   BUFFERS_MB  CACHED_MB</span><br><span class="line">   284120        12   284108          240          192       9472</span><br><span class="line">   291003         9   290994          118          192       9472   ← 命中率 ≈ 99.99%</span><br></pre></td></tr></table></figure>
+<ul>
+<li><strong>vmtouch</strong>：看某个具体文件有多少在缓存里：</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ vmtouch /tmp/fio.test</span><br><span class="line">           Files: 1</span><br><span class="line">     Directories: 0</span><br><span class="line">  Resident Pages: 262144/262144  1G/1G        100%   ← 全在缓存</span><br></pre></td></tr></table></figure>
+<p><strong>小文件问题</strong>是 IO 性能的高频案发地。10000 个 4KB 小文件 vs 一个 40MB 文件，读总量相同，但小文件版要多付：10000 次 open/close 的 syscall、元数据（inode/dentry）查询、更少的合并机会、更碎的磁盘分配。实测对比：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ mkdir -p /tmp/small &amp;&amp; for i in $(seq 1 2000); do head -c 4096 /dev/zero &gt; /tmp/small/f$i; done</span><br><span class="line">$ time tar cf /tmp/small.tar /tmp/small          # 2000 个小文件：元数据开销主导</span><br><span class="line">real  0m0.842s</span><br><span class="line">$ head -c 8388608 /dev/zero &gt; /tmp/big.bin</span><br><span class="line">$ time tar cf /tmp/big.tar /tmp/big.bin          # 一个 8MB 大文件</span><br><span class="line">real  0m0.021s</span><br></pre></td></tr></table></figure>
+<p>40 倍差距的药方（<strong>经验做法</strong>，按优先级）：打包成大文件（tar/parquet/自研容器格式，量化投资 09 篇的回测数据加载正该如此）；用 dentry/inode 缓存热身（先 <code>find</code> 一遍让缓存生效）；元数据操作改并发（多线程 open）；SSD/文件系统层面小文件场景提高 <code>vfs_cache_pressure</code> 收益有限，根治靠合并。</p>
+<h2 id="7-动手实验一个每条一-flush的日志器"><a class="markdownIt-Anchor" href="#7-动手实验一个每条一-flush的日志器"></a> 7. 动手实验：一个“每条一 flush”的日志器</h2>
+<p>故意有问题的程序：高频小写且每行 flush（很多日志库的错误配置正是如此）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># small_io.py —— 故意反模式：每条日志 open+write+flush（不 fsync，走页缓存回写）</span></span><br><span class="line"><span class="keyword">import</span> time, os</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">run</span>(<span class="params">path, n, flush_every</span>):</span><br><span class="line">    t0 = time.perf_counter()</span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(path, <span class="string">&quot;w&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n):</span><br><span class="line">            f.write(<span class="string">f&quot;2025-11-04 15:00:00.123 INFO rec <span class="subst">&#123;i&#125;</span> payload <span class="subst">&#123;<span class="string">&#x27;x&#x27;</span>*<span class="number">200</span>&#125;</span>\n&quot;</span>)</span><br><span class="line">            <span class="keyword">if</span> i % flush_every == <span class="number">0</span>:</span><br><span class="line">                f.flush()                     <span class="comment"># flush_every=1 时每条一次系统调用簇</span></span><br><span class="line">    <span class="keyword">return</span> time.perf_counter() - t0</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    <span class="keyword">for</span> fe <span class="keyword">in</span> (<span class="number">1</span>, <span class="number">16</span>, <span class="number">1024</span>):</span><br><span class="line">        dt = run(<span class="string">&quot;/tmp/app.log&quot;</span>, <span class="number">200_000</span>, fe)</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;flush_every=<span class="subst">&#123;fe:5d&#125;</span>  20万条日志耗时 <span class="subst">&#123;dt:<span class="number">6.3</span>f&#125;</span>s&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;文件大小: <span class="subst">&#123;os.path.getsize(<span class="string">&#x27;/tmp/app.log&#x27;</span>)//<span class="number">1024</span>//<span class="number">1024</span>&#125;</span> MB&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>第一步：症状。</strong> 同样写 20 万条，差别只在 flush 频率：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ python3 small_io.py</span><br><span class="line">flush_every=    1  20万条日志耗时  1.842s</span><br><span class="line">flush_every=   16  20万条日志耗时  0.311s</span><br><span class="line">flush_every= 1024  20万条日志耗时  0.247s</span><br></pre></td></tr></table></figure>
+<p><strong>第二步：观测。</strong> flush_every=1 时的系统调用画像：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ strace -c -e trace=write,openat python3 small_io.py 2&gt;&amp;1 | grep -E &#x27;write|openat|calls&#x27;</span><br><span class="line">% time     seconds  usecs/call    calls    errors syscall</span><br><span class="line">  98.71    1.801222           9    200002           write</span><br><span class="line">  ...                                       ← 20 万次 write 系统调用</span><br></pre></td></tr></table></figure>
+<p>用 iostat 看 wkB 与 w/s 的形状（每秒数千次、几 KB 一笔的小写流）；对照 flush_every=1024：write 次数降 1000 倍、吞吐上升（数量随实验环境而异，看形状）。</p>
+<p><strong>第三步：归因与修复。</strong> 反模式是&quot;把缓冲的责任交给了最慢的层&quot;：每条一次 write 系统调用（用户态→内核）+ 每条可能触发的回写。修复 = 用户态攒批（Python 的文件对象默认 8KB 缓冲本来就够，错在 flush_every=1）+ 让内核页缓存自然回写（30 秒到期策略），落盘需求用&quot;每 N 秒 fsync 一次&quot;的显式节拍。</p>
+<p><strong>第四步：对比。</strong></p>
+<table>
+<thead>
+<tr>
+<th>配置</th>
+<th>20 万条耗时</th>
+<th>write 系统调用</th>
+<th>备注</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>flush_every=1（原）</td>
+<td>1.842s</td>
+<td>200,002</td>
+<td>syscall 风暴</td>
+</tr>
+<tr>
+<td>flush_every=16</td>
+<td>0.311s</td>
+<td>12,500</td>
+<td>常见修正点</td>
+</tr>
+<tr>
+<td>flush_every=1024（修复）</td>
+<td>0.247s</td>
+<td>1,500</td>
+<td>缓冲收益接近上限</td>
+</tr>
+<tr>
+<td>+ 每 5s fsync</td>
+<td>0.251s</td>
+<td>1,500</td>
+<td>加了落盘保证，几乎无额外代价</td>
+</tr>
+</tbody>
+</table>
+<p>结论句式：<strong>把 1.842s 降到 0.247s（7.5 倍），改动只是把 flush 频率从每条改为每批</strong>；系统调用次数从 20 万降到 1500，这与 03 篇 perf 火焰图中 write 占比的变化互为印证。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“fio 不加 direct=1 测出来的 IOPS 很漂亮”</strong>：那是页缓存的成绩，不是盘的。基准测试永远 direct=1（要测缓存性能时另测并注明）。</li>
+<li><strong>“%util 100% = 该换盘了”</strong>：NVMe 上毫无意义（第 2 节陷阱一）。用 aqu-sz + await 趋势 + fio 上限三者判断。</li>
+<li><strong>“write 返回 = 数据安全”</strong>：只是进了页缓存。掉电不丢要求 fsync（或 O_SYNC/O_DIRECT+fsync 语义），这正是 04 篇 12ms 案例的由来。</li>
+<li><strong>“mmap 一定比 read 快”</strong>：顺序流式读 read 更稳（缺页开销小、预读友好）；mmap 赢在随机热点访问与省一次拷贝。按访问模式选，别按信仰。</li>
+<li><strong>“WSL2 里测 IO 代表真实服务器”</strong>：/mnt/c 走 9P 慢一个数量级，VHD 虚拟盘与真机 NVMe 也有差异；WSL2 数据只做相对比较，绝对值以真机 fio 为准（02 篇的约定）。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>IO 链路：页缓存（读写共用）→ 脏页回写策略 → IO 调度器 → 设备；write 成功≠落盘，fsync 是唯一保证。</li>
+<li>iostat 读法：await 含排队、aqu-sz 是在途深度（可按 Little’s Law 验算）、%util 在并行设备上不作数；svctm 已废弃。</li>
+<li>fio 体检单四场景（顺序/随机 × 读/写），direct=1、iodepth 按盘型设置，输出按&quot;分位数+余量百分比&quot;写结论。</li>
+<li>mmap vs read：流式 read、随机热点 mmap；小文件问题的本质是元数据与 syscall 开销，根治靠打包合并。</li>
+<li>页缓存观测：cachestat 看全局命中率、vmtouch 看单文件驻留；WSL2 的 /mnt/c 慢一个数量级，实验要在 WSL 文件系统内做。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>在你的 WSL2 上跑第 3 节四条 fio，把结果填进&quot;解读模板&quot;（设备/命令/IOPS/BW/P99）；再把 iodepth 改成 1 与 128 重跑 randread，画出&quot;IOPS vs iodepth&quot;曲线并解释拐点。</li>
+<li>复现第 2 节的验算：跑 fio 时另开终端 <code>iostat -x 1</code>，用 aqu-sz ≈ IOPS × await/1000 验证 Little’s Law 在块层的成立，记录三次采样误差。</li>
+<li>用 <code>python3 -c &quot;import time,os; ...&quot;</code> 分别测&quot;20 万条 flush_every=1/16/1024&quot;并叠加 <code>strace -c</code> 的 write 次数，画出&quot;syscall 次数 vs 耗时&quot;散点图，验证本篇结论。</li>
+<li>用 vmtouch 把一个 1GB 文件逐段缓存热身（dd 读前 25%/50%/100%），每档跑一次 bench_read 的随机跳读部分，记录缺页惩罚随缓存占比的变化。</li>
+<li>给你自己项目的数据加载路径（模型/数据集/行情数据）做一次&quot;小文件体检&quot;：统计文件个数与总大小（<code>find | wc -l</code> + <code>du -sh</code>），估算按本篇药方（打包/热身/并发）能省多少 open/close 次数，写出一句可验证的优化假设。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/Linux/" rel="tag"># Linux</a>
+              <a href="/tags/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" rel="tag"># 性能优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/05-%E5%86%85%E5%AD%98%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90/" rel="prev" title="05-内存性能分析">
+                  <i class="fa fa-angle-left"></i> 05-内存性能分析
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/07-%E7%BD%91%E7%BB%9C%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90/" rel="next" title="07-网络性能分析">
+                  07-网络性能分析 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

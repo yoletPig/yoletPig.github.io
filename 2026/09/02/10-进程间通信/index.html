@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 掌握管道的两种形态：匿名管道（shell 竖线的实体）与命名管道（FIFO），并亲手在 C 里接通它们。 - 理解信号的机制与陷阱：kill -l 的信号全景、处理函数的正确写法、可重入问题，以及 SIGKILL 不可捕获的铁律。 - …">
+<meta property="og:type" content="article">
+<meta property="og:title" content="10-进程间通信">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/10-%E8%BF%9B%E7%A8%8B%E9%97%B4%E9%80%9A%E4%BF%A1/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 掌握管道的两种形态：匿名管道（shell 竖线的实体）与命名管道（FIFO），并亲手在 C 里接通它们。 - 理解信号的机制与陷阱：kill -l 的信号全景、处理函数的正确写法、可重入问题，以及 SIGKILL 不可捕获的铁律。 - …">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T03:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.518Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="操作系统">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/10-%E8%BF%9B%E7%A8%8B%E9%97%B4%E9%80%9A%E4%BF%A1/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/10-%E8%BF%9B%E7%A8%8B%E9%97%B4%E9%80%9A%E4%BF%A1/","path":"2026/09/02/10-进程间通信/","title":"10-进程间通信"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>10-进程间通信 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#10-%E8%BF%9B%E7%A8%8B%E9%97%B4%E9%80%9A%E4%BF%A1"><span class="nav-number">1.</span> <span class="nav-text"> 10 - 进程间通信</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%AE%A1%E9%81%93%E5%8C%BF%E5%90%8D%E4%B8%8E%E5%91%BD%E5%90%8D"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 管道：匿名与命名</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E4%BF%A1%E5%8F%B7kill-l-%E5%A4%84%E7%90%86%E5%87%BD%E6%95%B0-%E5%8F%AF%E9%87%8D%E5%85%A5%E9%99%B7%E9%98%B1"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 信号：kill -l、处理函数、可重入陷阱</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97-%E5%85%B1%E4%BA%AB%E5%86%85%E5%AD%98-%E4%BF%A1%E5%8F%B7%E9%87%8F%E4%B8%89%E7%A7%8D-system-v-ipc"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 消息队列、共享内存、信号量：三种 System V IPC</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-socket-%E6%9C%AC%E5%9C%B0%E9%80%9A%E4%BF%A1af_unix"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. socket 本地通信：AF_UNIX</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E9%80%89%E5%9E%8B%E5%AF%B9%E6%AF%94%E8%A1%A8"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 选型对比表</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.9.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/10-%E8%BF%9B%E7%A8%8B%E9%97%B4%E9%80%9A%E4%BF%A1/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="10-进程间通信 | Yoleen的博客">
+      <meta itemprop="description" content="- 掌握管道的两种形态：匿名管道（shell 竖线的实体）与命名管道（FIFO），并亲手在 C 里接通它们。 - 理解信号的机制与陷阱：kill -l 的信号全景、处理函数的正确写法、可重入问题，以及 SIGKILL 不可捕获的铁律。 - …">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          10-进程间通信
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 11:30:00" itemprop="dateCreated datePublished" datetime="2026-09-02T11:30:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">操作系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.7k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>14 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 掌握管道的两种形态：匿名管道（shell 竖线的实体）与命名管道（FIFO），并亲手在 C 里接通它们。 - 理解信号的机制与陷阱：kill -l 的信号全景、处理函数的正确写法、可重入问题，以及 SIGKILL 不可捕获的铁律。 - …</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="10-进程间通信"><a class="markdownIt-Anchor" href="#10-进程间通信"></a> 10 - 进程间通信</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>掌握管道的两种形态：匿名管道（shell 竖线的实体）与命名管道（FIFO），并亲手在 C 里接通它们。</li>
+<li>理解信号的机制与陷阱：kill -l 的信号全景、处理函数的正确写法、可重入问题，以及 SIGKILL 不可捕获的铁律。</li>
+<li>会用消息队列、共享内存、信号量三种 System V IPC，并用&quot;拷贝次数&quot;的账本解释为什么共享内存最快。</li>
+<li>会用 AF_UNIX socket 做本地进程通信，知道它和 TCP socket 的差别。</li>
+<li>拿着一张选型对比表，给真实场景挑对 IPC。</li>
+</ul>
+<p>前置：第 02 篇的 fork、第 08 篇的 fd 与&quot;一切皆文件&quot;、第 09 篇的事件模型；环境 Ubuntu 22.04 / WSL2。</p>
+<h2 id="1-管道匿名与命名"><a class="markdownIt-Anchor" href="#1-管道匿名与命名"></a> 1. 管道：匿名与命名</h2>
+<p><strong>匿名管道</strong>是 shell 里竖线的实体（<code>man 2 pipe</code>）：一个单向字节流，带两个 fd——<code>pipefd[0]</code> 读端、<code>pipefd[1]</code> 写端。它的亲缘限制是刻在创建方式里的：由父进程 pipe() 创建后经 fork 继承，<strong>没有亲缘关系的进程拿不到它</strong>。看 shell 怎么把 <code>ls | grep os</code> 接起来：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// pipe_shell.c —— 手工实现 ls | grep os：pipe + fork ×2 + dup2</span></span><br><span class="line"><span class="comment">// 编译：gcc pipe_shell.c -o pipe_shell &amp;&amp; ./pipe_shell</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/wait.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">int</span> p[<span class="number">2</span>];</span><br><span class="line">    <span class="keyword">if</span> (pipe(p) &lt; <span class="number">0</span>) &#123; perror(<span class="string">&quot;pipe&quot;</span>); <span class="keyword">return</span> <span class="number">1</span>; &#125;   <span class="comment">// p[0] 读端, p[1] 写端</span></span><br><span class="line"></span><br><span class="line">    <span class="type">pid_t</span> c1 = fork();</span><br><span class="line">    <span class="keyword">if</span> (c1 == <span class="number">0</span>) &#123;                    <span class="comment">// 左命令 ls</span></span><br><span class="line">        dup2(p[<span class="number">1</span>], STDOUT_FILENO);    <span class="comment">// 把 stdout 接到管道写端（覆盖 fd 1）</span></span><br><span class="line">        close(p[<span class="number">0</span>]); close(p[<span class="number">1</span>]);     <span class="comment">// 多余的原始 fd 关掉</span></span><br><span class="line">        execlp(<span class="string">&quot;ls&quot;</span>, <span class="string">&quot;ls&quot;</span>, (<span class="type">char</span> *)<span class="literal">NULL</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="type">pid_t</span> c2 = fork();</span><br><span class="line">    <span class="keyword">if</span> (c2 == <span class="number">0</span>) &#123;                    <span class="comment">// 右命令 grep os</span></span><br><span class="line">        dup2(p[<span class="number">0</span>], STDIN_FILENO);     <span class="comment">// 把 stdin 接到管道读端</span></span><br><span class="line">        close(p[<span class="number">0</span>]); close(p[<span class="number">1</span>]);</span><br><span class="line">        execlp(<span class="string">&quot;grep&quot;</span>, <span class="string">&quot;grep&quot;</span>, <span class="string">&quot;os&quot;</span>, (<span class="type">char</span> *)<span class="literal">NULL</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    close(p[<span class="number">0</span>]); close(p[<span class="number">1</span>]);         <span class="comment">// 父进程两边都不用，必须关！</span></span><br><span class="line">    waitpid(c1, <span class="literal">NULL</span>, <span class="number">0</span>); waitpid(c2, <span class="literal">NULL</span>, <span class="number">0</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ ./pipe_shell | head -4</span><br><span class="line">操作系统.md</span><br><span class="line">process.md</span><br><span class="line">pytorch.md</span><br><span class="line">queue.md</span><br></pre></td></tr></table></figure>
+<p>（本目录恰好有这些文件名含 os 的文件。）图示数据流与两个易错点：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ls ──stdout──► [管道内核缓冲 64KB] ──stdin──► grep</span><br><span class="line">               ▲</span><br><span class="line">陷阱1: 父进程不关 p[0]/p[1] → grep 永远等不到 EOF（写端还有人）</span><br><span class="line">陷阱2: 缓冲区满(64KB)时写端阻塞 → 两端不读完会互相卡死（死锁形状）</span><br></pre></td></tr></table></figure>
+<p><strong>命名管道（FIFO）</strong>（<code>man 3 mkfifo</code>）突破亲缘限制：mkfifo 在文件系统里立一个特殊文件，任何进程按文件名 open 它。实测：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ <span class="built_in">mkfifo</span> /tmp/myfifo</span><br><span class="line">$ <span class="built_in">echo</span> <span class="string">&quot;通过fifo&quot;</span> &gt; /tmp/myfifo &amp;     <span class="comment"># 写端（阻塞直到有读者）</span></span><br><span class="line">$ <span class="built_in">cat</span> /tmp/myfifo                     <span class="comment"># 读端</span></span><br><span class="line">通过fifo</span><br><span class="line">$ <span class="built_in">ls</span> -l /tmp/myfifo</span><br><span class="line">prw-r--r-- 1 yyl yyl 0 ... /tmp/myfifo    ← p 开头：FIFO 文件</span><br></pre></td></tr></table></figure>
+<p>管道的本质限制：<strong>字节流、无消息边界</strong>（两条 echo 可能被一次 cat 读出——08 篇的&quot;字节流无结构&quot;在 IPC 里的镜像）、单向、缓冲有限。工程用法（<strong>经验做法</strong>）：进程间&quot;触发/通知/日志接力&quot;用管道顺手；要传结构化消息请看第 3、4 节。</p>
+<h2 id="2-信号kill-l-处理函数-可重入陷阱"><a class="markdownIt-Anchor" href="#2-信号kill-l-处理函数-可重入陷阱"></a> 2. 信号：kill -l、处理函数、可重入陷阱</h2>
+<p><strong>信号（signal）是内核发给进程的异步通知</strong>（<code>man 7 signal</code>）：软件中断（07 篇的&quot;打断&quot;家族在进程层面的投影）。发信人可以是内核（段错误→SIGSEGV、Ctrl-C→SIGINT、子进程退出→SIGCHLD）、也可以是别的进程（kill 命令）。信号生命周期三步：<strong>产生（pending）→ 阻塞（block，挂着不递送）→ 递送（deliver，执行默认动作或处理函数）</strong>。</p>
+<p>先看全景：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ <span class="built_in">kill</span> -l</span><br><span class="line"> 1) SIGHUP	 2) SIGINT	 3) SIGQUIT	 4) SIGILL	 5) SIGTRAP</span><br><span class="line"> 6) SIGABRT	 7) SIGBUS	 8) SIGFPE	 9) SIGKILL	10) SIGUSR1</span><br><span class="line">...</span><br><span class="line">15) SIGTERM	17) SIGCHLD	...</span><br></pre></td></tr></table></figure>
+<p>必须认识的六个：SIGKILL(9)/SIGSTOP <strong>不可捕获不可忽略</strong>（内核保留的最终手段）；SIGTERM(15)“请你退出”（kill 默认发它，优雅退出靠捕获它做清理）；SIGINT(2) Ctrl-C；SIGCHLD(17) 子进程退出（02 篇收尸的正牌触发器）；SIGSEGV(11) 段错误。进程对大多数信号可选三种处置：默认动作、忽略、或注册处理函数（<code>sigaction</code>，<code>man 2 sigaction</code>——比老的 signal() 可靠）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// signal_demo.c —— 优雅退出：捕获 SIGTERM/SIGINT 做清理</span></span><br><span class="line"><span class="comment">// 编译：gcc signal_demo.c -o signal_demo &amp;&amp; ./signal_demo &amp;</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;signal.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="keyword">volatile</span> <span class="type">sig_atomic_t</span> stop_flag = <span class="number">0</span>;   <span class="comment">// 关键：sig_atomic_t + volatile</span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">on_term</span><span class="params">(<span class="type">int</span> sig)</span> &#123;                        <span class="comment">// 处理函数：能做的事极少</span></span><br><span class="line">    stop_flag = <span class="number">1</span>;                             <span class="comment">// 只设置标志，不做 IO/加锁/ malloc</span></span><br><span class="line">    write(STDOUT_FILENO, <span class="string">&quot;收到退出信号，清理中...\n&quot;</span>, <span class="number">26</span>);  <span class="comment">// write 是异步信号安全的</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sigaction</span> <span class="title">sa</span> =</span> &#123;<span class="number">0</span>&#125;;</span><br><span class="line">    sa.sa_handler = on_term;</span><br><span class="line">    sigemptyset(&amp;sa.sa_mask);</span><br><span class="line">    sigaction(SIGTERM, &amp;sa, <span class="literal">NULL</span>);</span><br><span class="line">    sigaction(SIGINT, &amp;sa, <span class="literal">NULL</span>);</span><br><span class="line">    <span class="keyword">while</span> (!stop_flag)</span><br><span class="line">        pause();                               <span class="comment">// 睡着等信号</span></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;正常退出（这里放关闭连接/落盘等清理）\n&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ gcc signal_demo.c -o signal_demo &amp;&amp; ./signal_demo &amp;</span><br><span class="line">$ <span class="built_in">kill</span> -TERM %1</span><br><span class="line">收到退出信号，清理中...</span><br><span class="line">正常退出（这里放关闭连接/落盘等清理）</span><br><span class="line">$ <span class="built_in">kill</span> -9 &lt;另一个程序的pid&gt;     <span class="comment"># SIGKILL：无法捕获，进程当场消失，清理代码没机会跑</span></span><br></pre></td></tr></table></figure>
+<p><strong>可重入陷阱</strong>是本节的深水区：处理函数可能在<strong>任意一条指令之间</strong>插入主程序（比如主程序正在 malloc 到一半），所以处理函数里调用 malloc/printf/锁都可能撞上&quot;函数没跑完就被自己再次进入&quot;——不可重入。规则（<code>man 7 signal-safety</code>，POSIX 列出了异步信号安全函数白名单）：</p>
+<ul>
+<li>处理函数里<strong>只允许</strong>：设置 <code>volatile sig_atomic_t</code> 标志、调用白名单函数（write、_exit 等）；</li>
+<li>复杂清理全部放到主循环里根据标志执行（上面代码的结构正是&quot;标志 + 主循环&quot;模式）；</li>
+<li>Python 的信号处理是同一个问题的温柔版：CPython 把 Python 级 handler 排队到主线程的字节码间隙执行，所以 handler 里可以写 Python，但<strong>只有主线程收信号</strong>且可能延迟到下一个字节码——信号安全在两种语言里都要刻意设计。</li>
+</ul>
+<p><strong>经验做法</strong>：推理服务/Agent 进程必须捕获 SIGTERM 做&quot;断开新请求、排空旧请求、落盘状态&quot;的优雅退出——K8s 滚动更新发的是 SIGTERM，你的清理代码只有 <code>terminationGracePeriodSeconds</code> 的宽限；赌 SIGKILL 会给你几毫秒的人，都会在下次 OOM 时丢数据。</p>
+<h2 id="3-消息队列-共享内存-信号量三种-system-v-ipc"><a class="markdownIt-Anchor" href="#3-消息队列-共享内存-信号量三种-system-v-ipc"></a> 3. 消息队列、共享内存、信号量：三种 System V IPC</h2>
+<p><code>ipcs</code> 命令背后的一族机制（<code>man 7 sysvipc</code>）。先各自 30 秒画像，再用一道拷贝账本对比：</p>
+<p><strong>消息队列</strong>：内核维护的消息链表，收发按消息（有类型/边界）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// mq_demo.c —— System V 消息队列（实际项目多用 POSIX mq_open，思想相同）</span></span><br><span class="line"><span class="comment">// 编译：gcc mq_demo.c -o mq_demo</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/ipc.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/msg.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">struct</span> <span class="title">msgbuf</span> &#123;</span> <span class="type">long</span> mtype; <span class="type">char</span> text[<span class="number">64</span>]; &#125;;   <span class="comment">// mtype 是消息类型（优先级用）</span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">key_t</span> key = ftok(<span class="string">&quot;/tmp&quot;</span>, <span class="string">&#x27;A&#x27;</span>);              <span class="comment">// 路径+字符 → 生成 key</span></span><br><span class="line">    <span class="type">int</span> qid = msgget(key, IPC_CREAT | <span class="number">0666</span>);</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">msgbuf</span> <span class="title">m</span> =</span> &#123;<span class="number">1</span>, <span class="string">&quot;hello from queue&quot;</span>&#125;;</span><br><span class="line">    msgsnd(qid, &amp;m, <span class="built_in">strlen</span>(m.text) + <span class="number">1</span>, <span class="number">0</span>);     <span class="comment">// 发送（拷贝进内核）</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">msgbuf</span> <span class="title">r</span>;</span></span><br><span class="line">    msgrcv(qid, &amp;r, <span class="keyword">sizeof</span>(r.text), <span class="number">1</span>, <span class="number">0</span>);      <span class="comment">// 接收（拷贝出内核）</span></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;收到: %s\n&quot;</span>, r.text);</span><br><span class="line">    msgctl(qid, IPC_RMID, <span class="literal">NULL</span>);                <span class="comment">// 删除队列</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><strong>共享内存 + 信号量</strong>：最快的一条路。shmget 申请一块物理内存映射进<strong>多个进程的地址空间</strong>，读写就是普通指针访问——零拷贝。但&quot;同一时刻谁能写&quot;没人管，必须配信号量（semget）做互斥/计数：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// shm_demo.c —— 共享内存 + 信号量：写进程与读进程共享一块内存</span></span><br><span class="line"><span class="comment">// 编译：gcc shm_demo.c -o shm_demo</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/ipc.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/shm.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/sem.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/wait.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="class"><span class="keyword">union</span> <span class="title">semun</span> &#123;</span> <span class="type">int</span> val; &#125;;</span><br><span class="line"><span class="type">static</span> <span class="type">void</span> <span class="title function_">sem_op</span><span class="params">(<span class="type">int</span> id, <span class="type">int</span> val)</span> &#123;          <span class="comment">// P(-1)/V(+1) 一步封装</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sembuf</span> <span class="title">sb</span> =</span> &#123; .sem_num = <span class="number">0</span>, .sem_op = val &#125;;</span><br><span class="line">    semop(id, &amp;sb, <span class="number">1</span>);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">key_t</span> key = ftok(<span class="string">&quot;/tmp&quot;</span>, <span class="string">&#x27;B&#x27;</span>);</span><br><span class="line">    <span class="type">int</span> shmid = shmget(key, <span class="number">4096</span>, IPC_CREAT | <span class="number">0666</span>);</span><br><span class="line">    <span class="type">char</span> *shm = shmat(shmid, <span class="literal">NULL</span>, <span class="number">0</span>);          <span class="comment">// 映射进本进程地址空间</span></span><br><span class="line">    <span class="type">int</span> semid = semget(key, <span class="number">1</span>, IPC_CREAT | <span class="number">0666</span>);</span><br><span class="line">    semctl(semid, <span class="number">0</span>, SETVAL, (<span class="keyword">union</span> semun)&#123;.val = <span class="number">0</span>&#125;);   <span class="comment">// 初始 0：无数据可读</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">if</span> (fork() == <span class="number">0</span>) &#123;                          <span class="comment">// 子进程：读者</span></span><br><span class="line">        sem_op(semid, <span class="number">-1</span>);                      <span class="comment">// P：等&quot;数据就绪&quot;</span></span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;读者收到: %s\n&quot;</span>, shm);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="built_in">strcpy</span>(shm, <span class="string">&quot;zero-copy data via shm&quot;</span>);      <span class="comment">// 父进程：写者，直接写内存</span></span><br><span class="line">    sem_op(semid, +<span class="number">1</span>);                          <span class="comment">// V：通知读者</span></span><br><span class="line">    wait(<span class="literal">NULL</span>);</span><br><span class="line">    shmdt(shm); shmctl(shmid, IPC_RMID, <span class="literal">NULL</span>); semctl(semid, <span class="number">0</span>, IPC_RMID);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">$ gcc shm_demo.c -o shm_demo &amp;&amp; ./shm_demo</span><br><span class="line">读者收到: zero-copy data via shm</span><br></pre></td></tr></table></figure>
+<p>现在算那笔拷贝账（这是&quot;为什么共享内存最快&quot;的定量答案，管道/队列每走一次要 2 次内核↔用户拷贝）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">管道/消息队列:  写进程 → 拷贝1 → 内核缓冲 → 拷贝2 → 读进程     （2 次拷贝 + 2 次系统调用）</span><br><span class="line">共享内存:       写进程 ──同一段物理内存──► 读进程              （0 次拷贝 + 0 次系统调用）</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ ipcs -m        ← 实测查看系统中活着的共享内存段</span><br><span class="line">------ Shared Memory Segments --------</span><br><span class="line">key        shmid      owner      perms      bytes      nattch     status</span><br></pre></td></tr></table></figure>
+<p>（大模型推理的镜像知识：多进程共享模型权重、KV cache 传输、CUDA 的 IPC 显存句柄，全是&quot;共享内存+同步原语&quot;思想的硬件版；Python 的 <code>multiprocessing.shared_memory</code> 是 System V 的现代封装。）代价也要认清：共享内存<strong>没有任何边界和同步</strong>，布局、同步、生命周期全靠用户自己——最快 = 最不省心。<strong>经验做法</strong>：大数据高频传输用共享内存，控制/通知用信号量或小消息队列，&quot;数据走快车道、信令走可靠车道&quot;是标准分工。</p>
+<h2 id="4-socket-本地通信af_unix"><a class="markdownIt-Anchor" href="#4-socket-本地通信af_unix"></a> 4. socket 本地通信：AF_UNIX</h2>
+<p>socket 家族不止是网络工具（12 篇专题）：<code>AF_UNIX</code>（本地）socket 在同一台机器上提供全双工字节流/数据报，支持双向、面向连接、可传 fd（SCM_RIGHTS 附属数据，这是其他 IPC 给不了的能力）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// unix_socket_server.c —— AF_UNIX 流式 socket：进程间可靠的会话通道</span></span><br><span class="line"><span class="comment">// 编译：gcc unix_socket_server.c -o unix_socket_server &amp;&amp; ./unix_socket_server &amp;</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/socket.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/un.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">int</span> sfd = socket(AF_UNIX, SOCK_STREAM, <span class="number">0</span>);</span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sockaddr_un</span> <span class="title">addr</span> =</span> &#123;<span class="number">0</span>&#125;;</span><br><span class="line">    addr.sun_family = AF_UNIX;</span><br><span class="line">    <span class="built_in">strncpy</span>(addr.sun_path, <span class="string">&quot;/tmp/demo.sock&quot;</span>, <span class="keyword">sizeof</span>(addr.sun_path) - <span class="number">1</span>);</span><br><span class="line">    unlink(<span class="string">&quot;/tmp/demo.sock&quot;</span>);                       <span class="comment">// 旧的先删（socket 文件残留问题）</span></span><br><span class="line">    bind(sfd, (<span class="keyword">struct</span> sockaddr *)&amp;addr, <span class="keyword">sizeof</span>(addr));</span><br><span class="line">    listen(sfd, <span class="number">5</span>);</span><br><span class="line"></span><br><span class="line">    <span class="type">int</span> cfd = accept(sfd, <span class="literal">NULL</span>, <span class="literal">NULL</span>);              <span class="comment">// 等一个连接</span></span><br><span class="line">    <span class="type">char</span> buf[<span class="number">128</span>];</span><br><span class="line">    <span class="type">ssize_t</span> n = read(cfd, buf, <span class="keyword">sizeof</span>(buf) - <span class="number">1</span>);</span><br><span class="line">    buf[n] = <span class="number">0</span>;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;server 收到: %s\n&quot;</span>, buf);</span><br><span class="line">    write(cfd, <span class="string">&quot;ack&quot;</span>, <span class="number">3</span>);</span><br><span class="line">    close(cfd); close(sfd); unlink(<span class="string">&quot;/tmp/demo.sock&quot;</span>);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">$ python3 -c <span class="string">&quot;</span></span><br><span class="line"><span class="string">import socket</span></span><br><span class="line"><span class="string">s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)   # Python 客户端连它</span></span><br><span class="line"><span class="string">s.connect(&#x27;/tmp/demo.sock&#x27;)</span></span><br><span class="line"><span class="string">s.sendall(b&#x27;hello via unix socket&#x27;)</span></span><br><span class="line"><span class="string">print(&#x27;server 回复:&#x27;, s.recv(3).decode())&quot;</span></span><br><span class="line">server 收到: hello via unix socket</span><br><span class="line">server 回复: ack</span><br></pre></td></tr></table></figure>
+<p>AF_UNIX vs 管道/共享内存的定位：<strong>会话式</strong>（有连接、双向、有关闭语义）、<strong>可靠有序</strong>、可被 epoll 管理（09 篇的事件模型直接适用）。Docker 的 <code>/var/run/docker.sock</code>、推理服务与本地客户端的通信、systemd 的 socket 激活，都是它的地盘；相比 TCP 127.0.0.1 省掉完整网络栈（无路由/无校验和），延迟更低且天然有文件权限做访问控制。</p>
+<h2 id="5-选型对比表"><a class="markdownIt-Anchor" href="#5-选型对比表"></a> 5. 选型对比表</h2>
+<p>六种 IPC 一张表定选型（依据各 man 手册与《Linux 系统编程》Robert Love 第 5 章的横向对比，量级数据为常见经验值）：</p>
+<table>
+<thead>
+<tr>
+<th>机制</th>
+<th>数据形态</th>
+<th>方向</th>
+<th>拷贝次数</th>
+<th>关系要求</th>
+<th>典型场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>匿名管道</td>
+<td>字节流</td>
+<td>单向</td>
+<td>2</td>
+<td>亲缘</td>
+<td>shell 管道、父子通知</td>
+</tr>
+<tr>
+<td>命名管道</td>
+<td>字节流</td>
+<td>单向</td>
+<td>2</td>
+<td>无（文件权限）</td>
+<td>简单跨进程接力</td>
+</tr>
+<tr>
+<td>消息队列</td>
+<td>离散消息</td>
+<td>双向（多条队列）</td>
+<td>2</td>
+<td>无（key）</td>
+<td>小消息、需边界</td>
+</tr>
+<tr>
+<td>共享内存</td>
+<td>任意（自定协议）</td>
+<td>双向</td>
+<td><strong>0</strong></td>
+<td>无（需自行同步）</td>
+<td>大数据高频（权重/KV cache）</td>
+</tr>
+<tr>
+<td>信号</td>
+<td>无数据（一个编号）</td>
+<td>单向</td>
+<td>-</td>
+<td>无</td>
+<td>生命周期管理（kill/SIGTERM）</td>
+</tr>
+<tr>
+<td>AF_UNIX socket</td>
+<td>字节流/数据报</td>
+<td>双向</td>
+<td>2</td>
+<td>无（文件权限）</td>
+<td>会话式通信、传 fd、C/S 本地协议</td>
+</tr>
+</tbody>
+</table>
+<p>选型口诀（<strong>经验做法</strong>）：<strong>管数据量，也管关系</strong>——传大块高频数据选共享内存（配信号量）；要消息边界选消息队列；要会话与双向选 AF_UNIX；只发通知选信号；父子进程顺手用管道。多网卡多机？那不叫 IPC，叫网络编程（12 篇）。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“管道可以当消息队列用”</strong>：管道是无边界的字节流，两条消息可能黏在一次 read 里（与 12 篇 TCP 粘包同源）；需要边界自己加长度前缀，或改用消息队列/数据报 socket。</li>
+<li><strong>“信号处理函数里可以随意调用库函数”</strong>：malloc/printf/锁都可能死锁或破坏堆（不可重入）；只设 sig_atomic_t 标志 + 白名单函数是铁律（man 7 signal-safety）。</li>
+<li><strong>“共享内存最快所以全用共享内存”</strong>：它把同步、边界、生命周期全甩给你；小数据低频场景，消息队列/AF_UNIX 的省心完胜零拷贝的收益——性能优化只优化账本上真实的大头。</li>
+<li><strong>“kill -9 是清理进程的标准流程”</strong>：SIGKILL 绕过一切清理逻辑，会留下半写文件、锁、共享内存残骸；标准流程是先 SIGTERM 等待，超时才 SIGKILL（K8s/Kill 全家桶都这么设计）。</li>
+<li><strong>“System V IPC 资源会随进程退出自动回收”</strong>：不会！消息队列/共享内存/信号量在 <code>ipcs</code> 里一直活着直到显式 IPC_RMID 或重启——调试留下的共享内存段会悄悄吃内存（<code>ipcrm</code> 手动清理，<strong>经验做法</strong>：IPC 代码必配清理路径与 atexit）。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>管道 = 单向字节流（匿名靠亲缘、命名靠文件系统）；shell 竖线的实体是 pipe+dup2+fork；读不到 EOF 的第一嫌疑是写端 fd 没关干净。</li>
+<li>信号是异步通知：SIGTERM 捕获优雅退出、SIGKILL/ SIGSTOP 不可捕获；处理函数只设标志调白名单（可重入铁律，man 7 signal-safety）。</li>
+<li>三种 SysV IPC：消息队列有边界（2 次拷贝）、共享内存零拷贝但裸奔（配信号量）、信号量是同步原语不是数据通道；零拷贝账本是&quot;共享内存最快&quot;的全部答案。</li>
+<li>AF_UNIX socket：本机会话式通道，双向可靠、可传 fd、可进 epoll；docker.sock 是它的名片。</li>
+<li>选型按&quot;数据形态 × 关系 × 性能需求&quot;三轴走，没有万能 IPC；SysV IPC 资源生命周期独立于进程，用完必须显式回收。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>把 pipe_shell.c 扩展成支持三段管道 <code>ls | grep os | wc -l</code>（两个 pipe、三次 fork），画出你的 fd 接线图；故意不关父进程的写端 fd，观察 wc 的行为并解释。</li>
+<li>写程序验证信号丢失特性：连续发 3 次 SIGUSR1（不做任何等待），处理函数只递增计数器，最后打印收到的次数并解释为什么可能 &lt; 3（提示：信号是&quot;有无&quot;不是&quot;计数&quot;）。</li>
+<li>用共享内存实现一个双进程环形缓冲区（生产者消费者，两个信号量分别表示空槽/满槽），压入 100 万个 64B 消息计时；再用消息队列实现同功能对比耗时，验证 2 次拷贝 vs 0 次拷贝的量级差。</li>
+<li>给第 02 篇的 mini shell 加管道支持（<code>cmd1 | cmd2</code>）；之后用 <code>strace -f</code> 跟踪真实 bash 执行 <code>ls | wc</code>，对照你的实现数 fork/dup2/pipe 的调用序列是否一致。</li>
+<li>部署视角实验：写一个捕获 SIGTERM 的 Python 服务（signal.signal），打印&quot;排空中&quot;后退出；用 <code>docker run --stop-timeout</code> 或直接 <code>kill -TERM</code> 验证优雅退出路径，再用 <code>kill -9</code> 对比——把两种死法的差别写进你将来的部署文档。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" rel="tag"># 操作系统</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/09-IO%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8/" rel="prev" title="09-IO模型与多路复用">
+                  <i class="fa fa-angle-left"></i> 09-IO模型与多路复用
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/11-%E5%B9%B6%E5%8F%91%E5%90%8C%E6%AD%A5/" rel="next" title="11-并发同步">
+                  11-并发同步 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

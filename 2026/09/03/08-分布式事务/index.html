@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 完整走查 2PC（两阶段提交）的每一步，逐一分析协调者&#x2F;参与者在各阶段宕机的后果。 - 说明 3PC 为什么&#39;理论上更完备、实践上没人用&#39;。 - 掌握 Saga 模式（含补偿事务）并以订票案例写完整流程，理解 TCC 与 Saga 的区…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="08-分布式事务">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/08-%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 完整走查 2PC（两阶段提交）的每一步，逐一分析协调者&#x2F;参与者在各阶段宕机的后果。 - 说明 3PC 为什么&#39;理论上更完备、实践上没人用&#39;。 - 掌握 Saga 模式（含补偿事务）并以订票案例写完整流程，理解 TCC 与 Saga 的区…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T06:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.550Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/08-%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/08-%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/","path":"2026/09/03/08-分布式事务/","title":"08-分布式事务"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>08-分布式事务 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#08-%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1"><span class="nav-number">1.</span> <span class="nav-text"> 08 - 分布式事务</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E9%97%AE%E9%A2%98%E5%AE%9A%E4%B9%89%E5%8E%9F%E5%AD%90%E6%8F%90%E4%BA%A4%E8%B7%A8%E4%BA%86%E6%9C%BA%E5%99%A8"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 问题定义：原子提交跨了机器</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-2pc%E6%B5%81%E7%A8%8B%E4%B8%8E%E6%95%85%E9%9A%9C%E8%B5%B0%E6%9F%A5"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 2PC：流程与故障走查</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-3pc-%E4%B8%BA%E4%BB%80%E4%B9%88%E6%B2%A1%E4%BA%BA%E7%94%A8"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 3PC 为什么没人用</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-saga%E9%95%BF%E4%BA%8B%E5%8A%A1%E7%9A%84%E8%A1%A5%E5%81%BF%E4%B9%8B%E8%B7%AF"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. Saga：长事务的补偿之路</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-tcc-%E4%B8%8E%E6%B6%88%E6%81%AF%E6%9C%80%E7%BB%88%E4%B8%80%E8%87%B4"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. TCC 与消息最终一致</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E9%80%89%E5%9E%8B%E5%86%B3%E7%AD%96%E8%A1%A8"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 选型决策表</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/08-%E5%88%86%E5%B8%83%E5%BC%8F%E4%BA%8B%E5%8A%A1/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="08-分布式事务 | Yoleen的博客">
+      <meta itemprop="description" content="- 完整走查 2PC（两阶段提交）的每一步，逐一分析协调者&#x2F;参与者在各阶段宕机的后果。 - 说明 3PC 为什么&#39;理论上更完备、实践上没人用&#39;。 - 掌握 Saga 模式（含补偿事务）并以订票案例写完整流程，理解 TCC 与 Saga 的区…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          08-分布式事务
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 14:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T14:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">分布式系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>13 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 完整走查 2PC（两阶段提交）的每一步，逐一分析协调者/参与者在各阶段宕机的后果。 - 说明 3PC 为什么'理论上更完备、实践上没人用'。 - 掌握 Saga 模式（含补偿事务）并以订票案例写完整流程，理解 TCC 与 Saga 的区…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="08-分布式事务"><a class="markdownIt-Anchor" href="#08-分布式事务"></a> 08 - 分布式事务</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>完整走查 2PC（两阶段提交）的每一步，逐一分析协调者/参与者在各阶段宕机的后果。</li>
+<li>说明 3PC 为什么&quot;理论上更完备、实践上没人用&quot;。</li>
+<li>掌握 Saga 模式（含补偿事务）并以订票案例写完整流程，理解 TCC 与 Saga 的区别。</li>
+<li>落地&quot;基于消息的最终一致&quot;：本地消息表（outbox 模式），并给出选型决策表。</li>
+</ul>
+<h2 id="1-问题定义原子提交跨了机器"><a class="markdownIt-Anchor" href="#1-问题定义原子提交跨了机器"></a> 1. 问题定义：原子提交跨了机器</h2>
+<p>第 07 章留的问题：一个事务要写两个分片（甚至两种存储），怎么保证&quot;要么都提交、要么都不提交&quot;？单机靠 undo log + 一个锁管理器闭环；跨机后，<strong>决定&quot;提交&quot;的瞬间必须所有参与者都同意</strong>，而这个决定过程本身可能被故障打断——这就是<strong>原子提交问题（atomic commit）</strong>。</p>
+<p>关键约束（回忆 02 章）：协调者发出&quot;提交&quot;决定后收不到某参与者确认，它<strong>无法区分</strong>&quot;对方死了&quot;与&quot;网络断了&quot;；而参与者在等决定时也<strong>无法自作主张</strong>（自己提交了，协调者那边可能已决定中止）——双方都卡在&quot;必须等对方&quot;上。2PC 是这个困境下的最优工程解，但不是完美解。</p>
+<h2 id="2-2pc流程与故障走查"><a class="markdownIt-Anchor" href="#2-2pc流程与故障走查"></a> 2. 2PC：流程与故障走查</h2>
+<p><strong>两阶段提交（Two-Phase Commit，Jim Gray 1978 年《Notes on Data Base Operating Systems》中形式化）</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">阶段一（表决/准备）                          阶段二（决定/提交）</span><br><span class="line">协调者 ── PREPARE ──► 参与者A               协调者 ── COMMIT ──► A（应用提交）</span><br><span class="line">协调者 ── PREPARE ──► 参与者B               协调者 ── COMMIT ──► B</span><br><span class="line">          A 落盘 redo/undo，锁住资源</span><br><span class="line">          A 回 YES（此后只能听候发落）</span><br><span class="line">          B 回 YES</span><br><span class="line">协调者收到全部YES → 本地落盘&quot;决定提交&quot;</span><br></pre></td></tr></table></figure>
+<p>规则要点：参与者回 YES 后进入<strong>不确定态（in-doubt）</strong>——不能再自行提交或中止，必须死等协调者的第二阶段指令；协调者落盘决定后（write-ahead），无论发生什么都要把决定送达所有参与者。</p>
+<p><strong>故障逐一走查</strong>（面试核心题，每一条都要能推）：</p>
+<table>
+<thead>
+<tr>
+<th>故障点</th>
+<th>后果</th>
+<th>恢复动作</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>参与者在 PREPARE 前崩</td>
+<td>协调者收不齐 YES → 决定 ABORT</td>
+<td>参与者重启后收到/查出 ABORT，无副作用</td>
+</tr>
+<tr>
+<td>参与者回 YES 后、收到 COMMIT 前崩</td>
+<td>该参与者卡在不确定态；协调者若活着会重发 COMMIT</td>
+<td>参与者重启后<strong>必须问协调者</strong>（不能自决），期间其锁被占用</td>
+</tr>
+<tr>
+<td><strong>协调者在收到全部 YES 前崩</strong></td>
+<td>参与者等不到决定，但大家还都没提交 → 安全超时后统一 ABORT</td>
+<td>参与者自行中止（因为没人收到过&quot;决定提交&quot;）</td>
+</tr>
+<tr>
+<td><strong>协调者在落盘决定后、发完 COMMIT 前崩</strong></td>
+<td>最坏情形：参与者不知道全局决定是提交还是中止，<strong>全部卡死</strong></td>
+<td>参与者重启后只能阻塞等待协调者恢复；协调者从磁盘决定记录恢复后重发</td>
+</tr>
+<tr>
+<td>网络分区：协调者与部分参与者失联</td>
+<td>同上——失联的参与者卡在不确定态</td>
+<td>分区恢复后重发决定</td>
+</tr>
+</tbody>
+</table>
+<p>第 4 行是 2PC 的命门：<strong>协调者单点 + 参与者阻塞</strong>。协调者崩了，参与者既不能提交也不能中止（都可能违反原子性），资源锁全程持有，下游全堵。这就是&quot;2PC 时代码可用、故障时阻塞&quot;的精确含义。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># two_pc.py —— 2PC 模拟：正常路径 + 协调者&quot;落盘决定后&quot;宕机的阻塞现场</span></span><br><span class="line"><span class="keyword">import</span> asyncio</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Participant</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, name, fail_after_yes=<span class="literal">False</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>.name, <span class="variable language_">self</span>.fail = name, fail_after_yes</span><br><span class="line">        <span class="variable language_">self</span>.state = <span class="string">&quot;init&quot;</span>          <span class="comment"># init / prepared / committed / aborted / in_doubt</span></span><br><span class="line">        <span class="variable language_">self</span>.locked = <span class="literal">False</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">prepare</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="comment"># 模拟业务校验 + 写 redo/undo + 锁资源</span></span><br><span class="line">        <span class="variable language_">self</span>.locked = <span class="literal">True</span></span><br><span class="line">        <span class="variable language_">self</span>.state = <span class="string">&quot;prepared&quot;</span></span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot;YES&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">commit</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">if</span> <span class="variable language_">self</span>.state == <span class="string">&quot;in_doubt&quot;</span>:</span><br><span class="line">            <span class="variable language_">self</span>.state = <span class="string">&quot;committed&quot;</span></span><br><span class="line">            <span class="variable language_">self</span>.locked = <span class="literal">False</span></span><br><span class="line">            <span class="keyword">return</span> <span class="string">f&quot;<span class="subst">&#123;self.name&#125;</span> 恢复后提交&quot;</span></span><br><span class="line">        <span class="variable language_">self</span>.state = <span class="string">&quot;committed&quot;</span>; <span class="variable language_">self</span>.locked = <span class="literal">False</span></span><br><span class="line">        <span class="keyword">return</span> <span class="string">f&quot;<span class="subst">&#123;self.name&#125;</span> 提交&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">abort</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="variable language_">self</span>.state = <span class="string">&quot;aborted&quot;</span>; <span class="variable language_">self</span>.locked = <span class="literal">False</span></span><br><span class="line">        <span class="keyword">return</span> <span class="string">f&quot;<span class="subst">&#123;self.name&#125;</span> 中止&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Coordinator</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, parts</span>):</span><br><span class="line">        <span class="variable language_">self</span>.parts = parts</span><br><span class="line">        <span class="variable language_">self</span>.decision_disk = <span class="literal">None</span>     <span class="comment"># &quot;落盘&quot;的决定记录（持久化点）</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">run</span>(<span class="params">self, coord_dies_after_decision=<span class="literal">False</span></span>):</span><br><span class="line">        <span class="comment"># ---- 阶段一 ----</span></span><br><span class="line">        votes = []</span><br><span class="line">        <span class="keyword">for</span> p <span class="keyword">in</span> <span class="variable language_">self</span>.parts:</span><br><span class="line">            votes.append(<span class="keyword">await</span> p.prepare())</span><br><span class="line">            <span class="keyword">if</span> p.fail:</span><br><span class="line">                <span class="keyword">return</span> <span class="string">&quot;参与者故障 → 协调者决定 ABORT（安全）&quot;</span></span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">all</span>(v == <span class="string">&quot;YES&quot;</span> <span class="keyword">for</span> v <span class="keyword">in</span> votes):</span><br><span class="line">            <span class="variable language_">self</span>.decision_disk = <span class="string">&quot;COMMIT&quot;</span>          <span class="comment"># 写决定到磁盘（持久点）</span></span><br><span class="line">            <span class="built_in">print</span>(<span class="string">&quot;  协调者: 落盘决定=COMMIT&quot;</span>)</span><br><span class="line">            <span class="keyword">if</span> coord_dies_after_decision:</span><br><span class="line">                <span class="keyword">await</span> asyncio.sleep(<span class="number">0.05</span>)</span><br><span class="line">                <span class="built_in">print</span>(<span class="string">&quot;  协调者: 宕机（决定已落盘但未送达）&quot;</span>)</span><br><span class="line">                <span class="keyword">return</span> <span class="string">&quot;所有参与者卡死在 in_doubt，锁不释放，等待协调者恢复&quot;</span></span><br><span class="line">            results = [<span class="keyword">await</span> p.commit() <span class="keyword">for</span> p <span class="keyword">in</span> <span class="variable language_">self</span>.parts]</span><br><span class="line">            <span class="keyword">return</span> <span class="string">&quot; → &quot;</span>.join(results)</span><br><span class="line">        <span class="variable language_">self</span>.decision_disk = <span class="string">&quot;ABORT&quot;</span></span><br><span class="line">        <span class="keyword">return</span> <span class="string">&quot; → &quot;</span>.join([<span class="keyword">await</span> p.abort() <span class="keyword">for</span> p <span class="keyword">in</span> <span class="variable language_">self</span>.parts])</span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;== 场景1: 正常 ==&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot; &quot;</span>, <span class="keyword">await</span> Coordinator([Participant(<span class="string">&quot;A&quot;</span>), Participant(<span class="string">&quot;B&quot;</span>)]).run())</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;== 场景2: 参与者在准备前死 ==&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot; &quot;</span>, <span class="keyword">await</span> Coordinator([Participant(<span class="string">&quot;A&quot;</span>, fail_after_yes=<span class="literal">True</span>), Participant(<span class="string">&quot;B&quot;</span>)]).run())</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;== 场景3: 协调者落盘决定后宕机 ==&quot;</span>)</span><br><span class="line">    parts = [Participant(<span class="string">&quot;A&quot;</span>), Participant(<span class="string">&quot;B&quot;</span>)]</span><br><span class="line">    r = <span class="keyword">await</span> Coordinator(parts).run(coord_dies_after_decision=<span class="literal">True</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot; &quot;</span>, r)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;  参与者状态:&quot;</span>, [(p.name, p.state) <span class="keyword">for</span> p <span class="keyword">in</span> parts], <span class="string">&quot;← 锁仍被持有&quot;</span>)</span><br><span class="line"></span><br><span class="line">asyncio.run(main())</span><br></pre></td></tr></table></figure>
+<p>2PC 与 Raft 的关系值得点破：<strong>2PC 解决&quot;一次事务跨多方&quot;的原子性，Raft 解决&quot;一份日志跨副本&quot;的复制一致性</strong>，两者正交。etcd 的事务（txn）是 Raft 上的单键空间原子操作，MySQL XA 才是 2PC。把 Raft 叫&quot;分布式事务&quot;是常见口误。</p>
+<h2 id="3-3pc-为什么没人用"><a class="markdownIt-Anchor" href="#3-3pc-为什么没人用"></a> 3. 3PC 为什么没人用</h2>
+<p>三阶段提交（Three-Phase Commit，Skeleton of idea 出现于 1980 年代）在 PREPARE 与 COMMIT 之间插入 <strong>PreCommit</strong> 阶段，并引入超时：参与者若在 PreCommit 后失联，超时后<strong>自行提交</strong>（因为&quot;能到 PreCommit 说明大家都同意过&quot;）。</p>
+<p>理论目标：消除 2PC 的阻塞（协调者死了参与者也能自己决定）。但前提是<strong>网络延迟有上界 + 时钟可靠</strong>——正是 02 章证伪的两个假设。分区场景下，被隔离的一组参与者可能超时后自行提交，而协调者侧决定的是 ABORT → <strong>原子性被破坏</strong>。结论（DDIA 第 9 章明确表述）：3PC 在非拜占庭异步网络下既不完美也不实用；工程界要么用 2PC + 共识化协调者（协调者本身跑在 Raft 上，如 TiDB 的 TiKV 事务协调、 Spanner 的 Paxos group），要么换 Saga 类最终一致方案。</p>
+<h2 id="4-saga长事务的补偿之路"><a class="markdownIt-Anchor" href="#4-saga长事务的补偿之路"></a> 4. Saga：长事务的补偿之路</h2>
+<p><strong>Saga</strong>（Garcia-Molina &amp; Salem, <em>Sagas</em>, SIGMOD 1987；微服务语境的复兴见 Chris Richardson《微服务架构设计模式》第 4 章）：把大事务拆成 <strong>T1 → T2 → … → Tn</strong> 的本地事务序列，每个 Ti 配一个补偿事务 Ci（语义上&quot;撤销 Ti 的业务效果&quot;，不是数据库回滚）。任何一步失败，<strong>反向执行已完成步骤的补偿</strong>：T1 T2 T3 失败 → 执行 C2 C1。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">订票案例：订机票 → 订酒店 → 扣款</span><br><span class="line"> 正常:  T1订机票✓ → T2订酒店✓ → T3扣款✓ → 完成</span><br><span class="line"> 失败:  T1订机票✓ → T2订酒店✓ → T3扣款✗(余额不足)</span><br><span class="line">        → C2退酒店 → C1退机票 → 用户收到&quot;预订失败&quot;</span><br></pre></td></tr></table></figure>
+<p>补偿不是回滚的三个不同点：补偿<strong>发布新的可见状态</strong>（机票先显示&quot;已订&quot;再变&quot;已退&quot;，其他事务可能看到中间态）；补偿本身也可能失败（需要重试到成功，所以<strong>补偿必须设计成可重试的幂等操作</strong>）；没有隔离性（Saga 之间可能交错，需要业务层防脏读——如&quot;已订未付款&quot;状态让其他流程不可见）。</p>
+<p>编排（orchestration）与协同（choreography）两种实现：</p>
+<ul>
+<li><strong>编排式</strong>：中央协调器驱动每一步（代码直观、可观测；协调器本身要高可用——用状态机 + 持久化进度实现，别把协调器做成另一个 2PC 协调者）。</li>
+<li><strong>协同式</strong>：每步完成后发事件，下游订阅（无中心、松耦合；流程散落在各服务里，链路长后不可维护）。经验做法：步骤 ≤ 3 用协同式，更多用编排式。</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># saga_ticket.py —— 订票 Saga：正向流程 + 反向补偿 + 补偿失败的幂等重试</span></span><br><span class="line"><span class="keyword">import</span> asyncio</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">BookingSaga</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="variable language_">self</span>.done = []            <span class="comment"># 已完成的正向步骤（用于反向补偿）</span></span><br><span class="line">        <span class="variable language_">self</span>.log = []</span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">step</span>(<span class="params">self, name, forward, compensate</span>):</span><br><span class="line">        <span class="keyword">try</span>:</span><br><span class="line">            <span class="keyword">await</span> forward()</span><br><span class="line">            <span class="variable language_">self</span>.done.append((name, compensate))</span><br><span class="line">            <span class="variable language_">self</span>.log.append(<span class="string">f&quot;T:<span class="subst">&#123;name&#125;</span> ✓&quot;</span>)</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">True</span></span><br><span class="line">        <span class="keyword">except</span> Exception <span class="keyword">as</span> e:</span><br><span class="line">            <span class="variable language_">self</span>.log.append(<span class="string">f&quot;T:<span class="subst">&#123;name&#125;</span> ✗ (<span class="subst">&#123;e&#125;</span>)&quot;</span>)</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">False</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">run</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">book_flight</span>():</span><br><span class="line">            <span class="keyword">await</span> asyncio.sleep(<span class="number">0.01</span>); <span class="built_in">print</span>(<span class="string">&quot;  已订机票&quot;</span>)</span><br><span class="line">        <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">cancel_flight</span>():</span><br><span class="line">            <span class="built_in">print</span>(<span class="string">&quot;  已退机票（补偿，可重试）&quot;</span>)</span><br><span class="line">        <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">book_hotel</span>():</span><br><span class="line">            <span class="keyword">await</span> asyncio.sleep(<span class="number">0.01</span>); <span class="built_in">print</span>(<span class="string">&quot;  已订酒店&quot;</span>)</span><br><span class="line">        <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">cancel_hotel</span>():</span><br><span class="line">            <span class="built_in">print</span>(<span class="string">&quot;  已退酒店（补偿，可重试）&quot;</span>)</span><br><span class="line">        <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">charge</span>():</span><br><span class="line">            <span class="keyword">raise</span> RuntimeError(<span class="string">&quot;余额不足&quot;</span>)     <span class="comment"># 最后一步失败</span></span><br><span class="line"></span><br><span class="line">        ok1 = <span class="keyword">await</span> <span class="variable language_">self</span>.step(<span class="string">&quot;订机票&quot;</span>, book_flight, cancel_flight)</span><br><span class="line">        ok2 = <span class="keyword">await</span> <span class="variable language_">self</span>.step(<span class="string">&quot;订酒店&quot;</span>, book_hotel, cancel_hotel) <span class="keyword">if</span> ok1 <span class="keyword">else</span> <span class="literal">False</span></span><br><span class="line">        ok3 = <span class="keyword">await</span> <span class="variable language_">self</span>.step(<span class="string">&quot;扣款&quot;</span>, charge, <span class="literal">None</span>) <span class="keyword">if</span> ok2 <span class="keyword">else</span> <span class="literal">False</span></span><br><span class="line">        <span class="keyword">if</span> <span class="keyword">not</span> ok3:</span><br><span class="line">            <span class="keyword">for</span> name, comp <span class="keyword">in</span> <span class="built_in">reversed</span>(<span class="variable language_">self</span>.done):     <span class="comment"># 反向补偿</span></span><br><span class="line">                <span class="keyword">await</span> comp()</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">&quot;  流程:&quot;</span>, <span class="string">&quot; → &quot;</span>.join(<span class="variable language_">self</span>.log))</span><br><span class="line"></span><br><span class="line">asyncio.run(BookingSaga().run())</span><br></pre></td></tr></table></figure>
+<h2 id="5-tcc-与消息最终一致"><a class="markdownIt-Anchor" href="#5-tcc-与消息最终一致"></a> 5. TCC 与消息最终一致</h2>
+<p><strong>TCC（Try-Confirm-Cancel）</strong>：业务层的&quot;准 2PC&quot;。每个参与方实现三个接口：Try 预留资源（冻结额度而非扣款）、Confirm 确认（真正扣）、Cancel 释放预留。TCC 的本质是把&quot;数据库锁资源&quot;提前到&quot;业务预留资源&quot;，第二阶段不再碰底层事务，因此协调器崩溃时业务状态自洽（预留要么 Confirm 要么 Cancel，都有幂等接口兜底）。代价：<strong>每个参与方要写三个接口且全部幂等</strong>，侵入性大（支付/资金类业务愿意付这个代价）。</p>
+<p><strong>本地消息表 / Outbox 模式</strong>（最常用的最终一致落地，经验做法首选）：跨服务写操作拆成&quot;本地事务 + 事件投递&quot;：</p>
+<ol>
+<li>业务写与&quot;待发消息&quot;记录在<strong>同一个本地事务</strong>里落库（原子性由单机事务保证）。</li>
+<li>后台轮询（或 binlog 订阅，如 Canal/Debezium）把待发消息投到 MQ，成功后标记已发。</li>
+<li>消费方幂等处理（第 09 章幂等键）。</li>
+</ol>
+<p>它把&quot;分布式事务&quot;降级为&quot;本地事务 + 至少一次投递 + 幂等消费&quot;，没有跨库锁、没有协调者单点，唯一代价是<strong>消费方短暂可见延迟</strong>——大多数业务完全可接受。Kafka 的事务（transactional producer，read-process-write 原子性）是此思路在流处理侧的对应物，但覆盖面不同（见 09 章）。</p>
+<h2 id="6-选型决策表"><a class="markdownIt-Anchor" href="#6-选型决策表"></a> 6. 选型决策表</h2>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>一致性</th>
+<th>阻塞/单点</th>
+<th>侵入性</th>
+<th>适用</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>2PC/XA</td>
+<td>强（原子性）</td>
+<td>协调者宕机参与者阻塞</td>
+<td>低（协议级）</td>
+<td>短事务、参与方少、同公司基础设施</td>
+</tr>
+<tr>
+<td>3PC</td>
+<td>理论强</td>
+<td>网络分区下破坏原子性</td>
+<td>—</td>
+<td><strong>不用于生产</strong></td>
+</tr>
+<tr>
+<td>Saga</td>
+<td>最终一致（有中间态）</td>
+<td>无（补偿幂等重试）</td>
+<td>中（写补偿）</td>
+<td>长流程、跨服务、可接受中间态（订票/订单履约）</td>
+</tr>
+<tr>
+<td>TCC</td>
+<td>准强一致（业务预留）</td>
+<td>无（Confirm/Cancel 幂等）</td>
+<td>高（三接口）</td>
+<td>资金/库存等不容忍中间脏数据的短流程</td>
+</tr>
+<tr>
+<td>Outbox+MQ</td>
+<td>最终一致</td>
+<td>无</td>
+<td>低（一张表+轮询）</td>
+<td>微服务间状态同步的事实标准</td>
+</tr>
+</tbody>
+</table>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“用了 Raft/etcd 就不需要 2PC”</strong>：Raft 保证<strong>一份日志</strong>在副本间一致；&quot;一个操作横跨两个系统&quot;的原子性它管不着。跨系统原子性要么 2PC、要么 Saga/Outbox 拆解。</li>
+<li><strong>“Saga 的补偿 = 数据库回滚”</strong>：补偿是新的业务操作（退票单），会被其他事务看见；且补偿自身必须幂等可重试。把补偿当&quot;撤销历史&quot;会导致中间态被下游消费后无法收拾。</li>
+<li><strong>“TCC 的 Try 失败就不用 Cancel”</strong>：Try 超时时<strong>不知道</strong>对方是否已预留成功，必须照样发 Cancel（幂等），否则留下幽灵冻结额度。TCC 的正确性全靠幂等，这是它侵入性高的根源。</li>
+<li><strong>“Outbox 会不会丢消息/重复消息”</strong>：会重复（至少一次投递），不会丢（同事务落库）。正确姿势是消费端按消息 ID 幂等去重，而不是给投递加&quot;恰好一次&quot;的执念。</li>
+<li><strong>“2PC 性能差所以直接淘汰”</strong>：2PC 的可用性差（阻塞）与延迟高（两轮 RTT + 锁持有期）是真的；但在<strong>短事务、参与方稳定、同栈管理</strong>的场景（如同一厂商数据库集群、X AU 内部），XA 依然是省心选择。选型看故障容忍度，不看流行度。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>跨机原子提交的困境来自&quot;决定点与执行点分离 + 网络不可靠&quot;；2PC 用准备阶段 + 落盘决定给出了工程最优，代价是协调者宕机后参与者阻塞。</li>
+<li>2PC 五种故障走查中，&quot;协调者落盘决定后宕机&quot;是命门；3PC 想靠超时自救，却把原子性押在不可靠的网络与时钟上，被实践淘汰。</li>
+<li>Saga 用&quot;本地事务序列 + 反向补偿&quot;换取无阻塞长流程；补偿必须幂等、可重试、可被看见（与回滚的三点区别）。</li>
+<li>TCC 把锁资源业务化（预留），适合资金类短流程；Outbox + 至少一次投递 + 幂等消费是微服务最终一致的事实标准。</li>
+<li>选型口诀（经验做法）：强一致短事务 2PC、资金预留 TCC、长流程 Saga、服务间解耦 Outbox。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>跑通 two_pc.py，为场景 3 补写&quot;协调者恢复&quot;逻辑：重启后从 decision_disk 读出 COMMIT 并重发，验证参与者从 in_doubt 恢复到 committed——这正是 2PC 恢复协议的核心。</li>
+<li>在 saga_ticket.py 中给 cancel_hotel 加入&quot;前 2 次调用抛异常&quot;，实现补偿重试循环（带指数退避，预告 10 章），观察最终收敛；再想想：如果补偿永远失败，系统需要什么人工/异步兜底？</li>
+<li>设计一个 TCC：账户服务提供 freeze/confirm/cancel 三接口（余额 100 元，下单冻结 30）。用 Python 写出三个接口与调用方，并构造&quot;Try 成功但 Confirm 前<strong>调用方崩溃</strong>&quot;的场景，说明恢复策略（超时自动 Cancel）如何释放冻结。</li>
+<li>用 sqlite3 实现 Outbox：业务表与消息表同事务写入，轮询线程投递（打印代替 MQ），消费端用消息 ID 去重表幂等。故意让投递重复 3 次，验证最终只处理一次。</li>
+<li>阅读题：读 Chris Richardson《微服务架构设计模式》第 4 章（Saga 与 TCC），对比书中 Order Service 示例与本章 saga_ticket.py 的状态机设计，列出你至少能想到的两个生产化差距（如进度持久化、超时监控、幂等键设计）。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/07-%E4%BA%8B%E5%8A%A1%E4%B8%8E%E9%9A%94%E7%A6%BB%E7%BA%A7%E5%88%AB/" rel="prev" title="07-事务与隔离级别">
+                  <i class="fa fa-angle-left"></i> 07-事务与隔离级别
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/09-%E6%B6%88%E6%81%AF%E9%98%9F%E5%88%97/" rel="next" title="09-消息队列">
+                  09-消息队列 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

@@ -1,0 +1,621 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 说清 namespace 隔离了什么、没隔离什么：容器内视角与宿主机视角的差异，以及 top&#x2F;free 在容器里为什么&#39;骗人&#39;。 - 实测 cgroup v2 的 CPU throttling：cpu.max、cpu.stat 的 th…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="11-容器与云环境观测">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/11-%E5%AE%B9%E5%99%A8%E4%B8%8E%E4%BA%91%E7%8E%AF%E5%A2%83%E8%A7%82%E6%B5%8B/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 说清 namespace 隔离了什么、没隔离什么：容器内视角与宿主机视角的差异，以及 top&#x2F;free 在容器里为什么&#39;骗人&#39;。 - 实测 cgroup v2 的 CPU throttling：cpu.max、cpu.stat 的 th…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T01:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.542Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Linux">
+<meta property="article:tag" content="性能优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/11-%E5%AE%B9%E5%99%A8%E4%B8%8E%E4%BA%91%E7%8E%AF%E5%A2%83%E8%A7%82%E6%B5%8B/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/11-%E5%AE%B9%E5%99%A8%E4%B8%8E%E4%BA%91%E7%8E%AF%E5%A2%83%E8%A7%82%E6%B5%8B/","path":"2026/09/03/11-容器与云环境观测/","title":"11-容器与云环境观测"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>11-容器与云环境观测 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#11-%E5%AE%B9%E5%99%A8%E4%B8%8E%E4%BA%91%E7%8E%AF%E5%A2%83%E8%A7%82%E6%B5%8B"><span class="nav-number">1.</span> <span class="nav-text"> 11 - 容器与云环境观测</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%AE%B9%E5%99%A8%E5%86%85%E7%9A%84%E8%A7%82%E6%B5%8B%E8%BE%B9%E7%95%8Cnamespace-%E9%9A%94%E7%A6%BB%E4%BA%86%E4%BB%80%E4%B9%88"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 容器内的观测边界：namespace 隔离了什么</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-cpu-throttling-%E5%AE%9E%E6%B5%8Blimit-%E4%B9%8B%E4%B8%8B%E6%97%B6%E9%97%B4%E8%A2%AB%E6%B2%A1%E6%94%B6"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. CPU throttling 实测：limit 之下，时间被“没收”</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%AE%B9%E5%99%A8-oomlimit-%E7%9A%84%E6%AD%BB%E7%BA%BF"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 容器 OOM：limit 的“死线”</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-k8s-%E6%80%A7%E8%83%BD%E8%A7%82%E6%B5%8B%E6%9C%80%E5%B0%8F%E9%9B%86"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. K8s 性能观测最小集</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E4%BA%91%E4%B8%8A%E9%82%BB%E5%B1%85%E5%99%AA%E5%A3%B0steal-time-%E4%B8%8E%E7%9C%8B%E4%B8%8D%E8%A7%81%E7%9A%84%E9%82%BB%E5%B1%85"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 云上邻居噪声：steal time 与“看不见的邻居”</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-prometheus-%E6%8C%87%E6%A0%87%E8%AE%BE%E8%AE%A1usered-%E7%9A%84%E7%BF%BB%E8%AF%91%E5%AD%97%E5%85%B8"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. Prometheus 指标设计：USE&#x2F;RED 的翻译字典</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%8A%A8%E6%89%8B%E5%AE%9E%E9%AA%8C%E7%BB%99%E5%AE%B9%E5%99%A8%E6%80%A7%E8%83%BD%E9%97%AE%E9%A2%98%E5%BB%BA%E7%AB%8B%E8%AF%81%E6%8D%AE%E9%93%BE"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 动手实验：给容器性能问题建立证据链</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/11-%E5%AE%B9%E5%99%A8%E4%B8%8E%E4%BA%91%E7%8E%AF%E5%A2%83%E8%A7%82%E6%B5%8B/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="11-容器与云环境观测 | Yoleen的博客">
+      <meta itemprop="description" content="- 说清 namespace 隔离了什么、没隔离什么：容器内视角与宿主机视角的差异，以及 top&#x2F;free 在容器里为什么&#39;骗人&#39;。 - 实测 cgroup v2 的 CPU throttling：cpu.max、cpu.stat 的 th…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          11-容器与云环境观测
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 09:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T09:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Linux%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Linux性能工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>11 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 说清 namespace 隔离了什么、没隔离什么：容器内视角与宿主机视角的差异，以及 top/free 在容器里为什么'骗人'。 - 实测 cgroup v2 的 CPU throttling：cpu.max、cpu.stat 的 th…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="11-容器与云环境观测"><a class="markdownIt-Anchor" href="#11-容器与云环境观测"></a> 11 - 容器与云环境观测</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>说清 namespace 隔离了什么、没隔离什么：容器内视角与宿主机视角的差异，以及 top/free 在容器里为什么&quot;骗人&quot;。</li>
+<li>实测 cgroup v2 的 CPU throttling：cpu.max、cpu.stat 的 throttled 计数，理解&quot;为什么 top 看不到节流&quot;。</li>
+<li>区分容器 OOM 与宿主 OOM：memory.max、working set 与 OOMKill 事件链。</li>
+<li>掌握 K8s 性能观测的最小集（kubectl top/describe/events），理解 noisy neighbor 与 steal time。</li>
+<li>把 USE/RED 方法翻译成 Prometheus 指标设计：USE→指标命名的对照表。</li>
+</ul>
+<p>前置：操作系统系列 13（容器与虚拟化——namespace/cgroup 的原理）；本篇讲&quot;限制之下怎么观测&quot;。K8s 部分无集群也可读，命令形态与原理不变。</p>
+<h2 id="1-容器内的观测边界namespace-隔离了什么"><a class="markdownIt-Anchor" href="#1-容器内的观测边界namespace-隔离了什么"></a> 1. 容器内的观测边界：namespace 隔离了什么</h2>
+<p>容器 = 一组 namespace（视野隔离）+ cgroup（资源限额）+ 联合文件系统（OS 系列 13 篇）。对观测来说关键是分清<strong>哪些视野被隔了、哪些数据是&quot;假的&quot;</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">┌─ 容器内（PID namespace）────────────┐   ┌─ 宿主机视角 ──────────────┐</span><br><span class="line">│ $ top                                │   │ $ top                      │</span><br><span class="line">│   只有容器内进程可见（PID 从 1 开始） │   │   全部进程可见（真实 PID）  │</span><br><span class="line">│ $ free                               │   │ $ free                     │</span><br><span class="line">│   显示宿主机内存（未隔离！）          │   │   真实内存                  │</span><br><span class="line">│ $ cat /proc/cpuinfo                  │   │   真实 CPU                  │</span><br><span class="line">│   显示宿主机全部核（未隔离！）        │   │                            │</span><br><span class="line">│ $ cat /sys/fs/cgroup/memory.max      │   │                            │</span><br><span class="line">│   真限额（cgroup 视角才是“容器真话”）│   │                            │</span><br><span class="line">└──────────────────────────────────────┘   └────────────────────────────┘</span><br></pre></td></tr></table></figure>
+<p>三条实战结论（<strong>经验做法</strong>）：</p>
+<ol>
+<li><strong>容器内 top/mpstat 看到的 CPU 数与利用率是宿主机的</strong>——8 核宿主机上跑 limit=0.5 的容器，top 里的 %CPU 上限是 800%，你完全看不出&quot;只允许用半核&quot;。容量判断必须读 cgroup 文件（第 2 节）。</li>
+<li><strong>free 显示宿主机内存</strong>——判断容器内存水位用 <code>/sys/fs/cgroup/memory.current</code>（当前用量）与 <code>memory.max</code>（限额）。K8s 的 kubelet 默认就是按&quot;working set（近似 cgroup 用量 - 不可回收缓存）&quot;来判 OOM 的，比容器内 free 靠谱得多。</li>
+<li><strong>观测工具的越界</strong>：宿主机上可以看到一切（<code>docker exec</code> 进容器只是换 namespace，宿主 perf/eBPF 能覆盖容器进程）；容器内通常只能看自己。<strong>线上排查的标准站位是宿主机</strong>，容器内只做最后一米的确认。</li>
+</ol>
+<h2 id="2-cpu-throttling-实测limit-之下时间被没收"><a class="markdownIt-Anchor" href="#2-cpu-throttling-实测limit-之下时间被没收"></a> 2. CPU throttling 实测：limit 之下，时间被“没收”</h2>
+<p>cgroup v2 用 <code>cpu.max</code> 限 CPU，格式 “quota period”（man 5 cgroups；内核文档 <code>Documentation/admin-guide/cgroup-v2.rst</code>）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ docker run -d --name demo --cpus=0.5 python:3.11 sleep infinity   # --cpus=0.5 即 quota=50000/period=100000</span><br><span class="line">$ docker exec demo cat /sys/fs/cgroup/cpu.max</span><br><span class="line">50000 100000        # 每 100ms 周期只许用 50ms CPU 时间</span><br></pre></td></tr></table></figure>
+<p>制造节流：容器里跑两个死循环线程（合计需求 2 核，限额 0.5 核）。先看现象，再看证据：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">$ docker exec demo python3 -c &quot;</span><br><span class="line">import threading, time</span><br><span class="line">for _ in range(2):</span><br><span class="line">    threading.Thread(target=lambda: [sum(i*i for i in range(10**7)) or time.sleep(0)], daemon=True).start()</span><br><span class="line">import time as t; t.sleep(60)&quot;</span><br><span class="line"></span><br><span class="line">$ docker exec demo cat /sys/fs/cgroup/cpu.stat</span><br><span class="line">usage_usec 24310522          # 累计实际用掉的 CPU 时间</span><br><span class="line">nr_periods 480               # 经历的 100ms 周期数</span><br><span class="line">nr_throttled 431             # ← 431 个周期发生了节流（90%！）</span><br><span class="line">throttled_usec 18203440      # ← 累计被“没收”的 CPU 时间 18.2 秒</span><br></pre></td></tr></table></figure>
+<p><strong>这就是容器版&quot;CPU 不高但很慢&quot;的元凶</strong>：宿主机 top 里容器进程 %CPU 平平无奇（被限额压着），但每个 100ms 周期里，进程用完 50ms 配额后被硬暂停，到下个周期才能继续——P99 延迟被节流周期整体抬高（04 篇的&quot;等待&quot;多了一种内核来源）。判断节流三步（<strong>经验做法</strong>）：</p>
+<ol>
+<li><code>cat /sys/fs/cgroup/cpu.stat</code>（或 <code>docker exec</code> 进去看），看 <code>nr_throttled/nr_periods</code> 比例，&gt;10% 就值得警惕。</li>
+<li>对照应用 P99：节流比例与 P99 恶化常同步。</li>
+<li>药方按序：升 limit → 减并发线程数（把单请求的核需求压到 limit 之下）→ CPU 密集任务挪出该容器。</li>
+</ol>
+<p>无 Docker 的 WSL2 也能做同款实验（systemd-run 建 cgroup，或直接手写 cgroup v2 目录），工具变了，cpu.stat 的读法一模一样。</p>
+<h2 id="3-容器-oomlimit-的死线"><a class="markdownIt-Anchor" href="#3-容器-oomlimit-的死线"></a> 3. 容器 OOM：limit 的“死线”</h2>
+<p>cgroup v2 的内存限额在 <code>memory.max</code>，事件计数在 <code>memory.events</code>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ docker run -d --name oomdemo --memory=200m python:3.11 sleep infinity</span><br><span class="line">$ docker exec oomdemo python3 -c &quot;x = bytearray(300 * 1024 * 1024)&quot;   # 申 300MB，超 200m 限额</span><br><span class="line">Killed</span><br><span class="line">$ docker inspect oomdemo --format &#x27;&#123;&#123;.State.OOMKilled&#125;&#125; &#123;&#123;.State.ExitCode&#125;&#125;&#x27;</span><br><span class="line">true 137                       ← 137 = SIGKILL（128+9），OOMKilled 标记</span><br><span class="line">$ docker exec oomdemo cat /sys/fs/cgroup/memory.events 2&gt;/dev/null || docker logs oomdemo</span><br><span class="line">oom 1                          # memory.events: oom 计数 +1, oom_kill 计数 +1</span><br></pre></td></tr></table></figure>
+<p>与 05 篇宿主 OOM 的三点区别：<strong>作用域</strong>（cgroup 内挑选 victim，宿主内存再空也没用）；<strong>日志形状</strong>（<code>dmesg | grep -i 'memory cgroup out of memory'</code>，constraint=CONSTRAINT_MEMCG）；<strong>观测面</strong>（kubelet/memory.events 的 oom_kill 计数，比翻日志及时）。K8s 里 <code>kubectl describe pod</code> 的 <code>Last State: Terminated, Reason: OOMKilled</code> 就是这条链的用户界面。</p>
+<p>指标口径要小心（<strong>经验做法</strong>）：K8s 判 OOM 用 working set ≈ <code>memory.current − inactive_file</code>（近似），监控画 RSS 会与&quot;为什么被杀&quot;对不上——监控容器内存一律用 working set（Prometheus 的 <code>container_memory_working_set_bytes</code>），别用 RSS。</p>
+<h2 id="4-k8s-性能观测最小集"><a class="markdownIt-Anchor" href="#4-k8s-性能观测最小集"></a> 4. K8s 性能观测最小集</h2>
+<ul>
+<li><strong>kubectl top</strong>（metrics-server 提供）：<code>kubectl top pods -n prod</code> 看每个 Pod 的 CPU/内存用量（注意：这是用量不是限额利用率，limit 90% 的告警要自己算 <code>container_memory_working_set_bytes / cluster_resource_limit</code>）。</li>
+<li><strong>kubectl describe pod</strong>：Events 区是事故线索第一现场（OOMKilled、FailedScheduling、镜像拉取失败、重启原因）。</li>
+<li><strong>requests/limits 与 QoS</strong>：Guaranteed（cpu=mem 的 requests==limits）在节点资源紧张时最后被驱逐——延迟敏感服务值得多花钱买 Guaranteed（<strong>经验做法</strong>）。</li>
+<li><strong>CPU 节流的 K8s 形态</strong>：kubectl top 看不到节流！它只报用量。必须看 Prometheus 的 <code>container_cpu_cfs_throttled_periods_total</code>（下一节），这是 K8s 观测最著名的盲区之一。</li>
+</ul>
+<h2 id="5-云上邻居噪声steal-time-与看不见的邻居"><a class="markdownIt-Anchor" href="#5-云上邻居噪声steal-time-与看不见的邻居"></a> 5. 云上邻居噪声：steal time 与“看不见的邻居”</h2>
+<p>虚拟机里你的 CPU 时间可能被 hypervisor 拿走分配给同宿主机的其他租户（noisy neighbor）。观测信号是 <strong>steal time</strong>（top/vmstat/mpstat 的 %st 列，取自 /proc/stat 的 steal 字段）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ vmstat 1 5</span><br><span class="line">procs -----------memory---------- ---swap-- -----io---- -system-- ------cpu-----</span><br><span class="line"> r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st</span><br><span class="line"> 2  0      0 ...                                  0    0  4000 8000 30  5 40  0 25</span><br><span class="line">                                                              steal=25%! ↑</span><br></pre></td></tr></table></figure>
+<p>%st 持续 &gt;5% 就该警觉：你的&quot;CPU 利用率 60%&quot;里有一大块时间其实没在跑。排查与自救（<strong>经验做法</strong>）：</p>
+<ol>
+<li>确认形状：steal 高发时段与业务高峰重合 → 同宿主邻居忙；全天恒定 → 机型超卖比例如此。</li>
+<li>缓解：换实例类型/专用主机（dedicated host）/换可用区重开；把关键服务与噪声服务分组隔离。</li>
+<li>与 07 篇联动：网络抖动也常来自邻居（软中断/网卡带宽被抢），iperf3 基线（第 5 节）留档以便&quot;回到过去&quot;对比。</li>
+</ol>
+<h2 id="6-prometheus-指标设计usered-的翻译字典"><a class="markdownIt-Anchor" href="#6-prometheus-指标设计usered-的翻译字典"></a> 6. Prometheus 指标设计：USE/RED 的翻译字典</h2>
+<p>方法论的最终归宿是监控。USE（01 篇）落到 Promethesu 上就是一张命名字典（Prometheus 官方文档 “Naming of metrics” + node_exporter 指标清单）：</p>
+<table>
+<thead>
+<tr>
+<th>USE 问题</th>
+<th>资源</th>
+<th>Prometheus 指标</th>
+<th>读法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>利用率</td>
+<td>CPU</td>
+<td><code>node_cpu_seconds_total</code></td>
+<td><code>rate(...[5m])</code> 按 mode 求和</td>
+</tr>
+<tr>
+<td>利用率</td>
+<td>内存</td>
+<td><code>node_memory_MemAvailable_bytes</code></td>
+<td>/ total 得可用比例（02 篇的 available 口径）</td>
+</tr>
+<tr>
+<td>利用率</td>
+<td>磁盘</td>
+<td><code>node_disk_io_time_seconds_total</code></td>
+<td>rate = %util；<code>io_time_weighted</code> ≈ aqu-sz</td>
+</tr>
+<tr>
+<td>饱和度</td>
+<td>CPU（容器）</td>
+<td><code>container_cpu_cfs_throttled_periods_total</code></td>
+<td>/ <code>..._periods_total</code> = 节流比例（第 2 节）</td>
+</tr>
+<tr>
+<td>饱和度</td>
+<td>磁盘</td>
+<td><code>node_disk_io_now</code></td>
+<td>在途请求数（aqu-sz 的即时版）</td>
+</tr>
+<tr>
+<td>错误</td>
+<td>网络</td>
+<td><code>node_network_receive_drop_total</code> / <code>node_netstat_Tcp_RetransSegs</code></td>
+<td>速率告警（07 篇丢包）</td>
+</tr>
+<tr>
+<td>错误</td>
+<td>内存</td>
+<td><code>kube_pod_container_status_last_terminated_reason{reason=&quot;OOMKilled&quot;}</code></td>
+<td>事件计数（第 3 节）</td>
+</tr>
+</tbody>
+</table>
+<p>RED（服务侧）三件套的标准形状：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">Rate:     rate(http_requests_total&#123;job=&quot;infer&quot;&#125;[5m])                     ← Counter 累加后求速率</span><br><span class="line">Errors:   sum(rate(http_requests_total&#123;status=~&quot;5..&quot;&#125;[5m])) / sum(rate(http_requests_total[5m]))</span><br><span class="line">Duration: histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))</span><br><span class="line">          ↑ histogram 类型 + bucket + histogram_quantile 才能得到 P99（01 篇的分布承诺）</span><br></pre></td></tr></table></figure>
+<p><strong>命名与基数两守则</strong>（Prometheus 文档的 Data model 一节）：</p>
+<ol>
+<li>命名：<code>&lt;namespace&gt;_&lt;subsystem&gt;_&lt;name&gt;_&lt;unit&gt;</code>，unit 后缀（<code>_seconds</code>/<code>_bytes</code>/<code>_total</code>）强制——<code>http_request_duration_seconds</code> 能被全世界读懂，<code>latency1</code> 不能。</li>
+<li>label 基数（cardinality）：label 组合数 = 时序数量。给 <code>user_id</code>、<code>request_id</code> 打 label 是经典事故（时序爆炸，TSDB OOM——观测系统自己成了 05 篇的案发现场）。<strong>经验做法</strong>：低基数维度（method/path 模板/region）进 label，高基数（用户/请求 ID）进日志与 trace。</li>
+</ol>
+<h2 id="7-动手实验给容器性能问题建立证据链"><a class="markdownIt-Anchor" href="#7-动手实验给容器性能问题建立证据链"></a> 7. 动手实验：给容器性能问题建立证据链</h2>
+<p>完整走一遍&quot;节流导致的 P99 恶化&quot;（可全部在 WSL2 + Docker 复现）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># throttle_victim.py —— 8 线程 CPU 密集 worker，模拟“limit 太小的批处理容器”</span></span><br><span class="line"><span class="keyword">import</span> threading, time</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">worker</span>():</span><br><span class="line">    end = time.time() + <span class="number">60</span></span><br><span class="line">    <span class="keyword">while</span> time.time() &lt; end:</span><br><span class="line">        <span class="built_in">sum</span>(i * i <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">10</span>**<span class="number">6</span>))</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">8</span>):</span><br><span class="line">        threading.Thread(target=worker, daemon=<span class="literal">True</span>).start()</span><br><span class="line">    time.sleep(<span class="number">60</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>第一步：症状。</strong> <code>--cpus=0.5</code> 跑起来后用 hey 压容器里的探针接口（12 篇会细讲压测工具），P50 正常、P99 从 20ms 恶化到 700ms——经典形状。</p>
+<p><strong>第二步：宿主机视角取证。</strong> 宿主机上一切&quot;看起来正常&quot;：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ docker stats --no-stream demo</span><br><span class="line">CONTAINER   CPU %    MEM USAGE / LIMIT   NET I/O          BLOCK I/O</span><br><span class="line">demo        49.80%   120MiB / 200MiB     ...              ...</span><br></pre></td></tr></table></figure>
+<p>CPU 才 49.8%（0.5 核用满即 50%）——<strong>docker stats 完全看不出任何问题</strong>。这正是第 2 节说的盲区。取证必须去 cgroup：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ docker exec demo cat /sys/fs/cgroup/cpu.stat</span><br><span class="line">nr_periods 1200</span><br><span class="line">nr_throttled 1180        ← 98% 的周期在节流！</span><br><span class="line">throttled_usec 59000000</span><br></pre></td></tr></table></figure>
+<p><strong>第三步：修复对比。</strong> 三条路逐一试，同口径记录 P99 与节流比例：</p>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>P50</th>
+<th>P99</th>
+<th>nr_throttled/nr_periods</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>原状（0.5 核，8 线程）</td>
+<td>18ms</td>
+<td>700ms</td>
+<td>98%</td>
+</tr>
+<tr>
+<td>线程数 8→1（减少需求）</td>
+<td>19ms</td>
+<td>45ms</td>
+<td>55%</td>
+</tr>
+<tr>
+<td>limit 0.5→2（增加供给）</td>
+<td>18ms</td>
+<td>24ms</td>
+<td>6%</td>
+</tr>
+<tr>
+<td>1 线程 + limit 2（双管齐下）</td>
+<td>18ms</td>
+<td>21ms</td>
+<td>0%</td>
+</tr>
+</tbody>
+</table>
+<p>结论句式：节流（98% 周期）是 P99 恶化的直接原因（证据：cpu.stat 与 P99 同步恶化/恢复）；供给（limit）与需求（线程数）双向调整后节流归零、P99 回到 21ms。<strong>把这个表格放进你的调优报告</strong>——12 篇的模板会要求完全相同的结构。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“容器内 top/free 说内存 CPU 都正常”</strong>：/proc 未隔离的部分是宿主机数据；容器的&quot;真话&quot;在 /sys/fs/cgroup/。站位错误会让整个排查从第二步就走偏。</li>
+<li><strong>“docker stats CPU 50% 说明没瓶颈”</strong>：50% 恰好是 0.5 核限额跑满的形状；CPU % 必须除以 limit 看占比。</li>
+<li><strong>“K8s 里 kubectl top 红了才有问题”</strong>：top 看不到节流；throttled 比例是独立指标（第 6 节的翻译字典），缺了它 CPU 类 P99 事故排查会一筹莫展。</li>
+<li><strong>“监控把 RSS 画上就行”</strong>：容器判死用 working set；RSS 与 working set 的差（共享/缓存口径）会让&quot;为什么 OOM&quot;变成悬案。</li>
+<li><strong>“云上 VM 的 CPU 是我自己的”</strong>：%st 持续非零说明 hypervisor 在抽成；把 steal 常态化指标化是云上容量管理的常识（<strong>经验做法</strong>）。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>namespace 隔离视野（进程/网络/挂载），cgroup 决定限额；容器内 top/free 的数字是宿主机的，cgroup 文件才是容器的真话；排查站位在宿主机。</li>
+<li>throttling 证据链：cpu.max 定限额 → cpu.stat 的 nr_throttled/throttled_usec 量化 → 与 P99 同步性定因果；docker stats/top 都是盲区。</li>
+<li>容器 OOM 三件套：memory.max / memory.events(oom_kill) / OOMKilled 事件；监控口径用 working set 不是 RSS。</li>
+<li>K8s 最小集：top（用量）、describe（事件）、QoS（驱逐顺序）；节流与 OOM 都要靠指标（第 6 节字典）而非日志死磕。</li>
+<li>邻居噪声看 %st；Prometheus 设计 = USE/RED 翻译字典 + 命名守则 + label 基数自律。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>用 <code>docker run --cpus=0.5</code> 复现第 7 节实验，把三组 cpu.stat 数字与你机器上的 P99 填进表格；没有 Docker 时用 systemd-run（<code>systemd-run --scope -p CPUQuota=50% python3 ...</code>）替代，读同样的 cpu.stat（systemd cgroup 层级下路径在 /sys/fs/cgroup/system.slice/…）。</li>
+<li>在容器内分别跑 <code>free -h</code>、<code>cat /proc/cpuinfo | grep -c processor</code>、<code>cat /sys/fs/cgroup/memory.max</code>，把三组数字与宿主机对比，写一段&quot;容器内哪些数字不可信&quot;的笔记。</li>
+<li>构造一次容器 OOM（第 3 节命令），依次取证：<code>docker inspect</code> 的 OOMKilled、<code>memory.events</code> 的 oom 计数、宿主 dmesg 的 “memory cgroup out of memory” 行，体会三种证据的层级（编排层/内核层/事件层）。</li>
+<li>查一下你所在云（或本地虚拟机）的 %st：<code>vmstat 1 10</code> 记录 st 列；若有条件，把一个高 CPU 任务与它并行跑，观察 steal 与你自己进程延迟的相关性。</li>
+<li>给你自己的服务写&quot;USE→指标&quot;翻译清单（至少 CPU/内存/网络三资源六个指标名），并写一条 histogram_quantile 的 P99 查询；核对 label 是否有 user_id 级高基数维度，有则重构。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/Linux/" rel="tag"># Linux</a>
+              <a href="/tags/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" rel="tag"># 性能优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/10-%E5%BA%94%E7%94%A8%E5%89%96%E6%9E%90-Python%E4%B8%8EC++/" rel="prev" title="10-应用剖析-Python与C++">
+                  <i class="fa fa-angle-left"></i> 10-应用剖析-Python与C++
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/12-%E5%AE%9E%E6%88%98-%E6%8E%A8%E7%90%86%E6%9C%8D%E5%8A%A1%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98%E6%A1%88%E4%BE%8B/" rel="next" title="12-实战-推理服务性能调优案例">
+                  12-实战-推理服务性能调优案例 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

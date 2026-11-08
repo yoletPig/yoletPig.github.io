@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="1. 用实验看清四个作用域的真实生命周期，学会按&#39;资源多贵&#39;选作用域； 2. 理解 fixture 组合与依赖注入——为什么这是测试代码的&#39;构造函数&#39;； 3. 掌握三个最高频的内置 fixture：tmppath、capsys、monkey…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="03-fixture与测试架构">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/03-fixture%E4%B8%8E%E6%B5%8B%E8%AF%95%E6%9E%B6%E6%9E%84/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="1. 用实验看清四个作用域的真实生命周期，学会按&#39;资源多贵&#39;选作用域； 2. 理解 fixture 组合与依赖注入——为什么这是测试代码的&#39;构造函数&#39;； 3. 掌握三个最高频的内置 fixture：tmppath、capsys、monkey…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T17:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.562Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="测试">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/03-fixture%E4%B8%8E%E6%B5%8B%E8%AF%95%E6%9E%B6%E6%9E%84/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/03-fixture%E4%B8%8E%E6%B5%8B%E8%AF%95%E6%9E%B6%E6%9E%84/","path":"2026/09/04/03-fixture与测试架构/","title":"03-fixture与测试架构"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>03-fixture与测试架构 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#03-fixture-%E4%B8%8E%E6%B5%8B%E8%AF%95%E6%9E%B6%E6%9E%84%E6%8A%8A-setupteardown-%E5%86%99%E6%88%90%E4%BD%93%E7%B3%BB"><span class="nav-number">1.</span> <span class="nav-text"> 03 - fixture 与测试架构：把 setup&#x2F;teardown 写成体系</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%BD%9C%E7%94%A8%E5%9F%9Ffunction-class-module-session"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 作用域：function &#x2F; class &#x2F; module &#x2F; session</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E7%BB%84%E5%90%88%E4%B8%8E%E4%BE%9D%E8%B5%96%E6%B3%A8%E5%85%A5fixture-%E6%98%AF%E6%B5%8B%E8%AF%95%E7%9A%84%E6%9E%84%E9%80%A0%E5%87%BD%E6%95%B0"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 组合与依赖注入：fixture 是测试的构造函数</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-autouse%E6%96%B9%E4%BE%BF%E4%B8%8E%E6%BB%A5%E7%94%A8%E4%B8%80%E7%BA%BF%E4%B9%8B%E9%9A%94"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. autouse：方便与滥用一线之隔</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%86%85%E7%BD%AE-fixture-%E4%B8%89%E5%89%91%E5%AE%A2tmp_path-capsys-monkeypatch"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 内置 fixture 三剑客：tmp_path &#x2F; capsys &#x2F; monkeypatch</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-conftest-%E5%88%86%E5%B1%82%E7%9B%AE%E5%BD%95%E5%8D%B3%E5%91%BD%E5%90%8D%E7%A9%BA%E9%97%B4"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. conftest 分层：目录即命名空间</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%B7%A5%E5%8E%82-fixturemake_user-%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 工厂 fixture：make_user 模式</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/03-fixture%E4%B8%8E%E6%B5%8B%E8%AF%95%E6%9E%B6%E6%9E%84/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="03-fixture与测试架构 | Yoleen的博客">
+      <meta itemprop="description" content="1. 用实验看清四个作用域的真实生命周期，学会按&#39;资源多贵&#39;选作用域； 2. 理解 fixture 组合与依赖注入——为什么这是测试代码的&#39;构造函数&#39;； 3. 掌握三个最高频的内置 fixture：tmppath、capsys、monkey…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          03-fixture与测试架构
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 01:30:00" itemprop="dateCreated datePublished" datetime="2026-09-04T01:30:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%B5%8B%E8%AF%95/" itemprop="url" rel="index"><span itemprop="name">测试</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>10 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">1. 用实验看清四个作用域的真实生命周期，学会按'资源多贵'选作用域； 2. 理解 fixture 组合与依赖注入——为什么这是测试代码的'构造函数'； 3. 掌握三个最高频的内置 fixture：tmppath、capsys、monkey…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="03-fixture-与测试架构把-setupteardown-写成体系"><a class="markdownIt-Anchor" href="#03-fixture-与测试架构把-setupteardown-写成体系"></a> 03 - fixture 与测试架构：把 setup/teardown 写成体系</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ol>
+<li>用实验看清四个作用域的真实生命周期，学会按&quot;资源多贵&quot;选作用域；</li>
+<li>理解 fixture 组合与依赖注入——为什么这是测试代码的&quot;构造函数&quot;；</li>
+<li>掌握三个最高频的内置 fixture：<code>tmp_path</code>、<code>capsys</code>、<code>monkeypatch</code>；</li>
+<li>会用 conftest 分层与工厂 fixture 组织一套可维护的测试架构，并识别 autouse 的滥用。</li>
+</ol>
+<h2 id="1-作用域function-class-module-session"><a class="markdownIt-Anchor" href="#1-作用域function-class-module-session"></a> 1. 作用域：function / class / module / session</h2>
+<p><code>@pytest.fixture(scope=...)</code> 的四个作用域决定实例<strong>创建一次、活多久</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>scope</th>
+<th>创建时机</th>
+<th>销毁时机</th>
+<th>典型对象</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>function</code>（默认）</td>
+<td>每个测试前</td>
+<td>每个测试后</td>
+<td>临时文件、内存对象、fake</td>
+</tr>
+<tr>
+<td><code>class</code></td>
+<td>每个测试类前</td>
+<td>类内用例跑完</td>
+<td>类级共享的可变状态</td>
+</tr>
+<tr>
+<td><code>module</code></td>
+<td>每个模块前</td>
+<td>模块跑完</td>
+<td>模块级只读资源</td>
+</tr>
+<tr>
+<td><code>session</code></td>
+<td>整轮测试前</td>
+<td>进程退出前</td>
+<td>启动本地服务器、构建产物、数据库容器</td>
+</tr>
+</tbody>
+</table>
+<p><strong>执行顺序实验</strong>（完整可运行，把生命周期写进文件、pytest 退出后查看——比 print 直观）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># test_scope_order.py</span></span><br><span class="line"><span class="keyword">import</span> pytest</span><br><span class="line"><span class="keyword">from</span> pathlib <span class="keyword">import</span> Path</span><br><span class="line"></span><br><span class="line">LOG = Path(__file__).parent / <span class="string">&quot;order.txt&quot;</span></span><br><span class="line">LOG.write_text(<span class="string">&quot;&quot;</span>)          <span class="comment"># 每次运行前清空</span></span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture(<span class="params">scope=<span class="string">&quot;session&quot;</span></span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">s_session</span>():</span><br><span class="line">    LOG.write_text(LOG.read_text() + <span class="string">&quot;session: setup\n&quot;</span>); <span class="keyword">yield</span></span><br><span class="line">    LOG.write_text(LOG.read_text() + <span class="string">&quot;session: teardown\n&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture(<span class="params">scope=<span class="string">&quot;module&quot;</span></span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">s_module</span>():</span><br><span class="line">    LOG.write_text(LOG.read_text() + <span class="string">&quot;  module: setup\n&quot;</span>); <span class="keyword">yield</span></span><br><span class="line">    LOG.write_text(LOG.read_text() + <span class="string">&quot;  module: teardown\n&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">s_func</span>():</span><br><span class="line">    LOG.write_text(LOG.read_text() + <span class="string">&quot;    func: setup\n&quot;</span>); <span class="keyword">yield</span></span><br><span class="line">    LOG.write_text(LOG.read_text() + <span class="string">&quot;    func: teardown\n&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_a</span>(<span class="params">s_session, s_module, s_func</span>): <span class="keyword">pass</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_b</span>(<span class="params">s_session, s_module, s_func</span>): <span class="keyword">pass</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_c</span>(<span class="params">s_session, s_module, s_func</span>): <span class="keyword">pass</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">$ pytest test_scope_order.py -q</span><br><span class="line">3 passed in 0.07s</span><br><span class="line">$ cat order.txt</span><br><span class="line">session: setup</span><br><span class="line">  module: setup</span><br><span class="line">    func: setup</span><br><span class="line">    func: teardown</span><br><span class="line">    func: setup</span><br><span class="line">    func: teardown</span><br><span class="line">    func: setup</span><br><span class="line">    func: teardown</span><br><span class="line">  module: teardown</span><br><span class="line">session: teardown</span><br></pre></td></tr></table></figure>
+<p>三条从实验里读出的规律：① 宽作用域先 setup、<strong>后</strong> teardown（洋葱模型）；② function 级每个测试各走一轮——三个测试三组 setup/teardown，这就是&quot;默认隔离&quot;的物理来源；③ 同一作用域内有多个 fixture 时，按<strong>依赖关系</strong>排序（谁被依赖谁先建），无依赖时按声明顺序。teardown 顺序恰好相反。</p>
+<p><strong>选型纪律</strong>：作用域越宽，隔离越差。默认 function；只有&quot;创建成本明显高且内容只读&quot;（如预构建的测试数据集、本地 mock 服务器）才升到 module/session。session 级 fixture 里<strong>永远不要放可变状态</strong>——它会被一整个测试会话共享，一个用例改了它，后面全是薛定谔的绿。</p>
+<h2 id="2-组合与依赖注入fixture-是测试的构造函数"><a class="markdownIt-Anchor" href="#2-组合与依赖注入fixture-是测试的构造函数"></a> 2. 组合与依赖注入：fixture 是测试的构造函数</h2>
+<p>fixture 最大的能力不是替代 setUp，而是<strong>组合</strong>——一个 fixture 可以声明依赖另一个 fixture，pytest 自动解析依赖图、按正确顺序装配：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># test_compose.py</span></span><br><span class="line"><span class="keyword">import</span> pytest</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">config</span>():                          <span class="comment"># 最底层：纯配置</span></span><br><span class="line">    <span class="keyword">return</span> &#123;<span class="string">&quot;retry&quot;</span>: <span class="number">3</span>, <span class="string">&quot;timeout&quot;</span>: <span class="number">1.0</span>&#125;</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">fake_llm</span>(<span class="params">config</span>):                  <span class="comment"># 中层：依赖配置</span></span><br><span class="line">    <span class="keyword">class</span> <span class="title class_">FakeLLM</span>:</span><br><span class="line">        <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, cfg</span>): <span class="variable language_">self</span>.calls, <span class="variable language_">self</span>.cfg = <span class="number">0</span>, cfg</span><br><span class="line">        <span class="keyword">def</span> <span class="title function_">chat</span>(<span class="params">self, prompt</span>): <span class="variable language_">self</span>.calls += <span class="number">1</span>; <span class="keyword">return</span> <span class="string">&quot;pong&quot;</span></span><br><span class="line">    <span class="keyword">return</span> FakeLLM(config)</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">agent</span>(<span class="params">fake_llm</span>):                   <span class="comment"># 上层：组装被测对象</span></span><br><span class="line">    <span class="keyword">from</span> mylib.agent <span class="keyword">import</span> Agent</span><br><span class="line">    <span class="keyword">return</span> Agent(llm=fake_llm, **fake_llm.cfg)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_agent_retries</span>(<span class="params">agent, fake_llm</span>):</span><br><span class="line">    <span class="keyword">assert</span> agent.run(<span class="string">&quot;ping&quot;</span>) == <span class="string">&quot;pong&quot;</span></span><br><span class="line">    <span class="keyword">assert</span> fake_llm.calls == <span class="number">1</span></span><br></pre></td></tr></table></figure>
+<p>测试函数只声明它<strong>业务上需要</strong>的东西（<code>agent</code>），中间层的 <code>config</code> 不用关心——这是标准的<strong>依赖注入</strong>：依赖由外部容器（pytest 的 fixture 解析器）装配，而不是对象自己 <code>new</code>。06 篇会把同样的思想用到产品代码上（构造函数注入），两边是同一件事：<em>可测试性的本质是&quot;依赖从外面给进来&quot;</em>。</p>
+<p>pytest 文档《How to use fixtures》把这个结构称为&quot;fixture 固件层次&quot;。两个工程细节：</p>
+<ol>
+<li><strong>测试只声明直接依赖</strong>，不要为了拿 <code>config</code> 而多声明一个不用的参数——需要值时直接再注入 <code>config</code> 一次（同名 fixture 是单例，同一次装配里是同一个对象）；</li>
+<li><strong>依赖图在收集期静态可分析</strong>：<code>pytest --collect-only</code> 之外还有 <code>--setup-plan</code> 能打印&quot;将要执行的 fixture 装配顺序&quot;，调复杂组合时非常有用。</li>
+</ol>
+<h2 id="3-autouse方便与滥用一线之隔"><a class="markdownIt-Anchor" href="#3-autouse方便与滥用一线之隔"></a> 3. autouse：方便与滥用一线之隔</h2>
+<p><code>autouse=True</code> 让 fixture 无需声明就对作用域内所有测试生效：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@pytest.fixture(<span class="params">autouse=<span class="literal">True</span></span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">_isolate_cwd</span>(<span class="params">tmp_path, monkeypatch</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;每个测试都在临时目录里运行，防止污染仓库。&quot;&quot;&quot;</span></span><br><span class="line">    monkeypatch.chdir(tmp_path)</span><br><span class="line">    <span class="keyword">yield</span></span><br></pre></td></tr></table></figure>
+<p>这是 autouse 的正当用法：<strong>全局环境约定</strong>——隔离工作目录、固定时区、关闭网络、给全量测试注入统一日志配置。它相当于 unittest 的 setUp 全局版，但更透明（能 grep 到、能断言、能分层覆盖）。</p>
+<p>滥用长这样：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="meta">@pytest.fixture(<span class="params">autouse=<span class="literal">True</span></span>)          </span><span class="comment"># ❌ 反例</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">database</span>(<span class="params">db_url</span>):</span><br><span class="line">    db = connect(db_url)</span><br><span class="line">    <span class="keyword">yield</span> db</span><br></pre></td></tr></table></figure>
+<p>全量测试被迫连接数据库，纯逻辑的单元测试从毫秒级变成秒级，<strong>测试分层（单元/集成）被悄悄抹平</strong>。判断标准：</p>
+<table>
+<thead>
+<tr>
+<th>该用 autouse</th>
+<th>不该用 autouse</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>环境隔离（chdir/时区/env/禁网）</td>
+<td>资源连接（数据库、HTTP、消息队列）</td>
+</tr>
+<tr>
+<td>全局确定性设置（固定随机种子）</td>
+<td>只被少数测试用的数据</td>
+</tr>
+<tr>
+<td>统一的计时/清理兜底</td>
+<td>任何&quot;大多数测试用不上&quot;的东西</td>
+</tr>
+</tbody>
+</table>
+<p><strong>经验做法</strong>：autouse 数量保持个位数，且都放在 conftest 里集中可见；任何需要&quot;昂贵资源&quot;的都改成显式声明，让集成测试标签（<code>-m integration</code>）来控制启停。</p>
+<h2 id="4-内置-fixture-三剑客tmp_path-capsys-monkeypatch"><a class="markdownIt-Anchor" href="#4-内置-fixture-三剑客tmp_path-capsys-monkeypatch"></a> 4. 内置 fixture 三剑客：tmp_path / capsys / monkeypatch</h2>
+<p>pytest 自带的 fixture 覆盖了最高频的三类隔离需求，先写对它们，再谈造轮子。</p>
+<p><strong>tmp_path——文件系统隔离</strong>（每测试一个独立的临时目录，<code>pathlib.Path</code>，测试后自动清理）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">test_write_config</span>(<span class="params">tmp_path</span>):</span><br><span class="line">    p = tmp_path / <span class="string">&quot;config.yaml&quot;</span></span><br><span class="line">    p.write_text(<span class="string">&quot;retry: 3\n&quot;</span>, encoding=<span class="string">&quot;utf-8&quot;</span>)</span><br><span class="line">    <span class="keyword">from</span> mylib.config <span class="keyword">import</span> load</span><br><span class="line">    cfg = load(p)</span><br><span class="line">    <span class="keyword">assert</span> cfg[<span class="string">&quot;retry&quot;</span>] == <span class="number">3</span></span><br></pre></td></tr></table></figure>
+<p>绝不要在测试里写死 <code>/tmp/xxx</code> 或相对路径——并行跑（<code>pytest -n</code>）或 CI 缓存恢复都会撞车。需要跨测试共享的临时目录才升 scope（如 <code>scope=&quot;session&quot;</code> 的下载缓存）。</p>
+<p><strong>capsys——stdout/stderr 捕获与断言</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">test_progress_output</span>(<span class="params">capsys</span>):</span><br><span class="line">    <span class="keyword">from</span> mylib.render <span class="keyword">import</span> render_progress</span><br><span class="line">    render_progress(done=<span class="number">2</span>, total=<span class="number">3</span>)</span><br><span class="line">    out = capsys.readouterr()</span><br><span class="line">    <span class="keyword">assert</span> out.out == <span class="string">&quot;[## ] 2/3\n&quot;</span></span><br><span class="line">    <span class="keyword">assert</span> out.err == <span class="string">&quot;&quot;</span></span><br></pre></td></tr></table></figure>
+<p><code>capsys</code> 让&quot;输出&quot;从print-and-pray 变成可断言行为。它捕的是 pytest 已捕获的流（与 <code>-s</code> 互斥）；CLI 库的测试里，这比 <code>subprocess</code> 自跑快一个量级。注意 <code>capsys.readouterr()</code> 会清空缓冲，断言前的输出都在、之后的归零。</p>
+<p><strong>monkeypatch——环境/属性/字典的临时修改</strong>（teardown 自动还原，这是它相对手写 try/finally 的全部意义）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">test_api_key_from_env</span>(<span class="params">monkeypatch</span>):</span><br><span class="line">    monkeypatch.setenv(<span class="string">&quot;MYLIB_API_KEY&quot;</span>, <span class="string">&quot;test-key&quot;</span>)</span><br><span class="line">    <span class="keyword">from</span> mylib.client <span class="keyword">import</span> current_key</span><br><span class="line">    <span class="keyword">assert</span> current_key() == <span class="string">&quot;test-key&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_clock</span>(<span class="params">monkeypatch</span>):</span><br><span class="line">    <span class="keyword">class</span> <span class="title class_">FakeTime</span>:</span><br><span class="line"><span class="meta">        @staticmethod</span></span><br><span class="line">        <span class="keyword">def</span> <span class="title function_">time</span>(): <span class="keyword">return</span> <span class="number">1700000000.0</span></span><br><span class="line">    monkeypatch.<span class="built_in">setattr</span>(<span class="string">&quot;mylib.timing.time&quot;</span>, FakeTime.time)</span><br><span class="line">    ...</span><br></pre></td></tr></table></figure>
+<p>四个常用方法：<code>setenv/delenv</code>（环境变量）、<code>setattr(目标, &quot;名&quot;, 值)</code>（对象属性/模块函数，字符串形式 <code>&quot;模块.属性&quot;</code> 可选，但<strong>推荐写全字符串路径</strong>，patch 失败会立刻报 AttributeError 而不是静默）、<code>chdir</code>（切目录）、<code>setitem</code>（字典项）。与 04 篇的 <code>unittest.mock.patch</code> 相比，monkeypatch 的删除值语义（<code>delenv</code>、<code> raising=True</code>）和自动还原更省心；mock 的强项在&quot;替换调用行为并记录调用&quot;，04 篇辨析。</p>
+<h2 id="5-conftest-分层目录即命名空间"><a class="markdownIt-Anchor" href="#5-conftest-分层目录即命名空间"></a> 5. conftest 分层：目录即命名空间</h2>
+<p><a target="_blank" rel="noopener" href="http://conftest.py">conftest.py</a> 按<strong>目录层级</strong>自动生效，根 conftest 放全局约定，子目录放私有 fixture，子目录同名 fixture <strong>覆盖</strong>上层：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">tests/</span><br><span class="line">├── conftest.py              # 根：_isolate_cwd(autouse)、fake_llm、agent</span><br><span class="line">├── unit/</span><br><span class="line">│   └── test_agent.py        # 用根层 fake_llm</span><br><span class="line">└── integration/</span><br><span class="line">    ├── conftest.py          # 覆盖 fake_llm：换成 httpx MockTransport 版</span><br><span class="line">    └── test_agent_api.py    # 同名&quot;agent&quot;fixture，真实 HTTP 栈</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># tests/integration/conftest.py</span></span><br><span class="line"><span class="keyword">import</span> pytest</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">fake_llm</span>():</span><br><span class="line">    <span class="string">&quot;&quot;&quot;集成层的假 LLM：真实 HTTP 协议 + 假后端（07 篇展开）。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">import</span> httpx, respx</span><br><span class="line">    <span class="keyword">with</span> respx.mock(base_url=<span class="string">&quot;https://api.example.com&quot;</span>) <span class="keyword">as</span> r:</span><br><span class="line">        r.post(<span class="string">&quot;/v1/chat&quot;</span>).respond(json=&#123;<span class="string">&quot;reply&quot;</span>: <span class="string">&quot;pong&quot;</span>&#125;)</span><br><span class="line">        <span class="keyword">yield</span> r</span><br></pre></td></tr></table></figure>
+<p>同一个测试函数名、同一份测试代码，在不同目录里吃到不同的 <code>fake_llm</code>——<strong>同一组用例可以同时测单元层和集成层</strong>，这是 conftest 分层最锋利的用法。反过来的教训是：把所有 fixture 都堆在根 conftest，几周后没人知道某个 fixture 谁在用、能不能改。<strong>经验做法</strong>：fixture 跟着使用者走——只有一个目录用，就放该目录的 conftest；≥2 个目录用，才提升到根。</p>
+<h2 id="6-工厂-fixturemake_user-模式"><a class="markdownIt-Anchor" href="#6-工厂-fixturemake_user-模式"></a> 6. 工厂 fixture：make_user 模式</h2>
+<p>参数化 fixture 解决&quot;这批测试都要同一个对象&quot;，但很多测试需要<strong>多个、且带定制参数</strong>的对象（比如&quot;一个 admin 加两个普通用户&quot;）。工厂 fixture 把&quot;构造 + 记录 + 清理&quot;打包：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># test_factory.py</span></span><br><span class="line"><span class="keyword">import</span> pytest</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">make_user</span>():</span><br><span class="line">    created = []</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">_make</span>(<span class="params">name: <span class="built_in">str</span> = <span class="string">&quot;alice&quot;</span>, admin: <span class="built_in">bool</span> = <span class="literal">False</span></span>) -&gt; <span class="built_in">dict</span>:</span><br><span class="line">        u = &#123;<span class="string">&quot;name&quot;</span>: name, <span class="string">&quot;admin&quot;</span>: admin, <span class="string">&quot;id&quot;</span>: <span class="built_in">len</span>(created) + <span class="number">1</span>&#125;</span><br><span class="line">        created.append(u)</span><br><span class="line">        <span class="keyword">return</span> u</span><br><span class="line">    <span class="keyword">yield</span> _make</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;清理 <span class="subst">&#123;<span class="built_in">len</span>(created)&#125;</span> 个用户&quot;</span>)   <span class="comment"># teardown：统一回收</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_admin</span>(<span class="params">make_user</span>):</span><br><span class="line">    <span class="keyword">assert</span> make_user(admin=<span class="literal">True</span>)[<span class="string">&quot;admin&quot;</span>]</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_two_users</span>(<span class="params">make_user</span>):</span><br><span class="line">    a, b = make_user(), make_user(<span class="string">&quot;bob&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> a[<span class="string">&quot;name&quot;</span>] != b[<span class="string">&quot;name&quot;</span>]</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ pytest test_factory.py -q -s</span><br><span class="line">.</span><br><span class="line">清理 1 个用户</span><br><span class="line">.</span><br><span class="line">清理 2 个用户</span><br><span class="line"></span><br><span class="line">2 passed in 0.07s</span><br></pre></td></tr></table></figure>
+<p>这是 pytest 文档《fixture 工厂模式》一节的标准形态，要点有三：</p>
+<ol>
+<li><strong>闭包变量 <code>created</code> 记录所有产物</strong>，teardown 统一清理——比&quot;每个测试自己清理&quot;可靠（失败路径也走 teardown）；</li>
+<li><strong>默认值参数化</strong>：测试只写差异（<code>admin=True</code>），公共配置收敛在工厂里；06 篇的 Builder 模式是它的&quot;产品代码版&quot;；</li>
+<li>需要更复杂的构造链时，工厂可以依赖其他 fixture（如 <code>make_user(config)</code>）——工厂也是普通 fixture，组合规则照旧。</li>
+</ol>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<p><strong>误区一：把昂贵资源放进 function 级。</strong> 数据库容器、模型加载放 function 作用域，全量测试时间从 10 秒变 10 分钟。该 session 的 session，同时守住&quot;只读&quot;底线。</p>
+<p><strong>误区二：session 级 fixture 里改共享状态。</strong> 一个测试把共享 dict/dataset 改了，后面全乱且顺序相关。要共享可变状态？要么每测试深拷贝，要么回 function 级。</p>
+<p><strong>误区三：在 fixture 里写断言。</strong> fixture 失败报错是 <code>error</code> 而非 <code>failed</code>，会掩盖真正的测试语义；fixture 只负责&quot;准备与回收&quot;，断言留给测试函数。</p>
+<p><strong>误区四：autouse 依赖了昂贵 fixture。</strong> autouse 是&quot;对所有测试强制注入&quot;，它依赖的 fixture 连带全量执行。给 autouse 做 code review 时专看依赖链。</p>
+<p><strong>误区五：同名 fixture 意外覆盖。</strong> 根 conftest 的 <code>fake_llm</code> 被子目录同名 fixture 静默替换，单测层跑出了集成层行为。排查工具：<code>pytest --setup-plan</code> 打印实际装配，一眼看到用的是哪一层。</p>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>四个作用域的生命周期是洋葱模型：宽的先开后关；默认 function，昂贵的只读资源才升宽；宽作用域禁放可变状态；</li>
+<li>fixture 组合即依赖注入：测试声明直接依赖，pytest 按依赖图装配；<code>--setup-plan</code> 是装配排查器；</li>
+<li>autouse 只用于全局环境约定（隔离/确定性/兜底），资源连接永远显式；</li>
+<li>tmp_path/capsys/monkeypatch 覆盖文件、输出、环境三类隔离；monkeypatch 的自动还原是相对手写的全部价值；</li>
+<li>conftest 分层让&quot;同一份测试代码跑单元层与集成层&quot;成为机制，fixture 跟使用者走；</li>
+<li>工厂 fixture（make_user）= 构造 + 记录 + 统一清理，是多对象测试的标准答案。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>复现 1 节实验，再把 <code>s_func</code> 改成 <code>scope=&quot;module&quot;</code>，预测 order.txt 的新内容，跑一遍验证你的预测；再故意让 <code>test_b</code> 抛异常，观察 teardown 是否仍然完整。</li>
+<li>用组合 fixture 搭&quot;config → fake_clock → rate_limiter&quot;三层依赖（限流器按 fake 时钟计窗口），写一个测试验证&quot;窗口内第 N+1 次调用被拒&quot;。</li>
+<li>把项目里某个手写的 try/finally 环境恢复代码改写成 monkeypatch 版本，对比代码行数与可读性。</li>
+<li>按第 5 节搭一个 tests/unit 与 tests/integration 双层目录，同名 <code>fake_llm</code> 分层覆盖，用 <code>pytest --setup-plan</code> 截图级确认两层各用各的。</li>
+<li>给工厂 fixture 加&quot;批量构造 + 自动分配唯一 id + teardown 批量删除&quot;能力（<code>make_users(3, role=&quot;viewer&quot;)</code>），并让删除顺序与创建顺序相反——想清楚为什么这更安全。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%B5%8B%E8%AF%95/" rel="tag"># 测试</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/02-pytest%E5%9F%BA%E7%A1%80/" rel="prev" title="02-pytest基础">
+                  <i class="fa fa-angle-left"></i> 02-pytest基础
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/04-Mock%E4%B8%8E%E6%B5%8B%E8%AF%95%E6%9B%BF%E8%BA%AB/" rel="next" title="04-Mock与测试替身">
+                  04-Mock与测试替身 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

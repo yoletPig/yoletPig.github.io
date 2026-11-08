@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="进阶篇第 4 章（Agent 系列完结篇）。评测体系（13 篇）解决&#39;敢不敢改&#39;，本章解决&#39;上线后怎么活&#39;：tracing、成本治理、可靠性降级、以及多租户下的安全隔离。这些是 90% 的教程不写、但生产事故 90% 发生在这里的地方。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="14-进阶-生产部署与可观测性">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/06/14-%E8%BF%9B%E9%98%B6-%E7%94%9F%E4%BA%A7%E9%83%A8%E7%BD%B2%E4%B8%8E%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="进阶篇第 4 章（Agent 系列完结篇）。评测体系（13 篇）解决&#39;敢不敢改&#39;，本章解决&#39;上线后怎么活&#39;：tracing、成本治理、可靠性降级、以及多租户下的安全隔离。这些是 90% 的教程不写、但生产事故 90% 发生在这里的地方。">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-05T19:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.630Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Agent">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/06/14-%E8%BF%9B%E9%98%B6-%E7%94%9F%E4%BA%A7%E9%83%A8%E7%BD%B2%E4%B8%8E%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/06/14-%E8%BF%9B%E9%98%B6-%E7%94%9F%E4%BA%A7%E9%83%A8%E7%BD%B2%E4%B8%8E%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/","path":"2026/09/06/14-进阶-生产部署与可观测性/","title":"14-进阶-生产部署与可观测性"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>14-进阶-生产部署与可观测性 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#14-%E8%BF%9B%E9%98%B6%E7%94%9F%E4%BA%A7%E9%83%A8%E7%BD%B2%E4%B8%8E%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7"><span class="nav-number">1.</span> <span class="nav-text"> 14 - 进阶：生产部署与可观测性</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%94%9F%E4%BA%A7-agent-%E4%B8%8E%E6%BC%94%E7%A4%BA-agent-%E7%9A%84%E5%B7%AE%E5%BC%82%E6%B8%85%E5%8D%95"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 生产 Agent 与演示 Agent 的差异清单</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7%E4%B8%89%E6%94%AF%E6%9F%B1%E5%9C%A8-agent-%E5%9C%BA%E6%99%AF%E7%9A%84%E8%90%BD%E5%9C%B0"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 可观测性三支柱在 Agent 场景的落地</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-tracingagent-%E7%9A%84%E7%AC%AC%E4%B8%80%E7%AD%89%E5%85%AC%E6%B0%91"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 Tracing：Agent 的第一等公民</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-metrics%E9%9D%A2%E5%90%91%E5%91%8A%E8%AD%A6%E7%9A%84%E6%8C%87%E6%A0%87"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 Metrics：面向告警的指标</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-logging-%E4%B8%8E%E5%AE%A1%E8%AE%A1"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 Logging 与审计</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%88%90%E6%9C%AC%E6%B2%BB%E7%90%86%E4%BB%8E%E6%8C%89%E6%AC%A1%E8%AE%A1%E8%B4%B9%E5%88%B0%E6%8C%89%E4%BB%B7%E5%80%BC%E8%AE%B0%E8%B4%A6"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 成本治理：从&quot;按次计费&quot;到&quot;按价值记账&quot;</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%8F%AF%E9%9D%A0%E6%80%A7%E5%B7%A5%E7%A8%8B%E9%87%8D%E8%AF%95-%E8%B6%85%E6%97%B6-%E9%99%8D%E7%BA%A7%E7%9A%84%E5%88%86%E5%9E%8B%E7%AD%96%E7%95%A5"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 可靠性工程：重试、超时、降级的分型策略</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%A4%9A%E7%A7%9F%E6%88%B7%E4%B8%8E%E5%B9%B6%E5%8F%91%E9%9A%94%E7%A6%BB%E6%B8%85%E5%8D%95"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 多租户与并发：隔离清单</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%8F%98%E6%9B%B4%E7%AE%A1%E7%90%86%E4%B8%8E%E5%9B%9E%E6%BB%9A"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 变更管理与回滚</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E7%94%9F%E4%BA%A7%E5%B0%B1%E7%BB%AA%E6%A3%80%E6%9F%A5%E6%B8%85%E5%8D%95"><span class="nav-number">1.7.</span> <span class="nav-text"> 7. 生产就绪检查清单</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%B3%BB%E5%88%97%E6%94%B6%E5%AE%98"><span class="nav-number">1.8.</span> <span class="nav-text"> 系列收官</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%87%AA%E6%B5%8B"><span class="nav-number">1.9.</span> <span class="nav-text"> 自测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8F%82%E8%80%83%E6%9D%A5%E6%BA%90"><span class="nav-number">1.10.</span> <span class="nav-text"> 参考来源</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/06/14-%E8%BF%9B%E9%98%B6-%E7%94%9F%E4%BA%A7%E9%83%A8%E7%BD%B2%E4%B8%8E%E5%8F%AF%E8%A7%82%E6%B5%8B%E6%80%A7/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="14-进阶-生产部署与可观测性 | Yoleen的博客">
+      <meta itemprop="description" content=" 进阶篇第 4 章（Agent 系列完结篇）。评测体系（13 篇）解决&#39;敢不敢改&#39;，本章解决&#39;上线后怎么活&#39;：tracing、成本治理、可靠性降级、以及多租户下的安全隔离。这些是 90% 的教程不写、但生产事故 90% 发生在这里的地方。">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          14-进阶-生产部署与可观测性
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-06 03:00:00" itemprop="dateCreated datePublished" datetime="2026-09-06T03:00:00+08:00">2026-09-06</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Agent%E5%BC%80%E5%8F%91/" itemprop="url" rel="index"><span itemprop="name">Agent开发</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>7 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 进阶篇第 4 章（Agent 系列完结篇）。评测体系（13 篇）解决'敢不敢改'，本章解决'上线后怎么活'：tracing、成本治理、可靠性降级、以及多租户下的安全隔离。这些是 90% 的教程不写、但生产事故 90% 发生在这里的地方。</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="14-进阶生产部署与可观测性"><a class="markdownIt-Anchor" href="#14-进阶生产部署与可观测性"></a> 14 - 进阶：生产部署与可观测性</h1>
+<blockquote>
+<p>进阶篇第 4 章（Agent 系列完结篇）。评测体系（13 篇）解决&quot;敢不敢改&quot;，本章解决&quot;上线后怎么活&quot;：tracing、成本治理、可靠性降级、以及多租户下的安全隔离。这些是 90% 的教程不写、但生产事故 90% 发生在这里的地方。</p>
+</blockquote>
+<h2 id="1-生产-agent-与演示-agent-的差异清单"><a class="markdownIt-Anchor" href="#1-生产-agent-与演示-agent-的差异清单"></a> 1. 生产 Agent 与演示 Agent 的差异清单</h2>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>演示</th>
+<th>生产</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>失败处理</td>
+<td>报错即止</td>
+<td>降级、重试、部分结果返回</td>
+</tr>
+<tr>
+<td>成本</td>
+<td>不看</td>
+<td>每 token 有预算与归属</td>
+</tr>
+<tr>
+<td>调试</td>
+<td>print</td>
+<td>分布式 tracing，逐步回放</td>
+</tr>
+<tr>
+<td>并发</td>
+<td>单会话</td>
+<td>多用户隔离、限流、排队</td>
+</tr>
+<tr>
+<td>变更</td>
+<td>手改提示词</td>
+<td>版本化 + 灰度 + 回滚</td>
+</tr>
+<tr>
+<td>数据</td>
+<td>自己的</td>
+<td>用户数据的隐私与留存合规</td>
+</tr>
+</tbody>
+</table>
+<p>一条主线贯穿全章：<strong>生产 Agent 的每一层都要&quot;可解释、可限制、可回退&quot;</strong>。</p>
+<h2 id="2-可观测性三支柱在-agent-场景的落地"><a class="markdownIt-Anchor" href="#2-可观测性三支柱在-agent-场景的落地"></a> 2. 可观测性三支柱在 Agent 场景的落地</h2>
+<p>传统可观测性三支柱（metrics/logging/tracing，出自 CNCF 与 Control Theory 的工程共识）映射到 Agent：</p>
+<h3 id="21-tracingagent-的第一等公民"><a class="markdownIt-Anchor" href="#21-tracingagent-的第一等公民"></a> 2.1 Tracing：Agent 的第一等公民</h3>
+<p>Agent 的调试单位不是&quot;请求&quot;而是<strong>轨迹（trace）</strong>：一次任务 = 一次 trace，内含多个 LLM span 与工具 span，嵌套成树（多 Agent 时跨进程传播）。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">trace_id: t-20261107-001 (任务: 整理下载目录)</span><br><span class="line">├─ span: llm.step[1]      (model=gpt-x, in=2.1k tok, out=120 tok, 0.8s)</span><br><span class="line">├─ span: tool.list_files  (args=&#123;dir&#125;, 45ms, ok)</span><br><span class="line">├─ span: llm.step[2]      (in=2.4k tok, out=200 tok)</span><br><span class="line">├─ span: tool.move_file   (args=&#123;src,dst&#125;, 12ms, ok)</span><br><span class="line">├─ span: approval.delete  (human, waited 3m2s, DENIED)   ← 人审也进 trace</span><br><span class="line">└─ span: llm.step[3]      (in=2.6k tok, out=150 tok, final)</span><br></pre></td></tr></table></figure>
+<p>实现要点：</p>
+<ol>
+<li><strong>每步 LLM 调用记录完整输入输出</strong>（含工具定义版本、提示词版本）——事后能精确重放任意一步。没有这个，13 篇的&quot;线上采样评测&quot;无从谈起；</li>
+<li><strong>trace_id 透传到工具与子 Agent</strong>：跨服务/子 Agent 场景沿用标准分布式追踪语义（W3C Trace Context 规范：<code>traceparent</code> 头传播 trace-id/parent-id）；</li>
+<li><strong>prompt/工具定义打版本号</strong>并记录在 span 属性里——&quot;是提示词 v12 的锅还是 v13 的锅&quot;必须有据可查。</li>
+</ol>
+<h3 id="22-metrics面向告警的指标"><a class="markdownIt-Anchor" href="#22-metrics面向告警的指标"></a> 2.2 Metrics：面向告警的指标</h3>
+<ul>
+<li><strong>业务面</strong>：任务完成率、人工接管率、验收不通过率（13 篇三元组的线上版）；</li>
+<li><strong>成本面</strong>：token 消耗按 任务类型/用户/模型 维度分桶——成本告警比质量告警更早发现问题（token 突增常是死循环的先兆，07 篇问题 1 的生产形态）；</li>
+<li><strong>健康面</strong>：各工具的延迟与错误率、LLM API 的限流率（429）、重试率。</li>
+</ul>
+<h3 id="23-logging-与审计"><a class="markdownIt-Anchor" href="#23-logging-与审计"></a> 2.3 Logging 与审计</h3>
+<p>08 篇的审计日志在这里扩展为生产规范：追加写、含审批记录、保留期与合规要求对齐（涉及用户数据的留存策略按所在司法辖区要求，如 GDPR 的数据最小化原则——<strong>trace 里的完整用户输入往往不能永久留存</strong>，需要脱敏或截断策略）。</p>
+<h2 id="3-成本治理从按次计费到按价值记账"><a class="markdownIt-Anchor" href="#3-成本治理从按次计费到按价值记账"></a> 3. 成本治理：从&quot;按次计费&quot;到&quot;按价值记账&quot;</h2>
+<ol>
+<li><strong>预算三层</strong>：全局日预算（熔断）、按任务类型预算（超限降级到便宜模型）、按用户配额（防滥用）；</li>
+<li><strong>级联模型路由（model cascading）</strong>：简单步骤用小模型、关键决策用大模型——按&quot;步骤价值&quot;而不是&quot;任务&quot;选模型。这是推理成本优化的常见结构（业界统称 model routing / cascading，如早期 FrugalGPT 研究 Chen et al. 2023 系统化过）；</li>
+<li><strong>缓存复用</strong>：相同前缀（系统提示 + 工具定义）各家 API 普遍支持前缀缓存计费优惠；应用层再做任务级结果缓存（相同输入的任务直接复用轨迹）；</li>
+<li><strong>成本异常 = 行为异常</strong>：单任务成本超阈值自动终止并留 trace——它同时是成本控制和死循环熔断器。</li>
+</ol>
+<h2 id="4-可靠性工程重试-超时-降级的分型策略"><a class="markdownIt-Anchor" href="#4-可靠性工程重试-超时-降级的分型策略"></a> 4. 可靠性工程：重试、超时、降级的分型策略</h2>
+<p>不同失败类型，策略完全不同（盲目统一重试是事故放大器）：</p>
+<table>
+<thead>
+<tr>
+<th>失败类型</th>
+<th>例子</th>
+<th>策略</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>瞬时错误</td>
+<td>网络抖动、429 限流</td>
+<td>指数退避重试 + jitter（AWS 架构博客的标准做法：Exponential Backoff And Jitter）</td>
+</tr>
+<tr>
+<td>永久错误</td>
+<td>参数非法、权限不足</td>
+<td>不重试，作为观测回喂模型自纠（03 篇）</td>
+</tr>
+<tr>
+<td>超时</td>
+<td>工具卡死、LLM 慢</td>
+<td>分层超时：单步 &lt; 整任务 &lt; 用户等待预算；超时后降级</td>
+</tr>
+<tr>
+<td>内容级失败</td>
+<td>模型输出无法解析、评分不达标</td>
+<td>结构化重试（带错误反馈重生成 1~2 次），再失败降级</td>
+</tr>
+</tbody>
+</table>
+<p><strong>降级阶梯</strong>（从优到劣，提前定义好）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">正常执行 → 缓存/近似结果 → 简化版任务（如摘要代替全文分析）</span><br><span class="line">→ 转人工队列 → 明确报错（附任务状态，用户可续做）</span><br></pre></td></tr></table></figure>
+<p>关键纪律：<strong>降级是产品决策不是技术临时起意</strong>——每个任务类型上线前必须写明降级阶梯，否则事故时现场发明。</p>
+<h2 id="5-多租户与并发隔离清单"><a class="markdownIt-Anchor" href="#5-多租户与并发隔离清单"></a> 5. 多租户与并发：隔离清单</h2>
+<ol>
+<li><strong>状态隔离</strong>：每会话独立上下文存储（user_id + session_id 分区），串号（A 用户看到 B 的数据）是 Agent 产品最严重的事故类别之一；</li>
+<li><strong>并发限制</strong>：每用户并发任务数上限；全局并发保护下游（工具 API、数据库连接池）；</li>
+<li><strong>权限的租户维度</strong>：08 篇权限模型在多租户下升级——<strong>凭据按租户代持（on-behalf-of）</strong>，Agent 携带的是&quot;某用户的受限委托凭据&quot;，而不是服务级万能 key（09 篇 confused deputy 的租户版）；</li>
+<li><strong>队列与排队反馈</strong>：高峰期任务排队并给用户可见的排队状态，优于无声丢弃。</li>
+</ol>
+<h2 id="6-变更管理与回滚"><a class="markdownIt-Anchor" href="#6-变更管理与回滚"></a> 6. 变更管理与回滚</h2>
+<ol>
+<li><strong>提示词/工具定义/模型三者都做版本化</strong>（12 篇 ADR 的运行时延续），一次发布只改一个变量——便于归因；</li>
+<li><strong>灰度发布</strong>：5% → 25% → 100%，每档看 13 篇线上指标 + 成本指标；</li>
+<li><strong>一键回滚</strong>：回滚 = 切回上一版本的提示词/模型配置（数据与状态层保持兼容——<strong>状态 schema 变更要做前后兼容</strong>，否则回滚会读不出旧状态）；</li>
+<li><strong>影子运行（shadow mode）</strong>：新版 Agent 与线上版并行处理相同输入但不对外输出，用真实流量免费获得对比评测。</li>
+</ol>
+<h2 id="7-生产就绪检查清单"><a class="markdownIt-Anchor" href="#7-生产就绪检查清单"></a> 7. 生产就绪检查清单</h2>
+<figure class="highlight markdown"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">□ 每步 LLM/工具调用都有 trace（含版本号），可重放任意一步？</span><br><span class="line">□ 成本三层预算 + 异常熔断？</span><br><span class="line">□ 失败分型策略表（瞬时/永久/超时/内容级）已写明？</span><br><span class="line">□ 每个任务类型的降级阶梯已产品化定义？</span><br><span class="line">□ 会话状态按租户隔离？凭据是用户级委托而非万能 key？</span><br><span class="line">□ 提示词/模型版本化 + 灰度 + 一键回滚？状态 schema 前后兼容？</span><br><span class="line">□ trace 中的用户数据有脱敏/留存策略？</span><br><span class="line">□ 线上采样 → 评测集的闭环已运行？（13 篇）</span><br></pre></td></tr></table></figure>
+<h2 id="系列收官"><a class="markdownIt-Anchor" href="#系列收官"></a> 系列收官</h2>
+<p>四篇进阶与基础十篇合起来，构成一条完整的工程线：<strong>概念（01）→ 骨架（02-03）→ 协议与扩展（04-06）→ 可靠与安全（07-09）→ 实战（10）→ 上下文（11）→ 长任务（12）→ 评测（13）→ 生产（14）</strong>。下一步建议：拿 10 篇的文件整理 Agent，按 13 篇搭评测、按 14 篇加 trace 与降级——把整套方法论在自己的项目里走一遍。</p>
+<h2 id="自测"><a class="markdownIt-Anchor" href="#自测"></a> 自测</h2>
+<ol>
+<li>tracing 为什么是 Agent 可观测性的第一等公民？span 里必须记什么？</li>
+<li>四类失败的策略各是什么？为什么&quot;盲目统一重试是事故放大器&quot;？</li>
+<li>降级阶梯为什么要产品化提前定义？</li>
+<li>多租户下权限模型的核心变化是什么？</li>
+<li>状态 schema 变更与回滚的冲突在哪？怎么预防？</li>
+</ol>
+<h2 id="参考来源"><a class="markdownIt-Anchor" href="#参考来源"></a> 参考来源</h2>
+<ul>
+<li>W3C, <em>Trace Context</em> 规范（分布式 trace 透传标准）: <a target="_blank" rel="noopener" href="https://www.w3.org/TR/trace-context/">https://www.w3.org/TR/trace-context/</a></li>
+<li>AWS Architecture Blog, <em>Exponential Backoff And Jitter</em>: <a target="_blank" rel="noopener" href="https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/">https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/</a></li>
+<li>Chen, L. et al., <em>FrugalGPT: How to Use Large Language Models While Reducing Cost and Improving Performance</em>（2023，级联模型路由的代表性研究）: <a target="_blank" rel="noopener" href="https://arxiv.org/abs/2305.05176">https://arxiv.org/abs/2305.05176</a></li>
+<li>OpenTelemetry 文档（GenAI 语义约定，LLM 调用的 span 属性规范）: <a target="_blank" rel="noopener" href="https://opentelemetry.io/docs/specs/semconv/gen-ai/">https://opentelemetry.io/docs/specs/semconv/gen-ai/</a></li>
+<li>GDPR 数据最小化原则：GDPR Art. 5(1)©</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/Agent/" rel="tag"># Agent</a>
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/06/13-%E8%BF%9B%E9%98%B6-Agent%E8%AF%84%E6%B5%8B%E4%BD%93%E7%B3%BB/" rel="prev" title="13-进阶-Agent评测体系">
+                  <i class="fa fa-angle-left"></i> 13-进阶-Agent评测体系
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/06/%E8%AF%AD%E9%9F%B3%E6%96%B9%E5%90%91-README/" rel="next" title="语音方向 · 学习路线总览">
+                  语音方向 · 学习路线总览 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

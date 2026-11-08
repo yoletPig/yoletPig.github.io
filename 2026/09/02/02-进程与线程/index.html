@@ -1,0 +1,628 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 建立进程的&#39;档案&#39;直觉：不深入 taskstruct 源码，但能说出每个关键字段管什么、对应 &#x2F;proc 里的哪个文件。 - 亲手用 C 写出 fork&#x2F;exec&#x2F;wait 的 mini shell，理解&#39;复制后替换&#39;这套两步机制的每一…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="02-进程与线程">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/02-%E8%BF%9B%E7%A8%8B%E4%B8%8E%E7%BA%BF%E7%A8%8B/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 建立进程的&#39;档案&#39;直觉：不深入 taskstruct 源码，但能说出每个关键字段管什么、对应 &#x2F;proc 里的哪个文件。 - 亲手用 C 写出 fork&#x2F;exec&#x2F;wait 的 mini shell，理解&#39;复制后替换&#39;这套两步机制的每一…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-01T23:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.514Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="操作系统">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/02-%E8%BF%9B%E7%A8%8B%E4%B8%8E%E7%BA%BF%E7%A8%8B/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/02-%E8%BF%9B%E7%A8%8B%E4%B8%8E%E7%BA%BF%E7%A8%8B/","path":"2026/09/02/02-进程与线程/","title":"02-进程与线程"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>02-进程与线程 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#02-%E8%BF%9B%E7%A8%8B%E4%B8%8E%E7%BA%BF%E7%A8%8B"><span class="nav-number">1.</span> <span class="nav-text"> 02 - 进程与线程</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E8%BF%9B%E7%A8%8B%E6%98%AF%E4%BB%80%E4%B9%88task_struct-%E4%B8%8E%E8%BF%9B%E7%A8%8B%E6%8F%8F%E8%BF%B0%E7%AC%A6"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 进程是什么：task_struct 与进程描述符</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-forkexecwaitmini-shell-%E7%9A%84-c-%E5%AE%9E%E7%8E%B0"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. fork&#x2F;exec&#x2F;wait：mini shell 的 C 实现</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E7%BA%BF%E7%A8%8B%E6%A8%A1%E5%9E%8B%E7%94%A8%E6%88%B7%E7%BA%A7-vs-%E5%86%85%E6%A0%B8%E7%BA%A7"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 线程模型：用户级 vs 内核级</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E8%BF%9B%E7%A8%8B%E7%8A%B6%E6%80%81%E6%9C%BA%E4%B8%8E-ps-%E5%AE%9E%E6%B5%8B"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 进程状态机与 ps 实测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%83%B5%E5%B0%B8%E4%B8%8E%E5%AD%A4%E5%84%BF%E8%BF%9B%E7%A8%8B%E5%AE%9E%E6%B5%8B%E6%BC%94%E7%A4%BA"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 僵尸与孤儿进程：实测演示</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E8%BF%9B%E7%A8%8B-vs-%E7%BA%BF%E7%A8%8B%E6%80%8E%E4%B9%88%E9%80%89"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 进程 vs 线程：怎么选</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/02-%E8%BF%9B%E7%A8%8B%E4%B8%8E%E7%BA%BF%E7%A8%8B/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="02-进程与线程 | Yoleen的博客">
+      <meta itemprop="description" content="- 建立进程的&#39;档案&#39;直觉：不深入 taskstruct 源码，但能说出每个关键字段管什么、对应 &#x2F;proc 里的哪个文件。 - 亲手用 C 写出 fork&#x2F;exec&#x2F;wait 的 mini shell，理解&#39;复制后替换&#39;这套两步机制的每一…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          02-进程与线程
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 07:30:00" itemprop="dateCreated datePublished" datetime="2026-09-02T07:30:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">操作系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.1k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>15 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 建立进程的'档案'直觉：不深入 taskstruct 源码，但能说出每个关键字段管什么、对应 /proc 里的哪个文件。 - 亲手用 C 写出 fork/exec/wait 的 mini shell，理解'复制后替换'这套两步机制的每一…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="02-进程与线程"><a class="markdownIt-Anchor" href="#02-进程与线程"></a> 02 - 进程与线程</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>建立进程的&quot;档案&quot;直觉：不深入 task_struct 源码，但能说出每个关键字段管什么、对应 /proc 里的哪个文件。</li>
+<li>亲手用 C 写出 fork/exec/wait 的 mini shell，理解&quot;复制后替换&quot;这套两步机制的每一步。</li>
+<li>分清用户级线程与内核级线程，明白 Linux 的线程就是&quot;共享了资源的进程&quot;（clone），以及这对 Python GIL 世界意味着什么。</li>
+<li>实测观察进程状态机，亲手制造并回收一个僵尸进程、制造一个孤儿进程。</li>
+</ul>
+<p>前置：第 01 篇的 fork/exec/wait 概念；本篇环境 Ubuntu 22.04 / WSL2，gcc 带 <code>-pthread</code>。</p>
+<h2 id="1-进程是什么task_struct-与进程描述符"><a class="markdownIt-Anchor" href="#1-进程是什么task_struct-与进程描述符"></a> 1. 进程是什么：task_struct 与进程描述符</h2>
+<p>第 01 篇说&quot;进程是运行中的程序&quot;。更准确的说法（OSTEP 第 4 章《Processes》）：<strong>进程 = 受限直接执行的抽象 + 它的一整套状态</strong>。内核用一个结构体给每个进程建档，Linux 里就是 <code>task_struct</code>（定义在 <code>include/linux/sched.h</code>；我们不读源码，只讲字段的意义，想翻的对照《Linux 内核设计与实现》第 3 章）。把它想象成一张员工档案：</p>
+<table>
+<thead>
+<tr>
+<th>task_struct 字段</th>
+<th>档案上的一栏</th>
+<th>管什么</th>
+<th>在哪观察</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>pid</code> / <code>tgid</code></td>
+<td>工号</td>
+<td>pid 是&quot;执行流&quot;编号，tgid 是&quot;进程&quot;编号；主线程两者相同</td>
+<td><code>getpid()</code>、<code>ps -e</code></td>
+</tr>
+<tr>
+<td><code>state</code></td>
+<td>在岗状态</td>
+<td>TASK_RUNNING / INTERRUPTIBLE / … 见第 4 节状态机</td>
+<td><code>/proc/PID/status</code> 的 State</td>
+</tr>
+<tr>
+<td><code>mm</code></td>
+<td>记忆</td>
+<td>内存描述符：页表根、地址空间布局；线程共享同一份</td>
+<td><code>/proc/PID/maps</code>（04 篇）</td>
+</tr>
+<tr>
+<td><code>files</code></td>
+<td>钥匙串</td>
+<td>打开的文件描述符表</td>
+<td><code>/proc/PID/fd/</code>（08 篇）</td>
+</tr>
+<tr>
+<td><code>thread_info</code></td>
+<td>心跳</td>
+<td>CPU 上下文：寄存器、程序计数器，切换进程时保存/恢复的就是它</td>
+<td>07 篇上下文切换</td>
+</tr>
+<tr>
+<td><code>parent</code> / <code>children</code></td>
+<td>家谱</td>
+<td>父进程与子进程链表，wait/僵尸都绕不开它</td>
+<td><code>ps -o ppid= -p PID</code></td>
+</tr>
+<tr>
+<td><code>cred</code></td>
+<td>胸卡</td>
+<td>用户/组 ID、能力（capability），权限检查全查它</td>
+<td><code>ps -o user= -p PID</code></td>
+</tr>
+<tr>
+<td><code>sched_entity</code></td>
+<td>考勤</td>
+<td>调度信息：vruntime、权重，CFS 排队就靠它（03 篇）</td>
+<td><code>/proc/PID/sched</code></td>
+</tr>
+<tr>
+<td><code>signal</code> / <code>sighand</code></td>
+<td>呼机</td>
+<td>信号处理表，kill 打过来落到这里（10 篇）</td>
+<td><code>/proc/PID/status</code> 的 Sig* 行</td>
+</tr>
+</tbody>
+</table>
+<p>一句话记住档案哲学：<strong>fork 复制档案，exec 换掉&quot;记忆&quot;，wait 是家长签字</strong>。下面逐个落实。</p>
+<h2 id="2-forkexecwaitmini-shell-的-c-实现"><a class="markdownIt-Anchor" href="#2-forkexecwaitmini-shell-的-c-实现"></a> 2. fork/exec/wait：mini shell 的 C 实现</h2>
+<p>第 01 篇用 Python 演示过结构，现在用 C 写一遍才看得清语义。<code>fork()</code> 的奇特之处：<strong>调用一次，返回两次</strong>——父进程里返回子进程 PID，子进程里返回 0（OSTEP 第 5 章；<code>man 2 fork</code>）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// mini_shell.c —— 最小 shell：fork + execvp + waitpid</span></span><br><span class="line"><span class="comment">// 编译：gcc mini_shell.c -o mini_shell</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/wait.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> MAXLINE 4096</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> MAXARGS 64</span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">char</span> line[MAXLINE];</span><br><span class="line">    <span class="keyword">while</span> (<span class="number">1</span>) &#123;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;mysh&gt; &quot;</span>);                       <span class="comment">// 1. 提示符（记得冲缓冲区）</span></span><br><span class="line">        fflush(<span class="built_in">stdout</span>);</span><br><span class="line">        <span class="keyword">if</span> (!fgets(line, <span class="keyword">sizeof</span>(line), <span class="built_in">stdin</span>))  <span class="comment">// 读到 EOF（Ctrl-D）退出</span></span><br><span class="line">            <span class="keyword">break</span>;</span><br><span class="line">        line[<span class="built_in">strcspn</span>(line, <span class="string">&quot;\n&quot;</span>)] = <span class="string">&#x27;\0&#x27;</span>;       <span class="comment">// 去掉行尾换行</span></span><br><span class="line">        <span class="keyword">if</span> (line[<span class="number">0</span>] == <span class="string">&#x27;\0&#x27;</span>) <span class="keyword">continue</span>;</span><br><span class="line">        <span class="keyword">if</span> (<span class="built_in">strcmp</span>(line, <span class="string">&quot;exit&quot;</span>) == <span class="number">0</span>) <span class="keyword">break</span>;</span><br><span class="line"></span><br><span class="line">        <span class="comment">// 2. 简单分词（真实 shell 还要处理引号、管道、重定向）</span></span><br><span class="line">        <span class="type">char</span> *args[MAXARGS]; <span class="type">int</span> argc = <span class="number">0</span>;</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">char</span> *p = strtok(line, <span class="string">&quot; &quot;</span>); p; p = strtok(<span class="literal">NULL</span>, <span class="string">&quot; &quot;</span>))</span><br><span class="line">            args[argc++] = p;</span><br><span class="line">        args[argc] = <span class="literal">NULL</span>;</span><br><span class="line"></span><br><span class="line">        <span class="type">pid_t</span> pid = fork();                     <span class="comment">// 3. 复制进程</span></span><br><span class="line">        <span class="keyword">if</span> (pid &lt; <span class="number">0</span>) &#123; perror(<span class="string">&quot;fork&quot;</span>); <span class="keyword">continue</span>; &#125;</span><br><span class="line">        <span class="keyword">if</span> (pid == <span class="number">0</span>) &#123;                         <span class="comment">// —— 子进程分支 ——</span></span><br><span class="line">            execvp(args[<span class="number">0</span>], args);              <span class="comment">// 4. 替换程序；成功则不再返回</span></span><br><span class="line">            perror(<span class="string">&quot;execvp&quot;</span>);                   <span class="comment">// 失败才会执行到这里</span></span><br><span class="line">            _exit(<span class="number">127</span>);                         <span class="comment">// 用 _exit 别用 exit：不冲刷父进程的缓冲区</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="type">int</span> status;                             <span class="comment">// —— 父进程分支 ——</span></span><br><span class="line">        waitpid(pid, &amp;status, <span class="number">0</span>);               <span class="comment">// 5. 等待并回收（关键！不 wait 就有僵尸）</span></span><br><span class="line">        <span class="keyword">if</span> (WIFEXITED(status))</span><br><span class="line">            <span class="built_in">printf</span>(<span class="string">&quot;[退出码 %d]\n&quot;</span>, WEXITSTATUS(status));</span><br><span class="line">    &#125;</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">$ gcc mini_shell.c -o mini_shell &amp;&amp; ./mini_shell</span><br><span class="line">mysh&gt; <span class="built_in">echo</span> hello</span><br><span class="line">hello</span><br><span class="line">[退出码 0]</span><br><span class="line">mysh&gt; <span class="built_in">ls</span> no_such_file</span><br><span class="line"><span class="built_in">ls</span>: cannot access <span class="string">&#x27;no_such_file&#x27;</span>: No such file or directory</span><br><span class="line">[退出码 2]</span><br><span class="line">mysh&gt; <span class="built_in">exit</span></span><br></pre></td></tr></table></figure>
+<p>fork 的细节值得用一段代码钉死（面试高频）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// fork_basics.c —— fork 的三件套：返回值、写时复制、继承什么</span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> _GNU_SOURCE</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/wait.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> g = <span class="number">100</span>;                      <span class="comment">// 全局变量</span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">int</span> local = <span class="number">1</span>;                <span class="comment">// 栈上变量</span></span><br><span class="line">    <span class="type">pid_t</span> pid = fork();</span><br><span class="line">    <span class="keyword">if</span> (pid == <span class="number">0</span>) &#123;               <span class="comment">// 子进程</span></span><br><span class="line">        g++; local++;</span><br><span class="line">        <span class="built_in">printf</span>(<span class="string">&quot;child:  pid=%d ppid=%d g=%d local=%d\n&quot;</span>,</span><br><span class="line">               getpid(), getppid(), g, local);</span><br><span class="line">        <span class="keyword">return</span> <span class="number">0</span>;                 <span class="comment">// 子进程结束</span></span><br><span class="line">    &#125;</span><br><span class="line">    wait(<span class="literal">NULL</span>);                   <span class="comment">// 父进程回收</span></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;parent: pid=%d g=%d local=%d\n&quot;</span>, getpid(), g, local);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ gcc fork_basics.c -o fork_basics &amp;&amp; ./fork_basics</span><br><span class="line">child:  pid=23145 ppid=23144 g=101 local=2</span><br><span class="line">parent: pid=23144 g=100 local=1</span><br></pre></td></tr></table></figure>
+<p>两个输出对不上号，正是设计使然：</p>
+<ul>
+<li><strong>fork 之后两份进程各改各的，互不可见</strong>。现代 Linux 用<strong>写时复制</strong>（copy-on-write, COW）实现：fork 时不真的复制内存页，父子共享物理页并标记只读，谁写谁触发缺页、由内核复制那一页（OSTEP 第 15 章末尾；细节见 05 篇）。所以 fork 快、fork 大内存的进程也不怕（14 篇实测 fork 开销）。</li>
+<li><strong>子进程继承父进程打开的 fd、工作目录、环境变量、信号处理</strong>（<code>man 2 fork</code> 的描述），所以 shell 里的 <code>&gt; out.txt</code> 重定向才对子命令生效、log 才会写到同一个文件——线程与进程行为差异的很多&quot;怪现象&quot;根源都在继承规则。</li>
+</ul>
+<h2 id="3-线程模型用户级-vs-内核级"><a class="markdownIt-Anchor" href="#3-线程模型用户级-vs-内核级"></a> 3. 线程模型：用户级 vs 内核级</h2>
+<p><strong>线程 = 进程里的独立执行流</strong>。教科书区分两种模型（OSTEP 第 26 章《Concurrency: An Introduction》开头；经典对照见 Silberschatz《Operating System Concepts》第 4 章）：</p>
+<ul>
+<li><strong>用户级线程（user-level threads, 多对一）</strong>：线程库在用户态自己管理多个执行流，内核只看得见&quot;一个进程&quot;。切换极快（不进内核），但一个线程阻塞在系统调用上，<strong>整个进程</strong>都得跟着阻塞，也用不上多核。</li>
+<li><strong>内核级线程（kernel-level threads, 一对一）</strong>：每个线程都是内核的调度对象（Linux 走的路）。阻塞一个不影响别人、能用满多核，代价是切换要进内核。</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">用户级线程（多对一）              内核级线程（一对一，Linux/goroutine的宿主）</span><br><span class="line">┌──────────────┐                ┌──────────────┐</span><br><span class="line">│ 线程库: T1 T2 │ ←内核看不见     │ T1 T2 T3     │ ←每个都映射一个内核线程</span><br><span class="line">├──────────────┤                ├──────────────┤</span><br><span class="line">│  进程地址空间  │                │  进程地址空间  │</span><br><span class="line">└──────┬───────┘                └──────┬───────┘</span><br><span class="line">       ▼ 1 个内核调度对象                ▼ N 个内核调度对象</span><br><span class="line">   [ 内核进程 ]                    [内核线程][内核线程][内核线程]</span><br></pre></td></tr></table></figure>
+<p>Linux 的实现有个著名事实：<strong>Linux 不区分进程和线程</strong>，两者都是 <code>task</code>，只是创建参数不同（LKD 第 3 章）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// thread_vs_fork.c —— 同一个进程里开线程 vs 复制进程</span></span><br><span class="line"><span class="comment">// 编译：gcc thread_vs_fork.c -o thread_vs_fork -pthread</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;pthread.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/wait.h&gt;</span></span></span><br><span class="line"></span><br><span class="line">__thread <span class="type">int</span> tls_var = <span class="number">7</span>;            <span class="comment">// 线程局部存储（TLS）：每个线程一份</span></span><br><span class="line"></span><br><span class="line"><span class="type">void</span> *<span class="title function_">thread_main</span><span class="params">(<span class="type">void</span> *arg)</span> &#123;</span><br><span class="line">    tls_var = <span class="number">8</span>;</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;thread: pid=%d tid=%d tls_var=%d\n&quot;</span>,</span><br><span class="line">           getpid(), gettid(), tls_var);   <span class="comment">// 注意：pid 相同！</span></span><br><span class="line">    <span class="keyword">return</span> <span class="literal">NULL</span>;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">pthread_t</span> t;</span><br><span class="line">    pthread_create(&amp;t, <span class="literal">NULL</span>, thread_main, <span class="literal">NULL</span>);</span><br><span class="line">    pthread_join(t, <span class="literal">NULL</span>);</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;main  : pid=%d tls_var=%d\n&quot;</span>, getpid(), tls_var);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ gcc thread_vs_fork.c -o thread_vs_fork -pthread &amp;&amp; ./thread_vs_fork</span><br><span class="line">thread: pid=23901 tid=23902 tls_var=8</span><br><span class="line">main  : pid=23901 tls_var=7</span><br></pre></td></tr></table></figure>
+<p>读三个信息：线程和主进程 <code>pid</code> 相同（同一个&quot;进程&quot;），<code>tid</code> 不同（内核眼里是不同调度单位）；<code>__thread</code> 修饰的 TLS 变量每个线程独立（8 vs 7）；底层 <code>pthread_create</code> 调用的正是 <code>clone(CLONE_VM|CLONE_FS|CLONE_FILES|...)</code>（<code>man 2 clone</code>）——<strong>与 <code>fork</code> 共用同一套复制机制，只是少复制了 <code>mm</code> 等大头</strong>，这就是&quot;线程 = 共享资源的进程&quot;的确切含义。</p>
+<p>对照 Python：CPython 的 <code>threading</code> 建在 OS 线程（一对一线程）上，但解释器有全局锁 GIL，同一时刻只有一个线程执行 Python 字节码——所以 CPU 密集任务用 <code>threading</code> 不提速，要用 <code>multiprocessing</code>（多个进程）或把热点下沉到 C 扩展（NumPy/CUDA 在持锁外运行）。这也是推理服务普遍&quot;多进程 + 进程内多线程&quot;结构的原因（14 篇用 <code>ps -T</code> 实测线程与 GIL）。</p>
+<p><strong>经验做法</strong>：Go 语言的 goroutine 是&quot;内核线程之上再虚拟的一层&quot;（M:N 模型，多个 goroutine 复用少量内核线程）——你以后看到&quot;协程比线程轻&quot;的说法，本质就是用户级线程思想的现代复辟，代价是 runtime 要自己处理阻塞（netpoller）。Java 虚拟线程同理。</p>
+<h2 id="4-进程状态机与-ps-实测"><a class="markdownIt-Anchor" href="#4-进程状态机与-ps-实测"></a> 4. 进程状态机与 ps 实测</h2>
+<p>内核档案里 <code>state</code> 字段记录进程此刻在不在&quot;能上 CPU&quot;的状态。Linux 的主状态（LKD 第 3 章；<code>man proc</code> 的 /proc/PID/status 节）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">              fork() 创建</span><br><span class="line">                 │</span><br><span class="line">                 ▼</span><br><span class="line">   ┌──── TASK_RUNNING (R) ────运行中或就绪排队────┐</span><br><span class="line">   │             │ 时间片用尽/被抢占                │</span><br><span class="line">   │             ▼                                │</span><br><span class="line">   │      [ 等待 CPU 的就绪队列 ]                   │</span><br><span class="line">   │                                              │</span><br><span class="line">   ▼ 等待事件（read磁盘/网络/信号量）                 │</span><br><span class="line">TASK_INTERRUPTIBLE (S)  可中断睡眠 ←── 事件到达 ────┘</span><br><span class="line">TASK_UNINTERRUPTIBLE (D) 不可中断睡眠（通常在等 IO，kill 都杀不动）</span><br><span class="line">   │</span><br><span class="line">   ▼ exit() 退出</span><br><span class="line">TASK_ZOMBIE (Z)  僵尸：等父进程 wait 收尸</span><br><span class="line">TASK_STOPPED (T)  被 SIGSTOP/SIGTSTP 暂停（Ctrl-Z）</span><br></pre></td></tr></table></figure>
+<p>用 Python 造一个慢任务，观察它一生的状态变化：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># state_demo.py —— 一个会经历 S/R/Z 三种状态的进程</span></span><br><span class="line"><span class="keyword">import</span> os, time</span><br><span class="line"></span><br><span class="line">pid = os.fork()</span><br><span class="line"><span class="keyword">if</span> pid == <span class="number">0</span>:                     <span class="comment"># 子进程：跑 10 秒</span></span><br><span class="line">    time.sleep(<span class="number">10</span>)               <span class="comment"># sleep 是可中断睡眠 -&gt; S</span></span><br><span class="line">    os._exit(<span class="number">0</span>)</span><br><span class="line"><span class="comment"># 父进程故意 sleep 12 秒再收尸：子进程最后 2 秒是 Z</span></span><br><span class="line">time.sleep(<span class="number">2</span>)</span><br><span class="line"><span class="built_in">print</span>(<span class="built_in">open</span>(<span class="string">f&quot;/proc/<span class="subst">&#123;pid&#125;</span>/status&quot;</span>).read().split(<span class="string">&quot;State:&quot;</span>)[<span class="number">1</span>][:<span class="number">18</span>])  <span class="comment"># S sleeping</span></span><br><span class="line">os.system(<span class="string">f&quot;cat /proc/<span class="subst">&#123;pid&#125;</span>/status | head -3&quot;</span>)                     <span class="comment"># 现场打印</span></span><br><span class="line">os.system(<span class="string">f&quot;ps -o pid,stat,comm -p <span class="subst">&#123;pid&#125;</span>&quot;</span>)                         <span class="comment"># ps 视角</span></span><br><span class="line">time.sleep(<span class="number">10</span>)</span><br><span class="line">os.waitpid(pid, <span class="number">0</span>)               <span class="comment"># 收尸，Z 消失</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ python3 state_demo.py</span><br><span class="line">   2 lines: S (sleeping) ...</span><br><span class="line">    PID STAT COMM</span><br><span class="line">  23999 S    python3</span><br></pre></td></tr></table></figure>
+<p>STAT 列的字母就是上图的缩写（<code>man ps</code> 的 PROCESS STATE CODES 节）：R 运行、S 可中断睡眠、D 不可中断睡眠、Z 僵尸、T 暂停。<strong>性能分析里 S 和 D 的区别是关键线索</strong>：CPU 空闲但系统卡，<code>ps</code> 看到成片 D 状态，说明瓶颈在磁盘/网络 IO 而不是 CPU——load average 里也计入 D 状态进程（所以&quot;load 高但 CPU 低&quot;通常在等 IO）。<strong>WSL2 注</strong>：WSL2 的磁盘是 9P 协议挂载的虚拟盘，跨文件系统 IO 偶发慢且伴随 D 状态，属已知特性，不是你程序的问题。</p>
+<h2 id="5-僵尸与孤儿进程实测演示"><a class="markdownIt-Anchor" href="#5-僵尸与孤儿进程实测演示"></a> 5. 僵尸与孤儿进程：实测演示</h2>
+<p><strong>僵尸（zombie）</strong>：子进程已退出，退出状态还没被父进程收走，只剩一条 task_struct 档案挂着（OSTEP 第 5 章的 shell homework 专节）。<strong>孤儿（orphan）</strong>：父进程先死，子进程被 1 号进程（或 systemd 子进程）领养，领养者负责替它收尸。制造并观察两者：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// zombie_orphan.c —— 左手制造僵尸，右手制造孤儿</span></span><br><span class="line"><span class="comment">// 编译：gcc zombie_orphan.c -o zombie_orphan</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/wait.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">pid_t</span> z = fork();</span><br><span class="line">    <span class="keyword">if</span> (z == <span class="number">0</span>) _exit(<span class="number">42</span>);          <span class="comment">// 子进程立刻退出：父进程(本进程)还没收尸</span></span><br><span class="line">    sleep(<span class="number">1</span>);                        <span class="comment">// 窗口期：此刻 z 是僵尸</span></span><br><span class="line">    <span class="type">char</span> cmd[<span class="number">64</span>];</span><br><span class="line">    <span class="built_in">snprintf</span>(cmd, <span class="keyword">sizeof</span>(cmd), <span class="string">&quot;ps -o pid,ppid,stat,comm -p %d&quot;</span>, z);</span><br><span class="line">    system(cmd);                     <span class="comment">// 用 ps 亲眼确认 Z 状态</span></span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;僵尸的退出码=%d\n&quot;</span>, WEXITSTATUS(waitpid(z, <span class="literal">NULL</span>, <span class="number">0</span>)));  <span class="comment">// 收尸</span></span><br><span class="line"></span><br><span class="line">    <span class="type">pid_t</span> o = fork();</span><br><span class="line">    <span class="keyword">if</span> (o == <span class="number">0</span>) &#123;                    <span class="comment">// 另一个子进程：活得比父进程久</span></span><br><span class="line">        sleep(<span class="number">2</span>);</span><br><span class="line">        <span class="built_in">snprintf</span>(cmd, <span class="keyword">sizeof</span>(cmd),</span><br><span class="line">                 <span class="string">&quot;echo 孤儿的新爸爸 ppid=$(ps -o ppid= -p %d)&quot;</span>, getpid());</span><br><span class="line">        system(cmd);                 <span class="comment">// 此时父进程已死，ppid 应变为 1 或 systemd 之类</span></span><br><span class="line">        _exit(<span class="number">0</span>);</span><br><span class="line">    &#125;</span><br><span class="line">    sleep(<span class="number">1</span>);                        <span class="comment">// 父进程先撤，o 变孤儿</span></span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ gcc zombie_orphan.c -o zombie_orphan &amp;&amp; ./zombie_orphan</span><br><span class="line">    PID    PPID STAT COMM</span><br><span class="line">  24011   24010 Z+   zombie_orphan</span><br><span class="line">僵尸的退出码=42</span><br><span class="line">孤儿的新爸爸 ppid=2256     ← WSL2/systemd 担任 1 号进程角色，由它收尸</span><br></pre></td></tr></table></figure>
+<p>两条铁律由此而来：</p>
+<ol>
+<li><strong>僵尸无害但占名额</strong>：一个僵尸只占一个 PID 和一点内核内存；但如果服务长期 fork 短命子进程而不 wait（比如某些&quot;简单粗暴&quot;的推理框架调起外部工具），僵尸会越积越多直到 PID 耗尽。修法：父进程调用 <code>wait/waitpid</code>，或 <code>signal(SIGCHLD, SIG_IGN)</code>（内核代收），或用 <code>sigaction</code> 的 <code>SA_NOCLDWAIT</code>（<code>man 2 sigaction</code>）。</li>
+<li><strong>孤儿是正常机制</strong>：父进程死后子进程必须有人收尸，领养是内核自动做的，不是 bug。容器里 PID 1 的特殊性（要当所有孤儿的养父）正是 13 篇的主题。</li>
+</ol>
+<p><strong>经验做法</strong>：<code>ps aux | grep defunct</code> 是巡检僵尸的标准动作；看到僵尸先看它父进程是谁（PPID 列），修父进程的 wait 逻辑，而不是去 kill 僵尸（僵尸已经死了，杀不动）。</p>
+<h2 id="6-进程-vs-线程怎么选"><a class="markdownIt-Anchor" href="#6-进程-vs-线程怎么选"></a> 6. 进程 vs 线程：怎么选</h2>
+<p>把两者的核心差异压成一张表（依据：OSTEP 第 26 章、CSAPP 第 8.2/12 节）：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>进程</th>
+<th>线程</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>创建/销毁成本</td>
+<td>高（复制页表、fd 表，COW 缓解）</td>
+<td>低（共享大部分资源）</td>
+</tr>
+<tr>
+<td>上下文切换成本</td>
+<td>高（换页表，TLB 大概率被冲刷）</td>
+<td>低（同进程内换执行流，TLB 保得住）</td>
+</tr>
+<tr>
+<td>隔离性</td>
+<td>强：一个崩不死全家</td>
+<td>弱：一个线程越界写坏共享内存，整个进程完蛋</td>
+</tr>
+<tr>
+<td>数据共享</td>
+<td>要 IPC（10 篇：管道/共享内存/socket）</td>
+<td>直接读写全局变量（所以要同步，11 篇）</td>
+</tr>
+<tr>
+<td>故障半径</td>
+<td>独立进程独立挂</td>
+<td>共享进程生死</td>
+</tr>
+<tr>
+<td>典型场景</td>
+<td>隔离的组件（预处理/训练/服务），多租户，GIL 语言并行</td>
+<td>推理引擎流水线，IO 并发，同一个模型的多路请求</td>
+</tr>
+</tbody>
+</table>
+<p>对&quot;算法工程师&quot;这个目标画像，选型口诀（<strong>经验做法</strong>）：</p>
+<ul>
+<li><strong>用 Python 且 CPU 密集</strong>（数据预处理、特征工程）→ 多进程 <code>multiprocessing</code>，因为 GIL；</li>
+<li><strong>引擎内部流水线</strong>（C++ 推理框架、采集-推理-解码）→ 线程，共享模型权重省内存，切换快；</li>
+<li><strong>不信任的第三方模型/插件</strong> → 进程隔离，崩了不能拖垮主服务；</li>
+<li><strong>多 GPU 训练/多副本推理服务</strong> → 进程（每卡一进程是最省心的隔离单位，NCCL 生态也这么假设）。</li>
+</ul>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“fork 会复制整个内存，进程越大 fork 越慢”</strong>：有 COW 后 fork 主要是复制页表，微秒到毫秒级；真正慢的是 fork 后立即 exec 的路径要换掉整个地址空间。14 篇实测给出数字。</li>
+<li><strong>“线程数越多越好”</strong>：内核线程每个都是调度单位，超过核数的 CPU 密集线程只会增加上下文切换开销（07 篇实测成本）；IO 密集才靠更多线程掩盖等待。经验起点：CPU 密集 ≈ 核数，IO 密集按等待/计算比放大（<strong>经验做法</strong>）。</li>
+<li><strong>“僵尸进程用 kill -9 就能清掉”</strong>：僵尸已死，kill 发不进去；正确动作是让父进程 wait，或杀掉&quot;卡住不收尸的父进程&quot;让僵尸变孤儿被领养回收。</li>
+<li><strong>“子进程一定共享父进程之后的修改”</strong>：COW 之后完全分家；共享的只有显式建立的 IPC（10 篇）。拿&quot;子进程改了全局变量父进程怎么没变&quot;当 bug 报，是本系列最常收到的误解。</li>
+<li><strong>“D 状态进程 CPU 占用低，说明不忙”</strong>：D 是在等不可中断的 IO，load average 会计入它；&quot;load 高、CPU 低&quot;的第一反应是查 IO（<code>iostat</code>/<code>dmesg</code>），不是加机器。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>进程的档案是 task_struct：pid/state/mm/files/cred/sched_entity 各管一摊，都能在 /proc/PID 下找到观察窗口；fork 复制档案、exec 换记忆、wait 是收尸。</li>
+<li>fork 一次返回两次；COW 让 fork 便宜；fd/环境/信号处理被继承，这是 shell 重定向与日志落地的根基。</li>
+<li>Linux 的线程就是共享资源的进程（clone 参数不同）；用户级线程快但阻塞传染，内核级线程能用满多核；GIL 让 Python 的 CPU 并行必须走多进程。</li>
+<li>状态机 R/S/D/Z/T 中，S 与 D 的区分是 IO 排查的第一线索；僵尸要靠父进程 wait 回收，孤儿被 1 号进程领养是正常机制。</li>
+<li>选型：隔离与故障半径看进程，共享与切换成本看线程；Python CPU 密集用多进程是 GIL 决定的（<strong>经验做法</strong>）。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>跑通 mini_shell.c，然后扩展：支持 <code>cd</code>（提示：cd 必须由 shell 自己执行 <code>chdir</code>，想想为什么 fork 后做没用）；支持 <code>cmd &amp;</code> 后台执行（父进程不 waitpid，观察僵尸如何产生）。</li>
+<li>把 fork_basics.c 里的 <code>wait(NULL)</code> 删掉，父进程 sleep 后退出，用 <code>ps aux | grep Z</code> 观察子进程的下场；再用 <code>ps -o ppid= -p &lt;僵尸pid&gt;</code> 找到新父亲，解释为什么它最终会消失。</li>
+<li>用 <code>ps -o pid,ppid,stat,comm -e | head -30</code> 找出你系统里 3 个 S 状态、1 个 R 状态的进程；对 S 的进程查 <code>/proc/PID/wchan</code>（内核等待函数名），说说它在等什么。</li>
+<li>写 C 程序：fork 一个子进程，父子各自向同一个文件（以追加模式打开）各写 1000 行，检查行数与交错情况；再把 fd 换成两个进程分别打开同一文件，对比差异，用&quot;fork 继承 fd 表&quot;解释结果。</li>
+<li>在 Python 里用 <code>multiprocessing</code> 起 4 个进程各做 1 秒纯 CPU 循环，用 <code>time.perf_counter()</code> 对比 <code>threading</code> 版本；再用 <code>ps -T -p &lt;pid&gt;</code> 数一数两种版本的线程数。把&quot;GIL 下线程不并行于 CPU&quot;变成你亲眼看过的现象。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" rel="tag"># 操作系统</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/01-%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F%E6%98%AF%E4%BB%80%E4%B9%88%E4%B8%8E%E7%A8%8B%E5%BA%8F%E5%A6%82%E4%BD%95%E8%BF%90%E8%A1%8C/" rel="prev" title="01-操作系统是什么与程序如何运行">
+                  <i class="fa fa-angle-left"></i> 01-操作系统是什么与程序如何运行
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/03-CPU%E8%B0%83%E5%BA%A6/" rel="next" title="03-CPU调度">
+                  03-CPU调度 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

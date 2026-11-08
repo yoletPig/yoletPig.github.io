@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="1. 完整走一遍&#39;给无测试代码补测试&#39;的五步流程：characterization → 提取依赖 → 单元测试 → 假 LLM → 集成测试； 2. 拿走一套可直接落地的 CI 门禁配置（yaml&#x2F;覆盖率&#x2F;mypy&#x2F;ruff，及 C++ 扩…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="12-实战-给真实项目补测试">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/12-%E5%AE%9E%E6%88%98-%E7%BB%99%E7%9C%9F%E5%AE%9E%E9%A1%B9%E7%9B%AE%E8%A1%A5%E6%B5%8B%E8%AF%95/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="1. 完整走一遍&#39;给无测试代码补测试&#39;的五步流程：characterization → 提取依赖 → 单元测试 → 假 LLM → 集成测试； 2. 拿走一套可直接落地的 CI 门禁配置（yaml&#x2F;覆盖率&#x2F;mypy&#x2F;ruff，及 C++ 扩…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T22:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.566Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="测试">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/12-%E5%AE%9E%E6%88%98-%E7%BB%99%E7%9C%9F%E5%AE%9E%E9%A1%B9%E7%9B%AE%E8%A1%A5%E6%B5%8B%E8%AF%95/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/12-%E5%AE%9E%E6%88%98-%E7%BB%99%E7%9C%9F%E5%AE%9E%E9%A1%B9%E7%9B%AE%E8%A1%A5%E6%B5%8B%E8%AF%95/","path":"2026/09/04/12-实战-给真实项目补测试/","title":"12-实战-给真实项目补测试"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>12-实战-给真实项目补测试 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#12-%E5%AE%9E%E6%88%98%E7%BB%99%E4%B8%80%E4%B8%AA%E6%97%A0%E6%B5%8B%E8%AF%95%E7%9A%84-agent-%E5%B7%A5%E5%85%B7%E5%BA%93%E4%BB%8E%E9%9B%B6%E8%A1%A5%E6%B5%8B%E8%AF%95"><span class="nav-number">1.</span> <span class="nav-text"> 12 - 实战：给一个无测试的 Agent 工具库从零补测试</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%8E%B0%E7%8A%B6%E4%B8%80%E4%B8%AA%E8%83%BD%E8%B7%91%E4%BD%86%E6%B2%A1%E4%BA%BA%E6%95%A2%E5%8A%A8%E7%9A%84%E6%A8%A1%E5%9D%97"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 现状：一个&quot;能跑但没人敢动&quot;的模块</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E7%AC%AC%E4%B8%80%E6%AD%A5characterization-%E6%B5%8B%E8%AF%95%E5%85%88%E9%92%89%E6%AD%BB%E7%8E%B0%E7%8A%B6"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 第一步：characterization 测试——先钉死现状</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E7%AC%AC%E4%BA%8C%E6%AD%A5%E6%8F%90%E5%8F%96%E4%BE%9D%E8%B5%96%E7%AB%AF%E5%8F%A3-%E9%80%82%E9%85%8D%E5%99%A8%E4%B8%8E%E6%B3%A8%E5%85%A5"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 第二步：提取依赖——端口、适配器与注入</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E7%AC%AC%E4%B8%89%E6%AD%A5%E5%8D%95%E5%85%83%E6%B5%8B%E8%AF%95%E6%B5%8B%E8%AF%95%E6%8A%93%E5%87%BA%E7%9A%84%E7%AC%AC%E4%B8%80%E4%B8%AA-bug"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 第三步：单元测试——测试抓出的第一个 bug</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E7%AC%AC%E5%9B%9B%E6%AD%A5mock-llm-%E7%9A%84%E8%BE%B9%E7%95%8C%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E7%94%A8-patchopenai"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 第四步：mock LLM 的边界——为什么不用 patch(&quot;openai...&quot;)</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E7%AC%AC%E4%BA%94%E6%AD%A5%E9%9B%86%E6%88%90%E6%B5%8B%E8%AF%95%E7%9C%9F%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E4%B8%8E-llm-%E5%A5%91%E7%BA%A6"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 第五步：集成测试——真文件系统与 LLM 契约</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-ci-%E9%97%A8%E7%A6%81%E5%85%A8%E9%85%8D%E7%BD%AE"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. CI 门禁全配置</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#8-readme-%E6%B5%8B%E8%AF%95%E7%AB%A0%E8%8A%82%E6%A8%A1%E6%9D%BF"><span class="nav-number">1.9.</span> <span class="nav-text"> 8. README 测试章节模板</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#9-%E9%9D%A2%E8%AF%95%E9%AB%98%E9%A2%91%E9%97%AE%E9%A2%98%E6%B8%85%E5%8D%9520-%E9%A2%98%E5%B8%A6%E8%A6%81%E7%82%B9"><span class="nav-number">1.10.</span> <span class="nav-text"> 9. 面试高频问题清单（20 题带要点）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.11.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.12.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/12-%E5%AE%9E%E6%88%98-%E7%BB%99%E7%9C%9F%E5%AE%9E%E9%A1%B9%E7%9B%AE%E8%A1%A5%E6%B5%8B%E8%AF%95/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="12-实战-给真实项目补测试 | Yoleen的博客">
+      <meta itemprop="description" content="1. 完整走一遍&#39;给无测试代码补测试&#39;的五步流程：characterization → 提取依赖 → 单元测试 → 假 LLM → 集成测试； 2. 拿走一套可直接落地的 CI 门禁配置（yaml&#x2F;覆盖率&#x2F;mypy&#x2F;ruff，及 C++ 扩…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          12-实战-给真实项目补测试
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 06:00:00" itemprop="dateCreated datePublished" datetime="2026-09-04T06:00:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%B5%8B%E8%AF%95/" itemprop="url" rel="index"><span itemprop="name">测试</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>14 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">1. 完整走一遍'给无测试代码补测试'的五步流程：characterization → 提取依赖 → 单元测试 → 假 LLM → 集成测试； 2. 拿走一套可直接落地的 CI 门禁配置（yaml/覆盖率/mypy/ruff，及 C++ 扩…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="12-实战给一个无测试的-agent-工具库从零补测试"><a class="markdownIt-Anchor" href="#12-实战给一个无测试的-agent-工具库从零补测试"></a> 12 - 实战：给一个无测试的 Agent 工具库从零补测试</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ol>
+<li>完整走一遍&quot;给无测试代码补测试&quot;的五步流程：characterization → 提取依赖 → 单元测试 → 假 LLM → 集成测试；</li>
+<li>拿走一套可直接落地的 CI 门禁配置（yaml/覆盖率/mypy/ruff，及 C++ 扩展的 clang-tidy 位）；</li>
+<li>会写项目 README 的&quot;测试&quot;章节，让测试成为团队文档的一部分；</li>
+<li>用 20 道高频面试题收束全系列，检验自己能否讲清&quot;为什么&quot;。</li>
+</ol>
+<p>本章项目 <code>agentutils</code>（Agent 的文件工具 + LLM 问答封装）的全部代码与测试均已实测通过：<strong>13 个测试全绿，行覆盖率 96%，mypy --strict 零告警</strong>。文中所有&quot;实测&quot;输出都来自这次完整演练——包括测试抓出来的三个真 bug。</p>
+<h2 id="1-现状一个能跑但没人敢动的模块"><a class="markdownIt-Anchor" href="#1-现状一个能跑但没人敢动的模块"></a> 1. 现状：一个&quot;能跑但没人敢动&quot;的模块</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># before —— src/agentutils/workspace.py（无测试版原状，有删节）</span></span><br><span class="line"><span class="keyword">import</span> os</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">read_file</span>(<span class="params">path: <span class="built_in">str</span></span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">    root = os.environ[<span class="string">&quot;AGENT_ROOT&quot;</span>]                       <span class="comment"># ❌ 隐藏依赖：环境变量</span></span><br><span class="line">    full = os.path.join(root, path)</span><br><span class="line">    <span class="keyword">if</span> <span class="keyword">not</span> os.path.abspath(full).startswith(os.path.abspath(root)):</span><br><span class="line">        <span class="keyword">raise</span> PermissionError(<span class="string">&quot;escape workspace&quot;</span>)</span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(full, encoding=<span class="string">&quot;utf-8&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        <span class="keyword">return</span> f.read()</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">write_file</span>(<span class="params">path: <span class="built_in">str</span>, content: <span class="built_in">str</span></span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">    <span class="comment"># ……与 read_file 复制粘贴同款校验 ❌ DRY 失衡</span></span><br><span class="line">    ...</span><br><span class="line"></span><br><span class="line"><span class="comment"># before —— llm.py（同仓库另一模块）</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">answer_with_notes</span>(<span class="params">question, notes_reader</span>):</span><br><span class="line">    <span class="keyword">import</span> openai</span><br><span class="line">    ctx = notes_reader(<span class="string">&quot;AGENT_NOTES.md&quot;</span>)</span><br><span class="line">    client = openai.OpenAI()                              <span class="comment"># ❌ 函数体内自建 client</span></span><br><span class="line">    r = client.chat.completions.create(</span><br><span class="line">        model=os.environ.get(<span class="string">&quot;AGENT_MODEL&quot;</span>, <span class="string">&quot;gpt-4o-mini&quot;</span>),</span><br><span class="line">        messages=[&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: <span class="string">f&quot;笔记：\n<span class="subst">&#123;ctx&#125;</span>\n\n问题：<span class="subst">&#123;question&#125;</span>&quot;</span>&#125;])</span><br><span class="line">    <span class="keyword">return</span> r.choices[<span class="number">0</span>].message.content</span><br></pre></td></tr></table></figure>
+<p>病灶盘点（对照 06 篇）：<strong>隐藏依赖</strong>（<code>AGENT_ROOT</code> 环境变量、函数内自建 openai client）、<strong>复制粘贴</strong>（逃逸校验两份）、<strong>静态耦合</strong>（<code>answer_with_notes</code> 直接吃环境与 SDK）、<strong>God 倾向</strong>（文件工具与 LLM 封装混居）。任何改动（比如换模型、加路径白名单）都只能靠手工跑 Agent 试。</p>
+<h2 id="2-第一步characterization-测试先钉死现状"><a class="markdownIt-Anchor" href="#2-第一步characterization-测试先钉死现状"></a> 2. 第一步：characterization 测试——先钉死现状</h2>
+<p>按 06 篇纪律：不猜行为，用实测值钉死。before 的依赖是环境变量，<code>monkeypatch.setenv</code> 就够（不必上子进程）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># tests/test_characterization.py —— 锁 before 现状（值全部实测）</span></span><br><span class="line"><span class="keyword">import</span> pytest</span><br><span class="line"><span class="keyword">from</span> agentutils.workspace <span class="keyword">import</span> read_file, write_file</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">ws</span>(<span class="params">tmp_path, monkeypatch</span>):</span><br><span class="line">    monkeypatch.setenv(<span class="string">&quot;AGENT_ROOT&quot;</span>, <span class="built_in">str</span>(tmp_path))</span><br><span class="line">    <span class="keyword">return</span> tmp_path</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_read_ok</span>(<span class="params">ws</span>):</span><br><span class="line">    (ws / <span class="string">&quot;a.txt&quot;</span>).write_text(<span class="string">&quot;hello&quot;</span>, encoding=<span class="string">&quot;utf-8&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> read_file(<span class="string">&quot;a.txt&quot;</span>) == <span class="string">&quot;hello&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_read_missing_env_is_KeyError</span>(<span class="params">ws, monkeypatch</span>):</span><br><span class="line">    monkeypatch.delenv(<span class="string">&quot;AGENT_ROOT&quot;</span>)</span><br><span class="line">    <span class="keyword">with</span> pytest.raises(KeyError):</span><br><span class="line">        read_file(<span class="string">&quot;a.txt&quot;</span>)            <span class="comment"># 现状：环境变量缺失直接 KeyError</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_escape_blocked</span>(<span class="params">ws</span>):</span><br><span class="line">    <span class="keyword">with</span> pytest.raises(PermissionError):</span><br><span class="line">        read_file(<span class="string">&quot;../etc/passwd&quot;</span>)    <span class="comment"># 现状：相对路径逃逸被 startswith 挡住</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_write_creates_dirs</span>(<span class="params">ws</span>):</span><br><span class="line">    write_file(<span class="string">&quot;sub/dir/b.txt&quot;</span>, <span class="string">&quot;x&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> (ws / <span class="string">&quot;sub/dir/b.txt&quot;</span>).read_text(encoding=<span class="string">&quot;utf-8&quot;</span>) == <span class="string">&quot;x&quot;</span></span><br></pre></td></tr></table></figure>
+<p>实测：<strong>5 passed</strong>。注意 <code>test_read_missing_env_is_KeyError</code>——<code>KeyError</code> 是&quot;丑但真实&quot;的现状，characterization 阶段照锁（重构后它变成更优雅的显式异常，那是<strong>改行为</strong>，单独走需求流程）。</p>
+<h2 id="3-第二步提取依赖端口-适配器与注入"><a class="markdownIt-Anchor" href="#3-第二步提取依赖端口-适配器与注入"></a> 3. 第二步：提取依赖——端口、适配器与注入</h2>
+<p>按 06 篇的 seam 手术：环境变量 → 构造函数注入；openai client → 端口 + 适配器。after 版本四个文件：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># after —— src/agentutils/ports.py</span></span><br><span class="line"><span class="keyword">from</span> typing <span class="keyword">import</span> Protocol</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">NotesReader</span>(<span class="title class_ inherited__">Protocol</span>):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">read</span>(<span class="params">self, path: <span class="built_in">str</span></span>) -&gt; <span class="built_in">str</span>: ...</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">LLMClient</span>(<span class="title class_ inherited__">Protocol</span>):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">chat</span>(<span class="params">self, system: <span class="built_in">str</span>, user: <span class="built_in">str</span></span>) -&gt; <span class="built_in">str</span>: ...</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># after —— src/agentutils/workspace.py</span></span><br><span class="line"><span class="keyword">from</span> pathlib <span class="keyword">import</span> Path</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Workspace</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;Agent 可见的文件沙箱：一切路径解析以 root 为锚。&quot;&quot;&quot;</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, root: Path</span>):</span><br><span class="line">        <span class="variable language_">self</span>._root = Path(root).resolve()          <span class="comment"># resolve 折叠 .. 与符号链接</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">_resolve</span>(<span class="params">self, path: <span class="built_in">str</span></span>) -&gt; Path:</span><br><span class="line">        full = (<span class="variable language_">self</span>._root / path).resolve()</span><br><span class="line">        <span class="keyword">if</span> <span class="keyword">not</span> <span class="built_in">str</span>(full).startswith(<span class="built_in">str</span>(<span class="variable language_">self</span>._root)):</span><br><span class="line">            <span class="keyword">raise</span> PermissionError(<span class="string">f&quot;path escapes workspace: <span class="subst">&#123;path!r&#125;</span>&quot;</span>)</span><br><span class="line">        <span class="keyword">return</span> full</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">read</span>(<span class="params">self, path: <span class="built_in">str</span></span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">        <span class="keyword">return</span> <span class="variable language_">self</span>._resolve(path).read_text(encoding=<span class="string">&quot;utf-8&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">write</span>(<span class="params">self, path: <span class="built_in">str</span>, content: <span class="built_in">str</span></span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">        full = <span class="variable language_">self</span>._resolve(path)</span><br><span class="line">        full.parent.mkdir(parents=<span class="literal">True</span>, exist_ok=<span class="literal">True</span>)</span><br><span class="line">        full.write_text(content, encoding=<span class="string">&quot;utf-8&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">list_dir</span>(<span class="params">self, path: <span class="built_in">str</span> = <span class="string">&quot;.&quot;</span></span>) -&gt; <span class="built_in">list</span>[<span class="built_in">str</span>]:</span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">sorted</span>(p.name <span class="keyword">for</span> p <span class="keyword">in</span> <span class="variable language_">self</span>._resolve(path).iterdir())</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># after —— src/agentutils/adapters.py（薄壳真实现，只在集成层测）</span></span><br><span class="line"><span class="keyword">import</span> os</span><br><span class="line"><span class="keyword">from</span> .ports <span class="keyword">import</span> NotesReader</span><br><span class="line"><span class="keyword">from</span> .workspace <span class="keyword">import</span> Workspace</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">WorkspaceNotes</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, ws: Workspace, notes_name: <span class="built_in">str</span> = <span class="string">&quot;AGENT_NOTES.md&quot;</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>._ws, <span class="variable language_">self</span>._name = ws, notes_name</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">read</span>(<span class="params">self, path: <span class="built_in">str</span></span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">        <span class="keyword">return</span> <span class="variable language_">self</span>._ws.read(path <span class="keyword">if</span> path == <span class="variable language_">self</span>._name <span class="keyword">else</span> <span class="variable language_">self</span>._name)</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">OpenAIClient</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, base_url=<span class="string">&quot;https://api.openai.com/v1&quot;</span>, api_key=<span class="literal">None</span>,</span></span><br><span class="line"><span class="params">                 model=<span class="string">&quot;gpt-4o-mini&quot;</span>, http_client=<span class="literal">None</span></span>):   <span class="comment"># ⭐ 传输可注入（5 节的教训）</span></span><br><span class="line">        <span class="keyword">import</span> openai</span><br><span class="line">        <span class="variable language_">self</span>._client = openai.OpenAI(</span><br><span class="line">            base_url=base_url,</span><br><span class="line">            api_key=api_key <span class="keyword">if</span> api_key <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span> <span class="keyword">else</span> os.environ[<span class="string">&quot;AGENT_API_KEY&quot;</span>],</span><br><span class="line">            http_client=http_client)</span><br><span class="line">        <span class="variable language_">self</span>._model = model</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">chat</span>(<span class="params">self, system: <span class="built_in">str</span>, user: <span class="built_in">str</span></span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">        r = <span class="variable language_">self</span>._client.chat.completions.create(</span><br><span class="line">            model=<span class="variable language_">self</span>._model,</span><br><span class="line">            messages=[&#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;system&quot;</span>, <span class="string">&quot;content&quot;</span>: system&#125;,</span><br><span class="line">                      &#123;<span class="string">&quot;role&quot;</span>: <span class="string">&quot;user&quot;</span>, <span class="string">&quot;content&quot;</span>: user&#125;])</span><br><span class="line">        <span class="keyword">return</span> r.choices[<span class="number">0</span>].message.content <span class="keyword">or</span> <span class="string">&quot;&quot;</span>   <span class="comment"># mypy 抓出 SDK 返回 str|None（实测）</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># after —— src/agentutils/agent.py（纯逻辑：依赖全注入）</span></span><br><span class="line"><span class="keyword">from</span> .ports <span class="keyword">import</span> LLMClient, NotesReader</span><br><span class="line"></span><br><span class="line">SYSTEM_PROMPT = <span class="string">&quot;你是笔记助手，仅根据笔记回答，不知道的说不知道。&quot;</span></span><br><span class="line">MAX_PROMPT = <span class="number">8000</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">NotesAgent</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, notes: NotesReader, llm: LLMClient</span>):</span><br><span class="line">        <span class="variable language_">self</span>._notes, <span class="variable language_">self</span>._llm = notes, llm</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">answer</span>(<span class="params">self, question: <span class="built_in">str</span></span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">        ctx = <span class="variable language_">self</span>._notes.read(<span class="string">&quot;AGENT_NOTES.md&quot;</span>)</span><br><span class="line">        prefix, suffix = <span class="string">&quot;笔记：\n&quot;</span>, <span class="string">f&quot;\n\n问题：<span class="subst">&#123;question&#125;</span>&quot;</span></span><br><span class="line">        budget = MAX_PROMPT - <span class="built_in">len</span>(prefix) - <span class="built_in">len</span>(suffix)   <span class="comment"># 精确预算</span></span><br><span class="line">        ctx = ctx[:budget]</span><br><span class="line">        <span class="keyword">return</span> <span class="variable language_">self</span>._llm.chat(SYSTEM_PROMPT, <span class="string">f&quot;<span class="subst">&#123;prefix&#125;</span><span class="subst">&#123;ctx&#125;</span><span class="subst">&#123;suffix&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>前后对比</strong>（重构发生在 characterization 全绿保护下）：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>before</th>
+<th>after</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>根目录依赖</td>
+<td>环境变量（每次读）</td>
+<td>构造函数注入 <code>Workspace(root)</code></td>
+</tr>
+<tr>
+<td>逃逸校验</td>
+<td>两处复制粘贴</td>
+<td><code>_resolve</code> 单点</td>
+</tr>
+<tr>
+<td>LLM 依赖</td>
+<td>函数内 <code>openai.OpenAI()</code></td>
+<td><code>LLMClient</code> 端口 + <code>OpenAIClient</code> 适配器</td>
+</tr>
+<tr>
+<td>可测性</td>
+<td>必须环境变量 + 真 SDK</td>
+<td>tmp_path + Fake 即可</td>
+</tr>
+<tr>
+<td>行为变化</td>
+<td>—</td>
+<td><strong>零</strong>（characterization 移植后全绿）</td>
+</tr>
+</tbody>
+</table>
+<p>迁移期做了一次&quot;characterization 退役&quot;：旧函数式 API 的 5 条用例逐条改写为新类 API（<code>read_file(&quot;a.txt&quot;)</code> → <code>Workspace(root=tmp_path).read(&quot;a.txt&quot;)</code>），改写完的用例<strong>升级为永久单元测试</strong> <code>tests/unit/test_workspace.py</code>，原文件归档进 <code>docs-legacy/</code>。这就是 06 篇说的：characterization 是脚手架，不是永久房。</p>
+<h2 id="4-第三步单元测试测试抓出的第一个-bug"><a class="markdownIt-Anchor" href="#4-第三步单元测试测试抓出的第一个-bug"></a> 4. 第三步：单元测试——测试抓出的第一个 bug</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># tests/unit/test_workspace.py</span></span><br><span class="line"><span class="keyword">import</span> pytest</span><br><span class="line"><span class="keyword">from</span> agentutils.workspace <span class="keyword">import</span> Workspace</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">ws</span>(<span class="params">tmp_path</span>):</span><br><span class="line">    <span class="keyword">return</span> Workspace(root=tmp_path)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_roundtrip</span>(<span class="params">ws</span>):</span><br><span class="line">    ws.write(<span class="string">&quot;a.txt&quot;</span>, <span class="string">&quot;hello&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> ws.read(<span class="string">&quot;a.txt&quot;</span>) == <span class="string">&quot;hello&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_escape_via_dotdot</span>(<span class="params">ws</span>):</span><br><span class="line">    <span class="keyword">with</span> pytest.raises(PermissionError, <span class="keyword">match</span>=<span class="string">&quot;escape&quot;</span>):</span><br><span class="line">        ws.read(<span class="string">&quot;../outside.txt&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_escape_via_absolute</span>(<span class="params">ws</span>):</span><br><span class="line">    <span class="keyword">with</span> pytest.raises(PermissionError, <span class="keyword">match</span>=<span class="string">&quot;escape&quot;</span>):</span><br><span class="line">        ws.read(<span class="string">&quot;/etc/passwd&quot;</span>)          <span class="comment"># 新 API 显式挡住绝对路径</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_list_dir_sorted</span>(<span class="params">ws</span>):</span><br><span class="line">    <span class="keyword">for</span> name <span class="keyword">in</span> (<span class="string">&quot;b.txt&quot;</span>, <span class="string">&quot;a.txt&quot;</span>, <span class="string">&quot;c.txt&quot;</span>):</span><br><span class="line">        ws.write(name, <span class="string">&quot;&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> ws.list_dir() == [<span class="string">&quot;a.txt&quot;</span>, <span class="string">&quot;b.txt&quot;</span>, <span class="string">&quot;c.txt&quot;</span>]</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># tests/unit/test_agent.py —— Fake 替身（04 篇：Fake 优于 Mock 的场景）</span></span><br><span class="line"><span class="keyword">from</span> agentutils.agent <span class="keyword">import</span> NotesAgent, SYSTEM_PROMPT</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">FakeNotes</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, text</span>): <span class="variable language_">self</span>._t = text</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">read</span>(<span class="params">self, path</span>): <span class="keyword">assert</span> path == <span class="string">&quot;AGENT_NOTES.md&quot;</span>; <span class="keyword">return</span> <span class="variable language_">self</span>._t</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">FakeLLM</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, reply=<span class="string">&quot;ok&quot;</span></span>): <span class="variable language_">self</span>.calls = []; <span class="variable language_">self</span>._reply = reply</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">chat</span>(<span class="params">self, system, user</span>):</span><br><span class="line">        <span class="variable language_">self</span>.calls.append((system, user))</span><br><span class="line">        <span class="keyword">return</span> <span class="variable language_">self</span>._reply</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_prompt_contains_notes_and_question</span>():</span><br><span class="line">    llm = FakeLLM()</span><br><span class="line">    NotesAgent(FakeNotes(<span class="string">&quot;会议纪要：周三发布&quot;</span>), llm).answer(<span class="string">&quot;何时发布？&quot;</span>)</span><br><span class="line">    system, user = llm.calls[<span class="number">0</span>]</span><br><span class="line">    <span class="keyword">assert</span> system == SYSTEM_PROMPT <span class="keyword">and</span> <span class="string">&quot;何时发布？&quot;</span> <span class="keyword">in</span> user</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_truncates_long_notes</span>():</span><br><span class="line">    llm = FakeLLM()</span><br><span class="line">    NotesAgent(FakeNotes(<span class="string">&quot;x&quot;</span> * <span class="number">20_000</span>), llm).answer(<span class="string">&quot;q&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">len</span>(llm.calls[<span class="number">0</span>][<span class="number">1</span>]) &lt;= <span class="number">8000</span></span><br></pre></td></tr></table></figure>
+<p><code>test_truncates_long_notes</code> 第一次运行就红了：第一版预算公式 <code>MAX_PROMPT - len(question) - 8</code> 少算了一个前缀字符，<code>len(user) == 8001</code>。<strong>这就是测试的价值瞬间</strong>：上下文超限在真实环境里表现为&quot;偶发 API 报错&quot;，定位要几小时；在这里是 0.1 秒的一行红字。修复后的精确预算版全绿。</p>
+<h2 id="5-第四步mock-llm-的边界为什么不用-patchopenai"><a class="markdownIt-Anchor" href="#5-第四步mock-llm-的边界为什么不用-patchopenai"></a> 5. 第四步：mock LLM 的边界——为什么不用 <code>patch(&quot;openai...&quot;)</code></h2>
+<p>04 篇原则在本项目的两次落地：</p>
+<ol>
+<li><strong>业务测试 mock 自家端口</strong>：<code>FakeLLM</code> 是 <code>LLMClient</code> 端口的 Fake——记录调用、返回固定值，业务分支全覆盖（上面 3 条用例），从未出现 <code>patch(&quot;openai...&quot;)</code> 字样；</li>
+<li><strong>不 mock 你不拥有的东西</strong>：<code>OpenAIClient</code> 适配器内部对 openai SDK 的调用，<strong>不用</strong> <code>mock.patch</code> 指认内部实现，而是给它一个<strong>可注入的传输层</strong>（<code>http_client</code> 参数，第 3 节代码）。这里有个实测教训：最初用 respx 想全局拦截 openai 的请求，结果<strong>失败</strong>——openai SDK 自建 httpx client，拦截层对它不生效，请求直接打到了真网络。把 <code>http_client</code> 改成构造参数后，替换回到了&quot;构造函数注入&quot;的正轨。又一次验证：<strong>可测性是设计出来的，不是 patch 出来的</strong>。</li>
+</ol>
+<h2 id="6-第五步集成测试真文件系统与-llm-契约"><a class="markdownIt-Anchor" href="#6-第五步集成测试真文件系统与-llm-契约"></a> 6. 第五步：集成测试——真文件系统与 LLM 契约</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># tests/integration/test_workspace_fs.py —— 真实文件系统边界</span></span><br><span class="line"><span class="keyword">import</span> pytest</span><br><span class="line"><span class="keyword">from</span> agentutils.workspace <span class="keyword">import</span> Workspace</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.mark.integration</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_symlink_escape_blocked</span>(<span class="params">tmp_path</span>):</span><br><span class="line">    outside = tmp_path.parent / <span class="string">&quot;outside.txt&quot;</span></span><br><span class="line">    outside.write_text(<span class="string">&quot;s&quot;</span>, encoding=<span class="string">&quot;utf-8&quot;</span>)</span><br><span class="line">    (tmp_path / <span class="string">&quot;link.txt&quot;</span>).symlink_to(outside)    <span class="comment"># 工作区内符号链接指向外部</span></span><br><span class="line">    ws = Workspace(root=tmp_path)</span><br><span class="line">    <span class="keyword">with</span> pytest.raises(PermissionError):</span><br><span class="line">        ws.read(<span class="string">&quot;link.txt&quot;</span>)                        <span class="comment"># resolve() 折叠后越界，被拒</span></span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.mark.integration</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_unicode_and_newline</span>(<span class="params">tmp_path</span>):</span><br><span class="line">    ws = Workspace(root=tmp_path)</span><br><span class="line">    ws.write(<span class="string">&quot;笔记.md&quot;</span>, <span class="string">&quot;# 标题\n中文内容\n&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> ws.read(<span class="string">&quot;笔记.md&quot;</span>) == <span class="string">&quot;# 标题\n中文内容\n&quot;</span></span><br></pre></td></tr></table></figure>
+<p><code>test_symlink_escape_blocked</code> 是单元层测不出的真集成问题：单元层用 tmp_path 直接读写测不出&quot;符号链接折叠后逃逸&quot;——<code>Path.resolve()</code> 才是让它现身的机制。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># tests/integration/test_llm_contract.py —— OpenAIClient 契约（真 SDK 序列化栈）</span></span><br><span class="line"><span class="keyword">import</span> httpx, pytest</span><br><span class="line"><span class="keyword">from</span> agentutils.adapters <span class="keyword">import</span> OpenAIClient</span><br><span class="line"></span><br><span class="line">REPLY_JSON = &#123;<span class="string">&quot;choices&quot;</span>: [&#123;<span class="string">&quot;message&quot;</span>: &#123;<span class="string">&quot;content&quot;</span>: <span class="string">&quot;周三发布&quot;</span>&#125;&#125;]&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">make_client</span>(<span class="params">handler</span>):</span><br><span class="line">    calls = []</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">wrapped</span>(<span class="params">request</span>):</span><br><span class="line">        calls.append(request)</span><br><span class="line">        <span class="keyword">return</span> handler(request)</span><br><span class="line">    http = httpx.Client(transport=httpx.MockTransport(wrapped))</span><br><span class="line">    <span class="keyword">return</span> (OpenAIClient(base_url=<span class="string">&quot;https://api.example.com/v1&quot;</span>,</span><br><span class="line">                         api_key=<span class="string">&quot;test-key&quot;</span>, http_client=http), calls)</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_openai_client_contract</span>():</span><br><span class="line">    client, calls = make_client(<span class="keyword">lambda</span> req: httpx.Response(<span class="number">200</span>, json=REPLY_JSON))</span><br><span class="line">    <span class="keyword">assert</span> client.chat(<span class="string">&quot;sys&quot;</span>, <span class="string">&quot;hi&quot;</span>) == <span class="string">&quot;周三发布&quot;</span></span><br><span class="line">    <span class="keyword">assert</span> <span class="built_in">len</span>(calls) == <span class="number">1</span></span><br><span class="line">    <span class="keyword">assert</span> <span class="string">b&quot;gpt-4o-mini&quot;</span> <span class="keyword">in</span> calls[<span class="number">0</span>].read()        <span class="comment"># 模型名进请求体</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_openai_client_401_raises</span>():</span><br><span class="line">    client, _ = make_client(<span class="keyword">lambda</span> req: httpx.Response(<span class="number">401</span>, json=&#123;<span class="string">&quot;error&quot;</span>: <span class="string">&quot;bad&quot;</span>&#125;))</span><br><span class="line">    <span class="keyword">with</span> pytest.raises(Exception, <span class="keyword">match</span>=<span class="string">&quot;401&quot;</span>):</span><br><span class="line">        client.chat(<span class="string">&quot;s&quot;</span>, <span class="string">&quot;u&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><code>httpx.MockTransport</code> 走<strong>真实 SDK 序列化与响应解析</strong>（只换传输），比手写 Fake 更能抓契约偏差；想再进一步就上 07 篇的本地假服务端或 testcontainers。</p>
+<p><strong>全量实测结果</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">$ pytest tests --cov</span><br><span class="line">Name                          Stmts   Miss  Cover</span><br><span class="line">-------------------------------------------------</span><br><span class="line">src/agentutils/adapters.py       17      2    88%</span><br><span class="line">src/agentutils/agent.py          12      0   100%</span><br><span class="line">src/agentutils/ports.py           3      0   100%</span><br><span class="line">src/agentutils/workspace.py      18      0   100%</span><br><span class="line">-------------------------------------------------</span><br><span class="line">TOTAL                            50      2    96%</span><br><span class="line">13 passed in 0.35s</span><br></pre></td></tr></table></figure>
+<p>adapters 缺的 2 行是&quot;key 从环境读&quot;的分支——它属于组合根，留给一次显式的集成用例或接受不覆盖（并在 README 说明），<strong>不为数字写无断言测试</strong>（01 篇）。</p>
+<h2 id="7-ci-门禁全配置"><a class="markdownIt-Anchor" href="#7-ci-门禁全配置"></a> 7. CI 门禁全配置</h2>
+<p><code>.github/workflows/ci.yml</code>（Python 主体 + C++ 扩展位；若仓库含 C++ 扩展则启用 cpp job——clang-tidy 的接法 08/11 篇已给全）：</p>
+<figure class="highlight yaml"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br></pre></td><td class="code"><pre><span class="line"><span class="attr">name:</span> <span class="string">ci</span></span><br><span class="line"><span class="attr">on:</span></span><br><span class="line">  <span class="attr">pull_request:</span></span><br><span class="line">  <span class="attr">push:</span></span><br><span class="line">    <span class="attr">branches:</span> [<span class="string">main</span>]</span><br><span class="line"></span><br><span class="line"><span class="attr">jobs:</span></span><br><span class="line">  <span class="attr">python:</span></span><br><span class="line">    <span class="attr">runs-on:</span> <span class="string">ubuntu-latest</span></span><br><span class="line">    <span class="attr">strategy:</span></span><br><span class="line">      <span class="attr">fail-fast:</span> <span class="literal">false</span></span><br><span class="line">      <span class="attr">matrix:</span></span><br><span class="line">        <span class="attr">python-version:</span> [<span class="string">&quot;3.10&quot;</span>, <span class="string">&quot;3.12&quot;</span>]</span><br><span class="line">    <span class="attr">steps:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">uses:</span> <span class="string">actions/checkout@v4</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">uses:</span> <span class="string">astral-sh/setup-uv@v5</span></span><br><span class="line">        <span class="attr">with:</span></span><br><span class="line">          <span class="attr">enable-cache:</span> <span class="literal">true</span></span><br><span class="line">          <span class="attr">python-version:</span> <span class="string">$&#123;&#123;</span> <span class="string">matrix.python-version</span> <span class="string">&#125;&#125;</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">run:</span> <span class="string">uv</span> <span class="string">sync</span> <span class="string">--frozen</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">静态门禁</span></span><br><span class="line">        <span class="attr">run:</span> <span class="string">|</span></span><br><span class="line"><span class="string">          uv run ruff check --select B,S,PT,E,F .</span></span><br><span class="line"><span class="string">          uv run mypy src --strict</span></span><br><span class="line"><span class="string"></span>      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">单元测试（PR</span> <span class="string">快车道）</span></span><br><span class="line">        <span class="attr">run:</span> <span class="string">uv</span> <span class="string">run</span> <span class="string">pytest</span> <span class="string">tests/unit</span> <span class="string">-q</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">name:</span> <span class="string">全量</span> <span class="string">+</span> <span class="string">覆盖率门禁</span></span><br><span class="line">        <span class="attr">run:</span> <span class="string">uv</span> <span class="string">run</span> <span class="string">pytest</span> <span class="string">tests</span> <span class="string">-q</span> <span class="string">--cov</span> <span class="string">--cov-report=xml</span> <span class="string">--cov-fail-under=90</span></span><br><span class="line"></span><br><span class="line">  <span class="attr">cpp:</span>                                   <span class="comment"># 若仓库含 C++ 扩展（示例保留）</span></span><br><span class="line">    <span class="attr">runs-on:</span> <span class="string">ubuntu-latest</span></span><br><span class="line">    <span class="attr">steps:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">uses:</span> <span class="string">actions/checkout@v4</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">run:</span> <span class="string">sudo</span> <span class="string">apt-get</span> <span class="string">update</span> <span class="string">&amp;&amp;</span> <span class="string">sudo</span> <span class="string">apt-get</span> <span class="string">install</span> <span class="string">-y</span> <span class="string">cmake</span> <span class="string">g++</span> <span class="string">clang-tidy</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">run:</span> <span class="string">&gt;</span></span><br><span class="line"><span class="string">          cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug -DMYLIB_BUILD_TESTS=ON</span></span><br><span class="line"><span class="string">          -DCMAKE_CXX_CLANG_TIDY=&quot;clang-tidy;--warnings-as-errors=*&quot;</span></span><br><span class="line"><span class="string"></span>      <span class="bullet">-</span> <span class="attr">run:</span> <span class="string">cmake</span> <span class="string">--build</span> <span class="string">build</span> <span class="string">-j$(nproc)</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">run:</span> <span class="string">ctest</span> <span class="string">--test-dir</span> <span class="string">build</span> <span class="string">--output-on-failure</span></span><br><span class="line"></span><br><span class="line">  <span class="attr">nightly:</span></span><br><span class="line">    <span class="attr">if:</span> <span class="string">github.event_name</span> <span class="string">==</span> <span class="string">&#x27;schedule&#x27;</span></span><br><span class="line">    <span class="attr">runs-on:</span> <span class="string">ubuntu-latest</span></span><br><span class="line">    <span class="attr">steps:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">uses:</span> <span class="string">actions/checkout@v4</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">uses:</span> <span class="string">astral-sh/setup-uv@v5</span></span><br><span class="line">        <span class="attr">with:</span> &#123; <span class="attr">enable-cache:</span> <span class="literal">true</span> &#125;</span><br><span class="line">      <span class="bullet">-</span> <span class="attr">run:</span> <span class="string">uv</span> <span class="string">sync</span> <span class="string">--frozen</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">run:</span> <span class="string">uv</span> <span class="string">run</span> <span class="string">pytest</span> <span class="string">tests</span> <span class="string">-q</span> <span class="string">-m</span> <span class="string">&quot;integration or slow&quot;</span> <span class="string">--maxfail=3</span></span><br><span class="line">    <span class="attr">schedule:</span></span><br><span class="line">      <span class="bullet">-</span> <span class="attr">cron:</span> <span class="string">&quot;0 18 * * *&quot;</span></span><br></pre></td></tr></table></figure>
+<p>mypy <code>--strict</code> 不是一步到位：按 09 篇&quot;基线 + 增量收紧&quot;，先对 <code>src/</code> 非严格跑出基线记账，新代码强制 strict。本项目最终 <code>mypy src --strict</code> 输出 <code>Success: no issues found in 5 source files</code>（那次 <code>message.content or &quot;&quot;</code> 的修复就是它逼出来的）。</p>
+<h2 id="8-readme-测试章节模板"><a class="markdownIt-Anchor" href="#8-readme-测试章节模板"></a> 8. README 测试章节模板</h2>
+<p>写进项目 README，让&quot;怎么跑测试&quot;零口口相传：</p>
+<figure class="highlight markdown"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"><span class="section">## 测试</span></span><br><span class="line"></span><br><span class="line"><span class="code">    # 本地全量（约 1 秒）</span></span><br><span class="line"><span class="code">    uv sync --frozen &amp;&amp; uv run pytest tests -q</span></span><br><span class="line"><span class="code"></span></span><br><span class="line"><span class="code">    # 只跑单元层（最快反馈）</span></span><br><span class="line"><span class="code">    uv run pytest tests/unit -q</span></span><br><span class="line"><span class="code"></span></span><br><span class="line"><span class="code">    # 覆盖率与门禁</span></span><br><span class="line"><span class="code">    uv run pytest tests --cov --cov-fail-under=90</span></span><br><span class="line"><span class="code"></span></span><br><span class="line"><span class="bullet">-</span> 分层：tests/unit（毫秒级，无外部依赖）/ tests/integration（真实 FS、HTTP 传输桩，标记 integration）</span><br><span class="line"><span class="bullet">-</span> 覆盖率门禁 90%，重点模块（workspace/agent）100%；adapters 的环境分支接受不覆盖</span><br><span class="line"><span class="bullet">-</span> flaky 测试：发现即提 issue 并标记 flaky，一周内修复或删除（见 docs/flaky-policy.md）</span><br><span class="line"><span class="bullet">-</span> 修 bug 的流程：先写复现测试（红）→ 修复（绿）→ 用例永久保留</span><br></pre></td></tr></table></figure>
+<p>模板四要素：<strong>跑法命令、分层说明、门禁数字、异常处理政策</strong>——新人 clone 到第一条绿输出之间不该超过五分钟。</p>
+<h2 id="9-面试高频问题清单20-题带要点"><a class="markdownIt-Anchor" href="#9-面试高频问题清单20-题带要点"></a> 9. 面试高频问题清单（20 题带要点）</h2>
+<ol>
+<li><strong>单元测试和集成测试的边界怎么定？</strong> 看真实 I/O 与真实协作；单元层测逻辑分支、集成层测真契约，比例随项目类型（金字塔 vs 奖杯）。</li>
+<li><strong>什么是好的单元测试？</strong> FIRST：快/独立/可重复/自校验/及时；红了能直接指向坏的哪个行为。</li>
+<li><strong>pytest 的 assert 为什么比 unittest 强？</strong> 导入期 AST 断言重写，输出中间子表达式值；helper 里要 register_assert_rewrite。</li>
+<li><strong>fixture 的作用域怎么选？</strong> 默认 function；昂贵只读资源才升 module/session；宽作用域禁放可变状态。</li>
+<li><strong><a target="_blank" rel="noopener" href="http://conftest.py">conftest.py</a> 是什么？</strong> 按目录层级自动加载的 pytest 配置/fixture 载体；子目录同名 fixture 覆盖上层，实现分层。</li>
+<li><strong>Mock/Stub/Spy/Fake 的区别？</strong> Stub 管输入、Spy/Mock 管交互（事后/事前）、Fake 是有真实行为的轻实现、Dummy 填位。</li>
+<li><strong>什么时候不该用 mock？</strong> 不 mock 你不拥有的接口（第三方 SDK）——收进自家端口再造替身；状态型依赖优先 Fake。</li>
+<li><strong>patch 常见的坑？</strong> patch 定义处对 from-import 无效（要 patch 使用处）、属性名/模块名写错、值拷贝在导入期固化——三类现场要能复述。</li>
+<li><strong>什么是 property-based 测试？</strong> 陈述普适性质（往返/不变量/参考模型等价），引擎生成+缩小反例；适合解析器、纯算法、有状态组件。</li>
+<li><strong>TDD 的红绿重构是什么？你的实践节奏？</strong> 测试先行的心智模型；实践中&quot;新代码先行/同期，遗留代码 characterization 先行&quot;。</li>
+<li><strong>什么是 seam（接缝）？</strong> Feathers：不编辑现场就能改变行为的点；构造函数注入是最简 object seam，链接期替换是 C/C++ 的 link seam。</li>
+<li><strong>接手无测试的遗留代码第一步做什么？</strong> characterization 测试锁现状（值实测），再重构；改行为时先改测试。</li>
+<li><strong>测试代码要不要 DRY？</strong> setup 层大胆去重，断言层宁可重复；错误的抽象比重复贵（Sandi Metz）。</li>
+<li><strong>flaky 测试怎么治理？</strong> 识别→隔离（quarantine 不阻塞但限期）→归因（sleep/端口/环境泄漏/时区清单）→超期即删；重试必须留记录。</li>
+<li><strong>覆盖率 100% 为什么不是目标？</strong> 它是&quot;哪些行从未执行&quot;的诊断指标；无断言测试与分支盲区不被它反映；正解是改动行覆盖门禁。</li>
+<li><strong>静态类型检查在测试体系里的位置？</strong> 零成本全量类型层测试；None 流入、Optional 返回这类 bug 的第一道闸；基线+增量 strict 落地。</li>
+<li><strong>为什么要 fuzzing？测试用例不够吗？</strong> 示例/性质测试的输入空间仍是人定义的；覆盖引导变异能到达人想不到的深层路径，配 ASan 抓内存 UB。</li>
+<li><strong>基准测试为什么忽高忽低？</strong> 频率调节/后台进程/缓存冷热/GC/常量折叠与死代码；纪律是预热、多次 repeat、报 min、同环境对比。</li>
+<li><strong>C++ 测试和 Python 测试最大的差异？</strong> 替身机制（链接期 vs 运行时）、内存与 UB 需 Sanitizer 兜底、死亡测试把崩溃变规格；双语言各测各的母语。</li>
+<li><strong>你如何把测试文化带进团队？</strong> 门禁自动化（红不可合并）+ 分层反馈（PR 十分钟内）+ flaky 治理条款 + README 测试文档——机制优先于号召。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>五步流程完整落地：characterization（5 绿）→ seam 手术（端口/适配器/注入）→ 单元测试（抓出截断差一 bug）→ Fake 替身测业务、可注入传输测适配器 → 集成测试（符号链接逃逸、SDK 契约）；</li>
+<li>三次&quot;测试/类型检查抓 bug&quot;的实证：截断差一（8001&gt;8000）、<code>message.content</code> 为 <code>Optional</code>（mypy strict）、respx 对自建 client 失效（改设计注入）；</li>
+<li>CI 门禁双 job + nightly；覆盖率 96% 且说明缺口理由；mypy --strict 收官；</li>
+<li>README 测试章节四要素：跑法、分层、门禁数字、flaky 政策；</li>
+<li>20 题面试清单覆盖全系列——答不出&quot;为什么&quot;的题，回到对应章节重读。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>把本章 <code>agentutils</code> 完整敲进本地仓库并跑通 13 条测试；然后给 <code>Workspace.list_dir</code> 补一个&quot;空目录返回空表&quot;的用例，体会&quot;先想断言再想实现&quot;。</li>
+<li>给 <code>NotesAgent</code> 加&quot;多轮对话记忆&quot;（<code>history: list[tuple[str, str]]</code> 参数），先写三条单元测试定义行为（含超长历史截断），再实现到全绿。</li>
+<li>把第 7 节 yaml 落到你的真实项目，跑一次完整 PR 流水线；对每个失败的门禁逐条归因（ruff/mypy/覆盖率），记录修复顺序。</li>
+<li>给 <code>OpenAIClient</code> 补&quot;429 重试&quot;行为：先写契约测试（MockTransport 返回 429 两次再 200），再实现重试，思考重试计数器该不该注入。</li>
+<li>从 20 题里挑你最没把握的 5 题，各写 200 字答案并回读对应章节校对——这一步就是你的面试冲刺清单。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%B5%8B%E8%AF%95/" rel="tag"># 测试</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/11-C++%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%8F%8C%E8%AF%AD%E8%A8%80%E5%B7%A5%E7%A8%8B/" rel="prev" title="11-C++测试与双语言工程">
+                  <i class="fa fa-angle-left"></i> 11-C++测试与双语言工程
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/%E5%BC%BA%E5%8C%96%E5%AD%A6%E4%B9%A0-README/" rel="next" title="强化学习 · 学习路线总览">
+                  强化学习 · 学习路线总览 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

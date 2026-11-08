@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 掌握 x86-64 的 16 个通用寄存器与职责分工，看懂 AT&amp;T 语法下的 mov&#x2F;lea&#x2F;算术&#x2F;比较&#x2F;跳转&#x2F;调用六大类指令。 - 吃透 System V AMD64 调用约定：参数怎么传、栈帧怎么开、caller&#x2F;callee-s…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="02-机器级表示-读懂汇编">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/02-%E6%9C%BA%E5%99%A8%E7%BA%A7%E8%A1%A8%E7%A4%BA-%E8%AF%BB%E6%87%82%E6%B1%87%E7%BC%96/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 掌握 x86-64 的 16 个通用寄存器与职责分工，看懂 AT&amp;T 语法下的 mov&#x2F;lea&#x2F;算术&#x2F;比较&#x2F;跳转&#x2F;调用六大类指令。 - 吃透 System V AMD64 调用约定：参数怎么传、栈帧怎么开、caller&#x2F;callee-s…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T07:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.522Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="网络">
+<meta property="article:tag" content="计算机系统">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/02-%E6%9C%BA%E5%99%A8%E7%BA%A7%E8%A1%A8%E7%A4%BA-%E8%AF%BB%E6%87%82%E6%B1%87%E7%BC%96/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/02-%E6%9C%BA%E5%99%A8%E7%BA%A7%E8%A1%A8%E7%A4%BA-%E8%AF%BB%E6%87%82%E6%B1%87%E7%BC%96/","path":"2026/09/02/02-机器级表示-读懂汇编/","title":"02-机器级表示-读懂汇编"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>02-机器级表示-读懂汇编 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#02-%E6%9C%BA%E5%99%A8%E7%BA%A7%E8%A1%A8%E7%A4%BA%E8%AF%BB%E6%87%82%E6%B1%87%E7%BC%96"><span class="nav-number">1.</span> <span class="nav-text"> 02 - 机器级表示：读懂汇编</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E4%BC%9A%E8%AF%BB%E6%B1%87%E7%BC%96"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 为什么要会读汇编</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%AF%84%E5%AD%98%E5%99%A8%E5%85%A8%E6%99%AF16-%E4%B8%AA%E9%80%9A%E7%94%A8%E5%AF%84%E5%AD%98%E5%99%A8%E4%B8%8E%E5%AE%83%E4%BB%AC%E7%9A%84%E5%88%86%E5%B7%A5"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 寄存器全景：16 个通用寄存器与它们的分工</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%95%B0%E6%8D%AE%E4%BC%A0%E9%80%81%E4%B8%8E%E5%AF%BB%E5%9D%80%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 数据传送与寻址模式</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E7%AE%97%E6%9C%AF-%E6%AF%94%E8%BE%83%E4%B8%8E%E6%9D%A1%E4%BB%B6%E7%A0%81"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 算术、比较与条件码</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E8%B7%B3%E8%BD%AC-callret-%E4%B8%8E%E6%A0%88%E5%B8%A7"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 跳转、call&#x2F;ret 与栈帧</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-system-v-amd64-%E8%B0%83%E7%94%A8%E7%BA%A6%E5%AE%9A%E5%8F%82%E6%95%B0%E4%B8%8E%E8%BF%94%E5%9B%9E%E5%80%BC%E6%80%8E%E4%B9%88%E8%B5%B0"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. System V AMD64 调用约定：参数与返回值怎么走</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%AE%9E%E6%88%98%E5%B7%A5%E5%85%B7%E7%AE%B1objdump-readelf-gdb"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 实战工具箱：objdump &#x2F; readelf &#x2F; gdb</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/02-%E6%9C%BA%E5%99%A8%E7%BA%A7%E8%A1%A8%E7%A4%BA-%E8%AF%BB%E6%87%82%E6%B1%87%E7%BC%96/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="02-机器级表示-读懂汇编 | Yoleen的博客">
+      <meta itemprop="description" content="- 掌握 x86-64 的 16 个通用寄存器与职责分工，看懂 AT&amp;T 语法下的 mov&#x2F;lea&#x2F;算术&#x2F;比较&#x2F;跳转&#x2F;调用六大类指令。 - 吃透 System V AMD64 调用约定：参数怎么传、栈帧怎么开、caller&#x2F;callee-s…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          02-机器级表示-读懂汇编
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 15:00:00" itemprop="dateCreated datePublished" datetime="2026-09-02T15:00:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%B3%BB%E7%BB%9F%E4%B8%8E%E7%BD%91%E7%BB%9C/" itemprop="url" rel="index"><span itemprop="name">计算机系统与网络</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.5k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>13 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 掌握 x86-64 的 16 个通用寄存器与职责分工，看懂 AT&T 语法下的 mov/lea/算术/比较/跳转/调用六大类指令。 - 吃透 System V AMD64 调用约定：参数怎么传、栈帧怎么开、caller/callee-s…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="02-机器级表示读懂汇编"><a class="markdownIt-Anchor" href="#02-机器级表示读懂汇编"></a> 02 - 机器级表示：读懂汇编</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>掌握 x86-64 的 16 个通用寄存器与职责分工，看懂 AT&amp;T 语法下的 <code>mov</code>/<code>lea</code>/算术/比较/跳转/调用六大类指令。</li>
+<li>吃透 System V AMD64 调用约定：参数怎么传、栈帧怎么开、caller/callee-saved 谁负责保存、red zone 是什么。</li>
+<li>会用 <code>objdump -d</code>、<code>readelf</code>、<code>gdb</code> 三个工具把&quot;一个 C 函数&quot;拆到寄存器和栈的层面，亲眼看到 -O0 与 -O2 的产物差异。</li>
+</ul>
+<p>前置：01 章的 ISA 概念与 gcc 四阶段；操作系统系列 04 篇（地址空间）有助于理解栈，但不强求。</p>
+<h2 id="1-为什么要会读汇编"><a class="markdownIt-Anchor" href="#1-为什么要会读汇编"></a> 1. 为什么要会读汇编</h2>
+<p>三个你绕不开的场景：① <strong>性能归因</strong>——性能工程系列的火焰图把热点指到一个函数，但&quot;慢在哪一行&quot;只有汇编能回答（向量化了没有？内联了没有？多了几次访存？）；② <strong>没有源码的依赖库</strong>——线上 so 出问题，objdump 是最后的眼睛；③ <strong>验证编译器</strong>——你写的&quot;优化&quot;可能被编译器做得更好或完全忽略（04 章的 cmov 实验就是现场）。</p>
+<p>本系列默认 gcc 的 <strong>AT&amp;T 语法</strong>（objdump 默认输出），与 Intel 语法的显著差异：源操作数在前（<code>mov %rax, %rbx</code> 是 rbx←rax，与 Intel 相反）、寄存器带 <code>%</code>、立即数带 <code>$</code>、内存寻址用 <code>offset(base,index,scale)</code>。<strong>经验做法</strong>：看惯一种语法后，用 <code>objdump -d -M intel</code> 可切换到 Intel 语法，两边都认识会省很多查资料的功夫。</p>
+<h2 id="2-寄存器全景16-个通用寄存器与它们的分工"><a class="markdownIt-Anchor" href="#2-寄存器全景16-个通用寄存器与它们的分工"></a> 2. 寄存器全景：16 个通用寄存器与它们的分工</h2>
+<p>x86-64 有 16 个 64 位通用寄存器（CSAPP 第 3 章图 3-2；完整细节见 Intel SDM Vol.1 第 3 章）。名字里的历史包袱要认清：<code>rax</code> 的前身是 16 位的 <code>ax</code>，<code>e</code> 前缀（<code>eax</code>）是 32 位时代加的，<code>r</code> 前缀（<code>rax</code>）是 64 位时代加的——所以 <code>mov %eax, %eax</code> 是把 rax 的低 32 位&quot;扩展&quot;回自己（高 32 位清零）。</p>
+<table>
+<thead>
+<tr>
+<th>寄存器</th>
+<th>低 32 位</th>
+<th>职责（System V AMD64 ABI）</th>
+<th>保存责任</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>%rax</code></td>
+<td><code>%eax</code></td>
+<td>累加器 / <strong>函数返回值</strong> / 乘除法隐式操作数</td>
+<td>caller-saved</td>
+</tr>
+<tr>
+<td><code>%rbx</code></td>
+<td><code>%ebx</code></td>
+<td>基址（历史）</td>
+<td>callee-saved</td>
+</tr>
+<tr>
+<td><code>%rcx</code></td>
+<td><code>%ecx</code></td>
+<td>计数器 / <strong>第 4 参数</strong></td>
+<td>caller-saved</td>
+</tr>
+<tr>
+<td><code>%rdx</code></td>
+<td><code>%edx</code></td>
+<td>数据 / <strong>第 3 参数</strong> / 除法高位</td>
+<td>caller-saved</td>
+</tr>
+<tr>
+<td><code>%rsi</code></td>
+<td><code>%esi</code></td>
+<td>源索引 / <strong>第 2 参数</strong></td>
+<td>caller-saved</td>
+</tr>
+<tr>
+<td><code>%rdi</code></td>
+<td><code>%edi</code></td>
+<td>目的索引 / <strong>第 1 参数</strong></td>
+<td>caller-saved</td>
+</tr>
+<tr>
+<td><code>%rbp</code></td>
+<td><code>%ebp</code></td>
+<td>栈帧基址指针（-O2 常省略）</td>
+<td>callee-saved</td>
+</tr>
+<tr>
+<td><code>%rsp</code></td>
+<td><code>%esp</code></td>
+<td><strong>栈顶指针</strong>（方向向下）</td>
+<td>专用</td>
+</tr>
+<tr>
+<td><code>%r8</code>~<code>%r9</code></td>
+<td>—</td>
+<td><strong>第 5/6 参数</strong></td>
+<td>caller-saved</td>
+</tr>
+<tr>
+<td><code>%r10</code>~<code>%r11</code></td>
+<td>—</td>
+<td>临时（<code>r11</code> 常被 PLT 用）</td>
+<td>caller-saved</td>
+</tr>
+<tr>
+<td><code>%r12</code>~<code>%r15</code></td>
+<td>—</td>
+<td>临时</td>
+<td>callee-saved</td>
+</tr>
+</tbody>
+</table>
+<p>另有专用寄存器：<code>%rip</code>（指令指针，程序计数器；x86-64 才能对它做相对寻址）、16 个 XMM 寄存器（<code>%xmm0</code>~<code>%xmm15</code>，浮点参数与 SIMD 用，04 章展开）。<strong>caller-saved = 调用别人后内容可能被毁，调用者自己负责保存；callee-saved = 被调用者保证原样归还。</strong> 这个分工决定了汇编里&quot;谁在 push/pop&quot;。</p>
+<h2 id="3-数据传送与寻址模式"><a class="markdownIt-Anchor" href="#3-数据传送与寻址模式"></a> 3. 数据传送与寻址模式</h2>
+<p><code>mov</code> 家族是汇编里出现频率最高的指令，后缀表示操作数宽度：<code>movb</code>（1 字节）、<code>movw</code>（2）、<code>movl</code>（4）、<code>movq</code>（8）。注意两个特例（CSAPP 3.4.2）：<code>movzbl</code> 是&quot;零扩展传送&quot;（byte→long 补 0），<code>movsbl</code> 是&quot;符号扩展传送&quot;（补符号位）——<strong>扩展比缩短要多一条指令</strong>，因为高位必须被显式填上，这直接对应 05 章的符号扩展陷阱。</p>
+<p>五种内存寻址模式（ Intel SDM Vol.1 第 3.7.5 节，<code>D(Rb, Ri, S)</code> 形式，有效地址 = Rb + Ri×S + D）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">写法              含义                        等价 C</span><br><span class="line">(%rax)            *(rax)                      p[0]</span><br><span class="line">0x8(%rax)         *(rax+8)                    p[1]   （p 为 long*）</span><br><span class="line">(%rax,%rcx,4)     *(rax + rcx*4)              a[i]   （a 为 int*）</span><br><span class="line">0xc(%rax,%rcx,4)  *(rax + rcx*4 + 12)         a[i+3]</span><br><span class="line">symbol(%rip)      RIP 相对寻址：全局变量/常量    g     （位置无关代码的基础）</span><br></pre></td></tr></table></figure>
+<p>比例因子 S 只能是 1/2/4/8——因为它服务于&quot;按元素宽度步进数组&quot;，这正是 C 指针运算的机器真身：<code>a[i]</code> 的 <code>i</code> 乘的是<strong>元素大小</strong>而不是 1。</p>
+<p><code>lea</code>（load effective address）值得单独说：它本意是&quot;算地址不访存&quot;，但被编译器发扬成了<strong>免费的算术单元</strong>——</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">lea (%rdi,%rsi,4), %eax    # eax = rdi + rsi*4，未访存！</span><br><span class="line">lea 0x7(,%rax,8), %eax     # eax = rax*8 + 7，一条指令完成&quot;乘 8 加 7&quot;</span><br></pre></td></tr></table></figure>
+<p>一条 <code>lea</code> 一次算三数之和（含一次移位），且不占用算术标志位，-O2 的代码里到处是&quot;挂羊头卖狗肉&quot;的 lea 算术（CSAPP 3.5.1）。<strong>经验做法</strong>：读优化代码时不要看到 <code>lea</code> 就以为在取地址。</p>
+<h2 id="4-算术-比较与条件码"><a class="markdownIt-Anchor" href="#4-算术-比较与条件码"></a> 4. 算术、比较与条件码</h2>
+<p>算术类指令一图流：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">add %rbx, %rax        # rax += rbx</span><br><span class="line">sub %rbx, %rax        # rax -= rbx</span><br><span class="line">imul %rbx, %rax       # rax *= rbx（有符号乘，结果取低 64 位）</span><br><span class="line">inc/dec %rax          # ++/--</span><br><span class="line">neg %rax              # rax = -rax（补码取负，见 05 章）</span><br><span class="line">shl/shr/sar $3, %rax  # 左移3 / 逻辑右移（补0）/ 算术右移（补符号）</span><br><span class="line">xor %rax, %rax        # 清零的惯用法（比 mov $0 短）</span><br></pre></td></tr></table></figure>
+<p>真正让 C 的 <code>if</code> 能落地的是<strong>条件码（condition codes）</strong>：CPU 有一组一位标志寄存器（ZF 零、SF 符号、CF 进位、OF 溢出），算术/比较指令执行时顺带设置它们。<code>cmp %rbx, %rax</code> 实际执行 <code>rax - rbx</code> 但<strong>丢弃结果只留标志</strong>，随后的条件跳转读标志做决定：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">cmp %rsi, %rdi</span><br><span class="line">jl  L_less        # rdi &lt; rsi（有符号：SF≠OF）</span><br><span class="line">jle L_le          # ≤；无符号用 jb/jbe（CF），记法 j+后缀对应</span><br><span class="line">jmp L_end         # 无条件跳转</span><br></pre></td></tr></table></figure>
+<p>有符号/无符号条件码是两套（<code>l/g</code> vs <code>b/a</code>），C 代码里 <code>int</code> 与 <code>unsigned</code> 比较的坑（05 章）在机器层就是编译器选了哪套条件码。除了跳转，还有 <code>setcc</code>（把条件写进 8 位寄存器）和 <code>cmovcc</code>（条件传送，分支消无化，04 章的主角）——它们一起构成&quot;无分支编程&quot;的工具箱。</p>
+<h2 id="5-跳转-callret-与栈帧"><a class="markdownIt-Anchor" href="#5-跳转-callret-与栈帧"></a> 5. 跳转、call/ret 与栈帧</h2>
+<p>x86-64 的栈向低地址增长，<code>push</code> = rsp 减 8 + 写内存，<code>pop</code> 反之。一次函数调用的栈布局：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">    高地址</span><br><span class="line">┌─────────────┐</span><br><span class="line">│ caller 栈帧  │</span><br><span class="line">│  ...        │</span><br><span class="line">├─────────────┤ ◄── 进入 callee 时的 %rsp</span><br><span class="line">│ 返回地址     │   call 指令自动 push 的（rip+偏移）</span><br><span class="line">├─────────────┤ ◄── push %rbp 之后的 %rbp 指向这里</span><br><span class="line">│ 保存的 %rbp  │</span><br><span class="line">├─────────────┤</span><br><span class="line">│ 局部变量/     │</span><br><span class="line">│ 溢出的参数    │   第 7 个起参数放这里（见下节）</span><br><span class="line">└─────────────┘ ◄── 当前 %rsp（低地址）</span><br></pre></td></tr></table></figure>
+<p>三个关键事实：① <strong><code>call</code> 一条指令做了两件事</strong>：把返回地址压栈 + 跳转；<code>ret</code> 弹出返回地址跳回去——这解释了为什么栈溢出（递归太深）会&quot;毁掉&quot;返回路径；② <code>rbp</code> 是可选的帧指针，-O2 下常被省略（rbp 挪去当通用寄存器），靠 <code>.cfi_*</code> 伪指令和 unwind 信息回溯栈，这就是火焰图仍能在无帧指针的二进制上工作却偶尔栈断的原因（性能工程 03 篇的坑）；③ <strong><code>leave</code> 等价于 <code>mov %rbp,%rsp; pop %rbp</code></strong>，是函数尾声的打包写法。</p>
+<h2 id="6-system-v-amd64-调用约定参数与返回值怎么走"><a class="markdownIt-Anchor" href="#6-system-v-amd64-调用约定参数与返回值怎么走"></a> 6. System V AMD64 调用约定：参数与返回值怎么走</h2>
+<p>Linux 上 x86-64 的函数调用规则由 <strong>System V Application Binary Interface (AMD64 Architecture Processor Supplement)</strong> 定义（下称 SysV ABI，2.3.2 节）。核心条款：</p>
+<ul>
+<li><strong>整型/指针参数按顺序走 6 个寄存器：<code>rdi, rsi, rdx, rcx, r8, r9</code></strong>，第 7 个起从右往左依次压栈，栈上每个参数 8 字节对齐。</li>
+<li><strong>浮点参数走 <code>xmm0</code>~<code>xmm7</code></strong>，返回值：整数在 <code>rax</code>，浮点在 <code>xmm0</code>。</li>
+<li><strong>栈指针 16 字节对齐</strong>：在 <code>call</code> 指令执行<strong>前</strong> rsp 必须 16 字节对齐（call 压完返回地址后进入函数时 rsp ≡ 8 mod 16）。SSE 指令 <code>movaps</code> 要求 16 字节对齐，对齐破了会直接段错误——手写汇编最常见的翻车点。</li>
+<li><strong>red zone</strong>：进入函数后、真正下探栈之前，rsp 之下的 <strong>128 字节</strong>区域允许函数直接使用（叶函数不用改 rsp 就有临时空间）。信号处理和中断会踩到 red zone，所以内核态不适用（内核用单独的内核栈）。</li>
+<li><strong>ARM 注</strong>：ARM64 的约定是 AAPCS64：参数走 <code>x0</code>~<code>x7</code>（8 个），返回 <code>x0</code>，无 red zone，链接寄存器 <code>lr</code>（x30）保存返回地址——ARM 的 call 不压栈，而是写进 lr，需要更深的调用时才把 lr 入栈。这是两边汇编最重要的形状差异。</li>
+</ul>
+<p>一个完整对照实验。C 代码：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// abi.c —— 观察参数如何走寄存器</span></span><br><span class="line"><span class="type">int</span> <span class="title function_">add6</span><span class="params">(<span class="type">int</span> a, <span class="type">int</span> b, <span class="type">int</span> c, <span class="type">int</span> d, <span class="type">int</span> e, <span class="type">int</span> f)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> a + b + c + d + e + f;</span><br><span class="line">&#125;</span><br><span class="line"><span class="type">int</span> <span class="title function_">add7</span><span class="params">(<span class="type">int</span> a, <span class="type">int</span> b, <span class="type">int</span> c, <span class="type">int</span> d, <span class="type">int</span> e, <span class="type">int</span> f, <span class="type">int</span> g)</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> add6(a, b, c, d, e, f) + g;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">$ gcc -O0 -S abi.c -o abi.s &amp;&amp; sed -n <span class="string">&#x27;/^add6:/,/^add7:/p&#x27;</span> abi.s | grep -v <span class="string">&#x27;\.&#x27;</span></span><br><span class="line">add6:</span><br><span class="line">	pushq	%rbp</span><br><span class="line">	movq	%rsp, %rbp</span><br><span class="line">	movl	%edi, -20(%rbp)      <span class="comment"># a ← edi：第 1 参数</span></span><br><span class="line">	movl	%esi, -24(%rbp)      <span class="comment"># b ← esi</span></span><br><span class="line">	movl	%edx, -28(%rbp)      <span class="comment"># c ← edx</span></span><br><span class="line">	movl	%ecx, -32(%rbp)      <span class="comment"># d ← ecx</span></span><br><span class="line">	movl	%r8d, -36(%rbp)      <span class="comment"># e ← r8</span></span><br><span class="line">	movl	%r9d, -40(%rbp)      <span class="comment"># f ← r9：恰好用满 6 个</span></span><br><span class="line">	movl	-28(%rbp), %edx</span><br><span class="line">	movl	-24(%rbp), %eax</span><br><span class="line">	addl	%edx, %eax</span><br><span class="line">	...</span><br></pre></td></tr></table></figure>
+<p>再看 add7 的调用点（<code>gcc -O0 -c abi.c &amp;&amp; objdump -d abi.o</code>）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">sub    $0x10,%rsp          # 开 16 字节栈空间</span><br><span class="line">movl   %edi,0x8(%rsp)      # 第 7 个参数 g 被压到栈上！</span><br><span class="line">mov    %r9d,%r9d</span><br><span class="line">...</span><br><span class="line">call   3f &lt;add7+0x3f&gt;      # call 后 rsp ≡ 8 mod 16，符合约定</span><br><span class="line">add    $0x10,%rsp</span><br></pre></td></tr></table></figure>
+<p>（第 7 参数确实走了栈；调用点负责把它放好——参数压栈是 caller 的义务。）</p>
+<h2 id="7-实战工具箱objdump-readelf-gdb"><a class="markdownIt-Anchor" href="#7-实战工具箱objdump-readelf-gdb"></a> 7. 实战工具箱：objdump / readelf / gdb</h2>
+<p><strong>objdump</strong>——反汇编主力：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">$ gcc -O2 -c abi.c -o abi.o &amp;&amp; objdump -d abi.o</span><br><span class="line">0000000000000000 &lt;add6&gt;:</span><br><span class="line">   0:	8d 04 37             	lea    (%rdi,%rsi,1),%eax   <span class="comment"># a+b</span></span><br><span class="line">   3:	01 d0                	add    %edx,%eax            <span class="comment"># +c</span></span><br><span class="line">   5:	01 c8                	add    %ecx,%eax            <span class="comment"># +d</span></span><br><span class="line">   7:	44 01 c0             	add    %r8d,%eax            <span class="comment"># +e</span></span><br><span class="line">   a:	44 01 c8             	add    %eax,%r9d            <span class="comment"># +f（结果直接进 r9d）</span></span><br><span class="line">   d:	44 89 c8             	mov    %r9d,%eax</span><br><span class="line">  10:	c3                   	ret</span><br></pre></td></tr></table></figure>
+<p>对比 01 章的 -O0 版本：<strong>没有 push rbp、没有一次访存</strong>——优化把&quot;变量放栈上再搬来搬去&quot;整个抹掉了，寄存器间直接算。<code>readelf -S abi.o</code> 可看节表（<code>.text</code> 代码、<code>.rodata</code> 只读数据、<code>.data</code> 已初始化数据、<code>.bss</code> 未初始化数据占位），与 01 章的链接故事衔接。</p>
+<p><strong>gdb</strong>——单步看栈。完整实操脚本（<code>gcc -O0 -g abi.c -o abi_g</code> 先带调试信息编译）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line">$ gdb -q ./abi_g</span><br><span class="line">(gdb) b add6                  <span class="comment"># 在 add6 下断点</span></span><br><span class="line">Breakpoint 1 at 0x1149</span><br><span class="line">(gdb) run</span><br><span class="line">Breakpoint 1, 0x0000555555555149 <span class="keyword">in</span> add6 ()</span><br><span class="line">(gdb) info registers rdi rsi rdx rcx r8 r9   <span class="comment"># 参数真的在寄存器里</span></span><br><span class="line">rdi            0x1                 1</span><br><span class="line">rsi            0x2                 2</span><br><span class="line">rdx            0x3                 3</span><br><span class="line">rcx            0x4                 4</span><br><span class="line">r8             0x5                 5</span><br><span class="line">r9             0x6                 6</span><br><span class="line">(gdb) x/4gx <span class="variable">$rsp</span>              <span class="comment"># 看 rsp 处的栈内存：8 字单位</span></span><br><span class="line">0x7fffffffe268:	0x0000555555555192	0x0000000000000000</span><br><span class="line">                └── 这就是 call 压入的返回地址 ──┘</span><br><span class="line">(gdb) p *(long*)(<span class="variable">$rsp</span>) == 0x555555555192 ? <span class="string">&quot;返回地址在栈顶&quot;</span> : <span class="string">&quot;?&quot;</span></span><br><span class="line">返回地址在栈顶</span><br><span class="line">(gdb) si                      <span class="comment"># 单步一条指令</span></span><br><span class="line">(gdb) bt                      <span class="comment"># 回溯调用栈</span></span><br><span class="line"><span class="comment">#0  add6 () at abi.c:2</span></span><br><span class="line"><span class="comment">#1  add7 (a=1, b=2, c=3, d=4, e=5, f=6, g=7) at abi.c:6</span></span><br><span class="line"><span class="comment">#2  main () at abi.c:9</span></span><br></pre></td></tr></table></figure>
+<p>（地址里的 <code>0x5555...</code> 是 ASLR 关闭态下的典型基址；你的数字必然不同，看形状。）<code>bt</code> 能回溯正是靠着 5 节说的返回地址链/栈帧链；<code>disassemble add6</code> 可在 gdb 里直接反汇编，<code>layout asm</code> 开汇编窗口边跑边看。<strong>经验做法</strong>：调程序卡死时 <code>gdb -p &lt;pid&gt;</code> 附上去 <code>bt</code>，看它停在哪个系统调用——比重启复现快得多。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“汇编很难，先学完 C++ 再说”</strong>：常用指令就 20 来个（mov/lea/add/cmp/jmp/call/push/pop/ret 占绝大头），其余现查。读不懂的真实原因是没建立&quot;寄存器=变量、内存=数组/栈&quot;的映射，本篇 2~5 节就是那张映射表。</li>
+<li><strong>“AT&amp;T 的 <code>mov %rax, %rbx</code> 是 rax←rbx”</strong>：反了。AT&amp;T 是源在前，Intel 语法才是目的在前。判别技巧：看偏移方向——<code>mov %eax, -4(%rbp)</code> 只能是&quot;寄存器→内存&quot;，因为右边是地址。</li>
+<li><strong>“call 就是跳转”</strong>：call 跳转前先把返回地址压栈，这 8 字节影响 rsp 对齐（进函数时 rsp ≡ 8 mod 16）和栈回溯。手写汇编写崩，九成是忘了这一条或忘了 16 字节对齐。</li>
+<li><strong>“red zone 一直可用”</strong>：它是叶函数的特权——一旦你 call 别人，red zone 就成了别人的栈。信号处理函数运行在你&quot;以为的&quot; red zone 上，所以依赖 red zone 的代码在信号场景会坏（内核栈不用 red zone 正是为此，SysV ABI 3.2.2）。</li>
+<li><strong>“-O2 只是 -O0 的加速版”</strong>：它经常改变程序形状——省略帧指针、内联、把分支变 cmov、循环变 SIMD（04 章）。在 -O0 上做的性能结论对 -O2 几乎无效；性能实验必须用与生产相同的优化级别编译。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>16 个通用寄存器分工：前 6 参数 <code>rdi/rsi/rdx/rcx/r8/r9</code>、返回 <code>rax</code>、栈 <code>rsp</code>、帧 <code>rbp</code>（-O2 可省）；caller/callee-saved 决定谁 push 谁。</li>
+<li>寻址 <code>D(Rb,Ri,S)</code> 是 C 指针运算的真身（比例因子=元素宽度）；<code>lea</code> 是免访存的地址算术，-O2 里当三数加法器用。</li>
+<li>条件码 + <code>jcc</code>/<code>setcc</code>/<code>cmovcc</code> 把 C 的 if 落到机器；有符号（l/g）与无符号（b/a）条件码是两套，05 章的符号坑在这里现形。</li>
+<li>SysV AMD64 约定：6 寄存器传参、第 7 起走栈、16 字节栈对齐、red zone 128 字节（叶函数专用）；ARM64 是 8 寄存器 + lr 寄存器返回，call 不自动压栈。</li>
+<li>工具链：<code>objdump -d</code> 看产物、<code>readelf -S</code> 看节、<code>gdb</code> 断点 + <code>info registers</code> + <code>x/4gx $rsp</code> + <code>bt</code> 把栈帧&quot;看&quot;出来；-O0 与 -O2 的产物形状完全不同，性能结论必须匹配生产编译选项。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>把 01 章练习里的 <code>add</code> 函数改成返回 <code>a*8 + 3</code>，用 <code>gcc -O2 -S</code> 编译，验证产物是否只有一条 <code>lea</code>（提示：<code>lea 0x3(,%rdi,8), %eax</code>）。再试 <code>a*12+5</code>，观察编译器如何拆（两次 lea + add）。</li>
+<li>写一个 8 参数的函数 <code>int f8(int a,...,int h)</code>，用 <code>objdump -d</code> 找出哪两个参数走了栈、它们的偏移是多少，并解释为什么偏移里含返回地址的 8 字节。</li>
+<li>用 gdb 复现 7 节实验，但在 <code>add7</code> 内部下断点，执行 <code>x/6gx $rsp</code> 把栈上 6 个 8 字节槽位逐个打印，标出哪个槽是第 7 参数、哪个是对齐填充。</li>
+<li>用 <code>objdump -d -M intel</code> 重新反汇编 abi.o，把你看到的 <code>mov eax, edi</code> 与 AT&amp;T 版本逐条对应，总结两种语法的三条差异。</li>
+<li>（与 OS 系列联动）写一个会栈溢出的无限递归 C 程序，<code>ulimit -s unlimited</code> 前后分别运行观察崩溃点变化；用 <code>gdb</code> 跑崩溃现场 <code>bt</code>，解释为什么回溯栈是一长串相同的帧（呼应 5 节&quot;返回地址链&quot;）。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%B3%BB%E7%BB%9F/" rel="tag"># 计算机系统</a>
+              <a href="/tags/%E7%BD%91%E7%BB%9C/" rel="tag"># 网络</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/01-%E4%BB%8E%E6%99%B6%E4%BD%93%E7%AE%A1%E5%88%B0%E7%A8%8B%E5%BA%8F/" rel="prev" title="01-从晶体管到程序">
+                  <i class="fa fa-angle-left"></i> 01-从晶体管到程序
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/03-%E7%BC%93%E5%AD%98%E5%B1%82%E7%BA%A7%E4%B8%8E%E5%B1%80%E9%83%A8%E6%80%A7/" rel="next" title="03-缓存层级与局部性">
+                  03-缓存层级与局部性 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

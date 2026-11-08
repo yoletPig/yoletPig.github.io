@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 用前 11 章的框架拆解四个真实系统：Redis、etcd、ZooKeeper、Cassandra，看懂它们每条设计选择对应哪章理论。 - 论证&#39;大模型训练为什么天生是分布式问题&#39;，掌握数据并行的 AllReduce（含 Ring Al…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="12-分布式存储案例与LLM时代的分布式">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/12-%E5%88%86%E5%B8%83%E5%BC%8F%E5%AD%98%E5%82%A8%E6%A1%88%E4%BE%8B%E4%B8%8ELLM%E6%97%B6%E4%BB%A3%E7%9A%84%E5%88%86%E5%B8%83%E5%BC%8F/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 用前 11 章的框架拆解四个真实系统：Redis、etcd、ZooKeeper、Cassandra，看懂它们每条设计选择对应哪章理论。 - 论证&#39;大模型训练为什么天生是分布式问题&#39;，掌握数据并行的 AllReduce（含 Ring Al…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T08:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.550Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/12-%E5%88%86%E5%B8%83%E5%BC%8F%E5%AD%98%E5%82%A8%E6%A1%88%E4%BE%8B%E4%B8%8ELLM%E6%97%B6%E4%BB%A3%E7%9A%84%E5%88%86%E5%B8%83%E5%BC%8F/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/12-%E5%88%86%E5%B8%83%E5%BC%8F%E5%AD%98%E5%82%A8%E6%A1%88%E4%BE%8B%E4%B8%8ELLM%E6%97%B6%E4%BB%A3%E7%9A%84%E5%88%86%E5%B8%83%E5%BC%8F/","path":"2026/09/03/12-分布式存储案例与LLM时代的分布式/","title":"12-分布式存储案例与LLM时代的分布式"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>12-分布式存储案例与LLM时代的分布式 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#12-%E5%88%86%E5%B8%83%E5%BC%8F%E5%AD%98%E5%82%A8%E6%A1%88%E4%BE%8B%E4%B8%8Ellm%E6%97%B6%E4%BB%A3%E7%9A%84%E5%88%86%E5%B8%83%E5%BC%8F"><span class="nav-number">1.</span> <span class="nav-text"> 12 - 分布式存储案例与LLM时代的分布式</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E6%A1%88%E4%BE%8B%E6%8B%86%E8%A7%A3%E5%9B%9B%E4%B8%AA%E7%B3%BB%E7%BB%9F%E5%90%84%E6%98%AF%E5%93%AA%E5%87%A0%E7%AB%A0%E7%9A%84%E7%BB%84%E5%90%88"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 案例拆解：四个系统各是哪几章的组合</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%A4%A7%E6%A8%A1%E5%9E%8B%E8%AE%AD%E7%BB%83%E6%98%AF%E5%88%86%E5%B8%83%E5%BC%8F%E9%97%AE%E9%A2%98"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 为什么大模型训练是分布式问题</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%95%B0%E6%8D%AE%E5%B9%B6%E8%A1%8C%E4%B8%8E-allreduce%E6%89%8B%E5%86%99-ring-allreduce"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 数据并行与 AllReduce（手写 Ring AllReduce）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%BC%A0%E9%87%8F%E5%B9%B6%E8%A1%8C%E4%B8%8E%E6%B5%81%E6%B0%B4%E7%BA%BF%E5%B9%B6%E8%A1%8C%E7%9B%B4%E8%A7%89"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 张量并行与流水线并行：直觉</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%8F%82%E6%95%B0%E6%9C%8D%E5%8A%A1%E5%99%A8-vs-allreduce"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 参数服务器 vs AllReduce</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E6%8E%A8%E7%90%86%E4%BE%A7%E7%9A%84%E5%88%86%E5%B8%83%E5%BC%8F%E8%A1%94%E6%8E%A5-vlm-stage-8"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 推理侧的分布式（衔接 VLM Stage 8）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/12-%E5%88%86%E5%B8%83%E5%BC%8F%E5%AD%98%E5%82%A8%E6%A1%88%E4%BE%8B%E4%B8%8ELLM%E6%97%B6%E4%BB%A3%E7%9A%84%E5%88%86%E5%B8%83%E5%BC%8F/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="12-分布式存储案例与LLM时代的分布式 | Yoleen的博客">
+      <meta itemprop="description" content="- 用前 11 章的框架拆解四个真实系统：Redis、etcd、ZooKeeper、Cassandra，看懂它们每条设计选择对应哪章理论。 - 论证&#39;大模型训练为什么天生是分布式问题&#39;，掌握数据并行的 AllReduce（含 Ring Al…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          12-分布式存储案例与LLM时代的分布式
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 16:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T16:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">分布式系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>15 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 用前 11 章的框架拆解四个真实系统：Redis、etcd、ZooKeeper、Cassandra，看懂它们每条设计选择对应哪章理论。 - 论证'大模型训练为什么天生是分布式问题'，掌握数据并行的 AllReduce（含 Ring Al…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="12-分布式存储案例与llm时代的分布式"><a class="markdownIt-Anchor" href="#12-分布式存储案例与llm时代的分布式"></a> 12 - 分布式存储案例与LLM时代的分布式</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>用前 11 章的框架拆解四个真实系统：Redis、etcd、ZooKeeper、Cassandra，看懂它们每条设计选择对应哪章理论。</li>
+<li>论证&quot;大模型训练为什么天生是分布式问题&quot;，掌握数据并行的 AllReduce（含 Ring AllReduce 手写模拟）。</li>
+<li>建立张量并行与流水线并行的直觉，分清参数服务器与 AllReduce 两条梯度同步路线。</li>
+<li>概览推理侧的分布式：KV cache 分片、PD 分离，衔接库内 VLM Stage 8 的多机推理。</li>
+</ul>
+<h2 id="1-案例拆解四个系统各是哪几章的组合"><a class="markdownIt-Anchor" href="#1-案例拆解四个系统各是哪几章的组合"></a> 1. 案例拆解：四个系统各是哪几章的组合</h2>
+<p>理论只有一套，组合各显神通。先给四个系统各画一张&quot;配方卡&quot;：</p>
+<table>
+<thead>
+<tr>
+<th>系统</th>
+<th>复制</th>
+<th>一致性/共识</th>
+<th>分区</th>
+<th>定位一句话</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Redis Cluster</td>
+<td>主从 + 哨兵故障切换</td>
+<td>异步复制（无共识）→ 弱一致</td>
+<td>16384 固定 slot（第 06 章）</td>
+<td>低延迟数据结构服务器</td>
+</tr>
+<tr>
+<td>etcd</td>
+<td>Raft 多数派日志（第 05 章）</td>
+<td>线性一致读（ReadIndex/Lease）</td>
+<td>不分区（单 Raft 组，靠内存装）</td>
+<td>一致性元数据小存储</td>
+</tr>
+<tr>
+<td>ZooKeeper</td>
+<td>ZAB（类 Raft 的原子广播）</td>
+<td>写线性一致、读可读旧</td>
+<td>不分区</td>
+<td>协调服务（选主/锁/配置）</td>
+</tr>
+<tr>
+<td>Cassandra</td>
+<td>无主 Dynamo 派生（第 04 章）</td>
+<td>可调一致性（Quorum）</td>
+<td>一致性哈希 + vnode</td>
+<td>高可用写入型宽表</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Redis</strong>：单线程命令执行（OS 09 章 Reactor）+ 内存数据结构；持久化 RDB/AOF；Cluster 用 slot 分区 + gossip 传播路由表（第 11 章）。要点：主从是<strong>异步复制</strong>，哨兵 failover 时&quot;已确认写&quot;可能丢（第 04 章的结论在这里直接适用）——Redis 强在延迟与功能，弱在绝对不丢。</p>
+<p><strong>etcd</strong>：标准 Raft 生产实现（WAL + 快照 + 单节点成员变更），所有写走 Raft 日志多数派，读可选线性一致（ReadIndex）。K8s 用它存全部集群状态。要点：<strong>etcd 是&quot;小而强一致&quot;</strong>——存储量建议 GB 级以内，别拿它当数据库（它是元数据的脑子，不是数据的仓库）。</p>
+<p><strong>ZooKeeper</strong>：ZAB（ZooKeeper Atomic Broadcast，与 Raft 同类的崩溃容错共识，论文 <em>ZooKeeper: Wait-free coordination for Internet-scale Systems</em>, USENIX ATC 2010）。API 形态是文件树 + watch；临时节点（ephemeral）+ 会话超时实现活锁检测，是&quot;选主/服务注册&quot;的经典原料。要点：读默认走 follower（可能旧），要线性一致读需 sync() 前置——第 03 章&quot;贴 CP 标签 ≠ 所有读强一致&quot;的活例。</p>
+<p><strong>Cassandra</strong>：Dynamo 论文的工程化（一致性哈希 + vnode + 可调 W/R + hinted handoff + 读修复），存储模型是宽列族。要点：<strong>写路径极简</strong>（追加 commit log + memtable）→ 写吞吐碾压同类，代价是读放大与 tombstone（删除标记）清理的复杂性——AP 侧的极致取舍。</p>
+<h2 id="2-为什么大模型训练是分布式问题"><a class="markdownIt-Anchor" href="#2-为什么大模型训练是分布式问题"></a> 2. 为什么大模型训练是分布式问题</h2>
+<p>三条硬约束（第 01 章天花板的 LLM 版）：</p>
+<ol>
+<li><strong>放不下</strong>：175B 参数 fp16 权重 350GB + 梯度 350GB + 优化器状态（Adam 两个动量，fp32）1400GB ≈ 2.1TB，单卡 80GB 完全无望（Shoeybi et al., <em>Megatron-LM</em>, arXiv 2019 首次系统拆解此问题）。</li>
+<li><strong>算不动</strong>：GPT-3 训练量 3.14e23 FLOPs，单 A100（312 TFLOPS bf16）不吃不睡要 3 万年；数千卡并行数月是常态（计算依据：训练 FLOPs ≈ 6 × 参数量 × token 数，Kaplan et al., <em>Scaling Laws for Neural Language Models</em>, arXiv 2020 附录）。</li>
+<li><strong>等不起</strong>：即便放得下算得动，单卡迭代一个 step 的时间（内存带宽限制）也远超业务窗口。</li>
+</ol>
+<p>于是训练系统 = 把一个巨型 SGD 循环切到 N 卡 × M 机上：切参数（张量并行）、切层（流水线并行）、切数据（数据并行），三者可组合（3D 并行，Megatron-DeepSpeed 体系）。</p>
+<h2 id="3-数据并行与-allreduce手写-ring-allreduce"><a class="markdownIt-Anchor" href="#3-数据并行与-allreduce手写-ring-allreduce"></a> 3. 数据并行与 AllReduce（手写 Ring AllReduce）</h2>
+<p><strong>数据并行（DP）</strong>：每张卡放完整模型，各吃一份不同数据（micro-batch），前向反向各算各的；<strong>唯一需要通信的是反向结束后的梯度汇总</strong>——把 N 份梯度求平均， everybody 用同一个平均值更新。梯度求和+广播就是 <strong>AllReduce</strong>。</p>
+<p>朴素实现：参数服务器（第 3 节）或&quot;主卡收集所有梯度求平均再广播&quot;——主卡带宽是瓶颈（N-1 份上传 + N-1 份下载）。</p>
+<p><strong>Ring AllReduce</strong>（NCCL/Baidu 的标准实现，Baidu 2017 博客《Bringing HPC Techniques to Deep Learning》把 HPC 的 ring 算法带给 DL）：把 N 卡连成环，梯度切成 N 块，两阶段各 N-1 步：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">阶段一 Reduce-Scatter（每步：收前一块，加到自己对应块，传下一块）</span><br><span class="line">  step1: 卡i 把自己 chunk(i-1) 发给卡 i+1</span><br><span class="line">  ...N-1 步后：每张卡&quot;拥有&quot;一个完整规约好的 chunk（各不相同）</span><br><span class="line">阶段二 AllGather（同方向再传 N-1 步，把规约好的块广播回所有人）</span><br></pre></td></tr></table></figure>
+<p><strong>通信量证明</strong>（面试常考）：每卡每阶段发 (N-1)×(总梯度/N) 大小，两阶段合计 <code>2×(N-1)/N × 梯度总量</code>——<strong>与卡数 N 几乎无关</strong>（N 很大时趋近 2 倍梯度量），而参数服务器的量是 O(N) 倍。这就是 ring 结构赢的原因：带宽压力被摊到环上每条边。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># ring_allreduce.py —— 4 卡 Ring AllReduce 手写模拟：验证&quot;两阶段、通信量 2(N-1)/N&quot;</span></span><br><span class="line"><span class="keyword">import</span> asyncio</span><br><span class="line"></span><br><span class="line">N = <span class="number">4</span></span><br><span class="line">grads = [[k * <span class="number">1.0</span> <span class="keyword">for</span> k <span class="keyword">in</span> <span class="built_in">range</span>(N)] <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(N)]   <span class="comment"># 每卡一份&quot;梯度&quot;（各不相同）</span></span><br><span class="line"><span class="comment"># 目标：每卡得到全体的逐元素平均</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">ring_allreduce</span>(<span class="params">node_i: <span class="built_in">int</span>, buf: <span class="built_in">list</span>, mailbox: <span class="built_in">list</span></span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;节点 i 在环上做 ReduceScatter + AllGather。buf 长度 == N（每块一个元素）&quot;&quot;&quot;</span></span><br><span class="line">    left, right = (node_i - <span class="number">1</span>) % N, (node_i + <span class="number">1</span>) % N</span><br><span class="line">    <span class="comment"># ---- 阶段一: Reduce-Scatter（N-1 步）----</span></span><br><span class="line">    <span class="keyword">for</span> step <span class="keyword">in</span> <span class="built_in">range</span>(N - <span class="number">1</span>):</span><br><span class="line">        chunk = (node_i - step) % N            <span class="comment"># 本步我要积累的块号（环上错开）</span></span><br><span class="line">        <span class="keyword">await</span> mailbox[node_i].put((<span class="string">&quot;chunk&quot;</span>, chunk, buf[chunk], node_i))</span><br><span class="line">        src, c, val, _ = <span class="keyword">await</span> mailbox[node_i].get()</span><br><span class="line">        buf[c] += val                          <span class="comment"># 收到左邻的块 → 累加（规约）</span></span><br><span class="line">    <span class="comment"># ---- 阶段二: AllGather（N-1 步）----</span></span><br><span class="line">    <span class="keyword">for</span> step <span class="keyword">in</span> <span class="built_in">range</span>(N - <span class="number">1</span>):</span><br><span class="line">        chunk = (node_i + <span class="number">1</span> - step) % N        <span class="comment"># 本步我要广播出去的块</span></span><br><span class="line">        <span class="keyword">await</span> mailbox[node_i].put((<span class="string">&quot;chunk&quot;</span>, chunk, buf[chunk], node_i))</span><br><span class="line">        src, c, val, _ = <span class="keyword">await</span> mailbox[node_i].get()</span><br><span class="line">        buf[c] = val                           <span class="comment"># 覆盖为规约好的最终值</span></span><br><span class="line">    <span class="keyword">return</span> buf</span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    mailbox = [asyncio.Queue() <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(N)]</span><br><span class="line">    bufs = [<span class="built_in">list</span>(g) <span class="keyword">for</span> g <span class="keyword">in</span> grads]</span><br><span class="line">    expected = [<span class="built_in">sum</span>(g[k] <span class="keyword">for</span> g <span class="keyword">in</span> grads) / N <span class="keyword">for</span> k <span class="keyword">in</span> <span class="built_in">range</span>(N)]</span><br><span class="line"></span><br><span class="line">    <span class="comment"># 让所有节点并发跑（消息用共享队列组模拟网络；收发按环配对简化处理）</span></span><br><span class="line">    <span class="keyword">for</span> step_round <span class="keyword">in</span> <span class="built_in">range</span>(N - <span class="number">1</span>):            <span class="comment"># 手动展开步进以避免死锁，等价于两阶段循环</span></span><br><span class="line">        sends = []</span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(N):</span><br><span class="line">            chunk = (i - step_round) % N</span><br><span class="line">            sends.append(mailbox[(i + <span class="number">1</span>) % N].put((<span class="string">&quot;chunk&quot;</span>, chunk, bufs[i][chunk], i)))</span><br><span class="line">        <span class="keyword">await</span> asyncio.gather(*sends)</span><br><span class="line">        gets = []</span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(N):</span><br><span class="line">            msg = <span class="keyword">await</span> mailbox[i].get()</span><br><span class="line">            _, c, val, _ = msg</span><br><span class="line">            bufs[i][c] += val                  <span class="comment"># Reduce-Scatter 累加</span></span><br><span class="line">    <span class="keyword">for</span> step_round <span class="keyword">in</span> <span class="built_in">range</span>(N - <span class="number">1</span>):            <span class="comment"># AllGather</span></span><br><span class="line">        sends = []</span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(N):</span><br><span class="line">            chunk = (i + <span class="number">1</span> - step_round) % N</span><br><span class="line">            sends.append(mailbox[(i + <span class="number">1</span>) % N].put((<span class="string">&quot;chunk&quot;</span>, chunk, bufs[i][chunk], i)))</span><br><span class="line">        <span class="keyword">await</span> asyncio.gather(*sends)</span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(N):</span><br><span class="line">            _, c, val, _ = <span class="keyword">await</span> mailbox[i].get()</span><br><span class="line">            bufs[i][c] = val                   <span class="comment"># AllGather 覆盖</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(N):</span><br><span class="line">        ok = <span class="built_in">all</span>(<span class="built_in">abs</span>(bufs[i][k] - expected[k]) &lt; <span class="number">1e-9</span> <span class="keyword">for</span> k <span class="keyword">in</span> <span class="built_in">range</span>(N))</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;卡<span class="subst">&#123;i&#125;</span>: <span class="subst">&#123;bufs[i]&#125;</span> 平均正确: <span class="subst">&#123;ok&#125;</span>&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;理论通信量: 每卡 2*(N-1)/N 倍梯度 = <span class="subst">&#123;<span class="number">2</span>*(N-<span class="number">1</span>)/N:<span class="number">.2</span>f&#125;</span>x（参数服务器为 ~2x 恒定但在主卡集中）&quot;</span>)</span><br><span class="line"></span><br><span class="line">asyncio.run(main())</span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：理解 NCCL 不必读 CUDA，把上面 4 卡模拟跑通即可建立&quot;环上错位流水&quot;的心智模型；实战中 <code>torch.distributed.all_reduce(grad, op=SUM)</code> 一行搞定，NCCL 自动选环/树拓扑。通信量数字（2(N-1)/N）直接回答&quot;为什么 8 卡机内 NVLink 全互联也要按环走&quot;。</p>
+<h2 id="4-张量并行与流水线并行直觉"><a class="markdownIt-Anchor" href="#4-张量并行与流水线并行直觉"></a> 4. 张量并行与流水线并行：直觉</h2>
+<p><strong>张量并行（TP）</strong>：把<strong>一层内部</strong>的大矩阵切开。以线性层 Y = XW 为例（Megatron-LM 论文的核心）：按列切 W（每卡拿到 W 的列块），X 全员相同，各卡算出 Y 的列块 → AllGather 拼接；反向时对输入梯度做 AllReduce。前向反向<strong>每个线性层都要通信 1~2 次</strong>，因此 TP 的通信在关键路径上——<strong>经验做法：TP 只放机内 NVLink（带宽 ~900GB/s），不跨机</strong>（跨机网 ~25-50GB/s，通信会淹没计算）。</p>
+<p><strong>流水线并行（PP）</strong>：把<strong>层间</strong>切开（前 1/4 层在卡1、次 1/4 在卡2……），micro-batch 依次流过。难点是&quot;气泡&quot;（bubble）：卡2 必须等卡1 完成 micro-batch0 才有活干。气泡率公式（GPipe 论文，Huang et al., arXiv 2018）：<code>bubble = (p-1)/(m+p-1)</code>，p=流水线级数、m=micro-batch 数——<strong>用更多 micro-batch 稀释气泡</strong>（m 越大气泡越小）。1F1B 调度（PipeDream-Megatron 体系）让前向反向交错，把激活值内存从 O(m) 压到 O(p)。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">时间→  卡1: F0 F1 F2 F3 B0 B1 B2 B3        (F=前向 B=反向, 4 micro-batch)</span><br><span class="line">       卡2:    F0 F1 F2 F3 B0 B1 B2 B3</span><br><span class="line">       卡3:       F0 F1 F2 F3 B0 B1 B2 B3</span><br><span class="line">       卡4:          F0 F1 F2 F3 B0 B1 B2 B3   ← 开头与结尾的空档 = 气泡</span><br></pre></td></tr></table></figure>
+<p>用纯 Python 把张量并行的&quot;切列&quot;算一遍（不用 numpy，看清切分结构即可）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># tensor_parallel_demo.py —— 列并行线性层 Y = X·W 的 2 卡切分手工演算</span></span><br><span class="line"><span class="comment"># W 切成 [W0|W1]，每卡算 Y 的对应列块，AllGather 拼接</span></span><br><span class="line">X = [[<span class="number">1.0</span>, <span class="number">2.0</span>],                       <span class="comment"># 输入 2x2（全员相同）</span></span><br><span class="line">     [<span class="number">3.0</span>, <span class="number">4.0</span>]]</span><br><span class="line">W0 = [[<span class="number">1.0</span>], [<span class="number">2.0</span>]]                    <span class="comment"># W 的第 0 列（卡0 持有，2x1）</span></span><br><span class="line">W1 = [[<span class="number">3.0</span>], [<span class="number">4.0</span>]]                    <span class="comment"># W 的第 1 列（卡1 持有，2x1）</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">matmul</span>(<span class="params">a, b</span>):</span><br><span class="line">    <span class="keyword">return</span> [[<span class="built_in">sum</span>(a[i][k] * b[k][j] <span class="keyword">for</span> k <span class="keyword">in</span> <span class="built_in">range</span>(<span class="built_in">len</span>(b)))</span><br><span class="line">             <span class="keyword">for</span> j <span class="keyword">in</span> <span class="built_in">range</span>(<span class="built_in">len</span>(b[<span class="number">0</span>]))] <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="built_in">len</span>(a))]</span><br><span class="line"></span><br><span class="line">y0 = matmul(X, W0)                     <span class="comment"># 卡0 本地算出 Y[:, 0]</span></span><br><span class="line">y1 = matmul(X, W1)                     <span class="comment"># 卡1 本地算出 Y[:, 1]</span></span><br><span class="line">y_allgather = [r0 + r1 <span class="keyword">for</span> r0, r1 <span class="keyword">in</span> <span class="built_in">zip</span>(y0, y1)]   <span class="comment"># AllGather：按行拼接两卡结果</span></span><br><span class="line">y_true = matmul(X, [[<span class="number">1.0</span>, <span class="number">3.0</span>], [<span class="number">2.0</span>, <span class="number">4.0</span>]])        <span class="comment"># 不切分的完整结果</span></span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;两卡切列结果:&quot;</span>, y_allgather)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;完整矩阵结果:&quot;</span>, y_true)</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;一致:&quot;</span>, y_allgather == y_true, <span class="string">&quot;—— 这就是 Megatron 列并行的全部数学&quot;</span>)</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">$ python3 tensor_parallel_demo.py</span><br><span class="line">两卡切列结果: [[5.0, 11.0], [11.0, 25.0]]</span><br><span class="line">完整矩阵结果: [[5.0, 11.0], [11.0, 25.0]]</span><br><span class="line">一致: True —— 这就是 Megatron 列并行的全部数学</span><br></pre></td></tr></table></figure>
+<p>再看清&quot;行并行&quot;的另一半：W 按行切（每卡拿 W 的行块），输入 X 必须先按列切好（每卡拿 X 的对应列块），各卡算出<strong>完整 Y 的部分和</strong>，最后 AllReduce 求和。Transformer 的 MLP 层正是&quot;列切第一个线性层 + 行切第二个线性层&quot;，两次切分之间<strong>一次通信都不需要</strong>（列并行的输出恰好是行并行需要的形状，Megatron-LM 论文 §3.2 的经典设计）——这就是为什么 Megatron 的 MLP 一层只通信 2 次（前向一次、反向一次），也是 TP 效率设计的精髓。</p>
+<p>三种并行的正交组合（3D 并行的分工直觉，经验做法）：<strong>DP 管吞吐</strong>（梯度通信每步一次，通信占比低）、<strong>TP 管单层放不下</strong>（机内、通信频繁）、<strong>PP 管深层放不下</strong>（跨机、气泡靠 micro-batch 稀释）。典型 70B 训练：机内 TP=8，跨机 PP=4，数据并行再铺几十组。</p>
+<h2 id="5-参数服务器-vs-allreduce"><a class="markdownIt-Anchor" href="#5-参数服务器-vs-allreduce"></a> 5. 参数服务器 vs AllReduce</h2>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>参数服务器（PS）</th>
+<th>AllReduce（集合通信）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>架构</td>
+<td>worker ↔ 中央 server 组分片存参数</td>
+<td>对等节点环形/树形互联</td>
+</tr>
+<tr>
+<td>通信量</td>
+<td>集中于 server（按参数量 × worker 数增长）</td>
+<td>均摊到环（2(N-1)/N）</td>
+</tr>
+<tr>
+<td>容错</td>
+<td>server 分片可冗余（PS-Lite）</td>
+<td>天然对等，节点挂需重启动或备份环</td>
+</tr>
+<tr>
+<td>适用</td>
+<td><strong>稀疏模型</strong>（Embedding/推荐，worker 各取所需参数）、异构集群</td>
+<td><strong>稠密梯度</strong>（Transformer 全连接层）、同构 GPU 集群</td>
+</tr>
+<tr>
+<td>代表</td>
+<td>Parameter Server 论文（Li et al., OSDI 2014）、PS-Lite、TensorFlow 1.x 分布式</td>
+<td>NCCL、Horovod（Sergeev &amp; Del Balso, arXiv 2018）、DDP</td>
+</tr>
+</tbody>
+</table>
+<p>Transformer 训练之所以全走 AllReduce：梯度是稠密大矩阵，环上均摊最优；推荐系统embedding 表动辄 TB 级、每 batch 只碰其中一小撮，PS 的&quot;按需拉取&quot;才有意义。<code>torch.nn.parallel.DistributedDataParallel</code> 的默认实现就是&quot;反向钩子里对每个参数桶做 all_reduce&quot;，没有 server 节点。</p>
+<h2 id="6-推理侧的分布式衔接-vlm-stage-8"><a class="markdownIt-Anchor" href="#6-推理侧的分布式衔接-vlm-stage-8"></a> 6. 推理侧的分布式（衔接 VLM Stage 8）</h2>
+<p>推理与训练的分布式诉求不同——<strong>单请求延迟优先，吞吐次之</strong>：</p>
+<ul>
+<li><strong>KV cache 分片</strong>：多卡推理时注意 KV cache 的并行归属——TP 内每卡只存自己切分的注意力头对应 KV；长上下文下 KV cache 显存爆炸（第 01 章 PagedAttention 的动机在 Stage 5 已讲），跨机用 TP2/TP4 是把&quot;放得下&quot;买回来的标准手段。</li>
+<li><strong>PD 分离（Prefill/Decode disaggregation）</strong>：prefill（吃满算力，计算密集）与 decode（吃显存带宽，访存密集）负载特性相反，分开到不同节点各自扩容，中间用 KV cache 传输衔接（vLLM 的 disaggregated prefill、Mooncake 架构论文 <em>Mooncake: A KVCache-centric Disaggregated Architecture for LLM Serving</em>, FAST 2025 前身 arXiv 2024）。这是&quot;按功能拆分（第 01 章 y 轴）&quot;在 LLM 时代的重现。</li>
+<li><strong>多副本路由</strong>：无状态推理副本 + 负载均衡 = 第 01 章 x 轴；副本感知模型加载时长，扩容要预热（模型加载分钟级，健康检查要区分&quot;端口活了&quot;与&quot;能推理了&quot;——第 11 章服务发现的健康检查分层）。</li>
+</ul>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“Redis Cluster 是强一致的”</strong>：它的复制是异步、故障切换靠哨兵/ gossip 投票，已确认写可能在切换时丢失（第 04 章结论）。要强一致存储请选 etcd/Raft 系，Redis 的价值在延迟与数据结构。</li>
+<li><strong>“etcd 可以当业务数据库”</strong>：Raft 全量写日志 + 内存索引的架构适合万级 QPS 的<strong>元数据</strong>；放业务数据会把 Raft 组压垮且没有查询能力。&quot;小而强一致&quot;是定位不是缺陷。</li>
+<li><strong>“卡越多训练越快（线性加速）”</strong>：通信占比随规模上升——DP 的梯度同步、PP 的气泡、TP 的层内通信都在吃并行度。加速比要用&quot;计算/通信比&quot;（如每卡 batch 大小、梯度桶大小、TP 是否机内）逐项核算，Scaling Law 告诉你需要多少卡，通信工程决定这些卡实际有效多少。</li>
+<li><strong>“AllReduce 只能求和”</strong>：reduce 操作是参数（SUM/AVG/MIN/MAX），ring 结构不变；且 AllReduce = ReduceScatter + AllGather 的组合可以拆开单独用（ZeRO-1 的梯度分片就用 ReduceScatter 代替全量 AllReduce，Rajbhandari et al., <em>ZeRO</em>, SC 2020）。</li>
+<li><strong>“PD 分离就是把两个服务部两个机器”</strong>：分离的实质是<strong>KV cache 的传输与复用</strong>（prefill 节点算好的 KV 流式搬运给 decode 节点），只分服务不解决 KV 搬运（带宽、时延、cache 命中路由）等于只做了 y 轴拆分的形式。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>四个存储案例 = 前十一章理论的不同配方：Redis(低延迟+异步复制+slot 分区)、etcd(Raft 线性一致元数据)、ZooKeeper(ZAB 协调树)、Cassandra(Dynamo 无主宽表)；选型先问&quot;一致性 vs 可用性 vs 延迟&quot;的排序。</li>
+<li>LLM 训练三条硬约束（放不下/算不动/等不起）催生 3D 并行：DP 管吞吐、TP 管单层、PP 管深层。</li>
+<li>Ring AllReduce 通信量 2(N-1)/N 与规模无关，是稠密梯度同步的正解；手写 4 卡模拟足以建立心智模型。</li>
+<li>PS 与 AllReduce 的分界线在<strong>梯度稠密性</strong>：稠密走环，稀疏（Embedding）走 server。</li>
+<li>推理侧分布式三件事：KV cache 归属与显存治理、PD 分离（y 轴拆分的 LLM 版）、多副本路由与健康分层——与库内 Stage 5/8 的实战直接对上。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>跑通 ring_allreduce.py，把 N 改成 8 并在收发处计数消息总字节数，验证每卡通信量 = 2(N-1)/N × 数据量；对比&quot;主卡收集广播&quot;实现的通信量曲线。</li>
+<li>把 ring_allreduce.py 改成 ReduceScatter only（去掉 AllGather 阶段），模拟 ZeRO 的梯度分片：每卡只规约出自己负责的 1/N 参数梯度，写出更新自己那片的伪代码。</li>
+<li>用 GPipe 气泡公式 <code>(p-1)/(m+p-1)</code> 计算 p=4、m=1/4/16/64 的气泡率并画出曲线；结合 1F1B 的激活内存 O(p) 结论，给出&quot;micro-batch 怎么选&quot;的决策规则。</li>
+<li>若本机有 Docker：用 docker compose 起 3 节点 etcd 集群，<code>etcdctl put/get</code> 验证线性一致读（对比 <code>--consistency=s</code> 与 <code>l</code>），再 kill 掉 leader 观察 5 秒内重新选主——把第 05 章选举模拟与生产实现对上。</li>
+<li>设计题：一个 70B 模型的推理服务要支撑 500 并发长上下文（32K token）请求。给出你的并行策略（TP/PP/副本数）、KV cache 显存估算（fp16 KV 每token每层 2×hidden×2 字节，层数×hidden 从模型卡查）、以及是否 PD 分离的判断依据。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/11-%E6%88%90%E5%91%98%E7%AE%A1%E7%90%86%E4%B8%8E%E6%95%85%E9%9A%9C%E6%A3%80%E6%B5%8B/" rel="prev" title="11-成员管理与故障检测">
+                  <i class="fa fa-angle-left"></i> 11-成员管理与故障检测
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/13-%E5%AE%9E%E6%88%98%E4%B8%8E%E9%9D%A2%E8%AF%95%E6%B8%85%E5%8D%95/" rel="next" title="13-实战与面试清单">
+                  13-实战与面试清单 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

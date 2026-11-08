@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 掌握五种数据结构的真实用法（每个结构配一个场景），不再把 Redis 当&#39;大号字典&#39;。 - 理解 zset 为什么用跳表：与 B+树&#x2F;平衡树的对比，跳表实现要点。 - 讲清持久化（RDB vs AOF）、过期与淘汰策略（8 种）的权衡。…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="08-Redis与缓存">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/08-Redis%E4%B8%8E%E7%BC%93%E5%AD%98/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 掌握五种数据结构的真实用法（每个结构配一个场景），不再把 Redis 当&#39;大号字典&#39;。 - 理解 zset 为什么用跳表：与 B+树&#x2F;平衡树的对比，跳表实现要点。 - 讲清持久化（RDB vs AOF）、过期与淘汰策略（8 种）的权衡。…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T13:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.554Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Redis">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="数据库">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/08-Redis%E4%B8%8E%E7%BC%93%E5%AD%98/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/08-Redis%E4%B8%8E%E7%BC%93%E5%AD%98/","path":"2026/09/03/08-Redis与缓存/","title":"08-Redis与缓存"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>08-Redis与缓存 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#08-redis%E4%B8%8E%E7%BC%93%E5%AD%98"><span class="nav-number">1.</span> <span class="nav-text"> 08 - Redis与缓存</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%AE%89%E8%A3%85%E4%B8%8E%E4%BA%94%E7%A7%8D%E6%95%B0%E6%8D%AE%E7%BB%93%E6%9E%84%E7%9A%84%E7%9C%9F%E5%AE%9E%E7%94%A8%E6%B3%95"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 安装与五种数据结构的真实用法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-zset-%E4%B8%8E%E8%B7%B3%E8%A1%A8%E4%B8%BA%E4%BB%80%E4%B9%88%E4%B8%8D%E7%94%A8-b-%E6%A0%91"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. zset 与跳表：为什么不用 B 树</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%8C%81%E4%B9%85%E5%8C%96rdb-vs-aof"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 持久化：RDB vs AOF</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E8%BF%87%E6%9C%9F%E7%AD%96%E7%95%A5%E4%B8%8E%E6%B7%98%E6%B1%B0%E7%AD%96%E7%95%A5"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 过期策略与淘汰策略</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E7%BC%93%E5%AD%98%E4%B8%89%E9%97%AE%E7%A9%BF%E9%80%8F-%E5%87%BB%E7%A9%BF-%E9%9B%AA%E5%B4%A9"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 缓存三问：穿透 &#x2F; 击穿 &#x2F; 雪崩</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E7%BC%93%E5%AD%98%E4%B8%80%E8%87%B4%E6%80%A7%E5%85%88%E6%9B%B4%E6%96%B0%E5%BA%93%E5%86%8D%E5%88%A0%E7%BC%93%E5%AD%98"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 缓存一致性：先更新库，再删缓存</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81setnx-%E8%BF%87%E6%9C%9F-%E7%9C%8B%E9%97%A8%E7%8B%97"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 分布式锁：SETNX + 过期 + 看门狗</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/08-Redis%E4%B8%8E%E7%BC%93%E5%AD%98/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="08-Redis与缓存 | Yoleen的博客">
+      <meta itemprop="description" content="- 掌握五种数据结构的真实用法（每个结构配一个场景），不再把 Redis 当&#39;大号字典&#39;。 - 理解 zset 为什么用跳表：与 B+树&#x2F;平衡树的对比，跳表实现要点。 - 讲清持久化（RDB vs AOF）、过期与淘汰策略（8 种）的权衡。…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          08-Redis与缓存
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 21:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T21:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/" itemprop="url" rel="index"><span itemprop="name">数据库</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>14 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 掌握五种数据结构的真实用法（每个结构配一个场景），不再把 Redis 当'大号字典'。 - 理解 zset 为什么用跳表：与 B+树/平衡树的对比，跳表实现要点。 - 讲清持久化（RDB vs AOF）、过期与淘汰策略（8 种）的权衡。…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="08-redis与缓存"><a class="markdownIt-Anchor" href="#08-redis与缓存"></a> 08 - Redis与缓存</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>掌握五种数据结构的真实用法（每个结构配一个场景），不再把 Redis 当&quot;大号字典&quot;。</li>
+<li>理解 zset 为什么用跳表：与 B+树/平衡树的对比，跳表实现要点。</li>
+<li>讲清持久化（RDB vs AOF）、过期与淘汰策略（8 种）的权衡。</li>
+<li>把缓存三问（穿透/击穿/雪崩）逐个讲透：布隆过滤器手写、singleflight 思想、错峰 TTL；缓存一致性与分布式锁的完整方案与争议。</li>
+</ul>
+<h2 id="1-安装与五种数据结构的真实用法"><a class="markdownIt-Anchor" href="#1-安装与五种数据结构的真实用法"></a> 1. 安装与五种数据结构的真实用法</h2>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">sudo</span> apt install -y redis-server &amp;&amp; redis-cli ping    <span class="comment"># PONG 即就绪</span></span><br><span class="line">pip install redis                                     <span class="comment"># Python 客户端 redis-py</span></span><br></pre></td></tr></table></figure>
+<p>五个结构，五个场景（命令行 + Python 对照，key 设计约定 <code>业务:实体:id</code>，如 <code>sess:u42</code>、<code>px:AAPL:20250601</code>）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">┌────────────┬────────────────────────────┬──────────────────────────────┐</span><br><span class="line">│ 结构       │ 场景                        │ 关键命令                     │</span><br><span class="line">├────────────┼────────────────────────────┼──────────────────────────────┤</span><br><span class="line">│ String     │ 缓存对象/计数器/分布式锁     │ SET/GET/INCR/SETNX/SETEX     │</span><br><span class="line">│ List       │ 时间线/任务队列(轻量)        │ LPUSH/RPOP/LRANGE/BRPOP      │</span><br><span class="line">│ Hash       │ 对象字段级存取(部分更新)      │ HSET/HGET/HGETALL/HINCRBY    │</span><br><span class="line">│ Set        │ 标签/去重/共同关注(交并差)    │ SADD/SISMEMBER/SINTER        │</span><br><span class="line">│ ZSet       │ 排行榜/延时队列/滑动窗口限流  │ ZADD/ZINCRBY/ZRANGE/ZREMRANG │</span><br><span class="line">└────────────┴────────────────────────────┴──────────────────────────────┘</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> redis</span><br><span class="line">r = redis.Redis(host=<span class="string">&quot;localhost&quot;</span>, port=<span class="number">6379</span>, decode_responses=<span class="literal">True</span>)</span><br><span class="line"></span><br><span class="line">r.setex(<span class="string">&quot;px:AAPL:close&quot;</span>, <span class="number">60</span>, <span class="string">&quot;190.2&quot;</span>)            <span class="comment"># String: 60s TTL 的行情缓存</span></span><br><span class="line">r.incr(<span class="string">&quot;qps:api&quot;</span>)                                 <span class="comment"># String 计数器: 原子自增</span></span><br><span class="line">r.hset(<span class="string">&quot;user:42&quot;</span>, mapping=&#123;<span class="string">&quot;name&quot;</span>: <span class="string">&quot;yyl&quot;</span>, <span class="string">&quot;score&quot;</span>: <span class="number">88</span>&#125;)   <span class="comment"># Hash: 字段级更新</span></span><br><span class="line">r.sadd(<span class="string">&quot;agent:skills:42&quot;</span>, <span class="string">&quot;sql&quot;</span>, <span class="string">&quot;python&quot;</span>)        <span class="comment"># Set: 技能标签</span></span><br><span class="line">r.zincrby(<span class="string">&quot;rank:score&quot;</span>, <span class="number">10</span>, <span class="string">&quot;user:42&quot;</span>)            <span class="comment"># ZSet: 加 10 分</span></span><br><span class="line">r.zrevrange(<span class="string">&quot;rank:score&quot;</span>, <span class="number">0</span>, <span class="number">9</span>, withscores=<span class="literal">True</span>)  <span class="comment"># ZSet: TOP10 排行榜</span></span><br><span class="line">r.zadd(<span class="string">&quot;delay:jobs&quot;</span>, &#123;<span class="string">&quot;job:1001&quot;</span>: <span class="number">1730000000</span>&#125;)    <span class="comment"># ZSet 延时队列: score=执行时间戳</span></span><br><span class="line"><span class="comment"># 取到期任务: zrangebyscore(&quot;delay:jobs&quot;, 0, now, start=0, num=5)</span></span><br></pre></td></tr></table></figure>
+<p>选型口径（经验做法）：<strong>对象整体缓存用 String（序列化后一次读写）；字段频繁单独更新用 Hash</strong>（HSET 不用重写整个对象）；需要排序/范围 → ZSet；需要去重/集合运算 → Set。还有一个隐藏结构要认识：<strong>Stream</strong>（XADD/XREADGROUP，带消费组的日志型结构，分布式系统 09 章 MQ 主题的 Redis 版），轻量事件流可用，重 MQ 还是上专业队列。</p>
+<h2 id="2-zset-与跳表为什么不用-b-树"><a class="markdownIt-Anchor" href="#2-zset-与跳表为什么不用-b-树"></a> 2. zset 与跳表：为什么不用 B 树</h2>
+<p>zset 底层是<strong>跳表（Skip List）+ 哈希表</strong>：哈希表负责 member→score 的 O(1) 点查；跳表负责按 score 有序，支撑范围查询（ZRANGEBYSCORE）与排名。跳表 = 在有序链表上建多层&quot;快速车道&quot;（Redis 源码 t_zset.c，实现见 Pugh 1990 <em>Skip Lists: A Probabilistic Alternative to Balanced Trees</em>）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">L3:  head ─────────────────────────────── 50 ──────────────→ nil</span><br><span class="line">L2:  head ──────── 12 ─────────────────── 50 ────── 72 ───→ nil</span><br><span class="line">L1:  head ── 5 ── 12 ── 20 ── 30 ──────── 50 ── 61 ─ 72 ──→ nil</span><br><span class="line">L0:  head ── 5 ── 12 ── 20 ── 30 ── 41 ── 50 ── 61 ─ 72 ──→ nil</span><br><span class="line"></span><br><span class="line">查找 41: L3 走到 50 太大退回 L2 → 12 → 50 太大退回 L1 → 30 → 41 ✓ (从 11 次比较降到 4 次)</span><br><span class="line">每个节点晋升到上一层的概率 p=1/4(Redis 参数), 期望层数 O(log n), 查找/插入/删除 O(log n)</span><br></pre></td></tr></table></figure>
+<p><strong>为什么 Redis 不用 B+树/红黑树</strong>（作者 antirez 在博客 <em>Random notes on improving Redis</em> 中给过答案，要点如实转述）：①实现简单（红黑树的旋转/删除修复代码量数倍于跳表，B+树还要管理页与分裂）；②范围查询同样顺底链表走，不输 B+树；③<strong>并发友好性</strong>——插入只需改相邻指针，无全局再平衡；④调试与边界行为直观。跳表与平衡树同为 O(log n)，工程差异在&quot;常数、实现复杂度与并发形态&quot;——这和 06 章&quot;B+树对齐磁盘页&quot;是同一个道理：<strong>数据结构的胜负手在它服务的介质与访问模式</strong>。内存数据库没有&quot;页&quot;的概念，B+树最大的卖点（页级 IO 最少化）就不成立了。</p>
+<p>实现要点（若手写，10 章的 memtable 就是简化跳表的好场景）：插入时随机层数（抛硬币 p=1/4，封顶 32）；删除需同层摘链；span 字段可 O(log n) 查排名（ZRANK 的实现）。</p>
+<h2 id="3-持久化rdb-vs-aof"><a class="markdownIt-Anchor" href="#3-持久化rdb-vs-aof"></a> 3. 持久化：RDB vs AOF</h2>
+<p>Redis 数据在内存，持久化决定&quot;重启丢多少&quot;：</p>
+<table>
+<thead>
+<tr>
+<th>维度</th>
+<th>RDB（快照）</th>
+<th>AOF（追加日志）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>原理</td>
+<td>fork 子进程，把某一时刻全量数据写进 <code>.rdb</code></td>
+<td>把每条写命令追加进 <code>.aof</code>（先写 OS 缓冲）</td>
+</tr>
+<tr>
+<td>落盘时机</td>
+<td>save 配置点（如 900s 内 1 变）/手动 SAVE</td>
+<td>appendfsync: always / everysec(默认) / no</td>
+</tr>
+<tr>
+<td>丢失窗口</td>
+<td>上次快照以来的全部（分钟级）</td>
+<td>everysec 最多 1s；always 接近 0 但吞吐暴跌</td>
+</tr>
+<tr>
+<td>文件/恢复</td>
+<td>小、恢复快（直接加载）</td>
+<td>大、恢复要重放命令（有 AOF 重写压缩）</td>
+</tr>
+<tr>
+<td>性能影响</td>
+<td>fork 瞬间卡顿（写时复制，内存翻倍风险）</td>
+<td>每秒一次 fsync，稳态代价低</td>
+</tr>
+</tbody>
+</table>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">redis-cli config get save appendfsync     <span class="comment"># 查看当前配置</span></span><br><span class="line">redis-cli <span class="built_in">set</span> k v &amp;&amp; redis-cli bgsave     <span class="comment"># 手动触发快照</span></span><br><span class="line"><span class="comment"># 经验做法: 生产双开 — RDB 做冷备与快速重启, AOF(everysec) 做数据安全底线</span></span><br></pre></td></tr></table></figure>
+<p>对照 06 章：RDB 是&quot;checkpoint&quot;，AOF 是&quot;WAL&quot;——<strong>同一组概念在内存数据库里换了名字</strong>。fsync 代价与 group commit 的物理根源见分布式系统 07 章。</p>
+<h2 id="4-过期策略与淘汰策略"><a class="markdownIt-Anchor" href="#4-过期策略与淘汰策略"></a> 4. 过期策略与淘汰策略</h2>
+<p><strong>过期（对单个 key，设置了 TTL 的）</strong>：Redis 的组合拳——<strong>惰性删除</strong>（访问时发现过期才删，省 CPU 但留死键）+ <strong>定期抽样删除</strong>（每秒抽样若干带 TTL 的 key，过期比例高就继续抽）。于是死键可能占内存，需要：</p>
+<p><strong>淘汰（内存满了，maxmemory 触发时）8 种策略</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">noeviction      默认: 不淘汰, 写命令直接报错 OOM (重要场景选它, 逼你做容量)</span><br><span class="line">allkeys-lru     全部 key 里淘汰最久未使用        ← 纯缓存场景默认选它</span><br><span class="line">volatile-lru    只在设了 TTL 的 key 里 LRU       ← 缓存+持久 key 混居时</span><br><span class="line">allkeys-lfu / volatile-lfu     最不经常使用(4.0+, 适合热点更尖锐的场景)</span><br><span class="line">allkeys-random / volatile-random  随机淘汰(几乎不用)</span><br><span class="line">volatile-ttl    优先淘汰剩余 TTL 最短的</span><br></pre></td></tr></table></figure>
+<p>注意两个坑（经验做法）：①LRU/LFU 都是<strong>近似实现</strong>（抽样 N 个 key 淘汰其中最该死的，<code>maxmemory-samples</code> 可调），不是全局精确；②&quot;设了 TTL 但永不访问&quot;的 key 在 allkeys-lru 下反而比冷数据活得久——TTL 管生死、LRU 管冷热，是两套正交机制。</p>
+<h2 id="5-缓存三问穿透-击穿-雪崩"><a class="markdownIt-Anchor" href="#5-缓存三问穿透-击穿-雪崩"></a> 5. 缓存三问：穿透 / 击穿 / 雪崩</h2>
+<p>缓存层挡在应用与数据库之间，三种典型崩塌路径（配合第 4 节的策略记忆）：</p>
+<p><strong>① 穿透（查不存在的数据，缓存永远 miss，请求全打到库）</strong>——恶意扫描随机 id 时必现。解法双管：</p>
+<ul>
+<li>缓存空值：miss 的 key 也缓存 <code>&quot;&quot;</code> + 短 TTL（如 60s），把&quot;查无此数据&quot;也变成可命中。</li>
+<li><strong>布隆过滤器</strong>：在缓存前加一道&quot;一定不存在就别往下走&quot;的闸门。原理与手写简化版：</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># bloom.py —— 简化布隆过滤器: 多哈希置位, &quot;可能存在&quot;误报, &quot;不存在&quot;必准</span></span><br><span class="line"><span class="keyword">import</span> hashlib, math</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Bloom</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, n, fp=<span class="number">0.01</span></span>):</span><br><span class="line">        m = math.ceil(-n * math.log(fp) / (math.log(<span class="number">2</span>) ** <span class="number">2</span>))   <span class="comment"># 最优位数组长度</span></span><br><span class="line">        k = <span class="built_in">max</span>(<span class="number">1</span>, <span class="built_in">int</span>(<span class="number">0.693</span> * m / n))                           <span class="comment"># 最优哈希个数</span></span><br><span class="line">        <span class="variable language_">self</span>.m, <span class="variable language_">self</span>.k, <span class="variable language_">self</span>.bits = m, k, <span class="built_in">bytearray</span>((m + <span class="number">7</span>) // <span class="number">8</span>)</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">_idx</span>(<span class="params">self, key, i</span>):</span><br><span class="line">        h = hashlib.sha256(<span class="string">f&quot;<span class="subst">&#123;key&#125;</span>-<span class="subst">&#123;i&#125;</span>&quot;</span>.encode()).digest()       <span class="comment"># 双哈希模拟 k 个哈希</span></span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">int</span>.from_bytes(h[:<span class="number">8</span>], <span class="string">&quot;big&quot;</span>) % <span class="variable language_">self</span>.m</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">add</span>(<span class="params">self, key</span>):</span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="variable language_">self</span>.k):</span><br><span class="line">            p = <span class="variable language_">self</span>._idx(key, i); <span class="variable language_">self</span>.bits[p &gt;&gt; <span class="number">3</span>] |= <span class="number">1</span> &lt;&lt; (p &amp; <span class="number">7</span>)</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">might_contain</span>(<span class="params">self, key</span>) -&gt; <span class="built_in">bool</span>:</span><br><span class="line">        <span class="keyword">return</span> <span class="built_in">all</span>(<span class="variable language_">self</span>.bits[p &gt;&gt; <span class="number">3</span>] &amp; (<span class="number">1</span> &lt;&lt; (p &amp; <span class="number">7</span>)) <span class="keyword">for</span> p <span class="keyword">in</span></span><br><span class="line">                   [<span class="variable language_">self</span>._idx(key, i) <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="variable language_">self</span>.k)])</span><br><span class="line"></span><br><span class="line">b = Bloom(<span class="number">100_000</span>)</span><br><span class="line"><span class="keyword">for</span> uid <span class="keyword">in</span> valid_users: b.add(uid)</span><br><span class="line"><span class="keyword">if</span> <span class="keyword">not</span> b.might_contain(user_input): <span class="keyword">return</span> <span class="number">404</span>        <span class="comment"># 一定不存在 → 直接拦截</span></span><br><span class="line"><span class="comment"># 误报率 fp: 说&quot;存在&quot;但可能其实不存在(去查库确认); 说&quot;不存在&quot;则 100% 不存在 → 挡住穿透</span></span><br></pre></td></tr></table></figure>
+<p>布隆的代价：<strong>不能删除</strong>（位共享），计数布隆/布谷鸟过滤器是加强版；06 章提过 LSM 也用它挡无谓的磁盘查找——同一个结构两个舞台。</p>
+<p><strong>② 击穿（某个热点 key 过期瞬间，海量并发同时回源重建）</strong>——秒杀页缓存到期的 1 秒。解法：<strong>单飞（singleflight）思想</strong>——同一 key 的并发回源合并成一次：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># singleflight 思想版(跨进程要上分布式锁, 见第7节)</span></span><br><span class="line"><span class="keyword">import</span> threading</span><br><span class="line">_lock, _inflight = threading.Lock(), &#123;&#125;</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">get_with_singleflight</span>(<span class="params">key, loader, ttl=<span class="number">60</span></span>):</span><br><span class="line">    v = r.get(key)</span><br><span class="line">    <span class="keyword">if</span> v <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span>: <span class="keyword">return</span> v</span><br><span class="line">    <span class="keyword">with</span> _lock:                                        <span class="comment"># 进程内: 谁先到谁回源</span></span><br><span class="line">        <span class="keyword">if</span> key <span class="keyword">not</span> <span class="keyword">in</span> _inflight: _inflight[key] = loader()</span><br><span class="line">        v = _inflight.pop(key)</span><br><span class="line">    r.setex(key, ttl, v)</span><br><span class="line">    <span class="keyword">return</span> v</span><br></pre></td></tr></table></figure>
+<p>跨进程版本：回源前 <code>SET lock:key &lt;uuid&gt; NX EX 10</code> 抢锁，抢到的查库回填，没抢到的轮询缓存（或短 sleep 重试）——<strong>一个回源、众人等待</strong>。互斥重建 + 逻辑过期（key 永不过期、value 里带过期时间由单线程异步刷新）是热点更极致的方案。</p>
+<p><strong>③ 雪崩（大量 key 同一时刻过期 / Redis 整体宕机，流量海啸砸向数据库）</strong>。解法（经验做法）：<strong>错峰 TTL</strong>——基础 TTL 加随机抖动 <code>setex(key, ttl + random.randint(0, 300), v)</code>，把&quot;同刻过期&quot;摊平；<strong>多级缓存</strong>（本地 LRU + Redis，击穿与雪崩都被第一级垫了一层）；<strong>熔断降级</strong>（库端限流/返回兜底数据，分布式系统 10 章的熔断器在此就位）；Redis 高可用（哨兵/集群，分布式系统 12 章）保整体不死。</p>
+<h2 id="6-缓存一致性先更新库再删缓存"><a class="markdownIt-Anchor" href="#6-缓存一致性先更新库再删缓存"></a> 6. 缓存一致性：先更新库，再删缓存</h2>
+<p>缓存与数据库是两个系统，<strong>没有免费的强一致</strong>，工程要的是&quot;最终一致 + 窗口尽量小&quot;。主流方案的推演：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">先删缓存, 再更新库(坏): 删完还没更新库, 并发读把旧值又灌回缓存 → 旧值长期驻留</span><br><span class="line">先更新库, 再删缓存(推荐): 读写并发的最坏交错 = 读到旧值的短窗口</span><br><span class="line">   T1 读: miss → 读库得 v1 → (T2 更新库为 v2 并删缓存) → T1 把 v1 写入缓存</span><br><span class="line">   → 缓存里是旧值 v1 直到 TTL。概率低(需要读慢于写), 且 TTL 兜底。</span><br><span class="line">先更新库, 再更新缓存(不推荐): 并发双写乱序可让缓存停在旧值且无 TTL 之外的自愈</span><br></pre></td></tr></table></figure>
+<p>为什么是&quot;删&quot;不是&quot;更新&quot;（经验做法）：删除把一致性收敛责任推给下一次读（懒计算），避免&quot;缓存写回的值与下次库值计算口径不一致&quot;这一整类问题；写多读少的数据甚至<strong>不该缓存</strong>（删了也没人来读，白忙）。</p>
+<p><strong>延迟双删</strong>：<code>删缓存 → 更新库 → sleep(主从延迟估计值) → 再删一次</code>——第二次删除清掉&quot;在主从延迟窗口里读到的旧值&quot;。它是治标手段：以写路径加一次延迟为代价，缩小读旧值窗口（经验做法：读多写少 + 有从库时用；删除失败要重试队列/订阅 binlog 兜底，如 Canal 消费变更后删缓存——把一致性收敛做成后台任务而非在线路径）。</p>
+<h2 id="7-分布式锁setnx-过期-看门狗"><a class="markdownIt-Anchor" href="#7-分布式锁setnx-过期-看门狗"></a> 7. 分布式锁：SETNX + 过期 + 看门狗</h2>
+<p>多个进程互斥（击穿回源、定时任务防重），需要跨进程锁。Redis 方案的演进（每一步都是被事故逼出来的）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 1) 基础版: SET NX = 不存在才设置(原子), EX 过期防死锁</span></span><br><span class="line">ok = r.<span class="built_in">set</span>(<span class="string">&quot;lock:rebuild&quot;</span>, token, nx=<span class="literal">True</span>, ex=<span class="number">30</span>)</span><br><span class="line"><span class="comment"># 2) 释放必须&quot;检查是自己的锁再删&quot;, 两步不原子 → 用 Lua 脚本原子化</span></span><br><span class="line">unlock_lua = <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">if redis.call(&#x27;get&#x27;, KEYS[1]) == ARGV[1] then return redis.call(&#x27;del&#x27;, KEYS[1])</span></span><br><span class="line"><span class="string">else return 0 end&quot;&quot;&quot;</span></span><br><span class="line">r.<span class="built_in">eval</span>(unlock_lua, <span class="number">1</span>, <span class="string">&quot;lock:rebuild&quot;</span>, token)   <span class="comment"># token=uuid, 防止误删别人的锁</span></span><br><span class="line"><span class="comment"># 3) 业务比 TTL 长怎么办: 看门狗——持锁线程后台定时(如每 10s)续期; 进程崩了续期停止, 锁自然过期</span></span><br><span class="line"><span class="comment">#    (Redission 的 watchdog 即此思想; 手写: 起线程循环 eval 同款 Lua 把 EX 往后推)</span></span><br></pre></td></tr></table></figure>
+<p>三件套缺一不可：<strong>NX</strong>（互斥）、<strong>EX</strong>（持有者崩溃后锁能自动释放）、<strong>token+Lua</strong>（只能释放自己的锁）。再看两个进阶问题：</p>
+<ul>
+<li><strong>锁过期但业务还没跑完</strong>：看门狗续期是主解；兜底是业务幂等（锁失效后另一进程进入，重复执行不能造成数据损坏——分布式系统 09 章的幂等键）。</li>
+<li><strong>主从切换丢锁（Redlock 争议）</strong>：单实例 Redis 宕机 → 从库升主 → 锁丢失，两个客户端同时持锁。<strong>Redlock</strong>（向 N 个独立实例同时加锁、多数派成功才算持有）试图解决此问题；Kleppmann 与 antirez 有过公开论战（Kleppmann 博客 <em>How to do distributed locking</em>，2016）：Redlock 依赖时钟假设、且没法提供类似 fencing token 的安全性。<strong>如实呈现的结论（经验做法）</strong>：Redis 锁是&quot;效率锁&quot;（防重复干活，偶尔双执行无伤大雅）——够用；若是&quot;正确性锁&quot;（双执行会造成资损），用支持 fencing 的共识系统（etcd/ZooKeeper，分布式系统 11 章）或把正确性做进业务幂等，不指望锁本身。</li>
+</ul>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“Redis 就是缓存，数据丢了无所谓”</strong>：单实例 Redis 还承担着计数器、排行榜、分布式锁这些&quot;有状态&quot;职责。持久化策略（3 节）与淘汰策略（4 节 noeviction）要按角色区分：纯缓存 allkeys-lru+可丢，状态承载 noeviction+AOF。</li>
+<li><strong>“KEYS * 看看 key”</strong>：O(N) 阻塞整个单线程，百万 key 的实例直接卡死。生产用 <code>SCAN</code>（游标渐进遍历，不阻塞）——同理警惕 O(N) 的大集合命令（HGETALL 大 hash、ZRANGE 全量），先 <code>TYPE/OBJECT ENCODING</code> 看体量。</li>
+<li><strong>“加锁就安全”</strong>：锁只解决互斥，不解决持有者死亡（EX 补）、误删（token+Lua 补）、主从切换（fencing/幂等补）。每加一把分布式锁都要答完这四问。</li>
+<li><strong>“缓存与数据库可以强一致”</strong>：双写永远有窗口（6 节时序推演）。设计目标收敛为&quot;最终一致 + 窗口最小化 + TTL 兜底&quot;，把精力花在收敛机制（binlog 订阅/重试队列）而不是幻想。</li>
+<li><strong>“热点 key 过期才击穿，平时没事”</strong>：不设 TTL 的热点 key 在淘汰（allkeys-lru）下同样会&quot;意外消失&quot;。关键路径的缓存要么 TTL+单飞重建，要么逻辑过期+异步刷新，任其自生自灭就是事故预约。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>五结构五场景：String 缓存/计数/锁、List 轻队列、Hash 字段级对象、Set 去重交并、ZSet 排行/延时/限流；key 命名 <code>业务:实体:id</code>。</li>
+<li>zset=跳表+哈希表：跳表在内存介质上以实现简单+并发友好胜过 B+树——数据结构选择跟随介质与访问模式（与 06 章 B+树结论互为镜像）。</li>
+<li>持久化：RDB=checkpoint（快，丢分钟级），AOF=WAL（everysec 丢秒级）；生产双开。</li>
+<li>过期是惰性+抽样，淘汰 8 种记三个：noeviction（状态）、allkeys-lru（纯缓存）、volatile-ttl（混合）。</li>
+<li>缓存三问全解：穿透→空值+布隆（“不存在必准”）；击穿→单飞/互斥重建；雪崩→错峰 TTL+多级+熔断。</li>
+<li>一致性：先更新库再删缓存；延迟双删缩小窗口；binlog 订阅兜底。分布式锁：NX+EX+token+Lua+看门狗；Redlock 是效率锁方案，正确性靠共识系统或业务幂等。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>用 redis-py 实现滑动窗口限流：ZSET 结构（score=时间戳），<code>ZREMRANGEBYSCORE</code> 清窗口外、<code>ZCARD</code> 计数判限——写出完整函数并压测验证。</li>
+<li>把 5 节 Bloom 的 n=10万/fp=1% 代入公式，算出 m 与 k；故意用 1000 个不存在的 key 测误报率，与理论值对比；再测&quot;add 后误报率随元素数增长&quot;的曲线。</li>
+<li>击穿实验：一个 value 较大的 key（模拟慢回源 2s），50 并发在过期瞬间同时请求——对比&quot;裸 get+set&quot;与&quot;singleflight+分布式锁&quot;两版打到的回源次数与总耗时。</li>
+<li>复现 6 节&quot;先删缓存再更新库&quot;的旧值回灌：两个线程按文中时序交错（用事件控制步进），打印缓存最终值；再跑&quot;先更新库再删缓存&quot;版本对比窗口概率。</li>
+<li>看门狗手写：给 7 节锁加一个续期线程（每 TTL/3 续一次），模拟业务 60s（TTL 30s）运行全程不断锁；kill -9 持锁进程验证锁在 TTL 内自动释放——把&quot;三件套+看门狗&quot;的每个机制用自己的实验钉死。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/" rel="tag"># 数据库</a>
+              <a href="/tags/Redis/" rel="tag"># Redis</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/07-PostgreSQL%E5%AE%9E%E6%88%98/" rel="prev" title="07-PostgreSQL实战">
+                  <i class="fa fa-angle-left"></i> 07-PostgreSQL实战
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/09-%E5%90%91%E9%87%8F%E6%95%B0%E6%8D%AE%E5%BA%93%E4%B8%8E%E8%AF%AD%E4%B9%89%E6%A3%80%E7%B4%A2/" rel="next" title="09-向量数据库与语义检索">
+                  09-向量数据库与语义检索 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="1. 会判断一条测试属于单元还是集成，并据此选择替身策略； 2. 掌握数据库测试三种隔离法：事务回滚、独立 schema、内存库（及内存库与真库的差异清单）； 3. 会用 respx&#x2F;responses 打桩 HTTP 依赖，理解&#39;cont…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="07-集成测试与外部依赖">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/07-%E9%9B%86%E6%88%90%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%A4%96%E9%83%A8%E4%BE%9D%E8%B5%96/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="1. 会判断一条测试属于单元还是集成，并据此选择替身策略； 2. 掌握数据库测试三种隔离法：事务回滚、独立 schema、内存库（及内存库与真库的差异清单）； 3. 会用 respx&#x2F;responses 打桩 HTTP 依赖，理解&#39;cont…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T19:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.562Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="测试">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/07-%E9%9B%86%E6%88%90%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%A4%96%E9%83%A8%E4%BE%9D%E8%B5%96/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/07-%E9%9B%86%E6%88%90%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%A4%96%E9%83%A8%E4%BE%9D%E8%B5%96/","path":"2026/09/04/07-集成测试与外部依赖/","title":"07-集成测试与外部依赖"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>07-集成测试与外部依赖 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#07-%E9%9B%86%E6%88%90%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%A4%96%E9%83%A8%E4%BE%9D%E8%B5%96%E8%BE%B9%E7%95%8C%E5%B1%82%E5%8F%88%E7%A8%B3%E5%8F%88%E5%BF%AB"><span class="nav-number">1.</span> <span class="nav-text"> 07 - 集成测试与外部依赖：边界层又稳又快</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%8D%95%E5%85%83-vs-%E9%9B%86%E6%88%90%E8%BE%B9%E7%95%8C%E5%88%A4%E6%96%AD"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 单元 vs 集成：边界判断</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E6%95%B0%E6%8D%AE%E5%BA%93%E6%B5%8B%E8%AF%95%E4%B8%89%E7%A7%8D%E9%9A%94%E7%A6%BB%E6%B3%95"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 数据库测试：三种隔离法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-http-%E4%BE%9D%E8%B5%96%E6%89%93%E6%A1%A9%E4%B8%8E-contract-%E6%B5%8B%E8%AF%95"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. HTTP 依赖：打桩与 contract 测试</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-testcontainers-%E6%80%9D%E6%83%B3%E6%A6%82%E8%A7%88"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. testcontainers 思想概览</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F%E4%B8%8E%E5%AD%90%E8%BF%9B%E7%A8%8B%E7%9C%9F%E5%AE%9E%E8%BE%B9%E7%95%8C%E6%9C%80%E5%B0%8F%E6%9A%B4%E9%9C%B2"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 文件系统与子进程：真实边界，最小暴露</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E7%A8%B3%E5%AE%9A%E6%80%A7%E9%97%AE%E9%A2%98%E6%B8%85%E5%8D%95%E6%AF%8F%E4%B8%AA%E9%85%8D%E8%A7%A3%E6%B3%95"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 稳定性问题清单：每个配解法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/07-%E9%9B%86%E6%88%90%E6%B5%8B%E8%AF%95%E4%B8%8E%E5%A4%96%E9%83%A8%E4%BE%9D%E8%B5%96/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="07-集成测试与外部依赖 | Yoleen的博客">
+      <meta itemprop="description" content="1. 会判断一条测试属于单元还是集成，并据此选择替身策略； 2. 掌握数据库测试三种隔离法：事务回滚、独立 schema、内存库（及内存库与真库的差异清单）； 3. 会用 respx&#x2F;responses 打桩 HTTP 依赖，理解&#39;cont…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          07-集成测试与外部依赖
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 03:30:00" itemprop="dateCreated datePublished" datetime="2026-09-04T03:30:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%B5%8B%E8%AF%95/" itemprop="url" rel="index"><span itemprop="name">测试</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>11 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">1. 会判断一条测试属于单元还是集成，并据此选择替身策略； 2. 掌握数据库测试三种隔离法：事务回滚、独立 schema、内存库（及内存库与真库的差异清单）； 3. 会用 respx/responses 打桩 HTTP 依赖，理解'cont…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="07-集成测试与外部依赖边界层又稳又快"><a class="markdownIt-Anchor" href="#07-集成测试与外部依赖边界层又稳又快"></a> 07 - 集成测试与外部依赖：边界层又稳又快</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ol>
+<li>会判断一条测试属于单元还是集成，并据此选择替身策略；</li>
+<li>掌握数据库测试三种隔离法：事务回滚、独立 schema、内存库（及内存库与真库的差异清单）；</li>
+<li>会用 respx/responses 打桩 HTTP 依赖，理解&quot;contract 测试&quot;补齐打桩的信任缺口；</li>
+<li>建立稳定性问题清单：sleep、端口冲突、时区、代理——每个有解法。</li>
+</ol>
+<h2 id="1-单元-vs-集成边界判断"><a class="markdownIt-Anchor" href="#1-单元-vs-集成边界判断"></a> 1. 单元 vs 集成：边界判断</h2>
+<p>上三章默认&quot;依赖都替身化了&quot;——那是单元测试。<strong>集成测试</strong>回答另一类问题：<em>各部分拼起来，真实边界真的对得上吗？</em>（01 篇 Testing Trophy 里它当主力的原因。）</p>
+<p>判断一条测试属于哪层，看两个问题：</p>
+<ol>
+<li><strong>有没有真实 I/O？</strong>（真数据库、真 HTTP 栈、真文件系统、真子进程）——有，就是集成；</li>
+<li><strong>有没有跨模块的真实协作？</strong>（不是 mock 出来的协作）——有，也归集成。</li>
+</ol>
+<p>由此得出替身策略表：</p>
+<table>
+<thead>
+<tr>
+<th>依赖</th>
+<th>单元层</th>
+<th>集成层</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>数据库</td>
+<td>Fake 仓库（04 篇）</td>
+<td>事务回滚 / 独立 schema（本章 2 节）</td>
+</tr>
+<tr>
+<td>HTTP API</td>
+<td>respx/responses 打桩</td>
+<td>本地假服务端 / contract 测试（本章 3 节）</td>
+</tr>
+<tr>
+<td>文件系统</td>
+<td>tmp_path 注入</td>
+<td>tmp_path（本身就是真实 FS，算轻量集成）</td>
+</tr>
+<tr>
+<td>时间</td>
+<td>fake clock / freezegun</td>
+<td>真时钟（避免测时间本身）</td>
+</tr>
+<tr>
+<td>子进程</td>
+<td>mock <code>subprocess.run</code></td>
+<td>真跑短命令（<code>echo</code>/<code>python -c</code>）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>经验做法</strong>：单元层的集成替身（Fake/打桩）负责&quot;逻辑分支全覆盖&quot;，集成层只负责&quot;真契约验证&quot;——每类外部依赖通常只需要 5~20 条集成用例，多了说明业务逻辑漏到了边界层。</p>
+<h2 id="2-数据库测试三种隔离法"><a class="markdownIt-Anchor" href="#2-数据库测试三种隔离法"></a> 2. 数据库测试：三种隔离法</h2>
+<p>数据测试的核心矛盾：<strong>既要真库的语义，又要测试间的完全隔离</strong>。三种隔离法按优先级：</p>
+<p><strong>方法一：事务回滚（首选）。</strong> 每个测试在事务里跑，结束回滚——快（无建库开销）、绝对干净（失败也回滚）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># conftest.py</span></span><br><span class="line"><span class="keyword">import</span> sqlite3, pytest</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">db</span>():</span><br><span class="line">    <span class="string">&quot;&quot;&quot;事务回滚型 fixture：每个测试拿到干净库，失败也不留痕。&quot;&quot;&quot;</span></span><br><span class="line">    conn = sqlite3.connect(<span class="string">&quot;:memory:&quot;</span>, isolation_level=<span class="literal">None</span>)</span><br><span class="line">    conn.execute(<span class="string">&quot;BEGIN&quot;</span>)</span><br><span class="line">    conn.execute(<span class="string">&quot;CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT UNIQUE)&quot;</span>)</span><br><span class="line">    <span class="keyword">yield</span> conn</span><br><span class="line">    conn.rollback()</span><br><span class="line">    conn.close()</span><br></pre></td></tr></table></figure>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># test_db.py</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_insert</span>(<span class="params">db</span>):</span><br><span class="line">    db.execute(<span class="string">&quot;INSERT INTO users (name) VALUES (&#x27;alice&#x27;)&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> db.execute(<span class="string">&quot;SELECT count(*) FROM users&quot;</span>).fetchone()[<span class="number">0</span>] == <span class="number">1</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_unique_violation</span>(<span class="params">db</span>):</span><br><span class="line">    db.execute(<span class="string">&quot;INSERT INTO users (name) VALUES (&#x27;alice&#x27;)&quot;</span>)</span><br><span class="line">    <span class="keyword">import</span> pytest, sqlite3</span><br><span class="line">    <span class="keyword">with</span> pytest.raises(sqlite3.IntegrityError):</span><br><span class="line">        db.execute(<span class="string">&quot;INSERT INTO users (name) VALUES (&#x27;alice&#x27;)&quot;</span>)</span><br><span class="line">    <span class="keyword">assert</span> db.execute(<span class="string">&quot;SELECT count(*) FROM users&quot;</span>).fetchone()[<span class="number">0</span>] == <span class="number">1</span>  <span class="comment"># 上个测试没泄漏</span></span><br></pre></td></tr></table></figure>
+<p>对 PostgreSQL/MySQL 同构：<code>BEGIN</code> → 测试 → <code>ROLLBACK</code>；被测代码自己 <code>COMMIT</code> 时改用&quot;每测试独立 schema/库&quot;（方法二）。注意 fixture 里的 <code>isolation_level=None</code> 让 Python 驱动交出自动事务管理——否则驱动的隐式 commit 会让回滚失效，这是事务回滚法最常见的翻车点。</p>
+<p><strong>方法二：每测试独立 schema。</strong> 重但彻底：session 级 fixture 持连接池，function 级 fixture <code>CREATE SCHEMA test_$UUID</code> + 跑迁移，teardown <code>DROP SCHEMA</code>。适合&quot;被测代码必须 commit&quot;或要验证迁移脚本本身的场景：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 独立 schema 型 fixture（PostgreSQL 方言，骨架）</span></span><br><span class="line"><span class="keyword">import</span> uuid</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">pg_schema</span>(<span class="params">pg_pool</span>):                       <span class="comment"># pg_pool: session 级连接池</span></span><br><span class="line">    name = <span class="string">f&quot;t_<span class="subst">&#123;uuid.uuid4().<span class="built_in">hex</span>[:<span class="number">10</span>]&#125;</span>&quot;</span>       <span class="comment"># ⭐ 名字随机化，并行也不撞</span></span><br><span class="line">    <span class="keyword">with</span> pg_pool.connection() <span class="keyword">as</span> conn:</span><br><span class="line">        conn.execute(<span class="string">f&#x27;CREATE SCHEMA &quot;<span class="subst">&#123;name&#125;</span>&quot;&#x27;</span>)</span><br><span class="line">        conn.execute(<span class="string">f&#x27;SET search_path TO &quot;<span class="subst">&#123;name&#125;</span>&quot;&#x27;</span>)</span><br><span class="line">        run_migrations(conn)                  <span class="comment"># 每个测试一张全新表结构</span></span><br><span class="line">        <span class="keyword">yield</span> conn</span><br><span class="line">        conn.execute(<span class="string">f&#x27;DROP SCHEMA &quot;<span class="subst">&#123;name&#125;</span>&quot; CASCADE&#x27;</span>)   <span class="comment"># teardown 兜底清理</span></span><br></pre></td></tr></table></figure>
+<p>代价是每个测试多付一次迁移时间（几十毫秒到秒级），所以它通常只挂在 <code>-m integration</code> 层（02 篇的标记选择 + 08 篇分层策略）。</p>
+<p><strong>方法三：内存 SQLite（sqlite:///:memory:）。</strong> 最快，但<strong>与真库有真实语义差异</strong>——实测两条：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 差异一（实测）：SQLite 对列类型宽容，字符串能进 INTEGER 列</span></span><br><span class="line">conn.execute(<span class="string">&quot;CREATE TABLE t (n INTEGER)&quot;</span>)</span><br><span class="line">conn.execute(<span class="string">&quot;INSERT INTO t VALUES (&#x27;abc&#x27;)&quot;</span>)     <span class="comment"># 不报错！</span></span><br><span class="line"><span class="comment"># 查询结果: (&#x27;abc&#x27;, &#x27;text&#x27;)   # PostgreSQL 会直接 raise</span></span><br></pre></td></tr></table></figure>
+<p>差异清单（写库测试前过一遍）：类型强制度（上例）、并发写锁行为（文件库才有，<code>:memory:</code> 没有）、方言函数（<code>GROUP_CONCAT</code>/<code>ON CONFLICT</code> 细节/<code>RETURNING</code> 支持度）、事务隔离级别。<strong>经验做法</strong>：用内存 SQLite 测&quot;业务 SQL 逻辑&quot;，但<strong>每类查询至少一条用例在真库跑</strong>（testcontainers 或 CI 服务容器，见 4 节）——两层的分工是&quot;逻辑&quot;与&quot;方言&quot;。</p>
+<h2 id="3-http-依赖打桩与-contract-测试"><a class="markdownIt-Anchor" href="#3-http-依赖打桩与-contract-测试"></a> 3. HTTP 依赖：打桩与 contract 测试</h2>
+<p><strong>打桩（单元/集成层皆宜）。</strong> httpx 生态用 respx（requests 用 responses），语法同构：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># test_http.py</span></span><br><span class="line"><span class="keyword">import</span> httpx, pytest, respx</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">fetch_base</span>(<span class="params">url: <span class="built_in">str</span></span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">    r = httpx.get(url)</span><br><span class="line">    r.raise_for_status()</span><br><span class="line">    <span class="keyword">return</span> r.json()[<span class="string">&quot;base&quot;</span>]</span><br><span class="line"></span><br><span class="line"><span class="meta">@respx.mock(<span class="params">base_url=<span class="string">&quot;https://api.example.com&quot;</span></span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_fetch_base</span>(<span class="params">respx_mock</span>):</span><br><span class="line">    respx_mock.get(<span class="string">&quot;/v1/base&quot;</span>).respond(json=&#123;<span class="string">&quot;base&quot;</span>: <span class="string">&quot;CNY&quot;</span>&#125;, status_code=<span class="number">200</span>)</span><br><span class="line">    <span class="keyword">assert</span> fetch_base(<span class="string">&quot;https://api.example.com/v1/base&quot;</span>) == <span class="string">&quot;CNY&quot;</span></span><br><span class="line">    <span class="keyword">assert</span> respx_mock.calls.call_count == <span class="number">1</span>     <span class="comment"># 请求确实发出且只发一次</span></span><br><span class="line"></span><br><span class="line"><span class="meta">@respx.mock(<span class="params">base_url=<span class="string">&quot;https://api.example.com&quot;</span></span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_fetch_500_raises</span>(<span class="params">respx_mock</span>):</span><br><span class="line">    respx_mock.get(<span class="string">&quot;/v1/base&quot;</span>).respond(status_code=<span class="number">500</span>)</span><br><span class="line">    <span class="keyword">with</span> pytest.raises(httpx.HTTPStatusError):</span><br><span class="line">        fetch_base(<span class="string">&quot;https://api.example.com/v1/base&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>打桩能测全状态机（200/404/429/超时），但<strong>它验证不了&quot;对方真长这样&quot;</strong>——桩里的 JSON 形状是你抄的文档，接口一改，桩照常绿。这就是<strong>contract 测试</strong>要补的缺口：让桩与真服务端共享同一段&quot;契约&quot;（OpenAPI schema、或你定义的请求/响应快照），CI 里用真服务端（或其官方 sandbox）跑一遍契约用例，两边谁违约谁红。</p>
+<p>轻量形态：<strong>本地假服务端</strong>——pytest fixture 里起一个真实 HTTP server（<code>http.server</code>/<code>uvicorn</code>），业务代码发真 HTTP 请求，但打到 127.0.0.1。它比打桩多覆盖一层真实协议栈（编码、header、重定向），比打真外网稳定得多：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># tests/integration/conftest.py —— 本地假服务端 fixture（实测通过）</span></span><br><span class="line"><span class="keyword">import</span> http.server, json, threading</span><br><span class="line"><span class="keyword">import</span> pytest</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">fake_api</span>():</span><br><span class="line">    <span class="keyword">class</span> <span class="title class_">H</span>(http.server.BaseHTTPRequestHandler):</span><br><span class="line">        <span class="keyword">def</span> <span class="title function_">do_GET</span>(<span class="params">self</span>):</span><br><span class="line">            body = json.dumps(&#123;<span class="string">&quot;path&quot;</span>: <span class="variable language_">self</span>.path&#125;).encode()</span><br><span class="line">            <span class="variable language_">self</span>.send_response(<span class="number">200</span>)</span><br><span class="line">            <span class="variable language_">self</span>.send_header(<span class="string">&quot;Content-Type&quot;</span>, <span class="string">&quot;application/json&quot;</span>)</span><br><span class="line">            <span class="variable language_">self</span>.end_headers()</span><br><span class="line">            <span class="variable language_">self</span>.wfile.write(body)</span><br><span class="line">        <span class="keyword">def</span> <span class="title function_">log_message</span>(<span class="params">self, *a</span>): <span class="keyword">pass</span>         <span class="comment"># 静默访问日志</span></span><br><span class="line">    srv = http.server.ThreadingHTTPServer((<span class="string">&quot;127.0.0.1&quot;</span>, <span class="number">0</span>), H)  <span class="comment"># 端口 0 随机分配</span></span><br><span class="line">    threading.Thread(target=srv.serve_forever, daemon=<span class="literal">True</span>).start()</span><br><span class="line">    <span class="keyword">yield</span> <span class="string">f&quot;http://127.0.0.1:<span class="subst">&#123;srv.server_address[<span class="number">1</span>]&#125;</span>&quot;</span></span><br><span class="line">    srv.shutdown()                              <span class="comment"># teardown：进程内关闭，不占端口</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">test_fetch_base_via_real_stack</span>(<span class="params">fake_api</span>):</span><br><span class="line">    <span class="keyword">import</span> httpx</span><br><span class="line">    <span class="keyword">assert</span> httpx.get(fake_api + <span class="string">&quot;/v1/base&quot;</span>).json()[<span class="string">&quot;path&quot;</span>] == <span class="string">&quot;/v1/base&quot;</span></span><br></pre></td></tr></table></figure>
+<p>注意 fixture 里三件小事都做对了：端口交给内核分配（第 6 节清单二）、线程设 daemon、<code>shutdown()</code> 保证重复运行不积累监听 socket——集成 fixture 的&quot;干净退出&quot;与&quot;干净进入&quot;同样重要。</p>
+<h2 id="4-testcontainers-思想概览"><a class="markdownIt-Anchor" href="#4-testcontainers-思想概览"></a> 4. testcontainers 思想概览</h2>
+<p>&quot;真库语义&quot;与&quot;环境干净&quot;可以兼得：<strong>testcontainers</strong>（Python 包 <code>testcontainers</code>，思想同源 Java 生态）在测试会话里<strong>编程式拉起一次性的 Docker 容器</strong>（PostgreSQL、Redis、Kafka……），跑完销毁：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 思想示意（真实 API 以 testcontainers 文档为准）</span></span><br><span class="line"><span class="keyword">from</span> testcontainers.postgres <span class="keyword">import</span> PostgresContainer</span><br><span class="line"></span><br><span class="line"><span class="meta">@pytest.fixture(<span class="params">scope=<span class="string">&quot;session&quot;</span></span>)</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">pg</span>():</span><br><span class="line">    <span class="keyword">with</span> PostgresContainer(<span class="string">&quot;postgres:16&quot;</span>) <span class="keyword">as</span> p:</span><br><span class="line">        <span class="keyword">yield</span> p.get_connection_url()   <span class="comment"># 随机端口的真实 Postgres</span></span><br></pre></td></tr></table></figure>
+<p>三个关键词：<strong>session 级</strong>（容器启动秒级~十秒级，不要 function 级）、<strong>随机端口</strong>（容器自己分配，杜绝冲突）、<strong>一次性</strong>（每次 CI 任务全新实例，无状态污染）。成本是 CI 必须有 Docker；没有 Docker 的环境退化路径：CI 服务容器（GitHub Actions <code>services:</code> 字段，08 篇 yaml 里给全）或内存库+真库抽样。</p>
+<h2 id="5-文件系统与子进程真实边界最小暴露"><a class="markdownIt-Anchor" href="#5-文件系统与子进程真实边界最小暴露"></a> 5. 文件系统与子进程：真实边界，最小暴露</h2>
+<p><strong>文件系统</strong>：文件操作是真行为（编码、权限、换行符），用<strong>真实文件系统 + tmp_path</strong>（03 篇），不用 mock <code>open</code>——mock 文件的测试等于宣布&quot;我不测编码问题&quot;。子目录资源随测试自动清理，Windows/WSL 差异也顺手覆盖（换行符 <code>\r\n</code> 是经典翻车点，<code>Path.write_text</code> 的 <code>newline</code> 参数要显式）。</p>
+<p><strong>子进程</strong>：真跑可以，但三件事必须做——用 <code>sys.executable</code>（CI 上没有 <code>python</code> 别名）、超时必填（<code>subprocess.run(..., timeout=30)</code>，防挂死拖死整条流水线）、输出用 <code>capture_output=True</code> 断言而非人眼。命令本身做成参数注入，测试里替换成无害命令（<code>echo</code>/<code>python -c 'print(1)'</code>），只有一两条&quot;真命令&quot;用例留给 CI。</p>
+<h2 id="6-稳定性问题清单每个配解法"><a class="markdownIt-Anchor" href="#6-稳定性问题清单每个配解法"></a> 6. 稳定性问题清单：每个配解法</h2>
+<p>集成测试 flaky 的四大来源，逐条给解法（本系列写作过程中实际撞上的一条也在列）：</p>
+<ol>
+<li><strong>sleep 等待</strong>。<code>time.sleep(2)</code> 等&quot;慢的东西&quot;：CI 机器慢时 2 秒不够就 flaky，改成轮询——<code>for _ in range(50): if 条件: break; time.sleep(0.1)</code>，或更优：把&quot;等&quot;改成&quot;事件&quot;（fakes 事件、队列 <code>get(timeout=)</code>、asyncio 的 <code>Event</code>）。原则：<strong>测结果，不测时机</strong>；</li>
+<li><strong>端口冲突</strong>。写死 8000/8080 在并行 CI 上必撞。解法：<code>bind((&quot;127.0.0.1&quot;, 0))</code> 让内核随机分配（实测一次拿到 56595），再从 <code>getsockname()[1]</code> 读回真端口传给被测代码——&quot;端口可注入&quot;因此成为被测代码的隐性要求；</li>
+<li><strong>环境泄漏</strong>。实测案例：本系列写作时跑 httpx 测试，shell 里的 <code>ALL_PROXY</code> 让 respx 全绿用例直接 <code>ImportError: Using SOCKS proxy</code>。代理变量（<code>HTTP(S)_PROXY</code>/<code>ALL_PROXY</code>）、语言区（<code>LANG</code>）、时区（<code>TZ</code>）都会改变行为。解法：测试进程统一 <code>monkeypatch.delenv</code>（或 CI 步骤 <code>env -i</code>/显式覆盖）+ 关键测试显式 <code>monkeypatch.setenv(&quot;TZ&quot;, &quot;UTC&quot;)</code>；时区相关断言一律用 aware datetime；</li>
+<li><strong>外部状态残留</strong>。测试写了固定路径（<code>/tmp/shared.json</code>）或固定 docker 容器名。解法：一切&quot;名字&quot;经 tmp_path/UUID 生成，CI 每任务全新环境；同名容器的 stale 残留用 session 级 teardown 兜底清理。</li>
+</ol>
+<p><strong>经验做法</strong>：任何&quot;本地稳、CI 挂&quot;或&quot;单跑绿、全量红&quot;的测试，先查清单四条再查代码——九成命中其中之一。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<p><strong>误区一：全量用内存 SQLite 却以为测了数据库。</strong> 方言差异（类型/锁/函数）一条都没被覆盖。分层补真库用例，或接受&quot;数据库层风险另账管理&quot;并写进 README。</p>
+<p><strong>误区二：打桩即集成测试。</strong> respx 全绿 ≠ 对接没问题，它只证明&quot;你的代码按你理解的契约工作&quot;。契约测试/真服务端抽样必须存在。</p>
+<p><strong>误区三：共享数据库实例但不做隔离。</strong> 测试间靠&quot;执行顺序&quot;维持数据成立（A 建的数据 B 用），并行跑立刻散架。隔离三法选一个，别选第四种&quot;小心点&quot;。</p>
+<p><strong>误区四：容器当轻量资源。</strong> function 级拉容器把套件拖到十分钟级。session 级 + 随机端口 + 数据事务隔离的组合才是正解。</p>
+<p><strong>误区五：为稳定性加 try/except 吞断言。</strong> flaky 的正确处理是<strong>根因修复</strong>（本节清单）或显式隔离（08 篇的 quarantine 机制），吞掉的断言等于删掉的测试。</p>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>单元/集成的判定看真实 I/O 与真实协作；替身策略按&quot;单元测逻辑分支、集成测真契约&quot;分工，集成用例贵精不贵多；</li>
+<li>数据库隔离三法：事务回滚（首选，注意驱动隐式 commit）、独立 schema（必须 commit 时）、内存 SQLite（测逻辑不测方言，类型宽容度是实测坑）；</li>
+<li>HTTP 打桩（respx/responses）覆盖状态机，contract 测试/本地假服务端补&quot;对方真长这样&quot;的验证；</li>
+<li>testcontainers = session 级一次性容器 + 随机端口，CI 无 Docker 时退化到 services 容器；</li>
+<li>文件与子进程用真实资源但最小暴露：tmp_path、<code>sys.executable</code>、超时必填；</li>
+<li>稳定性四清单：sleep→轮询/事件、端口→内核分配、环境泄漏→显式 env 控制、状态残留→UUID 化——flaky 先查清单。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>把事务回滚 fixture 从 <code>:memory:</code> 改成临时文件库（tmp_path），并解释为什么两个测试之间依然互不可见；故意去掉 <code>isolation_level=None</code> 复现&quot;回滚失效&quot;，记录现象。</li>
+<li>为 <code>fetch_base</code> 补三条 respx 用例：429（带 <code>Retry-After</code> header）、超时（<code>respx_mock.route(...).mock(side_effect=httpx.ConnectTimeout)</code>）、响应体缺 <code>base</code> 字段。</li>
+<li>写一个&quot;本地假服务端&quot;fixture（<code>http.server</code> 起 127.0.0.1:0），让 <code>fetch_base</code> 走真 HTTP 栈通过，并说明它比 respx 多验证了什么。</li>
+<li>给一个你自己的库写 testcontainers 版 session fixture（或退化版：CI <code>services:</code> 里的真 Postgres），跑通&quot;迁移脚本幂等&quot;用例。</li>
+<li>制造一个 flaky 测试（固定端口 + sleep），按第 6 节清单逐条修复，写出修复前后各连续运行 10 次的结果对比。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%B5%8B%E8%AF%95/" rel="tag"># 测试</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/06-%E6%B5%8B%E8%AF%95%E7%AD%96%E7%95%A5%E4%B8%8E%E5%8F%AF%E6%B5%8B%E8%AF%95%E6%80%A7%E8%AE%BE%E8%AE%A1/" rel="prev" title="06-测试策略与可测试性设计">
+                  <i class="fa fa-angle-left"></i> 06-测试策略与可测试性设计
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/08-CI%E6%B5%81%E6%B0%B4%E7%BA%BF%E4%B8%8E%E8%B4%A8%E9%87%8F%E9%97%A8%E7%A6%81/" rel="next" title="08-CI流水线与质量门禁">
+                  08-CI流水线与质量门禁 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

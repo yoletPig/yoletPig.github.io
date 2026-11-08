@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 分清 on-CPU 分析与 off-CPU 分析的适用场景：什么时候看&#39;CPU 上在跑什么&#39;，什么时候看&#39;不在 CPU 上时在等谁&#39;。 - 理解 off-CPU 分析的实现原理（schedswitch tracepoint），会用 pe…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="04-延迟分析与off-CPU">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/04-%E5%BB%B6%E8%BF%9F%E5%88%86%E6%9E%90%E4%B8%8Eoff-CPU/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 分清 on-CPU 分析与 off-CPU 分析的适用场景：什么时候看&#39;CPU 上在跑什么&#39;，什么时候看&#39;不在 CPU 上时在等谁&#39;。 - 理解 off-CPU 分析的实现原理（schedswitch tracepoint），会用 pe…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T22:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.538Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Linux">
+<meta property="article:tag" content="性能优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/04-%E5%BB%B6%E8%BF%9F%E5%88%86%E6%9E%90%E4%B8%8Eoff-CPU/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/04-%E5%BB%B6%E8%BF%9F%E5%88%86%E6%9E%90%E4%B8%8Eoff-CPU/","path":"2026/09/03/04-延迟分析与off-CPU/","title":"04-延迟分析与off-CPU"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>04-延迟分析与off-CPU | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#04-%E5%BB%B6%E8%BF%9F%E5%88%86%E6%9E%90off-cpu-%E4%B8%8Ecpu-%E4%B8%8D%E9%AB%98%E4%BD%86%E5%BE%88%E6%85%A2"><span class="nav-number">1.</span> <span class="nav-text"> 04 - 延迟分析：off-CPU 与&quot;CPU 不高但很慢&quot;</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E6%97%B6%E9%97%B4%E9%83%BD%E5%8E%BB%E5%93%AA%E4%BA%86%E8%AF%B7%E6%B1%82%E8%80%97%E6%97%B6%E7%9A%84%E4%B8%89%E6%AE%B5%E8%AE%BA"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 时间都去哪了：请求耗时的三段论</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-off-cpu-%E5%88%86%E6%9E%90%E7%9A%84%E5%8E%9F%E7%90%86%E5%9C%A8%E8%B0%83%E5%BA%A6%E5%99%A8%E9%97%A8%E5%8F%A3%E6%89%93%E5%8D%A1"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. off-CPU 分析的原理：在调度器门口打卡</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-perf-sched%E5%AE%98%E6%96%B9%E7%9A%84%E8%B0%83%E5%BA%A6%E8%A7%86%E8%A7%92"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. perf sched：官方的调度视角</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-ftrace-%E6%9C%80%E5%B0%8F%E7%94%A8%E6%B3%95%E7%9C%8B%E5%8D%95%E4%B8%AA%E4%BA%8B%E4%BB%B6%E7%9A%84%E7%8E%B0%E5%9C%BA"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. ftrace 最小用法：看单个事件的现场</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%8A%A8%E6%89%8B%E5%AE%9E%E9%AA%8C%E4%B8%80%E4%B8%AAcpu-%E4%B8%8D%E9%AB%98%E4%BD%86%E5%BE%88%E6%85%A2%E7%9A%84%E6%9C%8D%E5%8A%A1"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 动手实验：一个&quot;CPU 不高但很慢&quot;的服务</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.9.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/04-%E5%BB%B6%E8%BF%9F%E5%88%86%E6%9E%90%E4%B8%8Eoff-CPU/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="04-延迟分析与off-CPU | Yoleen的博客">
+      <meta itemprop="description" content="- 分清 on-CPU 分析与 off-CPU 分析的适用场景：什么时候看&#39;CPU 上在跑什么&#39;，什么时候看&#39;不在 CPU 上时在等谁&#39;。 - 理解 off-CPU 分析的实现原理（schedswitch tracepoint），会用 pe…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          04-延迟分析与off-CPU
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 06:00:00" itemprop="dateCreated datePublished" datetime="2026-09-03T06:00:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Linux%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Linux性能工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.1k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>11 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 分清 on-CPU 分析与 off-CPU 分析的适用场景：什么时候看'CPU 上在跑什么'，什么时候看'不在 CPU 上时在等谁'。 - 理解 off-CPU 分析的实现原理（schedswitch tracepoint），会用 pe…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="04-延迟分析off-cpu-与cpu-不高但很慢"><a class="markdownIt-Anchor" href="#04-延迟分析off-cpu-与cpu-不高但很慢"></a> 04 - 延迟分析：off-CPU 与&quot;CPU 不高但很慢&quot;</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>分清 on-CPU 分析与 off-CPU 分析的适用场景：什么时候看&quot;CPU 上在跑什么&quot;，什么时候看&quot;不在 CPU 上时在等谁&quot;。</li>
+<li>理解 off-CPU 分析的实现原理（sched_switch tracepoint），会用 perf sched 和 BCC offcputime（或等价 bpftrace 思路）量出等待分布。</li>
+<li>会用 ftrace 的最小操作（events 使能、trace_on、读 trace 管道）看单个事件的现场。</li>
+<li>完成一个&quot;CPU 不高但很慢&quot;的完整案例：同步 IO 等待的服务，从症状到修复的全过程。</li>
+</ul>
+<p>前置：03 篇（perf 与火焰图）；操作系统系列 03（CPU 调度，理解 runqueue）。本篇与 03 篇合起来覆盖 CPU 时间的全部：在 CPU 上的（03）+ 等 CPU 的（本篇调度延迟）+ 等非 CPU 资源的（本篇 off-CPU）。</p>
+<h2 id="1-时间都去哪了请求耗时的三段论"><a class="markdownIt-Anchor" href="#1-时间都去哪了请求耗时的三段论"></a> 1. 时间都去哪了：请求耗时的三段论</h2>
+<p>一个请求的墙钟时间（wall time），只有一小部分花在 CPU 上：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">一个请求的生命周期（墙钟 100ms 示意）</span><br><span class="line">┌──────────────┬───────────────────────┬─────────────┐</span><br><span class="line">│  on-CPU 15ms  │      off-CPU 80ms      │  其他 5ms    │</span><br><span class="line">│  真的在算：    │  等资源被唤醒前：       │  进程被换出   │</span><br><span class="line">│  解释器/计算  │  磁盘 IO / 网络 RTT     │  等自己被调度 │</span><br><span class="line">│  序列化/加解密│  锁/信号量 / sleep      │  (调度延迟)   │</span><br><span class="line">└──────────────┴───────────────────────┴─────────────┘</span><br><span class="line">      03 篇的领地    ←──── 本篇的领地 ────→   runqlat</span><br></pre></td></tr></table></figure>
+<p>于是排查有了分诊规则（Brendan Gregg, “Off-CPU Analysis”, <a target="_blank" rel="noopener" href="http://brendangregg.com">brendangregg.com</a>；亦见《Systems Performance》第 5 章）：</p>
+<ul>
+<li><strong>CPU 利用率高 + 慢</strong> → on-CPU 分析（03 篇：火焰图找热点）。</li>
+<li><strong>CPU 利用率低 + 慢</strong> → off-CPU 分析（本篇）：时间花在等待上，perf 的 CPU 火焰图会显示一切正常——因为你只拍了&quot;在 CPU 上&quot;的照片。</li>
+<li><strong>忽快忽慢、抖动大</strong> → 两边都要看，还要看调度延迟（runqlat）和 01 篇的分布思维。</li>
+</ul>
+<p><strong>经验做法</strong>：拿到&quot;服务慢&quot;的工单，第一条命令永远是 <code>mpstat 1 5</code> 或 <code>top</code>——先确定 CPU 是不是当事者，再决定去 03 篇还是本篇。</p>
+<h2 id="2-off-cpu-分析的原理在调度器门口打卡"><a class="markdownIt-Anchor" href="#2-off-cpu-分析的原理在调度器门口打卡"></a> 2. off-CPU 分析的原理：在调度器门口打卡</h2>
+<p>off-CPU 分析的核心动作只有一个：<strong>在 sched_switch tracepoint 上，记录线程被换下 CPU 的时刻与原因，等它被换回时结算等待时长</strong>。线程离开 CPU 的路径有三种（内核 <code>sched_switch</code> 的 <code>prev_state</code>）：</p>
+<ul>
+<li><code>prev_state == 0</code>（TASK_RUNNING）：只是被抢占，还在运行队列里等 CPU → 这是&quot;等 CPU&quot;，属于调度延迟，runqlat 的统计对象。</li>
+<li><code>prev_state == 1</code>（TASK_INTERRUPTIBLE）/ <code>2</code>（TASK_UNINTERRUPTIBLE）：主动睡（等锁、等 IO、等网络包）→ off-CPU 分析的主体。D 状态（2）多半在等不可中断的资源如磁盘。</li>
+<li>被信号杀死/终止等其他状态，排查时一般忽略。</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">线程时间线与 sched_switch 打卡点</span><br><span class="line">        运行        等 IO（off-CPU）        运行</span><br><span class="line">   ────┤A├─────────╱                    ╲──────┤B├──────►</span><br><span class="line">       ▲ sched_switch(prev_state=2)          ▲ sched_switch(next_pid=我)</span><br><span class="line">       │ 记录 t_out=now, 栈=我此刻在哪等待      │ 结算 Δt=now-t_out</span><br><span class="line">                    └──────── Δt = off-CPU 时长 ────────┘</span><br></pre></td></tr></table></figure>
+<p>把每次 Δt 按调用栈/线程聚合，就得到 off-CPU 火焰图：宽塔 = 等得最久的路径。BCC 的 <code>offcputime</code> 工具（<code>/usr/share/bcc/tools/offcputime</code>）实现了这个逻辑；原理上它就是 08 篇 eBPF 技术的一个应用。等价 bpftrace 脚本（教学简化版，忽略唤醒栈与精度细节）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line"># offcpu.bt —— bpftrace 版 off-CPU 直方图（按线程聚合）</span><br><span class="line">tracepoint:sched:sched_switch</span><br><span class="line">/args-&gt;prev_state != 0/                     # 只统计阻塞型换出（含 D 状态），不算被抢占</span><br><span class="line">&#123;</span><br><span class="line">    @out_ts[args-&gt;prev_pid] = nsecs;        # 打卡：记录换出时刻</span><br><span class="line">    @out_comm[args-&gt;prev_pid] = args-&gt;prev_comm;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">tracepoint:sched:sched_switch</span><br><span class="line">/@out_ts[args-&gt;next_pid]/</span><br><span class="line">&#123;</span><br><span class="line">    @wait_us[@out_comm[args-&gt;next_pid]] =</span><br><span class="line">        hist((nsecs - @out_ts[args-&gt;next_pid]) / 1000);</span><br><span class="line">    delete(@out_ts[args-&gt;next_pid]);</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>字段名 <code>args-&gt;prev_state/prev_pid/next_pid/prev_comm</code> 来自 tracepoint 格式（<code>cat /sys/kernel/tracing/events/sched/sched_switch/format</code> 可验证），不同 bpftrace 版本写法略有差异，<code>bpftrace -l 'tracepoint:sched:sched_switch' -v</code> 查看。</p>
+<p>off-CPU 分析的两个盲区（《Systems Performance》5.3 节有述，<strong>经验做法</strong>补充）：</p>
+<ol>
+<li><strong>只看被阻塞线程自己的栈，看不到&quot;谁该负责&quot;</strong>：等锁的栈只显示 pthread_cond_wait，想找到持锁者需要 waker 分析（记录唤醒线程的栈，BCC offcputime 的 <code>-w</code> 选项）。</li>
+<li><strong>采样间隔与短等待</strong>：极短等待（&lt;10μs）海量发生时，记录本身开销不可忽略，通常过滤掉短等待（工具默认阈值）。</li>
+</ol>
+<h2 id="3-perf-sched官方的调度视角"><a class="markdownIt-Anchor" href="#3-perf-sched官方的调度视角"></a> 3. perf sched：官方的调度视角</h2>
+<p>不装任何额外工具，perf 就能做调度分析：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">$ sudo perf sched record -- sleep 10</span><br><span class="line">$ sudo perf sched latency --sort max</span><br><span class="line"></span><br><span class="line"> -----------------------------------------------------------------------------------------------------------------</span><br><span class="line">  Task                  |   Runtime ms  | Switches | Average delay ms | Maximum delay ms | Maximum delay at       |</span><br><span class="line"> -----------------------------------------------------------------------------------------------------------------</span><br><span class="line">  python3:(10)          |    812.033    |      324 | avg   0.512 ms | max   8.412 ms | max at 10:31:22.410532 s</span><br><span class="line">  kswapd0:0             |      4.102    |        4 | avg   0.101 ms | max   1.203 ms | max at ...</span><br><span class="line"> -----------------------------------------------------------------------------------------------------------------</span><br></pre></td></tr></table></figure>
+<p><code>perf sched latency</code> 的 Average/Maximum delay 就是<strong>调度延迟</strong>：线程从&quot;可运行&quot;到&quot;真的上 CPU&quot;等了多久（对应 03 篇说的 runqueue 等待，OSTEP 第 7 章讲过的&quot;CPU 就绪队列&quot;）。<code>perf sched timehist</code>（较新版本）则逐次切换列出 wait time / run time，是最细的时间线。</p>
+<p>调度延迟什么时候重要？<strong>CPU 饱和的机器上</strong>：8 个贪吃线程挤 4 个核，每个线程的调度延迟会显著抬升 P99（对延迟敏感型服务尤其致命——即使单请求计算量很小）。诊断信号：<code>vmstat 1</code> 的 <code>r</code> 列长期 ≥ 核数、<code>perf sched latency</code> 的 avg delay 从 0.1ms 级涨到毫秒级。<strong>经验做法</strong>：把&quot;调度延迟 P99&quot;当作和&quot;CPU 利用率&quot;平级的容量指标，前者饱和比后者到 100% 更早报警。</p>
+<p>更轻量的实时观察（BCC runqlat / bpftrace 一行版，08 篇剖析原理）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ sudo /usr/share/bcc/tools/runqlat 1</span><br><span class="line">     usecs               : count     distribution</span><br><span class="line">         0 -&gt; 1          : 1420     |****************                        |</span><br><span class="line">         2 -&gt; 3          : 3210     |****************************************|</span><br><span class="line">         4 -&gt; 7          : 1802     |**********************                  |</span><br><span class="line">      ...</span><br><span class="line">      4096 -&gt; 8191       : 12       |                                        |</span><br></pre></td></tr></table></figure>
+<h2 id="4-ftrace-最小用法看单个事件的现场"><a class="markdownIt-Anchor" href="#4-ftrace-最小用法看单个事件的现场"></a> 4. ftrace 最小用法：看单个事件的现场</h2>
+<p>ftrace 是内核自带的追踪框架（man ftrace；内核文档 <code>Documentation/trace/ftrace.rst</code>），通过 tracefs 文件操作。四步看&quot;read 系统调用在内核里跑了多久&quot;：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">$ cd /sys/kernel/tracing                    # 老内核在 /sys/kernel/debug/tracing</span><br><span class="line">$ echo 0 &gt; tracing_on                       # 先关，配置好再开</span><br><span class="line">$ echo 1 &gt; events/syscalls/sys_exit_read/enable</span><br><span class="line">$ echo 1 &gt; tracing_on                       # 开始记录</span><br><span class="line">$ cat /etc/hostname &gt; /dev/null             # 制造一点流量</span><br><span class="line">$ echo 0 &gt; tracing_on                       # 停止</span><br><span class="line">$ cat trace | head -5</span><br><span class="line"># tracer: nop</span><br><span class="line">#</span><br><span class="line"># entries-in-buffer/entries-written: 37/37   #P:16</span><br><span class="line">#</span><br><span class="line">#                                _-----=&gt; irqs-off/BH-disabled</span><br><span class="line">#                               / _----=&gt; need-resched</span><br><span class="line">#                              | / _---=&gt; hardirq/softirq</span><br><span class="line">#                              || / _--=&gt; preempt-depth</span><br><span class="line">#                              ||| /     delay</span><br><span class="line">#           TASK-PID     CPU#  ||||    TIMESTAMP   FUNCTION</span><br><span class="line">#              | |         |   ||||       |             |</span><br><span class="line">              cat-49152   [003] .....  1234.567890: sys_read -&gt; 0x0</span><br></pre></td></tr></table></figure>
+<p>更常用的还有函数级追踪（<code>echo function &gt; current_tracer</code> 看内核函数调用流）和 <code>echo function_graph &gt; current_tracer</code>（带耗时的调用图）。<strong>经验做法</strong>：ftrace 适合&quot;临时、单事件、要看原始现场&quot;的场景；要做统计聚合（直方图/频率表）直接上 bpftrace（08 篇），别用 ftrace 的原始输出硬数。<strong>WSL2 注</strong>：tracefs 存在，但个别事件目录为空属正常（内核配置裁剪）；找不到 <code>/sys/kernel/tracing</code> 时先 <code>sudo mount -t tracefs none /sys/kernel/tracing</code>。</p>
+<h2 id="5-动手实验一个cpu-不高但很慢的服务"><a class="markdownIt-Anchor" href="#5-动手实验一个cpu-不高但很慢的服务"></a> 5. 动手实验：一个&quot;CPU 不高但很慢&quot;的服务</h2>
+<p>症状设定：一个&quot;日志归档&quot;服务，每处理一条记录要确认落盘（模拟同步 fsync 的反模式）。CPU 几乎闲着，但吞吐惨不忍睹。先写这个&quot;有问题的程序&quot;：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># slow_writer.py —— 每条记录 open+write+fsync：CPU 不忙，但极慢</span></span><br><span class="line"><span class="keyword">import</span> os, time, sys</span><br><span class="line"></span><br><span class="line">DATA = <span class="string">b&quot;x&quot;</span> * <span class="number">1024</span>                        <span class="comment"># 1KB 的&quot;一条日志&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">process_records</span>(<span class="params">path, n</span>):</span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n):</span><br><span class="line">        t0 = time.perf_counter()</span><br><span class="line">        fd = os.<span class="built_in">open</span>(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND)</span><br><span class="line">        os.write(fd, DATA)</span><br><span class="line">        os.fsync(fd)                      <span class="comment"># ← 反模式：每条都强制落盘</span></span><br><span class="line">        os.close(fd)</span><br><span class="line">        <span class="keyword">if</span> i % <span class="number">100</span> == <span class="number">0</span>:</span><br><span class="line">            dt = (time.perf_counter() - t0) * <span class="number">1000</span></span><br><span class="line">            <span class="built_in">print</span>(<span class="string">f&quot;rec <span class="subst">&#123;i:5d&#125;</span>: <span class="subst">&#123;dt:<span class="number">6.2</span>f&#125;</span> ms&quot;</span>, file=sys.stderr)</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    process_records(<span class="string">&quot;/tmp/slow.log&quot;</span>, <span class="built_in">int</span>(sys.argv[<span class="number">1</span>]) <span class="keyword">if</span> <span class="built_in">len</span>(sys.argv) &gt; <span class="number">1</span> <span class="keyword">else</span> <span class="number">200</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>第一步：症状确认。</strong> 先看 CPU 是不是当事者：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ python3 slow_writer.py 200 2&gt;&amp;1 | tail -3</span><br><span class="line">rec   198:  11.32 ms</span><br><span class="line">rec   199:  10.98 ms</span><br><span class="line">$ mpstat -P ALL 1 3 | tail -2             # CPU 几乎空闲 → on-CPU 火焰图注定一无所获</span><br><span class="line">all    1.20    0.00    0.60    0.30    0.00    0.10    0.00    0.00   97.80</span><br></pre></td></tr></table></figure>
+<p>CPU 97.8% idle，但每条记录 11ms——典型 off-CPU 问题，进入本篇流程。</p>
+<p><strong>第二步：观测等待。</strong> 用 <code>pidstat</code> 确认 IO 等待，用 iostat 看设备层面：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ pidstat -d 1 2 -p $(pgrep -f slow_writer)</span><br><span class="line">02:10:01 PM   UID       PID   kB_rd/s   kB_wr/s kB_ccwr/s iodelay  Command</span><br><span class="line">02:10:02 PM  1000     50112      0.00   1024.00      0.00     810  python3</span><br><span class="line"></span><br><span class="line">$ iostat -x 1 2 | grep -E &#x27;Device|nvme&#x27;</span><br><span class="line">Device  r/s  w/s   rkB/s  wkB/s ... w_await aqu-sz ... %util</span><br><span class="line">nvme0n1 0.0 38.0    0.0  1024.0 ...   10.80   0.41 ...  3.60</span><br></pre></td></tr></table></figure>
+<p><code>iodelay</code>（pidstat 的 IO 等待毫秒计数）与 <code>w_await≈10.8ms</code> 指向：每次写都在等存储。再看系统级证据链：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ vmstat 1 3                              # b 列（阻塞在 IO 的任务）间歇出现</span><br><span class="line"> r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st</span><br><span class="line"> 1  1      0 ...                     0    0     0  1200 4300 9000  1  1 92  6  0</span><br></pre></td></tr></table></figure>
+<p><strong>第三步：抓现场（谁在等什么）。</strong> 用 ftrace 看 fsync 路径（或 08 篇的 BCC fileslower / offcputime）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">$ cd /sys/kernel/tracing</span><br><span class="line">$ echo 0 &gt; tracing_on</span><br><span class="line">$ echo 1 &gt; events/syscalls/sys_exit_fsync/enable</span><br><span class="line">$ echo 1 &gt; tracing_on</span><br><span class="line">$ python3 slow_writer.py 20 2&gt;/dev/null</span><br><span class="line">$ echo 0 &gt; tracing_on</span><br><span class="line">$ grep -v &#x27;^#&#x27; trace | head -3</span><br><span class="line">     python3-50231 [005] ..... 1301.223451: sys_fsync -&gt; 0x0</span><br></pre></td></tr></table></figure>
+<p>要量化&quot;每次 fsync 多久&quot;，用 strace 的统计模式（小负载下可用，01 篇的开销警告在此不适用）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ strace -c -e trace=fsync python3 slow_writer.py 50 2&gt;&amp;1 | tail -8</span><br><span class="line">% time     seconds  usecs/call    calls    errors syscall</span><br><span class="line">------ ----------- ----------- --------- --------- ----------------</span><br><span class="line"> 99.87    0.612345       12246        50           fsync</span><br><span class="line">  0.13    0.000821          16        50           write</span><br><span class="line">------ ----------- ----------- --------- --------- ----------------</span><br></pre></td></tr></table></figure>
+<p>证据闭环：<strong>50 次 fsync 占了 99.87% 的时间，平均每次 12ms</strong>——每条记录 11ms 的账全在这。这就是 off-CPU 火焰图会显示的塔：<code>process_records → os.fsync → ext4_sync_file → jbd2 ...</code>（宽度 99%）。</p>
+<p><strong>第四步：修复。</strong> 批量写 + 单次 fsync（吞吐换延迟的取舍显式化）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">process_records_fixed</span>(<span class="params">path, n, batch=<span class="number">64</span></span>):</span><br><span class="line">    fd = os.<span class="built_in">open</span>(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND)</span><br><span class="line">    buf = []</span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n):</span><br><span class="line">        buf.append(DATA)</span><br><span class="line">        <span class="keyword">if</span> <span class="built_in">len</span>(buf) &gt;= batch <span class="keyword">or</span> i == n - <span class="number">1</span>:</span><br><span class="line">            os.write(fd, <span class="string">b&quot;&quot;</span>.join(buf))</span><br><span class="line">            os.fsync(fd)                  <span class="comment"># 每批确认一次，而不是每条</span></span><br><span class="line">            buf.clear()</span><br><span class="line">    os.close(fd)</span><br></pre></td></tr></table></figure>
+<p><strong>第五步：同口径对比。</strong></p>
+<table>
+<thead>
+<tr>
+<th>版本</th>
+<th>200 条耗时</th>
+<th>平均每条</th>
+<th>fsync 次数</th>
+<th>每次耗时</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>逐条 fsync（原）</td>
+<td>2.24s</td>
+<td>11.2ms</td>
+<td>200</td>
+<td>~12ms</td>
+</tr>
+<tr>
+<td>批量 64 条（修复）</td>
+<td>0.041s</td>
+<td>0.21ms</td>
+<td>4</td>
+<td>~12ms</td>
+</tr>
+</tbody>
+</table>
+<p>fsync 单次耗时没变（存储的物理特性），<strong>变的是次数</strong>——53 倍吞吐提升来自把&quot;等&quot;的频率降为 1/53。这个案例的普适结论：<strong>off-CPU 问题优化掉的往往不是单次等待时长，而是等待次数</strong>（批量、合并、连接复用、池化都是这一句话的变体）。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“CPU 空闲就没瓶颈”</strong>：CPU 只是六类资源之一（01 篇 USE 表）。本案例里瓶颈是盘，CPU 空闲恰恰是&quot;等待型瓶颈&quot;的指纹。</li>
+<li><strong>“iowait 高 = 盘慢”</strong>：wa 只说明&quot;有 CPU 在等 IO&quot;，可能是盘慢，也可能是&quot;本来不该同步等盘的代码在等盘&quot;（本案例）。修复代码比换盘便宜。</li>
+<li><strong>“off-CPU 火焰图 = 等待火焰图直接改”</strong>：等 IO 的塔底是内核路径，根因常在应用层的调用频率（本案例）或锁顺序。看到内核塔，往上找应用塔的调用者。</li>
+<li><strong>“调度延迟不用看”</strong>：CPU 满载时它直接影响 P99；runqlat 是容量预警指标（第 3 节），比&quot;load 高&quot;精确得多。</li>
+<li><strong>“ftrace 输出逐行看就够”</strong>：原始 trace 是时间线不是统计，人眼数不出分布；聚合用 bpftrace/perf，ftrace 留给&quot;看单次现场&quot;。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>墙钟时间 = on-CPU + off-CPU（等资源）+ 调度延迟（等 CPU）；CPU 空闲还慢，直接进 off-CPU 流程，别在 03 篇的火焰图里白费劲。</li>
+<li>off-CPU 分析的机制：sched_switch 上对阻塞型换出（prev_state != 0）打卡，换回时结算；BCC offcputime/bpftrace 均可实现；盲区是看不到持锁方，需要 waker 分析。</li>
+<li>perf sched latency 与 runqlat 量化调度延迟；它是 CPU 饱和的早期预警，r 列持续 ≥ 核数时必查。</li>
+<li>ftrace 四步法（enable 事件 → tracing_on → 制造流量 → 读 trace）看单事件现场；统计聚合交给 perf/bpftrace。</li>
+<li>案例：逐条 fsync 的&quot;CPU 不高但很慢&quot;，strace -c 一锤定音；批量合并把 200 次 12ms 等待变 4 次，吞吐 53 倍——off-CPU 优化的本质是减少等待次数。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>跑 slow_writer.py，同时开三个终端分别跑 <code>mpstat 1</code>、<code>iostat -x 1</code>、<code>vmstat 1</code>，截取同一时刻三行输出，写一段话把 wa、w_await、b 三个数字串成一条因果链。</li>
+<li>把 batch 参数调成 8/64/512 各跑一次，记录&quot;200 条总耗时 + 每批 fsync 单次耗时&quot;，画出&quot;批量大小 vs 吞吐&quot;曲线，解释为什么收益递减、过大批次的代价（内存、单次 fsync 变长）是什么。</li>
+<li>若你的环境可用 BCC：跑 <code>sudo /usr/share/bcc/tools/offcputime -K -p $(pgrep -f slow_writer)</code>，找到最宽的内核栈；不可用则用第 4 节的 ftrace 步骤抓 <code>sys_exit_fsync</code> 时间戳序列，手算相邻差值的平均值。</li>
+<li>用 <code>perf sched record -- sleep 5</code> 加上&quot;同时跑 2 个、8 个 burn_cpu 死循环&quot;（03 篇 sick_machine.py 可复用）两种负载，对比 <code>perf sched latency</code> 的 Average delay，验证&quot;调度延迟随 CPU 饱和上升&quot;。</li>
+<li>你的服务每请求要查一次 Redis（RTT 0.5ms）、一次 MySQL（RTT 2ms）。在 N 个请求的批处理里逐个查 vs 合并成 pipeline/multi-get，用 Little’s Law（01 篇）估算批量后的等待次数下降比例，并在本地用 redis-py 或伪实现验证。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/Linux/" rel="tag"># Linux</a>
+              <a href="/tags/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" rel="tag"># 性能优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/03-CPU%E6%80%A7%E8%83%BD%E5%89%96%E6%9E%90-perf%E4%B8%8E%E7%81%AB%E7%84%B0%E5%9B%BE/" rel="prev" title="03-CPU性能剖析-perf与火焰图">
+                  <i class="fa fa-angle-left"></i> 03-CPU性能剖析-perf与火焰图
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/05-%E5%86%85%E5%AD%98%E6%80%A7%E8%83%BD%E5%88%86%E6%9E%90/" rel="next" title="05-内存性能分析">
+                  05-内存性能分析 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

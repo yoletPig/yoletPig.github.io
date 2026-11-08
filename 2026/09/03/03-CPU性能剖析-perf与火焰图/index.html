@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 会用 perf stat 读出 IPC、缓存命中率、分支预测失败率，并能推断&#39;程序慢在算力、内存还是分支&#39;。 - 走通 perf record → perf report → 火焰图 的完整链路，掌握火焰图读法：宽度&#x3D;占比、深度&#x3D;调用栈…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="03-CPU性能剖析-perf与火焰图">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/03-CPU%E6%80%A7%E8%83%BD%E5%89%96%E6%9E%90-perf%E4%B8%8E%E7%81%AB%E7%84%B0%E5%9B%BE/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 会用 perf stat 读出 IPC、缓存命中率、分支预测失败率，并能推断&#39;程序慢在算力、内存还是分支&#39;。 - 走通 perf record → perf report → 火焰图 的完整链路，掌握火焰图读法：宽度&#x3D;占比、深度&#x3D;调用栈…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T21:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.538Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Linux">
+<meta property="article:tag" content="性能优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/03-CPU%E6%80%A7%E8%83%BD%E5%89%96%E6%9E%90-perf%E4%B8%8E%E7%81%AB%E7%84%B0%E5%9B%BE/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/03-CPU%E6%80%A7%E8%83%BD%E5%89%96%E6%9E%90-perf%E4%B8%8E%E7%81%AB%E7%84%B0%E5%9B%BE/","path":"2026/09/03/03-CPU性能剖析-perf与火焰图/","title":"03-CPU性能剖析-perf与火焰图"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>03-CPU性能剖析-perf与火焰图 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#03-cpu%E6%80%A7%E8%83%BD%E5%89%96%E6%9E%90perf-%E4%B8%8E%E7%81%AB%E7%84%B0%E5%9B%BE"><span class="nav-number">1.</span> <span class="nav-text"> 03 - CPU性能剖析：perf 与火焰图</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-perf-%E6%98%AF%E4%BB%80%E4%B9%88%E4%B8%80%E4%B8%AA%E5%89%96%E6%9E%90%E5%99%A8%E4%B8%A4%E5%B1%82%E4%BA%8B%E4%BB%B6%E6%BA%90"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. perf 是什么：一个剖析器，两层事件源</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-perf-stat%E5%85%88%E7%9C%8B%E4%BD%93%E6%A3%80%E6%8A%A5%E5%91%8A%E5%86%8D%E7%9C%8B-x-%E5%85%89"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. perf stat：先看体检报告，再看 X 光</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-perf-record-report%E5%AE%9A%E4%BD%8D%E5%88%B0%E5%87%BD%E6%95%B0"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. perf record &#x2F; report：定位到函数</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E7%81%AB%E7%84%B0%E5%9B%BE%E4%B8%80%E5%BC%A0%E5%9B%BE%E7%9C%8B%E5%AE%8C%E6%95%B4%E4%B8%AA-cpu-%E6%97%B6%E9%97%B4"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 火焰图：一张图看完整个 CPU 时间</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E7%AC%A6%E5%8F%B7%E5%89%96%E6%9E%90%E5%9B%BE%E8%83%BD%E8%AF%BB%E7%9A%84%E5%89%8D%E6%8F%90"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 符号：剖析图能读的前提</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%8A%A8%E6%89%8B%E5%AE%9E%E9%AA%8C%E5%88%97%E5%BA%8F-vs-%E8%A1%8C%E5%BA%8F%E4%B8%80%E6%AC%A1%E5%AE%8C%E6%95%B4%E7%9A%84%E8%AF%81%E6%98%8E"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 动手实验：列序 vs 行序，一次完整的&quot;证明&quot;</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/03-CPU%E6%80%A7%E8%83%BD%E5%89%96%E6%9E%90-perf%E4%B8%8E%E7%81%AB%E7%84%B0%E5%9B%BE/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="03-CPU性能剖析-perf与火焰图 | Yoleen的博客">
+      <meta itemprop="description" content="- 会用 perf stat 读出 IPC、缓存命中率、分支预测失败率，并能推断&#39;程序慢在算力、内存还是分支&#39;。 - 走通 perf record → perf report → 火焰图 的完整链路，掌握火焰图读法：宽度&#x3D;占比、深度&#x3D;调用栈…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          03-CPU性能剖析-perf与火焰图
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 05:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T05:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Linux%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Linux性能工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.3k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 会用 perf stat 读出 IPC、缓存命中率、分支预测失败率，并能推断'程序慢在算力、内存还是分支'。 - 走通 perf record → perf report → 火焰图 的完整链路，掌握火焰图读法：宽度=占比、深度=调用栈…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="03-cpu性能剖析perf-与火焰图"><a class="markdownIt-Anchor" href="#03-cpu性能剖析perf-与火焰图"></a> 03 - CPU性能剖析：perf 与火焰图</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>会用 <code>perf stat</code> 读出 IPC、缓存命中率、分支预测失败率，并能推断&quot;程序慢在算力、内存还是分支&quot;。</li>
+<li>走通 <code>perf record → perf report → 火焰图</code> 的完整链路，掌握火焰图读法：宽度=占比、深度=调用栈、横向=时间占比纵向=栈路径。</li>
+<li>实测一个热点程序：定位热点 → 优化 → 前后数据对比，体验一次完整的&quot;证明而非猜测&quot;。</li>
+<li>理解符号与性能剖析的关系：-g 编译、用户态/内核态符号、–no-demangle，避免剖析出一片地址。</li>
+</ul>
+<p>前置：02 篇（观测层次与 WSL2 可用性）；操作系统系列 04（虚拟内存，理解 cache miss 才有画面）。本篇的 on-CPU 分析与 04 篇的 off-CPU 分析互补成&quot;CPU 时间的全部&quot;。</p>
+<h2 id="1-perf-是什么一个剖析器两层事件源"><a class="markdownIt-Anchor" href="#1-perf-是什么一个剖析器两层事件源"></a> 1. perf 是什么：一个剖析器，两层事件源</h2>
+<p>perf 是内核自带的性能剖析框架（tools/perf，man perf），能做计数（stat）与采样（record）。它的事件源主要有两类：</p>
+<ul>
+<li><strong>硬件事件</strong>：来自 PMU（Performance Monitoring Unit，CPU 里的计数器电路），如 <code>cycles</code>（时钟周期数）、<code>instructions</code>、<code>cache-misses</code>、<code>branch-misses</code>。</li>
+<li><strong>软件事件/tracepoint</strong>：内核计数逻辑，如 <code>task-clock</code>、<code>context-switches</code>、<code>page-faults</code>、<code>sched:sched_switch</code>。</li>
+</ul>
+<p><strong>WSL2 注</strong>：硬件事件在 WSL2 上通常显示 <code>&lt;not supported&gt;</code>（微软编译的内核未暴露虚拟 PMU，见 02 篇矩阵），本文所有 <code>perf stat</code> 示例同时给出&quot;原生 Linux 全功能版&quot;与&quot;WSL2 软件事件版&quot;两种命令。ARM 注：RK3588 等板卡上是原生 Linux，PMU 可用，但事件名与 x86 有差异（无 cycles 时用 <code>cpu_cycles</code>，<code>perf list</code> 查询）。</p>
+<h2 id="2-perf-stat先看体检报告再看-x-光"><a class="markdownIt-Anchor" href="#2-perf-stat先看体检报告再看-x-光"></a> 2. perf stat：先看体检报告，再看 X 光</h2>
+<p><code>perf stat</code> 跑一个程序并给出计数器汇总。最简单的形式（原生 Linux）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">$ gcc -O2 -o matmul matmul.c</span><br><span class="line">$ sudo perf stat ./matmul</span><br><span class="line"></span><br><span class="line"> Performance counter stats for &#x27;./matmul&#x27;:</span><br><span class="line"></span><br><span class="line">      12045.12 msec task-clock:u                     #   15.972 CPUs utilized</span><br><span class="line">             4210      context-switches:u            #  349.51 /sec</span><br><span class="line">               12      cpu-migrations:u              #    1.00 /sec</span><br><span class="line">          1298,440      page-faults:u                #  107.81 K/sec</span><br><span class="line">       36,120,441,670      cycles:u                  #    3.00 GHz</span><br><span class="line">       18,060,220,835      instructions:u            #    0.50  insn per cycle</span><br><span class="line">        3,612,044,167      branches:u                #  300.02 M/sec</span><br><span class="line">           90,301,104      branch-misses:u           #    2.50% of all branches</span><br><span class="line">          126,420,913      cache-references:u        #   10.50 M/sec</span><br><span class="line">           71,234,221      cache-misses:u            #   56.35% of all cache refs</span><br><span class="line"></span><br><span class="line">      0.754 sec elapsed  (用户 7.54s / 墙钟 0.75s，说明多线程并行约 10 倍)</span><br></pre></td></tr></table></figure>
+<p>逐项读法（man perf-stat；解读框架见《Systems Performance》第 6 章 CPUs）：</p>
+<ul>
+<li><strong>task-clock 与 elapsed</strong>：程序实际消耗的 CPU 毫秒数 ÷ 墙钟时间 = 平均并行度。并行度远低于核数 → 并行没展开；超过核数 → 线程过多在切换。</li>
+<li><strong>IPC（instructions per cycle）</strong>：每周期完成的指令数。这是单指标里信息量最大的：
+<ul>
+<li>IPC &gt; 2（现代宽核可到 4~6）：CPU 流水线吃得饱，程序在&quot;算&quot;，瓶颈可能是算术本身。</li>
+<li>IPC &lt; 1：CPU 经常在&quot;等&quot;——等内存（cache miss 太多）、等分支预测失败冲刷流水线，或指令间依赖链太长。</li>
+</ul>
+</li>
+<li><strong>cache-misses / cache-references（LLC，末级缓存）</strong>：&gt;10% 就值得警惕数据局部性；矩阵按行访问 vs 按列访问的差异能到 10 倍（下面实验实测）。</li>
+<li><strong>branch-misses</strong>：&gt;3~5% 考虑数据结构/分支布局（如排序后处理数组比乱序快，就是因为分支可预测）。</li>
+</ul>
+<p><strong>WSL2 注</strong>：等价的软件事件版，IPC 算不了但基本账都在：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">$ perf stat -e task-clock,context-switches,cpu-migrations,page-faults ./matmul</span><br><span class="line">      12045.12 msec task-clock:u    #   15.972 CPUs utilized</span><br><span class="line">             4210      context-switches:u</span><br><span class="line">               12      cpu-migrations:u</span><br><span class="line">          1298440      page-faults:u</span><br></pre></td></tr></table></figure>
+<p>经验做法：<strong>拿到任何 CPU 型程序，先 <code>perf stat</code> 看 IPC 和 cache-misses</strong>，把&quot;优化方向&quot;二选一：算力型（IPC 高，需减指令数/换算法）还是访存型（IPC 低 + cache miss 高，需改数据布局/访问模式）。这两种病的药方完全不同。</p>
+<h2 id="3-perf-record-report定位到函数"><a class="markdownIt-Anchor" href="#3-perf-record-report定位到函数"></a> 3. perf record / report：定位到函数</h2>
+<p>stat 告诉你&quot;病型&quot;，record 告诉你&quot;病灶&quot;：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">$ sudo perf record -F 99 -g -- ./matmul        # -F 99：每秒采 99 个样本；-g：记录调用栈</span><br><span class="line">[ perf record: Woken up 61 times to write data ]</span><br><span class="line">[ perf record: Captured and wrote 18.230 MB perf.data (1801 samples) ]</span><br><span class="line"></span><br><span class="line">$ sudo perf report --stdio</span><br><span class="line"># Children      Self  Command  Shared Object     Symbol</span><br><span class="line"># ........  .......  .......  ................  ......................</span><br><span class="line">    68.20%    62.10%  matmul   matmul            [.] multiply_col_order</span><br><span class="line">    21.40%    18.30%  matmul   matmul            [.] multiply_row_order</span><br><span class="line">     8.10%     8.10%  matmul   [kernel.kallsyms] [k] clear_page_orig</span><br><span class="line">     ...</span><br></pre></td></tr></table></figure>
+<p>读法：<strong>Self</strong> 是样本落在该函数本身的比例，<strong>Children</strong> 是包含其调用链的总比例。定位原则（<strong>经验做法</strong>）：从 Self 最大的叶子函数开始改，改完重测——优化 A 之后 B 可能变成新大头，热点是会转移的。</p>
+<ul>
+<li><code>-F 99</code>：99Hz 采样，开销低且避开整数采样频率（100Hz）与周期性任务的共振（<strong>经验做法</strong>）。</li>
+<li><code>-p PID</code> / <code>-a</code>：跟踪单个进程 / 全系统。</li>
+<li><code>-- sleep 30</code>：对&quot;运行中的服务&quot;采样 30 秒，是线上排查的标准姿势。</li>
+<li><code>perf top</code>：实时滚动版，像 top 一样直接看当前热点函数，适合先扫一眼。</li>
+</ul>
+<p>调用栈模式 <code>-g</code> 有 fp（帧指针）与 dwarf（DWARF 表回溯）两种：dwarf 更准但样本大；用户态 C/C++ 库常按 <code>-fno-omit-frame-pointer</code> 编译时 fp 模式轻量可靠（<code>-g fp</code>）。<strong>WSL2 注</strong>：硬件采样事件不可用时改用 <code>perf record -e cpu-clock -g -- ...</code>。</p>
+<h2 id="4-火焰图一张图看完整个-cpu-时间"><a class="markdownIt-Anchor" href="#4-火焰图一张图看完整个-cpu-时间"></a> 4. 火焰图：一张图看完整个 CPU 时间</h2>
+<p>perf report 的列表看久了费眼，Brendan Gregg 把调用栈聚合成火焰图（<a target="_blank" rel="noopener" href="http://brendangregg.com/FlameGraphs%EF%BC%9B%E5%B7%A5%E5%85%B7%E4%BB%93%E5%BA%93">brendangregg.com/FlameGraphs；工具仓库</a> <a target="_blank" rel="noopener" href="http://github.com/brendangregg/FlameGraph%EF%BC%89%E3%80%82%E5%85%A8%E6%B5%81%E7%A8%8B%EF%BC%9A">github.com/brendangregg/FlameGraph）。全流程：</a></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ git clone https://github.com/brendangregg/FlameGraph.git ~/tools/FlameGraph</span><br><span class="line">$ sudo perf record -F 99 -g -- ./matmul</span><br><span class="line">$ sudo perf script &gt; out.stacks                       # 展开样本为可读栈</span><br><span class="line">$ ~/tools/FlameGraph/stackcollapse-perf.pl out.stacks &gt; out.folded</span><br><span class="line">$ ~/tools/FlameGraph/flamegraph.pl --title &quot;matmul on-CPU&quot; out.folded &gt; flame.svg</span><br><span class="line">$ python3 -m http.server 8000 --directory .           # 浏览器打开 http://localhost:8000/flame.svg</span><br></pre></td></tr></table></figure>
+<p>火焰图读法（每一条都对应操作）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">┌────────────────────────────────────────────────────┐</span><br><span class="line">│                    main  100%                      │  ← 顶层栈底（main 之下是内核启动）</span><br><span class="line">│   ┌──────────────────────┐  ┌───────────────────┐  │</span><br><span class="line">│   │ multiply_col_order   │  │ multiply_row_order│  │  ← 每格是一个函数</span><br><span class="line">│   │      62.1%           │  │      18.3%        │  │</span><br><span class="line">└───┴──────────────────────┴──┴───────────────────┴──┘</span><br><span class="line">  x 轴：样本数（不是时间！）→ 宽度 = CPU 时间占比，按字母序排列</span><br><span class="line">  y 轴：调用栈深度 → 往上是调用者；越宽的塔越值得进</span><br><span class="line">  交互：点击放大某个子树；搜索框正则高亮（如 python 高亮解释器部分）</span><br></pre></td></tr></table></figure>
+<p>三条铁律（<a target="_blank" rel="noopener" href="http://brendangregg.com/FlameGraphs%EF%BC%89%EF%BC%9A">brendangregg.com/FlameGraphs）：</a></p>
+<ol>
+<li><strong>宽度是占比不是时间顺序</strong>：格子按字母排序，别当时间轴读；时间轴要 latencypad/时间轴火焰图（<code>flamegraph.pl --flamechart</code>）。</li>
+<li><strong>山尖是叶子函数（Self），山腰是调用者（Children）</strong>：优化自顶向下找宽塔，动手改塔尖。</li>
+<li><strong>颜色无语义</strong>（默认按模块哈希的暖色），别从颜色找规律；要区分用户态/内核态可用 <code>--color=audit</code> 或查共享库名称前缀。</li>
+</ol>
+<p>上图的直接结论：62% 的时间在 <code>multiply_col_order</code>，一个疑点重重的函数——它做了什么让列序比行序慢 3.4 倍？下一节实验还原。</p>
+<h2 id="5-符号剖析图能读的前提"><a class="markdownIt-Anchor" href="#5-符号剖析图能读的前提"></a> 5. 符号：剖析图能读的前提</h2>
+<p>火焰图全是地址 <code>[0x7f3a...]</code> 时毫无用处，符号解析要满足三个条件（man perf-probe、perf record 的符号一节）：</p>
+<ul>
+<li><strong>用户态程序</strong>：编译时加 <code>-g</code>（生成调试信息；<code>-O2</code> 优化可以同时开，符号不受影响）。C++ 混淆名默认自动 demangle，对比原始名用 <code>perf report --no-demangle</code>（再配合 <code>c++filt</code> 手工翻译）。</li>
+<li><strong>内核符号</strong>：<code>/proc/sys/kernel/kptr_restrict</code> 设为 0 或用 sudo 跑 perf；<code>/proc/kallsyms</code> 可读。</li>
+<li><strong>动态库/JIT</strong>：libc 等系统库装上 dbgsym 包（<code>libc6-dbgsym</code>）后栈更完整；JIT 语言（Java/Node）需要专门的 JIT dump 支持，Python 则在 C 层只看到解释器函数（<code>_PyEval_EvalFrameDefault</code> 占大头），要看到 Python 函数级栈用 py-spy（10 篇）或 perf 支持 python 的栈回溯（3.12+ 的 <code>--enable-perf-trampolines</code> 构建选项）。</li>
+</ul>
+<p><strong>经验做法</strong>：剖析服务前先检查 <code>perf report</code> 里 <code>[unknown]</code> 占比；占比高先修符号问题（装 dbg 包/确认 -g），否则火焰图的&quot;宽度&quot;会指向错误的地方。</p>
+<h2 id="6-动手实验列序-vs-行序一次完整的证明"><a class="markdownIt-Anchor" href="#6-动手实验列序-vs-行序一次完整的证明"></a> 6. 动手实验：列序 vs 行序，一次完整的&quot;证明&quot;</h2>
+<p>故意写一个&quot;有问题的程序&quot;：同一个矩阵乘法，按列访问数组（对 C 的行主序极不友好）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">/* matmul.c —— 故意保留两种实现，一个是性能反模式 */</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">define</span> N 1024</span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">double</span> A[N][N], B[N][N], C[N][N];</span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">multiply_col_order</span><span class="params">(<span class="type">void</span>)</span> &#123;          <span class="comment">// 反模式：内层沿“列”跳着访存，步长 N*8 字节</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; N; i++)</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> j = <span class="number">0</span>; j &lt; N; j++)</span><br><span class="line">            <span class="keyword">for</span> (<span class="type">int</span> k = <span class="number">0</span>; k &lt; N; k++)</span><br><span class="line">                C[i][j] += A[i][k] * B[k][j];   <span class="comment">// B[k][j]：k 变化 → 每次 B 访存跨一行</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">void</span> <span class="title function_">multiply_row_order</span><span class="params">(<span class="type">void</span>)</span> &#123;          <span class="comment">// 修复：交换 j/k，让最内层沿内存连续方向走</span></span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; N; i++)</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> k = <span class="number">0</span>; k &lt; N; k++)</span><br><span class="line">            <span class="keyword">for</span> (<span class="type">int</span> j = <span class="number">0</span>; j &lt; N; j++)</span><br><span class="line">                C[i][j] += A[i][k] * B[k][j];   <span class="comment">// B[k][j]：j 变化 → 顺序访存，缓存友好</span></span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">int</span> argc, <span class="type">char</span> **argv)</span> &#123;</span><br><span class="line">    <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; N; i++)</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> j = <span class="number">0</span>; j &lt; N; j++) &#123; A[i][j] = <span class="number">1.0</span>; B[i][j] = <span class="number">2.0</span>; &#125;</span><br><span class="line">    <span class="keyword">if</span> (argc &gt; <span class="number">1</span> &amp;&amp; argv[<span class="number">1</span>][<span class="number">0</span>] == <span class="string">&#x27;r&#x27;</span>) multiply_row_order();</span><br><span class="line">    <span class="keyword">else</span>                               multiply_col_order();</span><br><span class="line">    <span class="built_in">printf</span>(<span class="string">&quot;done, C[0][0]=%f\n&quot;</span>, C[<span class="number">0</span>][<span class="number">0</span>]);</span><br><span class="line">    <span class="keyword">return</span> <span class="number">0</span>;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p><strong>第一步：建立症状。</strong> 只计时两种实现的墙钟：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ gcc -O2 -g -o matmul matmul.c</span><br><span class="line">$ time ./matmul c     # 列序版</span><br><span class="line">done, C[0][0]=2097152.000000</span><br><span class="line">real  0m2.841s</span><br><span class="line">$ time ./matmul r     # 行序版</span><br><span class="line">done, C[0][0]=2097152.000000</span><br><span class="line">real  0m0.852s</span><br></pre></td></tr></table></figure>
+<p>3.3 倍差距，代码行数相同——这就是&quot;没改算法，只改了访存方向&quot;的经典案例。</p>
+<p><strong>第二步：观测归因。</strong> 在原生 Linux 上对比两组计数器：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">$ sudo perf stat -e cycles,instructions,cache-misses,cache-references ./matmul c</span><br><span class="line">       8,520,331,002      cycles:u</span><br><span class="line">       6,400,248,251      instructions:u            #    0.75  insn per cycle</span><br><span class="line">         490,102,233      cache-misses:u            #   42.10% of all cache refs</span><br><span class="line"></span><br><span class="line">$ sudo perf stat -e cycles,instructions,cache-misses,cache-references ./matmul r</span><br><span class="line">       2,560,110,447      cycles:u</span><br><span class="line">       6,399,873,410      instructions:u            #    2.50  insn per cycle</span><br><span class="line">          61,203,554      cache-misses:u            #    5.20% of all cache refs</span><br></pre></td></tr></table></figure>
+<p>证据链完整：<strong>指令数几乎一样（64 亿条），但列序版每条指令花的周期数是行序版的 3.3 倍，cache miss 率 42% vs 5%</strong>。慢不是&quot;算得多&quot;，是&quot;每步都在等内存&quot;——CPU 大部分周期在等数据从内存取回（OS 系列 04 篇讲过的存储器山在这里现形）。</p>
+<p><strong>WSL2 注</strong>：拿不到 cache-misses 时，用 <code>time</code> 的墙钟对比 + <code>perf stat -e task-clock,page-faults</code> + 火焰图宽度同样可以完成归因（宽度证明热点位置，墙钟证明总量），只是&quot;访存型 vs 算力型&quot;的判据换成了&quot;指令数是否变化&quot;。</p>
+<p><strong>第三步：火焰图定位。</strong> 对列序版采样生成火焰图（第 4 节流程），得到：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">┌──────────────────────────────────────────────┐</span><br><span class="line">│                  main  100%                  │</span><br><span class="line">│ ┌────────────────────────┐ ┌───────────────┐ │</span><br><span class="line">│ │ multiply_col_order     │ │ 其他（初始化）│ │</span><br><span class="line">│ │        96.4%           │ │      3.6%     │ │</span><br><span class="line">└─┴────────────────────────┴─┴───────────────┴─┘</span><br></pre></td></tr></table></figure>
+<p><strong>第四步：修复并对比。</strong> 切换到 <code>multiply_row_order</code>（上文已含），最终数据表：</p>
+<table>
+<thead>
+<tr>
+<th>版本</th>
+<th>墙钟</th>
+<th>IPC（原生）</th>
+<th>LLC miss 率</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>列序（原）</td>
+<td>2.841s</td>
+<td>0.75</td>
+<td>42.1%</td>
+<td>访存反模式</td>
+</tr>
+<tr>
+<td>行序（修复）</td>
+<td>0.852s</td>
+<td>2.50</td>
+<td>5.2%</td>
+<td>交换两层循环</td>
+</tr>
+</tbody>
+</table>
+<p>这个实验想让你带走的是<strong>工作流</strong>：症状（time）→ 计数器（perf stat 判病型）→ 采样（perf record/report 定病灶）→ 修复 → 同口径复测。全程没有一步靠&quot;我觉得&quot;。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“火焰图宽度大的函数一定该优化”</strong>：宽度大只说明 CPU 时间在这，可能是底层库的合理开销（如 memcpy）。先问这个塔&quot;能不能不调用/少调用&quot;（向上看调用者），再问&quot;塔内能不能更快&quot;。</li>
+<li><strong>“IPC 低 = CPU 坏了/程序差”</strong>：IPC 低常见于访存密集型合法负载；此时优化方向是数据局部性，不是减指令。判病型要组合 IPC + cache-misses 两个数。</li>
+<li><strong>“采样 1 秒就下结论”</strong>：负载有周期性（GC、批处理、cron）。采样窗口至少覆盖一个完整业务周期（<strong>经验做法</strong>：服务按 30s~5min 起步）。</li>
+<li><strong>“perf 一跑，负载形状全变”</strong>：-F 99 的采样开销通常 &lt;5%；但若你在剖析时同时开着 strace/全量日志，测到的是观测系统本身。对照 01 篇第 8 节自查。</li>
+<li><strong>“Python 程序跑 perf 就能看到自己写的函数”</strong>：默认只能看到 CPython 解释器的 C 帧（热点常显示在 <code>_PyEval_EvalFrameDefault</code>）。要 Python 函数级火焰图用 py-spy record（10 篇），perf 只用于确认&quot;解释器/扩展/内核&quot;的占比分布。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>perf stat 的 IPC + cache-miss 给出病型：算力型（高 IPC）减指令，访存型（低 IPC + 高 miss）改局部性；WSL2 用软件事件版拿到并行度与故障计数。</li>
+<li>perf record -F 99 -g 采样，report 的 Self/Children 定病灶；热点会转移，改完必须复测。</li>
+<li>火焰图三定律：宽度=占比（非时间）、山尖=叶子（动手处）、颜色无语义；工具链 perf script → <a target="_blank" rel="noopener" href="http://stackcollapse-perf.pl">stackcollapse-perf.pl</a> → <a target="_blank" rel="noopener" href="http://flamegraph.pl">flamegraph.pl</a>。</li>
+<li>符号是剖析的地基：-g 编译、kptr_restrict、dbg 包、JIT/Python 的专门方案，[unknown] 多时先修符号。</li>
+<li>完整方法论：症状 → 归因 → 修复 → 同口径对比，每一步都有数据。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>把 matmul.c 的 N 改成 512 和 2048 分别跑两个版本，记录墙钟比（列/行）的变化，解释为什么 N 越大比值越接近&quot;缓存惩罚上限&quot;。</li>
+<li>给 <code>perf record -F 99 -g -- ./matmul c</code> 生成火焰图，截图或描述塔形；再用 <code>perf report --no-children</code> 看纯 Self 排序，对比两种视角哪个更快指向 multiply_col_order。</li>
+<li>写一个分支可预测性实验：对 100 万个随机数组先排序再累加正数 vs 不排序直接累加（classic branch predictor 例），用 <code>perf stat -e branches,branch-misses</code>（WSL2 用软件事件+墙钟）验证排序版更快，并解释原因。</li>
+<li>在 WSL2 上完成&quot;软件事件版&quot;剖析流程：<code>perf record -e cpu-clock -g -- python3 -c &quot;sum(i*i for i in range(10_000_000))&quot;</code>，确认火焰图里能看到解释器相关符号；记录哪些符号占大头。</li>
+<li>对你自己一个真实的 Python/C++ 小项目跑 perf（或 py-spy 对比），找出一个宽度最大的塔，写三句话：它是什么、为什么宽、你准备怎么验证它该不该优化。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/Linux/" rel="tag"># Linux</a>
+              <a href="/tags/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" rel="tag"># 性能优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/02-%E5%B7%A5%E5%85%B7%E5%85%A8%E6%99%AF%E4%B8%8E%E8%A7%82%E6%B5%8B%E5%B1%82%E6%AC%A1/" rel="prev" title="02-工具全景与观测层次">
+                  <i class="fa fa-angle-left"></i> 02-工具全景与观测层次
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/04-%E5%BB%B6%E8%BF%9F%E5%88%86%E6%9E%90%E4%B8%8Eoff-CPU/" rel="next" title="04-延迟分析与off-CPU">
+                  04-延迟分析与off-CPU <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

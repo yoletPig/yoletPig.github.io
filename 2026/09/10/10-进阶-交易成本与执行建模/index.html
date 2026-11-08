@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="进阶篇第 1 章。05 篇把成本当作一个常数参数（costbps）；实盘中，成本是随你自身行为变化的环境函数——你下单本身会移动价格（冲击成本），你的策略越成功这条曲线越陡。本章把成本从&#39;扣减项&#39;升级为&#39;建模对象&#39;：成本结构拆解、滑点建模…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="10-进阶-交易成本与执行建模">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/10/10-%E8%BF%9B%E9%98%B6-%E4%BA%A4%E6%98%93%E6%88%90%E6%9C%AC%E4%B8%8E%E6%89%A7%E8%A1%8C%E5%BB%BA%E6%A8%A1/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="进阶篇第 1 章。05 篇把成本当作一个常数参数（costbps）；实盘中，成本是随你自身行为变化的环境函数——你下单本身会移动价格（冲击成本），你的策略越成功这条曲线越陡。本章把成本从&#39;扣减项&#39;升级为&#39;建模对象&#39;：成本结构拆解、滑点建模…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-09T20:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.854Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="量化投资">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/10/10-%E8%BF%9B%E9%98%B6-%E4%BA%A4%E6%98%93%E6%88%90%E6%9C%AC%E4%B8%8E%E6%89%A7%E8%A1%8C%E5%BB%BA%E6%A8%A1/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/10/10-%E8%BF%9B%E9%98%B6-%E4%BA%A4%E6%98%93%E6%88%90%E6%9C%AC%E4%B8%8E%E6%89%A7%E8%A1%8C%E5%BB%BA%E6%A8%A1/","path":"2026/09/10/10-进阶-交易成本与执行建模/","title":"10-进阶-交易成本与执行建模"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>10-进阶-交易成本与执行建模 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#10-%E8%BF%9B%E9%98%B6%E4%BA%A4%E6%98%93%E6%88%90%E6%9C%AC%E4%B8%8E%E6%89%A7%E8%A1%8C%E5%BB%BA%E6%A8%A1"><span class="nav-number">1.</span> <span class="nav-text"> 10 - 进阶：交易成本与执行建模</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E6%88%90%E6%9C%AC%E8%A7%A3%E5%89%96%E5%9B%9B%E5%B1%82%E7%BB%93%E6%9E%84"><span class="nav-number">1.1.</span> <span class="nav-text"> 1. 成本解剖：四层结构</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E6%BB%91%E7%82%B9%E5%BB%BA%E6%A8%A1%E4%BB%8E%E5%B8%B8%E6%95%B0%E5%88%B0%E7%8E%AF%E5%A2%83%E5%87%BD%E6%95%B0"><span class="nav-number">1.2.</span> <span class="nav-text"> 2. 滑点建模：从常数到环境函数</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#21-%E4%B8%89%E4%B8%AA%E7%BB%84%E6%88%90%E9%83%A8%E5%88%86"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 2.1 三个组成部分</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#22-%E5%AE%9E%E7%8E%B0%E4%B8%80%E4%B8%AA%E9%9A%8F%E8%A1%8C%E4%B8%BA%E5%8F%98%E5%8C%96%E7%9A%84%E6%88%90%E6%9C%AC%E6%A8%A1%E5%9E%8B"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 2.2 实现一个随行为变化的成本模型</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#23-%E6%88%90%E6%9C%AC%E6%95%8F%E6%84%9F%E6%80%A7%E6%B5%8B%E8%AF%95%E7%9A%84%E6%AD%A3%E7%A1%AE%E5%A7%BF%E5%8A%BF"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 2.3 成本敏感性测试的正确姿势</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%89%A7%E8%A1%8C%E7%AE%97%E6%B3%95%E6%80%9D%E6%83%B3vwaptwap-%E4%B8%8E%E6%8B%86%E5%8D%95"><span class="nav-number">1.3.</span> <span class="nav-text"> 3. 执行算法思想：VWAP&#x2F;TWAP 与拆单</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%AE%B9%E9%87%8F%E5%88%86%E6%9E%90%E7%AD%96%E7%95%A5%E8%83%BD%E8%A3%85%E5%A4%9A%E5%B0%91%E9%92%B1"><span class="nav-number">1.4.</span> <span class="nav-text"> 4. 容量分析：策略能装多少钱</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E4%BA%A4%E6%98%93%E7%BA%A6%E6%9D%9F%E7%9A%84%E7%9C%9F%E5%AE%9E%E5%BD%A2%E6%80%81a-%E8%82%A1%E8%AF%AD%E5%A2%83"><span class="nav-number">1.5.</span> <span class="nav-text"> 5. 交易约束的真实形态（A 股语境）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E6%8A%8A%E6%89%A7%E8%A1%8C%E5%BB%BA%E6%A8%A1%E6%8E%A5%E5%9B%9E%E5%9B%9E%E6%B5%8B%E7%B3%BB%E7%BB%9F"><span class="nav-number">1.6.</span> <span class="nav-text"> 6. 把执行建模接回回测系统</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%87%AA%E6%B5%8B"><span class="nav-number">1.7.</span> <span class="nav-text"> 自测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%8B%E4%B8%80%E7%AF%87"><span class="nav-number">1.8.</span> <span class="nav-text"> 下一篇</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8F%82%E8%80%83%E6%9D%A5%E6%BA%90"><span class="nav-number">1.9.</span> <span class="nav-text"> 参考来源</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/10/10-%E8%BF%9B%E9%98%B6-%E4%BA%A4%E6%98%93%E6%88%90%E6%9C%AC%E4%B8%8E%E6%89%A7%E8%A1%8C%E5%BB%BA%E6%A8%A1/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="10-进阶-交易成本与执行建模 | Yoleen的博客">
+      <meta itemprop="description" content=" 进阶篇第 1 章。05 篇把成本当作一个常数参数（costbps）；实盘中，成本是随你自身行为变化的环境函数——你下单本身会移动价格（冲击成本），你的策略越成功这条曲线越陡。本章把成本从&#39;扣减项&#39;升级为&#39;建模对象&#39;：成本结构拆解、滑点建模…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          10-进阶-交易成本与执行建模
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-10 04:30:00" itemprop="dateCreated datePublished" datetime="2026-09-10T04:30:00+08:00">2026-09-10</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E9%87%8F%E5%8C%96%E6%8A%95%E8%B5%84/" itemprop="url" rel="index"><span itemprop="name">量化投资</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>7 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description"> 进阶篇第 1 章。05 篇把成本当作一个常数参数（costbps）；实盘中，成本是随你自身行为变化的环境函数——你下单本身会移动价格（冲击成本），你的策略越成功这条曲线越陡。本章把成本从'扣减项'升级为'建模对象'：成本结构拆解、滑点建模…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="10-进阶交易成本与执行建模"><a class="markdownIt-Anchor" href="#10-进阶交易成本与执行建模"></a> 10 - 进阶：交易成本与执行建模</h1>
+<blockquote>
+<p>进阶篇第 1 章。05 篇把成本当作一个常数参数（cost_bps）；实盘中，成本是<strong>随你自身行为变化的环境函数</strong>——你下单本身会移动价格（冲击成本），你的策略越成功这条曲线越陡。本章把成本从&quot;扣减项&quot;升级为&quot;建模对象&quot;：成本结构拆解、滑点建模、执行算法思想、容量分析。这是回测与实盘之间最后一段可量化的差距。</p>
+</blockquote>
+<h2 id="1-成本解剖四层结构"><a class="markdownIt-Anchor" href="#1-成本解剖四层结构"></a> 1. 成本解剖：四层结构</h2>
+<table>
+<thead>
+<tr>
+<th>层</th>
+<th>构成</th>
+<th>量级（A 股参考）</th>
+<th>性质</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>显性佣金</td>
+<td>券商佣金</td>
+<td>约万 1~万 3（各家不同，最低 5 元）</td>
+<td>固定，可谈</td>
+</tr>
+<tr>
+<td>税费</td>
+<td>印花税（卖出单边）</td>
+<td>万 5（2023-08-28 起）</td>
+<td>固定，政策性</td>
+</tr>
+<tr>
+<td>过户费</td>
+<td>沪市过户费</td>
+<td>万 0.1 量级</td>
+<td>固定</td>
+</tr>
+<tr>
+<td><strong>隐性滑点</strong></td>
+<td>价差 + 冲击 + 时机</td>
+<td><strong>波动大，常超过前三项之和</strong></td>
+<td>随行为变化</td>
+</tr>
+</tbody>
+</table>
+<p>结论先行：<strong>低频策略的成本近似常数；换手率越高的策略，成本模型的精度越是生死攸关</strong>。日换手 100% 的策略，年成本 20%+ 里大半可能是滑点——对这类策略，&quot;成本建模&quot;就是&quot;策略建模&quot;本身。</p>
+<h2 id="2-滑点建模从常数到环境函数"><a class="markdownIt-Anchor" href="#2-滑点建模从常数到环境函数"></a> 2. 滑点建模：从常数到环境函数</h2>
+<h3 id="21-三个组成部分"><a class="markdownIt-Anchor" href="#21-三个组成部分"></a> 2.1 三个组成部分</h3>
+<p>对一笔市价单，滑点 = <strong>半价差</strong> + <strong>冲击成本</strong> + <strong>时机成本</strong>：</p>
+<ol>
+<li><strong>半价差（half-spread）</strong>：吃掉买卖价差的一半，与流动性成反比——A 股大盘蓝筹价差常在 1 个 tick（0.01 元），小盘股可达数 tick；</li>
+<li><strong>冲击成本（impact）</strong>：你的单量推动价格的部分。业界常用平方根律建模（源自 Loeb 1983 与后续市场微观结构研究）：冲击 ≈ σ_daily × k × √(Q / ADV)，其中 Q 为你的单量、ADV 为日均成交量、k 为经验系数；</li>
+<li><strong>时机成本（timing）</strong>：从决策到成交期间价格的自然漂移——延迟一天执行的期望漂移就是 02 篇 shift(1) 的实盘对应物。</li>
+</ol>
+<h3 id="22-实现一个随行为变化的成本模型"><a class="markdownIt-Anchor" href="#22-实现一个随行为变化的成本模型"></a> 2.2 实现一个随行为变化的成本模型</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">slippage_bps</span>(<span class="params">order_shares: <span class="built_in">float</span>, adv_shares: <span class="built_in">float</span>,</span></span><br><span class="line"><span class="params">                 daily_vol: <span class="built_in">float</span>, spread_bps: <span class="built_in">float</span>,</span></span><br><span class="line"><span class="params">                 impact_coef: <span class="built_in">float</span> = <span class="number">0.5</span></span>) -&gt; <span class="built_in">float</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;平方根律滑点（单边，bp）。</span></span><br><span class="line"><span class="string">    order_shares: 本单股数; adv_shares: 该股日均成交量（股）</span></span><br><span class="line"><span class="string">    daily_vol: 日波动率; spread_bps: 半价差（bp）</span></span><br><span class="line"><span class="string">    &quot;&quot;&quot;</span></span><br><span class="line">    participation = order_shares / adv_shares          <span class="comment"># 参与率</span></span><br><span class="line">    impact = daily_vol * impact_coef * participation ** <span class="number">0.5</span></span><br><span class="line">    <span class="keyword">return</span> spread_bps + impact * <span class="number">1e4</span></span><br></pre></td></tr></table></figure>
+<p>在回测引擎里用它替代常数：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">cost = slippage_bps(trade_shares, adv[symbol], vol[symbol], spread[symbol])</span><br></pre></td></tr></table></figure>
+<p>立刻得到两个此前不可见的事实：</p>
+<ol>
+<li><strong>小市值股票的&quot;纸面信号&quot;在真实单量下不可执行</strong>——参与率 5% 的单子滑点可达数十 bp；</li>
+<li><strong>因子收益与可执行性的分层</strong>：某因子在小盘组收益更高，但计入行为相关成本后可能归零——这正是 06 篇&quot;分层回测只有两端有差异&quot;的因子要警惕的深层原因之一。</li>
+</ol>
+<h3 id="23-成本敏感性测试的正确姿势"><a class="markdownIt-Anchor" href="#23-成本敏感性测试的正确姿势"></a> 2.3 成本敏感性测试的正确姿势</h3>
+<p>05 篇让成本×2 再跑；进阶做法是<strong>扫描成本曲线</strong>：把策略年化收益画成&quot;参与率上限&quot;的函数——</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">参与率上限 0.1% → 年化 12.1%</span><br><span class="line">参与率上限 0.5% → 年化 9.8%</span><br><span class="line">参与率上限 2.0% → 年化 3.2%   ← 曲线告诉你策略的&quot;规模-收益&quot;边界</span><br></pre></td></tr></table></figure>
+<h2 id="3-执行算法思想vwaptwap-与拆单"><a class="markdownIt-Anchor" href="#3-执行算法思想vwaptwap-与拆单"></a> 3. 执行算法思想：VWAP/TWAP 与拆单</h2>
+<p>大单不能一次打出去（自己制造冲击），执行算法把大单在时间上展开。两种基准算法（实现极简，思想重要）：</p>
+<ul>
+<li><strong>TWAP（时间加权）</strong>：把 N 股均分为 T 个时段各执行 N/T——与市场节奏无关，适合流动性稳定时；</li>
+<li><strong>VWAP（成交量加权）</strong>：按时段的历史成交量分布（U 型：开盘收盘量大、午间小）分配单量——与市场同行，冲击更小。</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">vwap_schedule</span>(<span class="params">total: <span class="built_in">float</span>, horizon: <span class="built_in">int</span>, volume_profile: np.ndarray</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;按历史成交量分布分配未来 horizon 个时段的下单量。&quot;&quot;&quot;</span></span><br><span class="line">    w = volume_profile / volume_profile.<span class="built_in">sum</span>()</span><br><span class="line">    <span class="keyword">return</span> total * w          <span class="comment"># 各时段下单量</span></span><br></pre></td></tr></table></figure>
+<p>实盘意义对个人投资者是<strong>反向的</strong>：你的回测默认&quot;收盘价成交&quot;，而执行算法存在的意义是逼近基准价。理解执行算法，是为了给回测的&quot;成交价假设&quot;定一个诚实的折扣（如&quot;收盘价 ± 半个价差&quot;），而不是为了自己写 VWAP 引擎。</p>
+<h2 id="4-容量分析策略能装多少钱"><a class="markdownIt-Anchor" href="#4-容量分析策略能装多少钱"></a> 4. 容量分析：策略能装多少钱</h2>
+<p><strong>容量（capacity）= 在收益衰减到不可接受前，策略能容纳的最大资金规模。</strong> 推导思路（平方根律的直接应用）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">目标：冲击成本 ≤ alpha_per_trade 的一半（成本吃掉一半 alpha 是警戒线）</span><br><span class="line">σ√(Q/ADV)·k ≤ alpha/2</span><br><span class="line">→ Q_max = ADV × (alpha / (2kσ))²</span><br><span class="line">→ 容量 = Q_max / 目标持仓占组合比例</span><br></pre></td></tr></table></figure>
+<p>例（警戒线取&quot;冲击 ≤ 单笔 alpha 的一半&quot;）：单笔 alpha 50bp（0.005）、日波动 2%、k=0.5 时，√(Q/ADV) ≤ 0.0025/(0.5×0.02) = 0.25 → Q_max ≈ <strong>ADV 的 6.25%</strong>；若单笔 alpha 只有 10bp（更常见的低频信号量级），同样的警戒线给出 √(Q/ADV) ≤ 0.0005/0.01 = 0.05 → Q_max ≈ <strong>ADV 的 0.25%——日均成交 5 亿元的股票单笔上限约 125 万元</strong>。这个量级让很多&quot;漂亮回测&quot;直接出局。影响容量的变量：alpha 强度（越强容量越大）、调仓频率（越频繁容量越小）、 universe 宽度（可分散的股票越多容量越大）。</p>
+<p>结论：<strong>回测报告不含容量分析，等于没回答&quot;这策略能不能用&quot;</strong>。</p>
+<h2 id="5-交易约束的真实形态a-股语境"><a class="markdownIt-Anchor" href="#5-交易约束的真实形态a-股语境"></a> 5. 交易约束的真实形态（A 股语境）</h2>
+<p>回测引擎（05/09 篇）为教学刻意简化，实盘约束必须逐项检查：</p>
+<table>
+<thead>
+<tr>
+<th>约束</th>
+<th>规则</th>
+<th>对策略的影响</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>T+1</td>
+<td>当日买入次日才能卖</td>
+<td>日内止损不可行；隔夜风险敞口</td>
+</tr>
+<tr>
+<td>涨跌停</td>
+<td>±10%（主板，ST ±5%；科创板/创业板 ±20%）</td>
+<td>涨停买不进/跌停卖不出——<strong>跌停连板是回测里&quot;不存在&quot;的流动性</strong></td>
+</tr>
+<tr>
+<td>最小单位</td>
+<td>100 股整手</td>
+<td>小资金组合分散受限（07 篇）</td>
+</tr>
+<tr>
+<td>融资融券</td>
+<td>标的池 + 保证金</td>
+<td>杠杆约束（07 篇立场：学习期不用）</td>
+</tr>
+<tr>
+<td>申购/减持规则</td>
+<td>限售、大宗交易等</td>
+<td>影响特定策略的可执行性</td>
+</tr>
+</tbody>
+</table>
+<p><strong>涨跌停的正确回测处理</strong>：达到涨停的买入信号 → 放弃该笔（不可成交），跌停的卖出 → 持仓顺延——而不是假装成交在停板价上（这是&quot;隐性前视偏差&quot;的一种：用了你在那个价格根本买不到的成交）。</p>
+<h2 id="6-把执行建模接回回测系统"><a class="markdownIt-Anchor" href="#6-把执行建模接回回测系统"></a> 6. 把执行建模接回回测系统</h2>
+<p>09 篇引擎的升级点（伪代码级别）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 成交价假设从&quot;当日收盘&quot;升级为</span></span><br><span class="line">fill_price = close * (<span class="number">1</span> + side * (spread_bps/<span class="number">2</span> + impact_bps) / <span class="number">1e4</span>)</span><br><span class="line"><span class="comment"># 成交量约束</span></span><br><span class="line">fills = <span class="built_in">min</span>(order_shares, participation_cap * adv)</span><br><span class="line"><span class="comment"># 停板约束</span></span><br><span class="line"><span class="keyword">if</span> limit_up_hit(symbol, date): skip_buy()</span><br><span class="line"><span class="keyword">if</span> limit_down_hit(symbol, date): defer_sell()   <span class="comment"># 持仓顺延，进&quot;待处理&quot;队列</span></span><br></pre></td></tr></table></figure>
+<p>并在评估报表增加一列：<strong>理论收益（无成本）→ 纸面收益（常数成本）→ 可实现收益（执行模型）</strong> 的三层瀑布——差距最大的那段就是你的执行研究优先级。</p>
+<h2 id="自测"><a class="markdownIt-Anchor" href="#自测"></a> 自测</h2>
+<ol>
+<li>滑点三成分是什么？哪一项随你的单量变化？</li>
+<li>平方根律里四个输入是什么？参与率翻 4 倍，冲击变成几倍？</li>
+<li>TWAP 与 VWAP 的分配逻辑差异？各自适用场景？</li>
+<li>推导容量的警戒线假设是什么？alpha 减半对容量的影响是线性还是更剧烈？</li>
+<li>涨跌停在回测里的正确处理？为什么&quot;假装成交在停板价&quot;是隐性前视？</li>
+</ol>
+<h2 id="下一篇"><a class="markdownIt-Anchor" href="#下一篇"></a> 下一篇</h2>
+<p>11 - 进阶：因子工程进阶——从&quot;用因子&quot;到&quot;造因子&quot;。</p>
+<h2 id="参考来源"><a class="markdownIt-Anchor" href="#参考来源"></a> 参考来源</h2>
+<ul>
+<li>Thomas Loeb, <em>Trading Cost: The Critical Link to Investment Performance</em>, Organized Exchanges, 1983（平方根律的早期实证）</li>
+<li>A 股费用口径：印花税（财政部/税务总局公告 2023 年第 39 号）、涨跌停规则（沪深交易所交易规则）</li>
+<li>Barry Johnson, <em>Algorithmic Trading &amp; DMA</em>, 4Myeloma Press, 2010（执行算法与成本建模的行业参考书）</li>
+<li>容量分析的实践框架见各大量化机构的公开研究（如 AQR 部分公开论文对策略容量的讨论）</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E9%87%8F%E5%8C%96%E6%8A%95%E8%B5%84/" rel="tag"># 量化投资</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/10/09-%E5%AE%9E%E6%88%98%E9%A1%B9%E7%9B%AE-%E5%8A%A8%E9%87%8F%E9%80%89%E8%82%A1%E5%9B%9E%E6%B5%8B%E7%B3%BB%E7%BB%9F/" rel="prev" title="09-实战项目-动量选股回测系统">
+                  <i class="fa fa-angle-left"></i> 09-实战项目-动量选股回测系统
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/10/11-%E8%BF%9B%E9%98%B6-%E5%9B%A0%E5%AD%90%E5%B7%A5%E7%A8%8B%E8%BF%9B%E9%98%B6/" rel="next" title="11-进阶-因子工程进阶">
+                  11-进阶-因子工程进阶 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

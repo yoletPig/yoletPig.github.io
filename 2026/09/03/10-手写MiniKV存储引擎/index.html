@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 用四步演进写出一个能落盘、能崩溃恢复、能合并的 KV 存储引擎：内存版 → WAL 版 → 简化 LSM 版 → LSM+缓存版。 - 每一步都用真实基准数字对比（写入吞吐&#x2F;读延迟），把 01&#x2F;06 章的理论（fsync 代价、顺序写、…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="10-手写MiniKV存储引擎">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/10-%E6%89%8B%E5%86%99MiniKV%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 用四步演进写出一个能落盘、能崩溃恢复、能合并的 KV 存储引擎：内存版 → WAL 版 → 简化 LSM 版 → LSM+缓存版。 - 每一步都用真实基准数字对比（写入吞吐&#x2F;读延迟），把 01&#x2F;06 章的理论（fsync 代价、顺序写、…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T14:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.558Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Redis">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="数据库">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/10-%E6%89%8B%E5%86%99MiniKV%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/10-%E6%89%8B%E5%86%99MiniKV%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E/","path":"2026/09/03/10-手写MiniKV存储引擎/","title":"10-手写MiniKV存储引擎"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>10-手写MiniKV存储引擎 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#10-%E6%89%8B%E5%86%99minikv%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E"><span class="nav-number">1.</span> <span class="nav-text"> 10 - 手写MiniKV存储引擎</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E9%A1%B9%E7%9B%AE%E6%80%BB%E8%A7%88%E5%9B%9B%E6%AD%A5%E6%BC%94%E8%BF%9B%E7%9A%84%E8%B7%AF%E7%BA%BF%E5%9B%BE"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 项目总览：四步演进的路线图</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E9%98%B6%E6%AE%B51%E5%86%85%E5%AD%98%E7%89%88%E4%B8%80%E5%88%87%E6%80%A7%E8%83%BD%E7%9A%84%E5%9F%BA%E5%87%86%E7%BA%BF"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 阶段1：内存版——一切性能的基准线</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E9%98%B6%E6%AE%B52wal-%E7%89%88%E6%8C%81%E4%B9%85%E6%80%A7%E4%B8%8E%E5%B4%A9%E6%BA%83%E6%81%A2%E5%A4%8D"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 阶段2：WAL 版——持久性与崩溃恢复</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E9%98%B6%E6%AE%B53%E7%AE%80%E5%8C%96-lsm-%E7%89%88%E7%94%A8%E9%A1%BA%E5%BA%8F%E5%86%99%E6%8D%A2%E5%90%9E%E5%90%90"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 阶段3：简化 LSM 版——用顺序写换吞吐</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E9%98%B6%E6%AE%B54%E5%8A%A0%E7%BC%93%E5%AD%98%E4%B8%8E%E5%B8%83%E9%9A%86%E8%AF%BB%E8%B7%AF%E5%BE%84%E7%9A%84%E8%A1%A5%E6%95%91"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 阶段4：加缓存与布隆——读路径的补救</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%9F%BA%E5%87%86%E5%86%99%E5%85%A5%E5%90%9E%E5%90%90%E4%B8%8E%E8%AF%BB%E5%BB%B6%E8%BF%9F%E7%9A%84%E5%AE%8C%E6%95%B4%E6%95%B0%E5%AD%97"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 基准：写入吞吐与读延迟的完整数字</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E8%AE%BE%E8%AE%A1%E5%8F%96%E8%88%8D%E6%97%A5%E5%BF%97%E6%AF%8F%E4%B8%80%E6%AD%A5%E4%B8%BA%E4%BB%80%E4%B9%88%E8%BF%99%E4%B9%88%E5%81%9A"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 设计取舍日志：每一步为什么这么做</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/10-%E6%89%8B%E5%86%99MiniKV%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="10-手写MiniKV存储引擎 | Yoleen的博客">
+      <meta itemprop="description" content="- 用四步演进写出一个能落盘、能崩溃恢复、能合并的 KV 存储引擎：内存版 → WAL 版 → 简化 LSM 版 → LSM+缓存版。 - 每一步都用真实基准数字对比（写入吞吐&#x2F;读延迟），把 01&#x2F;06 章的理论（fsync 代价、顺序写、…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          10-手写MiniKV存储引擎
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 22:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T22:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/" itemprop="url" rel="index"><span itemprop="name">数据库</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>15 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 用四步演进写出一个能落盘、能崩溃恢复、能合并的 KV 存储引擎：内存版 → WAL 版 → 简化 LSM 版 → LSM+缓存版。 - 每一步都用真实基准数字对比（写入吞吐/读延迟），把 01/06 章的理论（fsync 代价、顺序写、…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="10-手写minikv存储引擎"><a class="markdownIt-Anchor" href="#10-手写minikv存储引擎"></a> 10 - 手写MiniKV存储引擎</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>用四步演进写出一个能落盘、能崩溃恢复、能合并的 KV 存储引擎：内存版 → WAL 版 → 简化 LSM 版 → LSM+缓存版。</li>
+<li>每一步都用真实基准数字对比（写入吞吐/读延迟），把 01/06 章的理论（fsync 代价、顺序写、读放大）变成自己的测量。</li>
+<li>跑通 kill -9 崩溃恢复验证：写 1000 条后强杀，重放 WAL 后数据一条不丢。</li>
+<li>以&quot;设计取舍日志&quot;的形式记录每一步的决策与代价，养成存储工程的思维方式。</li>
+</ul>
+<h2 id="1-项目总览四步演进的路线图"><a class="markdownIt-Anchor" href="#1-项目总览四步演进的路线图"></a> 1. 项目总览：四步演进的路线图</h2>
+<p>我们要造的东西叫 MiniKV——一个 put/get/delete 的 KV 存储。它不是玩具堆砌，而是把前九章的原理按依赖顺序逐一落地：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">阶段1 内存版    dict 一把梭                    → 基准线: 不落盘能有多快(11216 千条/s)</span><br><span class="line">   ↓ 加什么? 持久性(01 章 D 的实现=追加日志)</span><br><span class="line">阶段2 WAL版     append+fsync 每条落盘          → 持久但慢(1 千条/s): fsync 的账单</span><br><span class="line">   ↓ 加什么? 吞吐(06 章 LSM: 顺序写+批量刷盘)</span><br><span class="line">阶段3 LSM版     memtable+SSTable+compaction    → 快(720 千条/s) 但读要翻文件(642μs)</span><br><span class="line">   ↓ 加什么? 读性能(08 章缓存思想)</span><br><span class="line">阶段4 +缓存     读缓存+布隆过滤器              → 热读减半(321μs), 认识&quot;缓存救重复读&quot;</span><br></pre></td></tr></table></figure>
+<p>文件组织（单文件 <code>minikv.py</code> 分四个类，本章全部代码给出；建议动手抄一遍而不是复制）：</p>
+<ul>
+<li><code>MemoryKV</code>：纯字典，基准线。</li>
+<li><code>WALKV</code>：WAL 版，记录格式 + 崩溃恢复（重放）。</li>
+<li><code>LSMKV</code>：简化 LSM，memtable 满 N 条冻结为不可变 SSTable，提供 compact()。</li>
+<li><code>CachedLSM</code>：在 LSMKV 上加读缓存 + 简化布隆过滤器。</li>
+</ul>
+<p>约定：Python 3.10+ 纯标准库；val 支持 str/bytes；记录格式 <code>[4B keylen][4B vallen][key][val]</code>（小端）。<strong>简化声明</strong>：没有 CRC 校验、没有多线程安全级写入、SSTable 读是全文件加载（没有稀疏索引）——这些&quot;偷懒&quot;恰是 5 节取舍日志的素材：每处简化都对应真实引擎的一个组件（校验和→RocksDB 的 block crc、稀疏索引→SSTable 的 index block）。</p>
+<h2 id="2-阶段1内存版一切性能的基准线"><a class="markdownIt-Anchor" href="#2-阶段1内存版一切性能的基准线"></a> 2. 阶段1：内存版——一切性能的基准线</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># minikv.py 第 1 段</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">MemoryKV</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self</span>): <span class="variable language_">self</span>.d = &#123;&#125;</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">put</span>(<span class="params">self, k, v</span>): <span class="variable language_">self</span>.d[k] = v</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">get</span>(<span class="params">self, k</span>): <span class="keyword">return</span> <span class="variable language_">self</span>.d.get(k)</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">close</span>(<span class="params">self</span>): <span class="keyword">pass</span></span><br></pre></td></tr></table></figure>
+<p>就这么短。它的意义是<strong>确立对照系</strong>：进程一死数据全没（01 章&quot;可靠存储&quot;为零），但写吞吐是物理上限。实测（20 万条压测见 6 节 <a target="_blank" rel="noopener" href="http://bench.py">bench.py</a>，此处 2 万条）：<strong>写 11216 千条/s、读 0.06μs</strong>。后面每加一层能力，都回头问一句&quot;我付的代价换来了什么&quot;。</p>
+<h2 id="3-阶段2wal-版持久性与崩溃恢复"><a class="markdownIt-Anchor" href="#3-阶段2wal-版持久性与崩溃恢复"></a> 3. 阶段2：WAL 版——持久性与崩溃恢复</h2>
+<p>WAL 版的写路径：<strong>每条 put 追加写日志并 fsync</strong>，内存字典同步更新；读纯内存。崩溃恢复 = 启动时把日志从头重放。这是 01 章&quot;可靠存储&quot;、06 章 SQLite journal 的最小实现：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># minikv.py 第 2 段</span></span><br><span class="line"><span class="keyword">import</span> os, struct</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">WALKV</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, path</span>):</span><br><span class="line">        <span class="variable language_">self</span>.path, <span class="variable language_">self</span>.d = path, &#123;&#125;</span><br><span class="line">        <span class="keyword">if</span> os.path.exists(path):                      <span class="comment"># ---- 崩溃恢复: 重放日志 ----</span></span><br><span class="line">            <span class="keyword">with</span> <span class="built_in">open</span>(path, <span class="string">&quot;rb&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">                <span class="keyword">while</span> <span class="literal">True</span>:</span><br><span class="line">                    hdr = f.read(<span class="number">8</span>)</span><br><span class="line">                    <span class="keyword">if</span> <span class="built_in">len</span>(hdr) &lt; <span class="number">8</span>: <span class="keyword">break</span>            <span class="comment"># 尾部不满 8B = 半条记录(崩溃截断)</span></span><br><span class="line">                    kl, vl = struct.unpack(<span class="string">&quot;&lt;II&quot;</span>, hdr)</span><br><span class="line">                    <span class="keyword">if</span> kl &gt; <span class="number">1</span>&lt;&lt;<span class="number">20</span> <span class="keyword">or</span> vl &gt; <span class="number">1</span>&lt;&lt;<span class="number">20</span>: <span class="keyword">break</span> <span class="comment"># 长度字段损坏(截断在长度处)→丢弃</span></span><br><span class="line">                    k, v = f.read(kl), f.read(vl)</span><br><span class="line">                    <span class="keyword">if</span> <span class="built_in">len</span>(k) &lt; kl <span class="keyword">or</span> <span class="built_in">len</span>(v) &lt; vl: <span class="keyword">break</span></span><br><span class="line">                    <span class="keyword">if</span> v == <span class="string">b&quot;\x00TOMB&quot;</span>: <span class="variable language_">self</span>.d.pop(k, <span class="literal">None</span>)   <span class="comment"># 删除标记(墓碑)</span></span><br><span class="line">                    <span class="keyword">else</span>: <span class="variable language_">self</span>.d[k] = v</span><br><span class="line">        <span class="variable language_">self</span>.f = <span class="built_in">open</span>(path, <span class="string">&quot;ab&quot;</span>)</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">put</span>(<span class="params">self, k, v</span>):</span><br><span class="line">        k, v = k.encode(), (v.encode() <span class="keyword">if</span> <span class="built_in">isinstance</span>(v, <span class="built_in">str</span>) <span class="keyword">else</span> v)</span><br><span class="line">        <span class="variable language_">self</span>.f.write(struct.pack(<span class="string">&quot;&lt;II&quot;</span>, <span class="built_in">len</span>(k), <span class="built_in">len</span>(v)) + k + v)</span><br><span class="line">        <span class="variable language_">self</span>.f.flush(); os.fsync(<span class="variable language_">self</span>.f.fileno())     <span class="comment"># ---- 持久点: 这行是 D 的价格 ----</span></span><br><span class="line">        <span class="variable language_">self</span>.d[k] = v</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">delete</span>(<span class="params">self, k</span>):                              <span class="comment"># 删除也走日志(墓碑), 崩溃后重放才知道删过</span></span><br><span class="line">        k = k.encode(); <span class="variable language_">self</span>.f.write(struct.pack(<span class="string">&quot;&lt;II&quot;</span>, <span class="built_in">len</span>(k), <span class="number">4</span>) + k + <span class="string">b&quot;\x00TOMB&quot;</span>)</span><br><span class="line">        <span class="variable language_">self</span>.f.flush(); os.fsync(<span class="variable language_">self</span>.f.fileno()); <span class="variable language_">self</span>.d.pop(k, <span class="literal">None</span>)</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">get</span>(<span class="params">self, k</span>): <span class="keyword">return</span> <span class="variable language_">self</span>.d.get(k.encode())</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">close</span>(<span class="params">self</span>): <span class="variable language_">self</span>.f.close()</span><br></pre></td></tr></table></figure>
+<p>四个设计点逐一对应理论：</p>
+<ol>
+<li><strong>追加写（append-only）</strong>：永不原地改文件——01 章铁律&quot;随机写变顺序写&quot;。</li>
+<li><strong>fsync 才是持久点</strong>：<code>flush()</code> 只到内核页缓存（进程崩溃不丢，断电丢），<code>os.fsync()</code> 才到盘。WAL 版实测写吞吐跌到 <strong>1 千条/s</strong>——比内存版慢四个数量级，正是分布式系统 07 章 fsync 实验的数据库版。</li>
+<li><strong>半条记录的处理</strong>：崩溃可能发生在&quot;写了 6 字节&quot;的中间态。恢复循环里三道闸（hdr 不足/长度越界/数据不足）都直接 break——<strong>日志尾部不完整 = 事务没提交，丢弃</strong>。这就是&quot;原子性&quot;在追加日志上的廉价实现。</li>
+<li><strong>删除是写墓碑</strong>：不写墓碑，崩溃后重放会&quot;复活&quot;已删的 key（日志里只有 put）。</li>
+</ol>
+<p>崩溃恢复验证（kill -9 是最诚实的测试——不给任何清理机会）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># crash_test.py —— 子进程写 1000 条后 kill -9, 主进程重放验证</span></span><br><span class="line"><span class="keyword">import</span> subprocess, sys, os</span><br><span class="line">sys.path.insert(<span class="number">0</span>, <span class="string">&quot;/tmp/minikv&quot;</span>)</span><br><span class="line">child = <span class="string">&#x27;&#x27;&#x27;</span></span><br><span class="line"><span class="string">import sys, os</span></span><br><span class="line"><span class="string">sys.path.insert(0, &quot;/tmp/minikv&quot;)</span></span><br><span class="line"><span class="string">from minikv import WALKV</span></span><br><span class="line"><span class="string">kv = WALKV(&quot;/tmp/minikv/crash.db&quot;)</span></span><br><span class="line"><span class="string">for i in range(1000):</span></span><br><span class="line"><span class="string">    kv.put(f&quot;key&#123;i&#125;&quot;, f&quot;val&#123;i&#125;&quot;)</span></span><br><span class="line"><span class="string">os.kill(os.getpid(), 9)               # 模拟崩溃: 不调用 close</span></span><br><span class="line"><span class="string">&#x27;&#x27;&#x27;</span></span><br><span class="line">subprocess.run([sys.executable, <span class="string">&quot;-c&quot;</span>, child], capture_output=<span class="literal">True</span>)</span><br><span class="line"><span class="keyword">from</span> minikv <span class="keyword">import</span> WALKV</span><br><span class="line">kv = WALKV(<span class="string">&quot;/tmp/minikv/crash.db&quot;</span>)    <span class="comment"># 重新打开 → 重放 WAL</span></span><br><span class="line">ok = <span class="built_in">sum</span>(<span class="number">1</span> <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">1000</span>) <span class="keyword">if</span> kv.get(<span class="string">f&quot;key<span class="subst">&#123;i&#125;</span>&quot;</span>) == <span class="string">f&quot;val<span class="subst">&#123;i&#125;</span>&quot;</span>.encode())</span><br><span class="line"><span class="built_in">print</span>(<span class="string">f&quot;恢复后验证: 1000 条中存活 <span class="subst">&#123;ok&#125;</span> 条&quot;</span>); kv.close()</span><br></pre></td></tr></table></figure>
+<p>实测输出：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">子进程退出码: -9 (预期 -9, 被 SIGKILL)</span><br><span class="line">恢复后验证: 1000 条中存活 1000 条</span><br></pre></td></tr></table></figure>
+<p><strong>1000/1000</strong>。再加一道恶意题（留作练习）：在 1000 条中手工把日志文件截断在第 500 条的中间，重放应得到恰好 499 或 500 条完整数据且无异常——原子性的边界行为要亲手验证。</p>
+<h2 id="4-阶段3简化-lsm-版用顺序写换吞吐"><a class="markdownIt-Anchor" href="#4-阶段3简化-lsm-版用顺序写换吞吐"></a> 4. 阶段3：简化 LSM 版——用顺序写换吞吐</h2>
+<p>WAL 版每条 fsync 太贵，LSM 的答案是<strong>攒批</strong>：写入先进内存 memtable（无 fsync 压力），攒满 N 条整体顺序刷成不可变的 SSTable 文件；WAL 保留但只 flush 不逐条 fsync（崩溃最多丢 memtable 未刷部分——用&quot;最多丢最近一批&quot;换吞吐，这正是 Redis AOF everysec 的权衡再现）。06 章的图变成代码：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># minikv.py 第 3 段</span></span><br><span class="line"><span class="keyword">import</span> time, threading</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">_load_sst</span>(<span class="params">path</span>):                                  <span class="comment"># 读取 SSTable → &#123;key: val&#125;</span></span><br><span class="line">    idx = &#123;&#125;</span><br><span class="line">    <span class="keyword">with</span> <span class="built_in">open</span>(path, <span class="string">&quot;rb&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">        <span class="keyword">while</span> <span class="literal">True</span>:</span><br><span class="line">            hdr = f.read(<span class="number">8</span>)</span><br><span class="line">            <span class="keyword">if</span> <span class="built_in">len</span>(hdr) &lt; <span class="number">8</span>: <span class="keyword">break</span></span><br><span class="line">            kl, vl = struct.unpack(<span class="string">&quot;&lt;II&quot;</span>, hdr)</span><br><span class="line">            <span class="keyword">if</span> kl &gt; <span class="number">1</span>&lt;&lt;<span class="number">20</span> <span class="keyword">or</span> vl &gt; <span class="number">1</span>&lt;&lt;<span class="number">24</span>: <span class="keyword">break</span></span><br><span class="line">            k, v = f.read(kl), f.read(vl)</span><br><span class="line">            <span class="keyword">if</span> <span class="built_in">len</span>(k) &lt; kl <span class="keyword">or</span> <span class="built_in">len</span>(v) &lt; vl: <span class="keyword">break</span></span><br><span class="line">            idx[k] = v</span><br><span class="line">    <span class="keyword">return</span> idx</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">LSMKV</span>:</span><br><span class="line">    FLUSH_N = <span class="number">2000</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, path</span>):</span><br><span class="line">        <span class="variable language_">self</span>.path = path; os.makedirs(path, exist_ok=<span class="literal">True</span>)</span><br><span class="line">        <span class="variable language_">self</span>.memtable, <span class="variable language_">self</span>.ssts = &#123;&#125;, []              <span class="comment"># ssts: (文件名, 键集) 新→旧</span></span><br><span class="line">        <span class="variable language_">self</span>.wal = <span class="built_in">open</span>(os.path.join(path, <span class="string">&quot;wal.log&quot;</span>), <span class="string">&quot;ab&quot;</span>)</span><br><span class="line">        <span class="variable language_">self</span>._lock = threading.Lock()</span><br><span class="line">        <span class="keyword">for</span> fn <span class="keyword">in</span> <span class="built_in">sorted</span>(os.listdir(path), reverse=<span class="literal">True</span>):   <span class="comment"># 启动: 扫已有 SSTable</span></span><br><span class="line">            <span class="keyword">if</span> fn.endswith(<span class="string">&quot;.sst&quot;</span>):</span><br><span class="line">                <span class="variable language_">self</span>.ssts.append((fn, <span class="built_in">set</span>(_load_sst(os.path.join(path, fn)).keys())))</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">put</span>(<span class="params">self, k, v</span>):</span><br><span class="line">        k, v = k.encode(), (v.encode() <span class="keyword">if</span> <span class="built_in">isinstance</span>(v, <span class="built_in">str</span>) <span class="keyword">else</span> v)</span><br><span class="line">        <span class="variable language_">self</span>.wal.write(struct.pack(<span class="string">&quot;&lt;II&quot;</span>, <span class="built_in">len</span>(k), <span class="built_in">len</span>(v)) + k + v)</span><br><span class="line">        <span class="variable language_">self</span>.wal.flush()                               <span class="comment"># 注意: 不 fsync(丢批换吞吐)</span></span><br><span class="line">        <span class="keyword">with</span> <span class="variable language_">self</span>._lock:</span><br><span class="line">            <span class="variable language_">self</span>.memtable[k] = v</span><br><span class="line">            <span class="keyword">if</span> <span class="built_in">len</span>(<span class="variable language_">self</span>.memtable) &gt;= <span class="variable language_">self</span>.FLUSH_N: <span class="variable language_">self</span>._flush()</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">_flush</span>(<span class="params">self</span>):                                  <span class="comment"># memtable → 不可变 SSTable(顺序写)</span></span><br><span class="line">        fn = <span class="string">f&quot;<span class="subst">&#123;<span class="built_in">int</span>(time.time()*<span class="number">1e6</span>)&#125;</span>.sst&quot;</span></span><br><span class="line">        keys = <span class="built_in">sorted</span>(<span class="variable language_">self</span>.memtable)</span><br><span class="line">        <span class="keyword">with</span> <span class="built_in">open</span>(os.path.join(<span class="variable language_">self</span>.path, fn), <span class="string">&quot;wb&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">            <span class="keyword">for</span> k <span class="keyword">in</span> keys:</span><br><span class="line">                v = <span class="variable language_">self</span>.memtable[k]</span><br><span class="line">                f.write(struct.pack(<span class="string">&quot;&lt;II&quot;</span>, <span class="built_in">len</span>(k), <span class="built_in">len</span>(v)) + k + v)</span><br><span class="line">        <span class="variable language_">self</span>.ssts.insert(<span class="number">0</span>, (fn, <span class="built_in">set</span>(keys)))</span><br><span class="line">        <span class="variable language_">self</span>.memtable.clear()</span><br><span class="line">        <span class="variable language_">self</span>.wal.close(); <span class="variable language_">self</span>.wal = <span class="built_in">open</span>(os.path.join(<span class="variable language_">self</span>.path, <span class="string">&quot;wal.log&quot;</span>), <span class="string">&quot;wb&quot;</span>)  <span class="comment"># WAL 可清</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">get</span>(<span class="params">self, k</span>):</span><br><span class="line">        kb = k.encode()</span><br><span class="line">        <span class="keyword">if</span> kb <span class="keyword">in</span> <span class="variable language_">self</span>.memtable: <span class="keyword">return</span> <span class="variable language_">self</span>.memtable[kb]        <span class="comment"># ① 先查 memtable</span></span><br><span class="line">        <span class="keyword">for</span> fn, keyset <span class="keyword">in</span> <span class="variable language_">self</span>.ssts:                            <span class="comment"># ② 再按新→旧翻 SSTable</span></span><br><span class="line">            <span class="keyword">if</span> kb <span class="keyword">in</span> keyset:</span><br><span class="line">                <span class="keyword">return</span> _load_sst(os.path.join(<span class="variable language_">self</span>.path, fn)).get(kb)</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">None</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">compact</span>(<span class="params">self</span>):                                 <span class="comment"># 合并: 重放所有 SSTable 取每个 key 最新版</span></span><br><span class="line">        latest = &#123;&#125;</span><br><span class="line">        <span class="keyword">for</span> fn, _ <span class="keyword">in</span> <span class="built_in">reversed</span>(<span class="variable language_">self</span>.ssts):</span><br><span class="line">            latest.update(_load_sst(os.path.join(<span class="variable language_">self</span>.path, fn)))</span><br><span class="line">        <span class="keyword">for</span> k, v <span class="keyword">in</span> <span class="variable language_">self</span>.memtable.items(): latest[k] = v</span><br><span class="line">        <span class="keyword">for</span> fn, _ <span class="keyword">in</span> <span class="variable language_">self</span>.ssts: os.remove(os.path.join(<span class="variable language_">self</span>.path, fn))</span><br><span class="line">        <span class="keyword">with</span> <span class="built_in">open</span>(os.path.join(<span class="variable language_">self</span>.path, <span class="string">&quot;merged.sst&quot;</span>), <span class="string">&quot;wb&quot;</span>) <span class="keyword">as</span> f:</span><br><span class="line">            <span class="keyword">for</span> k <span class="keyword">in</span> <span class="built_in">sorted</span>(latest):</span><br><span class="line">                v = latest[k]; f.write(struct.pack(<span class="string">&quot;&lt;II&quot;</span>, <span class="built_in">len</span>(k), <span class="built_in">len</span>(v)) + k + v)</span><br><span class="line">        <span class="variable language_">self</span>.ssts = [(<span class="string">&quot;merged.sst&quot;</span>, <span class="built_in">set</span>(latest.keys()))]</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">close</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">if</span> <span class="variable language_">self</span>.memtable: <span class="variable language_">self</span>._flush()</span><br><span class="line">        <span class="variable language_">self</span>.wal.close()</span><br></pre></td></tr></table></figure>
+<p>要点核对（每条都是 06 章的直接翻译）：memtable 满 2000 条才刷盘（<strong>攒批摊薄 fsync</strong>）；SSTable 文件名带时间戳、<strong>新文件覆盖旧文件同 key</strong>（读时按新→旧找）；compact() 把全部 SSTable 合一、每个 key 只留最新版（真 LSM 是多层 k-way merge + 墓碑回收，这里是单层简化，但&quot;读全量→写全量&quot;的成本结构一致）。</p>
+<h2 id="5-阶段4加缓存与布隆读路径的补救"><a class="markdownIt-Anchor" href="#5-阶段4加缓存与布隆读路径的补救"></a> 5. 阶段4：加缓存与布隆——读路径的补救</h2>
+<p>阶段 3 的读路径有明确的坏味道：<code>get</code> 每次都 <code>_load_sst</code> 整文件。阶段 4 加两样：<strong>读缓存</strong>（dict + 容量上限，08 章的 Redis 思想缩小版）与<strong>简化布隆过滤器</strong>（08 章手写版复用，挂在每个 SSTable 上，“一定没有就跳过该文件”）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># minikv.py 第 4 段</span></span><br><span class="line"><span class="keyword">import</span> hashlib</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">CachedLSM</span>(<span class="title class_ inherited__">LSMKV</span>):</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, path, cache_size=<span class="number">10000</span></span>):</span><br><span class="line">        <span class="built_in">super</span>().__init__(path)</span><br><span class="line">        <span class="variable language_">self</span>.cache, <span class="variable language_">self</span>.cache_size, <span class="variable language_">self</span>.stat = &#123;&#125;, cache_size, &#123;<span class="string">&quot;hit&quot;</span>: <span class="number">0</span>, <span class="string">&quot;q&quot;</span>: <span class="number">0</span>&#125;</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">get</span>(<span class="params">self, k</span>):</span><br><span class="line">        kb = k.encode(); <span class="variable language_">self</span>.stat[<span class="string">&quot;q&quot;</span>] += <span class="number">1</span></span><br><span class="line">        <span class="keyword">if</span> kb <span class="keyword">in</span> <span class="variable language_">self</span>.cache:</span><br><span class="line">            <span class="variable language_">self</span>.stat[<span class="string">&quot;hit&quot;</span>] += <span class="number">1</span>; <span class="keyword">return</span> <span class="variable language_">self</span>.cache[kb]     <span class="comment"># 缓存命中: 0.1μs 级</span></span><br><span class="line">        v = <span class="built_in">super</span>().get(kb.decode())                          <span class="comment"># 未命中: 走慢路径</span></span><br><span class="line">        <span class="keyword">if</span> v <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span> <span class="keyword">and</span> <span class="built_in">len</span>(<span class="variable language_">self</span>.cache) &lt; <span class="variable language_">self</span>.cache_size:</span><br><span class="line">            <span class="variable language_">self</span>.cache[kb] = v</span><br><span class="line">        <span class="keyword">return</span> v</span><br><span class="line"></span><br><span class="line"><span class="comment"># 布隆(与 08 章 bloom.py 同款, 挂在每个 SSTable 的键集上):</span></span><br><span class="line">    <span class="comment"># def _bloom_might(self, fn, k): ... 3 哈希置位/查询, &quot;不在&quot;→直接跳过该 SSTable</span></span><br><span class="line">    <span class="comment"># 效果: 不存在的 key 的读, 从&quot;翻遍所有文件&quot;降为&quot;3 次哈希×文件数&quot;</span></span><br></pre></td></tr></table></figure>
+<p>基准结果见下节。先说读到的教训：<strong>缓存只救&quot;重复读&quot;</strong>——冷读（每个 key 第一次）完全无感，热读（第二次起）延迟减半。真实引擎（RocksDB）把 SSTable 的索引块常驻内存、数据页走 LRU，是同一思想的全量版。</p>
+<h2 id="6-基准写入吞吐与读延迟的完整数字"><a class="markdownIt-Anchor" href="#6-基准写入吞吐与读延迟的完整数字"></a> 6. 基准：写入吞吐与读延迟的完整数字</h2>
+<p>基准脚本（<a target="_blank" rel="noopener" href="http://bench.py">bench.py</a>，压测 2 万条 put + 全量 get；代码骨架）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># bench.py 核心逻辑</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">bench_put</span>(<span class="params">cls, path, n=<span class="number">20000</span></span>):</span><br><span class="line">    kv = cls(path) <span class="keyword">if</span> path <span class="keyword">else</span> cls()</span><br><span class="line">    t0 = time.monotonic()</span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n): kv.put(<span class="string">f&quot;key<span class="subst">&#123;i&#125;</span>&quot;</span>, <span class="string">&quot;v&quot;</span> * <span class="number">40</span>)</span><br><span class="line">    w = n / (time.monotonic() - t0) / <span class="number">1000</span>            <span class="comment"># 千条/s</span></span><br><span class="line">    t0 = time.monotonic()</span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n): kv.get(<span class="string">f&quot;key<span class="subst">&#123;i&#125;</span>&quot;</span>)</span><br><span class="line">    rd = (time.monotonic() - t0) / n * <span class="number">1e6</span>            <span class="comment"># μs/条</span></span><br><span class="line">    kv.close(); <span class="keyword">return</span> w, rd</span><br></pre></td></tr></table></figure>
+<p>WSL2/Ubuntu（NVMe）实测汇总——<strong>背下这张表的相对结构，不是绝对值</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>引擎</th>
+<th>写吞吐（千条/s）</th>
+<th>读均耗（μs/条）</th>
+<th>持久性</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>内存版</td>
+<td>11216</td>
+<td>0.06</td>
+<td>无（进程死=数据死）</td>
+</tr>
+<tr>
+<td>WAL 版</td>
+<td>1</td>
+<td>0.10</td>
+<td>每条 fsync，崩溃不丢</td>
+</tr>
+<tr>
+<td>LSM 版</td>
+<td>720</td>
+<td>642（冷读）</td>
+<td>WAL 未 fsync，最多丢未刷批</td>
+</tr>
+<tr>
+<td>LSM+缓存</td>
+<td>707</td>
+<td>646 冷 / <strong>322 热</strong></td>
+<td>同上</td>
+</tr>
+</tbody>
+</table>
+<p>四条结论（每条都值得在面试里展开）：</p>
+<ol>
+<li><strong>fsync 是第一分水岭</strong>：内存版→WAL 版掉四个数量级。所有数据库的 group commit、O_DSYNC 调参、电池保护写缓存，都是在给这 0.1-1ms 买单。</li>
+<li><strong>攒批是第二分水岭</strong>：LSM 版把 fsync 从&quot;每条&quot;变&quot;每批（flush 时一次）“，吞吐回到 72 万条/s——代价是崩溃恢复窗口从 0 条变成最多一个未刷批（RPO 从 0 变成&quot;一批”，与 Redis AOF everysec 同构）。</li>
+<li><strong>简化 LSM 的读放大是真的</strong>：冷读 642μs（内存版 0.06μs 的一万倍）——每次 get 加载整个 SSTable 文件。真引擎靠稀疏索引 + 页缓存把这里降回微秒级；我们的 5 节取舍日志要诚实记下这一点。</li>
+<li><strong>缓存收益与访问局部性成正比</strong>：热读减半，冷读无感。评估缓存先看访问分布（Zipf 还是均匀），均匀分布的缓存是纯内存浪费。</li>
+</ol>
+<h2 id="7-设计取舍日志每一步为什么这么做"><a class="markdownIt-Anchor" href="#7-设计取舍日志每一步为什么这么做"></a> 7. 设计取舍日志：每一步为什么这么做</h2>
+<p>以&quot;日志体&quot;记录本项目全部取舍决策（这是存储工程师的核心工作方式，比代码更值钱）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br></pre></td><td class="code"><pre><span class="line">[决策 01] 记录格式用 [len][len][k][v] 而非 JSON 行</span><br><span class="line">  为什么: 解析零依赖、定长头支持流式读取; 代价: 不可读、需处理字节序 → 真引擎补 CRC32</span><br><span class="line"></span><br><span class="line">[决策 02] WAL 版每条 fsync</span><br><span class="line">  为什么: 演示&quot;持久点&quot;的物理位置; 代价: 1 千条/s → 真引擎用 group commit 把多条事务</span><br><span class="line">  合并成一次 fsync(Redis AOF always→everysec 同理)</span><br><span class="line"></span><br><span class="line">[决策 03] LSM 版 WAL 只 flush 不 fsync</span><br><span class="line">  为什么: 攒批换吞吐(1→72万条/s); 代价: 崩溃丢最近未刷批 → 这是 RPO 的主动选择,</span><br><span class="line">  不是疏忽。真产品要在这里写明文档</span><br><span class="line"></span><br><span class="line">[决策 04] SSTable 文件名用时间戳, 新旧顺序=文件名倒序</span><br><span class="line">  为什么: 免去版本号管理; 代价: 依赖时钟、并发 flush 需锁 → 真引擎用递增序号</span><br><span class="line"></span><br><span class="line">[决策 05] compact() 全量重写(单层)</span><br><span class="line">  为什么: 演示&quot;合并取最新&quot;的语义; 代价: O(全库) IO、合并期间双倍空间 → 真 LSM</span><br><span class="line">  分层(size-tiered/leveled)摊平成本, 06 章写放大 5-10x 的来源就是它</span><br><span class="line"></span><br><span class="line">[决策 06] 读路径全文件加载(无稀疏索引)</span><br><span class="line">  为什么: 代码最短; 代价: 冷读 642μs → 教训: **读路径的第一课是索引常驻内存**。</span><br><span class="line">  RocksDB 每打开一个 SSTable 就把 index block 装进内存, get 是&quot;内存查索引→只读一个块&quot;</span><br><span class="line"></span><br><span class="line">[决策 07] 缓存不做淘汰(容量到顶即停)</span><br><span class="line">  为什么: 演示最小可用; 代价: 热点漂移后命中率衰减 → 升级路径: LRU/LFU(08 章 8 种策略)</span><br></pre></td></tr></table></figure>
+<p><strong>下一步升级路线</strong>（把本项目变成简历项目的方向）：CRC 校验与文件 footer；稀疏索引（每 64 条记一个 offset）；多层 compaction；get/delete 的并发安全（读写锁）；用 mmap 替代 read；对标 RocksDB 的 WriteBatch 与 column family。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“flush() 了就持久了”</strong>：flush 只到内核页缓存，断电照丢；<code>os.fsync(fd)</code> 才是持久点。本项目的 WALKV 若漏掉 fsync，crash_test 会随机丢尾部数据——亲自删掉那行跑一次，看丢失数字。</li>
+<li><strong>“崩溃恢复重放日志从文件头读到尾就是了”</strong>：半条记录是常态不是异常（崩溃就爱发生在写一半时），三道截断闸门缺一不可；生产还要 CRC 区分&quot;截断&quot;与&quot;位翻转&quot;。</li>
+<li><strong>“LSM 快所以全用 LSM”</strong>：本项目的 LSM 版冷读 642μs 已经演示了读放大。选型回到 06 章的表：读多点查场景，B+树数据库（SQLite/PG）仍然是默认答案。</li>
+<li><strong>“compaction 可以等磁盘满了再做”</strong>：合并是 O(全库) 的 IO，磁盘 90% 时才开始合并 = 业务高峰自焚。真引擎的 compaction 触发条件是&quot;层数/文件数阈值&quot;（空间与读放大的前瞻控制），且要限速。</li>
+<li><strong>“测试 = 功能跑对”</strong>：本项目最重要的一行代码不是 put 而是 <code>os.kill(os.getpid(), 9)</code>。存储系统的验收标准是<strong>故障注入通过</strong>：kill -9、日志截断、写一半断电（可模拟：写 truncate 到任意中间长度）——每个都要有脚本、有预期输出。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>四步演进各自补一块拼图：内存版（基准）→ WAL 版（持久性=append+fsync+重放恢复）→ LSM 版（吞吐=memtable 攒批+SSTable 顺序写+compaction）→ 缓存版（读路径=缓存救重复读+布隆挡无效扫描）。</li>
+<li>数字结构：fsync 让写掉 4 个数量级（11216→1 千条/s），攒批拿回 3 个（→720 千条/s），冷读 642μs 暴露读放大，缓存把热读减半。</li>
+<li>原子性在追加日志上的廉价实现：尾部不完整即视为未提交；删除必须写墓碑。</li>
+<li>取舍日志是最有复用价值的产出：每个简化都标注&quot;为什么+代价+真引擎怎么补&quot;——这套思维方式比 MiniKV 本身更接近存储工程师的日常。</li>
+<li>至此全系列原理闭环：01 章的四件事（可靠存储/并发/查询/事务）在 B+树（03/06 章）与 LSM（06/10 章）两条路线上都看过了实现。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>给 WALKV 加 CRC32（<code>zlib.crc32</code>，记录头加 4B）：恢复时校验每条记录，把&quot;截断&quot;与&quot;损坏&quot;分开处理（损坏即停或跳过，写清语义）。再跑 crash_test 与&quot;手工截断日志&quot;两个用例。</li>
+<li>实现稀疏索引：_flush 时每 64 条记录记下 (首key, offset)，get 时二分定位 offset 后 seek 读 64 条；重测冷读延迟，对比 642μs 的改善幅度并解释为什么这等于&quot;把 03 章的 B+树思想搬进了 LSM&quot;。</li>
+<li>把 LSM 版的 FLUSH_N 从 2000 调到 200 与 20000，分别测写吞吐与崩溃恢复的丢失条数（kill -9 测试），画出&quot;批大小→吞吐/RPO&quot;的权衡曲线。</li>
+<li>给 CachedLSM 换成 LRU 淘汰（OrderedDict 或 functools.lru_cache 语义手写），构造&quot;热点漂移&quot;访问序列（前半访问 key 0-9999，后半访问 10000-19999），对比有无 LRU 的命中率。</li>
+<li>扩展题：把 MiniKV 包装成 Redis 协议子集（RESP 的 GET/SET），用 redis-cli 连上你的引擎真实读写——体会&quot;存储引擎&quot;与&quot;数据库产品&quot;之间隔着协议层、并发层与运维层（这也是为什么本系列前面 9 章不能跳过）。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/" rel="tag"># 数据库</a>
+              <a href="/tags/Redis/" rel="tag"># Redis</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/09-%E5%90%91%E9%87%8F%E6%95%B0%E6%8D%AE%E5%BA%93%E4%B8%8E%E8%AF%AD%E4%B9%89%E6%A3%80%E7%B4%A2/" rel="prev" title="09-向量数据库与语义检索">
+                  <i class="fa fa-angle-left"></i> 09-向量数据库与语义检索
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/11-%E6%95%B0%E6%8D%AE%E5%BB%BA%E6%A8%A1%E4%B8%8E%E9%80%89%E5%9E%8B/" rel="next" title="11-数据建模与选型">
+                  11-数据建模与选型 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 把&#39;延迟数字表&#39;内化成可以心算的直觉：内存往返、跨机房 RTT、一次 TLS 握手各值多少，用它们给任何架构方案划出物理下限。 - 掌握带宽×延迟积（BDP）与 TCP 窗口的关系，算出&#39;我的连接能不能吃满带宽&#39;。 - 理解&#39;加机器不一…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="12-延迟与带宽的工程常识">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/12-%E5%BB%B6%E8%BF%9F%E4%B8%8E%E5%B8%A6%E5%AE%BD%E7%9A%84%E5%B7%A5%E7%A8%8B%E5%B8%B8%E8%AF%86/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 把&#39;延迟数字表&#39;内化成可以心算的直觉：内存往返、跨机房 RTT、一次 TLS 握手各值多少，用它们给任何架构方案划出物理下限。 - 掌握带宽×延迟积（BDP）与 TCP 窗口的关系，算出&#39;我的连接能不能吃满带宽&#39;。 - 理解&#39;加机器不一…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T12:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.526Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="网络">
+<meta property="article:tag" content="计算机系统">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/12-%E5%BB%B6%E8%BF%9F%E4%B8%8E%E5%B8%A6%E5%AE%BD%E7%9A%84%E5%B7%A5%E7%A8%8B%E5%B8%B8%E8%AF%86/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/12-%E5%BB%B6%E8%BF%9F%E4%B8%8E%E5%B8%A6%E5%AE%BD%E7%9A%84%E5%B7%A5%E7%A8%8B%E5%B8%B8%E8%AF%86/","path":"2026/09/02/12-延迟与带宽的工程常识/","title":"12-延迟与带宽的工程常识"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>12-延迟与带宽的工程常识 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#12-%E5%BB%B6%E8%BF%9F%E4%B8%8E%E5%B8%A6%E5%AE%BD%E7%9A%84%E5%B7%A5%E7%A8%8B%E5%B8%B8%E8%AF%86"><span class="nav-number">1.</span> <span class="nav-text"> 12 - 延迟与带宽的工程常识</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%BB%B6%E8%BF%9F%E6%95%B0%E5%AD%97%E8%A1%A8%E5%B7%A5%E7%A8%8B%E5%B8%88%E5%BF%85%E9%A1%BB%E8%83%8C%E4%B8%8B%E6%9D%A5%E7%9A%84%E6%95%B0%E9%87%8F%E7%BA%A7"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 延迟数字表：工程师必须背下来的数量级</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E5%B8%A6%E5%AE%BD%E5%BB%B6%E8%BF%9F%E7%A7%AFbdp-%E4%B8%8E%E7%AA%97%E5%8F%A3"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 带宽×延迟积：BDP 与窗口</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E4%B8%BA%E4%BB%80%E4%B9%88%E5%8A%A0%E6%9C%BA%E5%99%A8%E4%B8%8D%E4%B8%80%E5%AE%9A%E5%8F%98%E5%BF%AB"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 为什么&quot;加机器不一定变快&quot;</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-amdahl-%E5%AE%9A%E5%BE%8B%E5%B9%B6%E8%A1%8C%E6%94%B6%E7%9B%8A%E7%9A%84%E6%95%B0%E5%AD%A6%E4%B8%8A%E9%99%90"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. Amdahl 定律：并行收益的数学上限</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E5%BB%B6%E8%BF%9F%E7%AE%97%E9%A2%98%E4%B8%A4%E4%BE%8B%E6%8A%8A%E6%95%B0%E5%AD%97%E8%A1%A8%E7%94%A8%E8%B5%B7%E6%9D%A5"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 延迟算题两例：把数字表用起来</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-rtt-%E6%95%8F%E6%84%9F%E8%AE%BE%E8%AE%A1%E5%AF%B9%E6%8A%97%E5%BE%80%E8%BF%94%E7%9A%84%E5%9B%9B%E4%BB%B6%E5%B7%A5%E5%85%B7"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. RTT 敏感设计：对抗往返的四件工具</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E8%B7%A8%E5%9C%B0%E5%9F%9F%E9%83%A8%E7%BD%B2%E5%86%B3%E7%AD%96%E6%8A%8A%E8%AE%A1%E7%AE%97%E6%94%BE%E5%88%B0%E7%A6%BB%E7%94%A8%E6%88%B7%E6%9C%80%E8%BF%91%E7%9A%84%E5%9C%B0%E6%96%B9"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 跨地域部署决策：把计算放到离用户最近的地方</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/12-%E5%BB%B6%E8%BF%9F%E4%B8%8E%E5%B8%A6%E5%AE%BD%E7%9A%84%E5%B7%A5%E7%A8%8B%E5%B8%B8%E8%AF%86/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="12-延迟与带宽的工程常识 | Yoleen的博客">
+      <meta itemprop="description" content="- 把&#39;延迟数字表&#39;内化成可以心算的直觉：内存往返、跨机房 RTT、一次 TLS 握手各值多少，用它们给任何架构方案划出物理下限。 - 掌握带宽×延迟积（BDP）与 TCP 窗口的关系，算出&#39;我的连接能不能吃满带宽&#39;。 - 理解&#39;加机器不一…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          12-延迟与带宽的工程常识
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 20:00:00" itemprop="dateCreated datePublished" datetime="2026-09-02T20:00:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%B3%BB%E7%BB%9F%E4%B8%8E%E7%BD%91%E7%BB%9C/" itemprop="url" rel="index"><span itemprop="name">计算机系统与网络</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.6k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>17 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 把'延迟数字表'内化成可以心算的直觉：内存往返、跨机房 RTT、一次 TLS 握手各值多少，用它们给任何架构方案划出物理下限。 - 掌握带宽×延迟积（BDP）与 TCP 窗口的关系，算出'我的连接能不能吃满带宽'。 - 理解'加机器不一…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="12-延迟与带宽的工程常识"><a class="markdownIt-Anchor" href="#12-延迟与带宽的工程常识"></a> 12 - 延迟与带宽的工程常识</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>把&quot;延迟数字表&quot;内化成可以心算的直觉：内存往返、跨机房 RTT、一次 TLS 握手各值多少，用它们给任何架构方案划出物理下限。</li>
+<li>掌握带宽×延迟积（BDP）与 TCP 窗口的关系，算出&quot;我的连接能不能吃满带宽&quot;。</li>
+<li>理解&quot;加机器不一定变快&quot;的三类硬约束：串行依赖、一致性往返、共享瓶颈。</li>
+<li>会推导 Amdahl 定律并查数值表；建立 RTT 敏感设计的四件工具（批量/流水线/预取/本地缓存），用 KV cache 作预取案例；给出跨地域部署的决策框架。</li>
+</ul>
+<p>前置：03 章（延迟表的一半来自那里）、07 章（TCP 窗口）、10 章（边缘与 Anycast）。</p>
+<h2 id="1-延迟数字表工程师必须背下来的数量级"><a class="markdownIt-Anchor" href="#1-延迟数字表工程师必须背下来的数量级"></a> 1. 延迟数字表：工程师必须背下来的数量级</h2>
+<p>来源：Jeff Dean《Latency Numbers Every Programmer Should Know》（2009 年 Build '10 演讲），Brendan Gregg 将其整理成著名可视化卡片；跨层数字在 03 章已给过一半，这里补全工程版并加上&quot;换算&quot;一栏——<strong>光速与快递员的物理事实</strong>：</p>
+<table>
+<thead>
+<tr>
+<th>事件</th>
+<th>量级</th>
+<th>直觉换算（1ns≈光走 30cm）</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>L1 缓存访问</td>
+<td>~1 ns</td>
+<td>房间里</td>
+</tr>
+<tr>
+<td>内存往返（DRAM）</td>
+<td>~100 ns</td>
+<td>横穿一条街</td>
+</tr>
+<tr>
+<td>同机房 RPC（含栈开销）</td>
+<td>~0.5 ms</td>
+<td>过一个街区</td>
+</tr>
+<tr>
+<td>同城 RTT</td>
+<td>~1-5 ms</td>
+<td>跨城区</td>
+</tr>
+<tr>
+<td>跨国/跨洲 RTT</td>
+<td>~150-300 ms</td>
+<td>北京↔洛杉矶光速直线 ~70ms，实际路径绕行 2-4 倍</td>
+</tr>
+<tr>
+<td>SSD 随机读</td>
+<td>~20-100 µs</td>
+<td>比内存慢 1000 倍</td>
+</tr>
+<tr>
+<td>一次 HTTPS 握手（1-RTT TLS1.3）</td>
+<td>≈ 2×RTT + 服务器处理</td>
+<td>跨洲站点 ≈ 400ms 才能发第一个请求</td>
+</tr>
+</tbody>
+</table>
+<p><strong>为什么必须背</strong>：因为它是所有&quot;该不该优化&quot;的<strong>分母</strong>。例：接口耗时 120ms，其中 DB 查询 90ms——若 DB 在同城（RTT 1ms），90ms 是&quot;真的在算&quot;；若 DB 跨机房（RTT 40ms）且查了 2 次，80ms 可能只是<strong>在路上</strong>，加索引无效、搬机房立竿见影。分不清&quot;计算时间&quot;和&quot;传输时间&quot;，优化方向就是随机的。<strong>经验做法</strong>：给任何服务的延迟拆账时，第一刀切&quot;本地计算/网络往返/磁盘 IO&quot;三份，各占多少一目了然，再决定动哪刀。</p>
+<h2 id="2-带宽延迟积bdp-与窗口"><a class="markdownIt-Anchor" href="#2-带宽延迟积bdp-与窗口"></a> 2. 带宽×延迟积：BDP 与窗口</h2>
+<p>一条链路&quot;同时能有多少数据在飞&quot;由带宽和 RTT 共同决定：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">BDP = 带宽 × RTT</span><br><span class="line">例：100 Mbps 链路 × 50 ms RTT = 12.5 MB/s × 0.05 s = 625 KB 在途</span><br><span class="line">例：10 Gbps 长肥网络 × 100 ms = 125 MB 在途！</span><br></pre></td></tr></table></figure>
+<p>要吃满带宽，<strong>在途数据必须 ≥ BDP</strong>（管道灌不满就没有满速可谈）。对 TCP，在途数据上限 = 接收窗口 rwnd（07 章），所以：<strong>窗口 &lt; BDP ⇒ 吞吐 = 窗口/RTT，与带宽无关</strong>。常见场景的 BDP 速查（心算即可）：</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>带宽</th>
+<th>RTT</th>
+<th>BDP（在途需求）</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>家宽到同城 CDN</td>
+<td>300 Mbps</td>
+<td>15 ms</td>
+<td>≈ 563 KB</td>
+<td>普通窗口即可吃满</td>
+</tr>
+<tr>
+<td>机房间万兆</td>
+<td>10 Gbps</td>
+<td>0.5 ms</td>
+<td>≈ 625 KB</td>
+<td>低 RTT 是朋友</td>
+</tr>
+<tr>
+<td>跨洲 10G 专线</td>
+<td>10 Gbps</td>
+<td>150 ms</td>
+<td>≈ 187 MB</td>
+<td><strong>必须开窗口缩放+大缓冲</strong></td>
+</tr>
+<tr>
+<td>跨洲 100 Mbps</td>
+<td>100 Mbps</td>
+<td>150 ms</td>
+<td>≈ 1.9 MB</td>
+<td>带宽小 BDP 也小，窗口够</td>
+</tr>
+</tbody>
+</table>
+<p>经典陷阱：带宽 1Gbps、RTT 50ms、窗口只有 256KB → 吞吐 = 256KB/50ms ≈ 5.2MB/s ≈ 42Mbps，<strong>带宽利用率 4%</strong>——加带宽无效，必须加窗口（这正是 07 章握手时 wscale 窗口缩放存在的理由：16 位字段最大 64KB，乘 2⁷ 才到 MB 级）。实测验证：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ ss -tin dst :443 | grep -E <span class="string">&#x27;rtt|send&#x27;</span></span><br><span class="line">	rtt:45.2/0.1   send 4.5Mbps   unacked 38   cwnd 62</span><br><span class="line"><span class="comment"># 吞吐上限估计 = cwnd×MSS / RTT = 62×1460B / 45ms ≈ 2.0MB/s</span></span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：跨地域传输慢时先算 BDP 对账——若理论吞吐远高于实测且 <code>ss</code> 看到 cwnd 偏小，是拥塞控制保守（考虑 BBR）或丢包率作祟；若 cwnd 已很大仍慢，看接收端窗口与应用读速（所谓&quot;服务端慢&quot;经常是客户端读慢）。本系列的延迟表 + BDP 公式与 Linux 性能工程 07 章的实测工具是同一知识的一体两面。</p>
+<p>BDP 的思维还可以超出 TCP，做任何&quot;管道&quot;的容量设计：消息队列的在途消息上限（消费速率 × 端到端延迟）、流水线的工位深度（03 章 GPU 流水线）、甚至并发爬虫的请求数（QPS × 平均响应）。凡&quot;速率 × 延迟&quot;决定&quot;同时在飞多少&quot;的场景，都是 BDP 换了个马甲——<strong>见到&quot;加并发没用/加了也白加&quot;，先算这条管道的 BDP 对不对得上</strong>。</p>
+<h2 id="3-为什么加机器不一定变快"><a class="markdownIt-Anchor" href="#3-为什么加机器不一定变快"></a> 3. 为什么&quot;加机器不一定变快&quot;</h2>
+<p>三类硬约束，每类一个现场：</p>
+<p><strong>① 串行依赖</strong>：流程 A→B→C 必须依次发生，并行只能压&quot;同一环节内部的量&quot;。用户登录要过：鉴权服务→风控服务→数据库——三跳串行，每跳 20ms，总延迟 60ms 与机器数无关；把三个服务各扩 10 倍，延迟还是 60ms（吞吐提高了，延迟没变）。<strong>吞吐可并行，延迟看关键路径</strong>。</p>
+<p><strong>② 一致性强制的往返</strong>：分布式一致性协议（共识/锁/主从复制）的代价就是<strong>额外往返</strong>。写一个&quot;强一致跨机房&quot;的数据：客户端→机房A主库（1 RTT）→同步复制到机房B（1 RTT 跨洲 150ms）→确认（回程）——写延迟 ≥ 300ms，<strong>这是 CAP/共识的数学代价，不是实现差</strong>。同一数据同城复制 30ms 就够——所以&quot;多活&quot;难就难在跨洲一致性延迟上（10 章调度、本章 7 节再回收）。</p>
+<p><strong>③ 共享瓶颈</strong>：03 章的内存带宽（8 核抢一条总线）、07 章的拥塞窗口（所有连接共享一条链路）、数据库连接池（100 个应用实例抢 2000 个连接）——加机器只是把瓶颈推到下一个共享点。<strong>判断方法</strong>：看目标资源是不是&quot;全局共享且不可分割&quot;（带宽、单库写、单实例缓存）；是，则先拆共享点（分片、本地缓存、读写分离）再加机器。</p>
+<p>把三类约束放进一张算题（面试与架构评审通用）：一个下单接口的关键路径是&quot;鉴权 10ms（本地）→ 风控 RPC 30ms（跨机房 RTT 20 + 处理 10）→ 强一致写主库 80ms（跨洲同步复制）→ 返回&quot;。总延迟 120ms 里：本地计算只占 20ms，<strong>100ms 是协议与距离给的</strong>——加 10 台应用机器，这三段一毫秒都不会变；把风控 RPC 改批量/合并不了（串行依赖），把强一致写换同城（-50ms）或异步化（-80ms，牺牲强一致）才是有效杠杆。<strong>先问每一段延迟的&quot;物理成分&quot;（距离/协议/计算），再谈加机器</strong>——这个拆法同时覆盖 3 类约束的判断。</p>
+<h2 id="4-amdahl-定律并行收益的数学上限"><a class="markdownIt-Anchor" href="#4-amdahl-定律并行收益的数学上限"></a> 4. Amdahl 定律：并行收益的数学上限</h2>
+<p>系统有可并行比例 p 和不可并行的串行比例 (1-p)，用 n 个并行单元的加速比（Amdahl 1967）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">S(n) = 1 / ((1-p) + p/n)</span><br></pre></td></tr></table></figure>
+<p>推导一行：总时间 = 串行部分 (1-p)·T + 并行部分 (p·T)/n；加速比 = 原时间/新时间。数值表（背下形状）：</p>
+<table>
+<thead>
+<tr>
+<th>p \ n</th>
+<th>2</th>
+<th>4</th>
+<th>16</th>
+<th>100</th>
+<th>∞</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0.50</td>
+<td>1.33</td>
+<td>1.60</td>
+<td>1.88</td>
+<td>1.98</td>
+<td><strong>2.00</strong></td>
+</tr>
+<tr>
+<td>0.90</td>
+<td>1.82</td>
+<td>3.08</td>
+<td>6.40</td>
+<td>9.17</td>
+<td><strong>10.00</strong></td>
+</tr>
+<tr>
+<td>0.95</td>
+<td>1.90</td>
+<td>3.48</td>
+<td>9.14</td>
+<td>16.67</td>
+<td><strong>20.00</strong></td>
+</tr>
+<tr>
+<td>0.99</td>
+<td>1.96</td>
+<td>3.88</td>
+<td>13.91</td>
+<td>50.25</td>
+<td><strong>100.00</strong></td>
+</tr>
+</tbody>
+</table>
+<p>两个反直觉结论：① <strong>上限由串行部分锁死</strong>：p=0.95 时哪怕无限并行，最多快 20 倍（1/(1-0.95)）；p=0.50 永远最多 2 倍。② <strong>边际收益递减</strong>：p=0.9 时从 2 核到 4 核快 1.69 倍，从 50 到 100 核只快 1.11 倍——机器数翻倍不再带来翻倍。工程含义：<strong>优化顺序是先提 p 再加 n</strong>（串行的 10% 改并行，比再买 100 台机器值钱）；这也解释了推理服务里为什么&quot;批量&quot;优先于&quot;扩容&quot;（batch 内并行把 p 推高，而 GPU 已经是 n=几千并行的单元）。对照定律 Gustafson（1988）一句话区分：Amdahl 回答&quot;固定工作量下并行能多快跑完&quot;（降延迟视角），Gustafson 回答&quot;固定时间下能多算多少&quot;（扩工作量视角）——讨论降延迟用 Amdahl，讨论吞吐扩容用 Gustafson。</p>
+<h2 id="5-延迟算题两例把数字表用起来"><a class="markdownIt-Anchor" href="#5-延迟算题两例把数字表用起来"></a> 5. 延迟算题两例：把数字表用起来</h2>
+<p><strong>例一：一次 HTTPS 请求的握手预算</strong>（把 1 节的表变成心算）。目标服务器 RTT=60ms（同城边缘），各阶段理论下限：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">DNS（本地解析器有缓存）        0 RTT        0 ms</span><br><span class="line">TCP 三次握手                  1 RTT       60 ms   （SYN→SYN+ACK 是半个往返？不：</span><br><span class="line">                                         SYN 与 SYN+ACK 各半个，合并计 1 RTT）</span><br><span class="line">TLS 1.3 握手（与 TCP 合并计）  +0~1 RTT    60 ms   （TLS1.3 的 1-RTT 里 ClientHello</span><br><span class="line">                                         可搭 TCP 第三个 ACK 的车，实际约 1 RTT）</span><br><span class="line">HTTP 请求+首字节响应          1 RTT       60 ms</span><br><span class="line">合计首字节                   ≈ 3 RTT     180 ms</span><br><span class="line">若 TLS1.2（2-RTT）且跨洲 150ms：≈ 4 RTT = 600ms —— 版本与距离都是 2 倍级杠杆</span><br></pre></td></tr></table></figure>
+<p>这张小账单解释了 08 章的 HTTP/3（把 TCP+TLS 两笔握手并成 1 RTT）、09 章的 0-RTT（复用会话再省一笔）、10 章的 Anycast（把 RTT 本身砍小）各自省的是哪一笔——<strong>每一项优化都能在账单上找到自己的位置</strong>。也解释了为什么&quot;长连接+连接池&quot;是所有客户端库（数据库/Redis/HTTP）的标配：连接建立成本是每个新连接都要重付的固定税。</p>
+<p><strong>例二：Little’s Law 做容量规划</strong>（性能工程 01 篇的核心公式，这里补上网络语境的用法）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">L = λ × W        并发数 = 到达率 × 平均驻留时间</span><br><span class="line">例：API 目标 QPS=1000，平均响应 200ms → 稳态并发 L = 1000 × 0.2 = 200</span><br><span class="line">   → 至少 200 个&quot;并发槽&quot;（连接池、worker、线程），再加余量应对突发</span><br></pre></td></tr></table></figure>
+<p>两个直接应用：① <strong>连接池 sizing 不再拍脑袋</strong>——QPS 与单请求延迟一乘就出下限（DB 连接池给 200+缓冲，而不是&quot;经验值 10&quot;）；② <strong>排队预警</strong>——实测并发 &gt; λ×W 持续增长，说明系统过饱和（吞吐封顶了），P99 会先爆炸（性能工程 01 篇的长尾）。<strong>经验做法</strong>：压测报告必须同时给 QPS、P99、并发数三个数，用 Little’s Law 交叉验证一致性——三个数对不上，说明测量本身有坑（比如压测机瓶颈）。</p>
+<h2 id="6-rtt-敏感设计对抗往返的四件工具"><a class="markdownIt-Anchor" href="#6-rtt-敏感设计对抗往返的四件工具"></a> 6. RTT 敏感设计：对抗往返的四件工具</h2>
+<p>凡是&quot;每一步都要等上一步的网络回应&quot;的设计，延迟 ≈ 步数 × RTT，而 RTT 你优化不动（光速+距离），能动的只有<strong>步数</strong>：</p>
+<ul>
+<li><strong>批量（batching）</strong>：N 个请求并成一个往返。DB 的 N+1 查询（循环里逐条 SELECT）改成 IN 一次查询；RPC 的逐条推送改成攒批（11 章 client-streaming）；LLM 的 continuous batching（03 章）——同一个思想的三次落地。</li>
+<li><strong>流水线（pipelining）</strong>：不等回应就发下一个（Redis pipeline：10 条命令 1 个 RTT 发完，而非 10 个 RTT；TCP 滑动窗口本质也是流水线）。注意与并发的区别：流水线保序，并发乱序。</li>
+<li><strong>预取（prefetch）</strong>：猜到下一步要什么，提前去拿。CPU 硬件预取器（03 章）、HTTP/2 服务器推送（已弃）、数据库预读——共同点是&quot;用带宽换延迟&quot;（带宽便宜，RTT 贵）。</li>
+<li><strong>本地缓存</strong>：把上一次往返的结果留在进程内，下次零往返。成本是失效一致性（缓存多久的权衡），收益是把 100ns~100ms 的访问降到 ~100ns 内存速度（03 章表）。</li>
+</ul>
+<p><strong>案例：KV cache 就是&quot;预取/缓存&quot;思想在推理里的化身</strong>。Transformer 自回归生成第 t 个 token 时需要全部前文 t-1 个位置的 K/V——朴素做法每步重算全部历史（往返=重算整个前缀）；KV cache 把历史 K/V 存下来，每步只算新 token 的 K/V（<strong>一次增量、零重算</strong>）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">朴素生成（无缓存）                     KV cache（预取/缓存）</span><br><span class="line">第 t 步：算 K/V(1..t-1) ← 重算！       第 t 步：只算 K/V(t)，查表其余</span><br><span class="line">第 t+1 步：算 K/V(1..t) ← 又重算！     第 t+1 步：只算 K/V(t+1)，追加进表</span><br><span class="line">每步代价 O(t)   →  总代价 O(n²)        每步代价 O(1) → 总代价 O(n)</span><br></pre></td></tr></table></figure>
+<p>代价是显存（随上下文线性增长：7B 模型 fp16 每万 token 约数 GB——03/05 章的位宽账直接可用），收益是延迟从 O(上下文长度) 降到 O(1)。<strong>PagedAttention 进一步</strong>把 KV cache 当虚拟内存分页管理（OS 系列 05 篇思想的 GPU 版），碎片率从 60-80% 降到 &lt;4%（vLLM 论文，Kwon et al. 2023）——网络课的&quot;缓存/预取&quot;与 OS 课的&quot;分页&quot;在推理引擎里会师。</p>
+<h2 id="7-跨地域部署决策把计算放到离用户最近的地方"><a class="markdownIt-Anchor" href="#7-跨地域部署决策把计算放到离用户最近的地方"></a> 7. 跨地域部署决策：把计算放到离用户最近的地方</h2>
+<p>决策树（从上往下走，命中即停）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">请求能否容忍 &gt;150ms 延迟？ ──是──► 单区域部署（最简单）</span><br><span class="line">       │否</span><br><span class="line">请求是读为主、数据可缓存/可复制？ ──是──► 边缘/CDN + 多区域读副本</span><br><span class="line">       │否</span><br><span class="line">写为主且强一致？ ──是──► 单主区域 + 就近接入转发（Anycast 终结连接，写回主区域）</span><br><span class="line">       │否（可牺牲一致性）</span><br><span class="line">最终一致多活（CRDT/冲突解决）── 复杂度最高，仅巨头核心业务用</span><br></pre></td></tr></table></figure>
+<p>典型 LLM API 的形态（10 章 Anycast 的回收）：边缘就近终结 TLS/TCP（握手快），请求转发到少数几个大区域集群（GPU 集中管理便宜），流式响应原路返回（首 token 延迟取决于模型集群位置——所以&quot;区域选择&quot;是用户可见的配置项）。<strong>经验做法</strong>：跨区域部署前先做&quot;延迟预算审计&quot;——把一个请求的关键路径按 6 节四件工具过一遍，往往发现&quot;搬到边缘&quot;的收益远小于&quot;少两次跨区域往返&quot;；多区域是最后手段，不是第一步。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“带宽大 = 传得快”</strong>：小文件传输的耗时被 RTT 主导（握手+往返），100Mbps 与 10Gbps 传一个 10KB 文件几乎无差（1 RTT 就完事）。提升&quot;小包延迟&quot;靠就近（10 章）与长连接复用（07/08 章），不靠加带宽。</li>
+<li><strong>“并行度 = 机器数，加机器线性加速”</strong>：Amdahl 数值表面前不成立；p=0.9 时 100 台只有 9 倍。先审计串行比例与共享瓶颈，再谈扩容（3 节三类约束过一遍）。</li>
+<li><strong>“延迟优化 = 优化代码”</strong>：03 章的内存墙、07 章的慢启动、本章的 RTT——大量延迟是&quot;物理与协议&quot;给的，代码层优化在错误的分母上白费劲。先拆账（1 节三刀），再选工具。</li>
+<li><strong>“缓存是万能的”</strong>：缓存的隐性成本=一致性维护+失效风暴（热点 key 失效瞬间打穿源站）+内存预算；KV cache 显示&quot;缓存思想&quot;要配套&quot;淘汰与分页&quot;（PagedAttention）才完整。无失效策略的缓存是事故预定。</li>
+<li><strong>“跨机房复制 = 高可用，值得马上做”</strong>：强一致跨机房写延迟 ≥ 2×RTT（3 节②的账），同步复制把最慢副本变成你的写延迟；多数业务该用&quot;同城强一致 + 异地异步灾备&quot;，跨洲强一致多活是极少数业务的需求。</li>
+<li><strong>“数字表会过时，不用背”</strong>：数字会微调，<strong>数量级关系十年不变</strong>（L1 比内存快两个数量级、网络比内存慢三个数量级以上）——背的是数量级与梯度，不是精确值；拿到新机器用 06 章的 ping、本篇的 <code>curl -w</code> 花 5 分钟重新标定一遍即可。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>延迟数字表是优化方向的分母：内存 100ns / 同城 1ms / 跨洲 150-300ms / HTTPS 握手 2×RTT；先拆&quot;计算/网络/磁盘&quot;三份账再动手（经验做法）。</li>
+<li>BDP = 带宽×RTT；窗口 &lt; BDP 时吞吐 = 窗口/RTT 与带宽无关——跨地域慢先对 BDP 账，看 cwnd/rwnd 再谈扩带宽；&quot;速率×延迟=在途量&quot;的管道思维适用于 MQ/流水线/爬虫等一切场景。</li>
+<li>加机器无效的三类约束：串行依赖（延迟看关键路径）、一致性往返（跨洲强一致写 ≥ 2×RTT）、共享瓶颈（先拆共享点）。</li>
+<li>Amdahl：S(n)=1/((1-p)+p/n)，上限 1/(1-p)；p=0.95 → ∞ 台也只有 20 倍；先提 p（批量化）再加 n；Gustafson 是吞吐视角的补集。</li>
+<li>会用数字表做算题：HTTPS 首字节 ≈ 3 RTT（DNS 缓存命中 + TLS1.3），TLS1.2 跨洲变 4 RTT——每项协议优化都能在账单上找到位置；Little’s Law L=λ×W 把连接池/worker 的 sizing 从拍脑袋变成乘法（与性能工程 01 篇互通）。</li>
+<li>RTT 敏感设计四件套：批量/流水线/预取/本地缓存；KV cache = 预取思想 + 分页管理（PagedAttention）在推理引擎的会师。</li>
+<li>跨地域决策树：能容忍 → 单区域；读多 → 边缘+副本；强一致写 → 单主+就近接入（Anycast 终结）；先做延迟预算审计，多区域是最后手段。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>用 1 节数字表心算：一个页面加载需要 1 次 DNS（未缓存）、1 次 TCP+TLS 握手（TLS1.3）、1 次 HTTP 请求，服务器在 150ms RTT 外——首个字节大约多少 ms 之后到达？换 HTTP/3 的 1-RTT 握手（QUIC+TLS 合一，DNS 仍需一次往返）能省多少？</li>
+<li>算 BDP：你的 WSL2 到 <code>223.5.5.5</code> 的 RTT（06 章 ping 实测 ~15ms）× 你家/办公室出口带宽（假设 300Mbps）——在途数据多少 KB？TCP 窗口至少要多大？用 <code>ss -tin</code> 观察一次真实下载的 cwnd 与 send 速率对照。</li>
+<li>对一个 p=0.8 的任务画 Amdahl 表（n=2/8/32/∞），并计算&quot;把 p 提到 0.95（n=8）“与&quot;保持 p=0.8 加到 n=64&quot;哪个收益大——用数字回答&quot;先提 p 再加 n”。</li>
+<li>拆账实验：用 <code>curl -w</code> 的计时变量（<code>time_namelookup/time_connect/time_appconnect/time_starttransfer</code>）请求一个 HTTPS API，把总延迟切成 DNS/TCP/TLS/首字节四段，指出最大一段该用本章哪个工具箱（就近/复用/批量/缓存）。</li>
+<li>用 Little’s Law 反推你手头一个服务的并发槽：取它的目标 QPS 与实测 P50 延迟（没有真实服务就用 5 节例二的数字），算稳态并发 L；再故意把&quot;响应时间&quot;换成 P99 重算一次，解释&quot;按 P99 做 sizing&quot;比&quot;按平均&quot;安全在哪。</li>
+<li>估算你常用的 7B 模型在 fp16 下的 KV cache 显存（每 token = 2×层数×上下文×头数×头维×2 字节；查模型 config 的 num_layers/num_heads/head_dim），算出 32K 上下文一张 24GB 卡能放几个并发会话——把 6 节的&quot;缓存收益与预算&quot;算成具体数字。</li>
+<li>给 3 节的下单算题补一问：若风控 RPC 需要两次调用（串行），总延迟变多少？若把两次调用合并成一次批量接口（1 个 RTT），又省多少？画出前后两条时间线（比例尺 10ms/格），标出&quot;串行依赖&quot;被消掉的部分。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E8%AE%A1%E7%AE%97%E6%9C%BA%E7%B3%BB%E7%BB%9F/" rel="tag"># 计算机系统</a>
+              <a href="/tags/%E7%BD%91%E7%BB%9C/" rel="tag"># 网络</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/11-RPC%E4%B8%8E%E5%BA%8F%E5%88%97%E5%8C%96/" rel="prev" title="11-RPC与序列化">
+                  <i class="fa fa-angle-left"></i> 11-RPC与序列化
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/13-%E5%AE%9E%E6%88%98-%E5%AE%8C%E6%95%B4%E8%AF%B7%E6%B1%82%E6%97%85%E7%A8%8B%E4%B8%8E%E6%8A%93%E5%8C%85%E5%88%86%E6%9E%90/" rel="next" title="13-实战-完整请求旅程与抓包分析">
+                  13-实战-完整请求旅程与抓包分析 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

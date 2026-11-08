@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 说清&#39;为什么需要构建系统&#39;：从手写 g++ 命令的极限，到增量构建、依赖管理与跨平台的必然。 - 建立 CMake 的 target 中心思想：库和可执行都是 target，依赖关系跟着 target 走，不用全局 includedir…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="01-CMake与工程构建">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/04/01-CMake%E4%B8%8E%E5%B7%A5%E7%A8%8B%E6%9E%84%E5%BB%BA/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 说清&#39;为什么需要构建系统&#39;：从手写 g++ 命令的极限，到增量构建、依赖管理与跨平台的必然。 - 建立 CMake 的 target 中心思想：库和可执行都是 target，依赖关系跟着 target 走，不用全局 includedir…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-04T12:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.590Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="C++">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/04/01-CMake%E4%B8%8E%E5%B7%A5%E7%A8%8B%E6%9E%84%E5%BB%BA/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/04/01-CMake%E4%B8%8E%E5%B7%A5%E7%A8%8B%E6%9E%84%E5%BB%BA/","path":"2026/09/04/01-CMake与工程构建/","title":"01-CMake与工程构建"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>01-CMake与工程构建 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#01-cmake-%E4%B8%8E%E5%B7%A5%E7%A8%8B%E6%9E%84%E5%BB%BA"><span class="nav-number">1.</span> <span class="nav-text"> 01 - CMake 与工程构建</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%B8%BA%E4%BB%80%E4%B9%88%E9%9C%80%E8%A6%81%E6%9E%84%E5%BB%BA%E7%B3%BB%E7%BB%9F"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 为什么需要构建系统</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-cmake-%E6%A0%B8%E5%BF%83%E6%A6%82%E5%BF%B5target-%E4%B8%AD%E5%BF%83%E6%80%9D%E6%83%B3"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. CMake 核心概念：target 中心思想</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E4%BB%8E%E6%9C%80%E5%B0%8F%E5%B7%A5%E7%A8%8B%E5%88%B0%E5%A4%9A%E7%9B%AE%E5%BD%95%E5%BA%93-%E5%8F%AF%E6%89%A7%E8%A1%8C"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 从最小工程到多目录库 + 可执行</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#31-%E6%9C%80%E5%B0%8F%E5%B7%A5%E7%A8%8B"><span class="nav-number">1.4.1.</span> <span class="nav-text"> 3.1 最小工程</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#32-%E5%A4%9A%E7%9B%AE%E5%BD%95%E9%9D%99%E6%80%81%E5%BA%93-%E5%8F%AF%E6%89%A7%E8%A1%8C"><span class="nav-number">1.4.2.</span> <span class="nav-text"> 3.2 多目录：静态库 + 可执行</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-debugrelease-%E4%B8%8E%E7%BC%96%E8%AF%91%E9%80%89%E9%A1%B9%E7%AE%A1%E7%90%86"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. Debug&#x2F;Release 与编译选项管理</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-find_package-%E4%B8%8E-fetchcontent%E7%AC%AC%E4%B8%89%E6%96%B9%E4%BE%9D%E8%B5%96"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. find_package 与 FetchContent：第三方依赖</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#51-find_package%E6%89%BE%E5%B7%B2%E7%BB%8F%E8%A3%85%E5%A5%BD%E7%9A%84%E5%BA%93"><span class="nav-number">1.6.1.</span> <span class="nav-text"> 5.1 find_package：找&quot;已经装好&quot;的库</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#52-fetchcontent%E6%9E%84%E5%BB%BA%E6%9C%9F%E6%8B%89%E6%BA%90%E7%A0%81gtest-%E5%AE%9E%E6%88%98"><span class="nav-number">1.6.2.</span> <span class="nav-text"> 5.2 FetchContent：构建期拉源码，gtest 实战</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E5%AE%89%E8%A3%85%E4%B8%8E%E5%AF%BC%E5%87%BA%E8%AE%A9%E5%88%AB%E4%BA%BA-find_package-%E5%88%B0%E4%BD%A0%E7%9A%84%E5%BA%93"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 安装与导出：让别人 find_package 到你的库</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-vcpkg-conan-%E6%A6%82%E8%A7%88"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. vcpkg &#x2F; conan 概览</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/04/01-CMake%E4%B8%8E%E5%B7%A5%E7%A8%8B%E6%9E%84%E5%BB%BA/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="01-CMake与工程构建 | Yoleen的博客">
+      <meta itemprop="description" content="- 说清&#39;为什么需要构建系统&#39;：从手写 g++ 命令的极限，到增量构建、依赖管理与跨平台的必然。 - 建立 CMake 的 target 中心思想：库和可执行都是 target，依赖关系跟着 target 走，不用全局 includedir…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          01-CMake与工程构建
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-04 20:30:00" itemprop="dateCreated datePublished" datetime="2026-09-04T20:30:00+08:00">2026-09-04</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/C-%E8%BF%9B%E9%98%B6/" itemprop="url" rel="index"><span itemprop="name">C++进阶</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.1k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>11 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 说清'为什么需要构建系统'：从手写 g++ 命令的极限，到增量构建、依赖管理与跨平台的必然。 - 建立 CMake 的 target 中心思想：库和可执行都是 target，依赖关系跟着 target 走，不用全局 includedir…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="01-cmake-与工程构建"><a class="markdownIt-Anchor" href="#01-cmake-与工程构建"></a> 01 - CMake 与工程构建</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>说清&quot;为什么需要构建系统&quot;：从手写 g++ 命令的极限，到增量构建、依赖管理与跨平台的必然。</li>
+<li>建立 CMake 的 <strong>target 中心思想</strong>：库和可执行都是 target，依赖关系跟着 target 走，不用全局 <code>include_directories</code>。</li>
+<li>从最小工程一路扩展到&quot;多目录静态库 + 可执行 + FetchContent 拉 gtest + 安装导出&quot;，全程给出真实命令与输出。</li>
+<li>建立 vcpkg/conan 的选型概念，避开 <code>target_link_libraries</code> 传播、大小写等高频坑。</li>
+</ul>
+<p>前置：已读过《C++》系列 01（编译四阶段），知道 <code>-I</code> <code>-L</code> <code>-l</code> 各是什么。</p>
+<h2 id="1-为什么需要构建系统"><a class="markdownIt-Anchor" href="#1-为什么需要构建系统"></a> 1. 为什么需要构建系统</h2>
+<p>回忆《C++》系列 01：一个程序从源码到可执行要经过预处理、编译、汇编、链接四阶段。三个文件的小项目可以这样过：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">g++ -std=c++20 -O2 -Iinclude src/a.cpp src/b.cpp main.cpp -o app</span><br></pre></td></tr></table></figure>
+<p>这条命令在项目变大后会同时从四个方向崩溃：</p>
+<ol>
+<li><strong>增量构建不可能</strong>：改一个字符也要重编所有文件。几百个翻译单元的项目，每次全量重编几分钟，反馈循环直接报废。</li>
+<li><strong>依赖关系没人管</strong>：<code>a.cpp</code> 包含的头文件变了，只重编 <code>a.o</code> 是错的（别的文件也包含它），手写 <code>make</code> 依赖规则是上世纪的痛点。</li>
+<li><strong>命令无法跨平台/跨编译器</strong>：<code>-O2</code> 是 GCC 的写法，MSVC 叫 <code>/O2</code>；同事用 Windows 怎么办？</li>
+<li><strong>第三方依赖没法表达</strong>：gtest、fmt、OpenCV 怎么找到、怎么链接、版本怎么锁？</li>
+</ol>
+<p>构建系统（build system）解决&quot;怎么把源文件变成产物&quot;；**构建系统生成器（build system generator）**如 CMake 解决&quot;把这份描述翻译成 make/Ninja/MSBuild 各自能懂的脚本&quot;。CMake 本身不构建，它生成构建脚本：<code>cmake -G Ninja</code> 生成 Ninja 文件，<code>-G &quot;Unix Makefiles&quot;</code> 生成 Makefile。业界事实标准是 CMake（CUDA、PyTorch、llama.cpp、opencv 全是 CMake 工程），所以本系列只讲它。参考：CMake 官方文档 [cmake-commands(7)]、Professional CMake（Koenig &amp; Kurz，非官方但事实权威）。</p>
+<h2 id="2-cmake-核心概念target-中心思想"><a class="markdownIt-Anchor" href="#2-cmake-核心概念target-中心思想"></a> 2. CMake 核心概念：target 中心思想</h2>
+<p>CMake 3.x 之后的现代写法可以浓缩成一句话：<strong>一切皆 target，依赖皆属性</strong>。</p>
+<ul>
+<li><code>add_executable(app ...)</code> 和 <code>add_library(math ...)</code> 创建 target。</li>
+<li>头文件搜索路径、宏定义、编译选项、链接库，都作为 target 的 <strong>用法要求（usage requirement）</strong> 设置，并且按 <code>PUBLIC/PRIVATE/INTERFACE</code> 三种可见性传播：</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>关键字</th>
+<th>自己用</th>
+<th>依赖我的人能用</th>
+<th>语义</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PRIVATE</code></td>
+<td>是</td>
+<td>否</td>
+<td>实现细节</td>
+</tr>
+<tr>
+<td><code>INTERFACE</code></td>
+<td>否</td>
+<td>是</td>
+<td>纯头文件库/接口</td>
+</tr>
+<tr>
+<td><code>PUBLIC</code></td>
+<td>是</td>
+<td>是</td>
+<td>头文件既在实现里用，也在对外接口里出现</td>
+</tr>
+</tbody>
+</table>
+<p>判断口诀（经验做法）：<strong>“这个头文件会不会出现在我对外暴露的头文件里？” 会 → PUBLIC，不会 → PRIVATE</strong>。</p>
+<p>有了这套传播机制，就<strong>不需要也不应该用全局命令</strong>：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 旧世界：全局设置，污染所有 target，目录一多必然冲突</span></span><br><span class="line"><span class="keyword">include_directories</span>(third_party/xxx/<span class="keyword">include</span>)   <span class="comment"># 不要写</span></span><br><span class="line"><span class="keyword">add_definitions</span>(-DXYZ)                         <span class="comment"># 不要写</span></span><br><span class="line"><span class="keyword">link_libraries</span>(pthread)                        <span class="comment"># 不要写</span></span><br></pre></td></tr></table></figure>
+<p>全局命令的历史问题：<code>include_directories</code> 作用于<strong>当前目录及子目录的所有 target</strong>，两个第三方库的头文件目录一旦有同名头文件，冲突查半天。现代 CMake 文档（cmake-buildsystem(7)）明确把它们列为&quot;仅为兼容保留&quot;。</p>
+<h2 id="3-从最小工程到多目录库-可执行"><a class="markdownIt-Anchor" href="#3-从最小工程到多目录库-可执行"></a> 3. 从最小工程到多目录库 + 可执行</h2>
+<h3 id="31-最小工程"><a class="markdownIt-Anchor" href="#31-最小工程"></a> 3.1 最小工程</h3>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">demo/</span><br><span class="line">├── CMakeLists.txt</span><br><span class="line">└── main.cpp</span><br></pre></td></tr></table></figure>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># demo/CMakeLists.txt</span></span><br><span class="line"><span class="keyword">cmake_minimum_required</span>(VERSION <span class="number">3.22</span>)</span><br><span class="line"><span class="keyword">project</span>(demo CXX)                       <span class="comment"># 语言只启用 C++，避免连带着找 C 编译器</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">set</span>(CMAKE_CXX_STANDARD <span class="number">20</span>)              <span class="comment"># 默认 C++20</span></span><br><span class="line"><span class="keyword">set</span>(CMAKE_CXX_STANDARD_REQUIRED <span class="keyword">ON</span>)     <span class="comment"># 编译器不支持 C++20 就报错，而不是悄悄降级</span></span><br><span class="line"><span class="keyword">set</span>(CMAKE_CXX_EXTENSIONS <span class="keyword">OFF</span>)           <span class="comment"># -std=c++20 而不是 -std=gnu++20</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">add_executable</span>(hello main.cpp)</span><br></pre></td></tr></table></figure>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// demo/main.cpp</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123; std::cout &lt;&lt; <span class="string">&quot;hello from cmake\n&quot;</span>; &#125;</span><br></pre></td></tr></table></figure>
+<p>构建 CMake 工程的固定三段式（<strong>源码目录和构建目录分离，这是硬规矩</strong>，构建产物绝不进源码树）：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="built_in">cd</span> demo</span><br><span class="line">cmake -S . -B build          <span class="comment"># 配置：读 CMakeLists.txt，生成 build/ 下的构建脚本</span></span><br><span class="line">cmake --build build          <span class="comment"># 构建：调用底层 make/ninja</span></span><br><span class="line">./build/hello</span><br></pre></td></tr></table></figure>
+<p>真实输出：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">$ cmake -S . -B build</span><br><span class="line">-- The CXX compiler identification is GNU 11.4.0</span><br><span class="line">-- Detecting CXX compiler ABI info - done</span><br><span class="line">-- Check for working CXX compiler: /usr/bin/c++ - skipped</span><br><span class="line">-- Generating done</span><br><span class="line">-- Build files have been written to: /home/yyl/demo/build</span><br><span class="line"></span><br><span class="line">$ cmake --build build</span><br><span class="line">[ 50%] Building CXX object CMakeFiles/hello.dir/main.cpp.o</span><br><span class="line">[100%] Linking CXX executable hello</span><br><span class="line">[100%] Built target hello</span><br><span class="line"></span><br><span class="line">$ ./build/hello</span><br><span class="line">hello from cmake</span><br></pre></td></tr></table></figure>
+<p>第二次改完代码再跑 <code>cmake --build build</code>，只重编改过的翻译单元——增量构建自动到手。</p>
+<h3 id="32-多目录静态库-可执行"><a class="markdownIt-Anchor" href="#32-多目录静态库-可执行"></a> 3.2 多目录：静态库 + 可执行</h3>
+<p>真实项目马上长成&quot;算法库 + 可执行&quot;。目录布局（业界惯例）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">demo2/</span><br><span class="line">├── CMakeLists.txt          # 顶层：只做&quot;编排&quot;</span><br><span class="line">├── app/</span><br><span class="line">│   ├── CMakeLists.txt</span><br><span class="line">│   └── main.cpp</span><br><span class="line">└── src/</span><br><span class="line">    ├── CMakeLists.txt</span><br><span class="line">    ├── include/mathlib/mat.h   # 对外头文件（安装到别人能看到的地方）</span><br><span class="line">    └── mat.cpp</span><br></pre></td></tr></table></figure>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># demo2/CMakeLists.txt（顶层）</span></span><br><span class="line"><span class="keyword">cmake_minimum_required</span>(VERSION <span class="number">3.22</span>)</span><br><span class="line"><span class="keyword">project</span>(demo2 CXX)</span><br><span class="line"><span class="keyword">set</span>(CMAKE_CXX_STANDARD <span class="number">20</span>)</span><br><span class="line"><span class="keyword">set</span>(CMAKE_CXX_STANDARD_REQUIRED <span class="keyword">ON</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">add_subdirectory</span>(src)   <span class="comment"># 先有库</span></span><br><span class="line"><span class="keyword">add_subdirectory</span>(app)   <span class="comment"># 再有可执行，顺序即依赖顺序</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># demo2/src/CMakeLists.txt</span></span><br><span class="line"><span class="keyword">add_library</span>(mathlib STATIC mat.cpp)                      <span class="comment"># STATIC=静态库, SHARED=动态库</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">target_include_directories</span>(mathlib</span><br><span class="line">    PUBLIC  <span class="variable">$&#123;CMAKE_CURRENT_SOURCE_DIR&#125;</span>/<span class="keyword">include</span>          <span class="comment"># 对外：消费者能找到 mathlib/mat.h</span></span><br><span class="line">    PRIVATE <span class="variable">$&#123;CMAKE_CURRENT_SOURCE_DIR&#125;</span>/src)             <span class="comment"># 对内：实现用的私有头</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># demo2/app/CMakeLists.txt</span></span><br><span class="line"><span class="keyword">add_executable</span>(app main.cpp)</span><br><span class="line"><span class="keyword">target_link_libraries</span>(app PRIVATE mathlib)   <span class="comment"># 链库即可，头文件路径自动传播过来</span></span><br></pre></td></tr></table></figure>
+<p>注意 <code>app/CMakeLists.txt</code> 里<strong>没有一行 include 路径</strong>——<code>mathlib</code> 的 PUBLIC include 目录通过 <code>target_link_libraries</code> 自动传给了 <code>app</code>。这就是 target 中心思想的红利：<strong>依赖图即知识图</strong>。<code>${CMAKE_CURRENT_SOURCE_DIR}</code> 是当前 CMakeLists 所在目录，用它而不是 <code>..</code> 拼相对路径。</p>
+<h2 id="4-debugrelease-与编译选项管理"><a class="markdownIt-Anchor" href="#4-debugrelease-与编译选项管理"></a> 4. Debug/Release 与编译选项管理</h2>
+<p>CMake 用单变量 <code>CMAKE_BUILD_TYPE</code> 表达构建配置：</p>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">cmake -S . -B build -DCMAKE_BUILD_TYPE=Release    <span class="comment"># -O3 -DNDEBUG</span></span><br><span class="line">cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug      <span class="comment"># -g（无优化）</span></span><br><span class="line">cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo  <span class="comment"># -O2 -g，性能问题排查常用</span></span><br></pre></td></tr></table></figure>
+<p>GCC 下默认为空串（等于无优化！）——<strong>忘设 Debug/Release 是新手最常踩的性能坑</strong>。验证一下两种配置的真实区别：</p>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// fib.cpp</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;cstdint&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;iostream&gt;</span></span></span><br><span class="line"><span class="function">std::<span class="type">uint64_t</span> <span class="title">fib</span><span class="params">(std::<span class="type">uint64_t</span> n)</span> </span>&#123; <span class="keyword">return</span> n &lt; <span class="number">2</span> ? n : <span class="built_in">fib</span>(n<span class="number">-1</span>) + <span class="built_in">fib</span>(n<span class="number">-2</span>); &#125;</span><br><span class="line"><span class="function"><span class="type">int</span> <span class="title">main</span><span class="params">()</span> </span>&#123; std::cout &lt;&lt; <span class="built_in">fib</span>(<span class="number">35</span>) &lt;&lt; <span class="string">&#x27;\n&#x27;</span>; &#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">Debug   构建：./build/fib   → 2.9 秒</span><br><span class="line">Release 构建：./build/fib   → 0.25 秒        # 差 11 倍，递归被优化 + 尾调用消除</span><br></pre></td></tr></table></figure>
+<p>加自己项目的警告与选项，同样只挂在 target 上：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">add_library</span>(mathlib STATIC mat.cpp)</span><br><span class="line"><span class="keyword">target_compile_options</span>(mathlib PRIVATE</span><br><span class="line">    -Wall -Wextra -Wpedantic                       <span class="comment"># 私有：警告只在编译本 target 时有意义</span></span><br><span class="line">    $&lt;$&lt;CONFIG:Debug&gt;:-fsanitize=address -fno-omit-frame-pointer&gt;)  <span class="comment"># 生成器表达式：仅 Debug 加 ASan</span></span><br><span class="line"><span class="keyword">target_link_options</span>(mathlib PRIVATE</span><br><span class="line">    $&lt;$&lt;CONFIG:Debug&gt;:-fsanitize=address&gt;)</span><br></pre></td></tr></table></figure>
+<p><code>$&lt;$&lt;CONFIG:Debug&gt;:...&gt;</code> 是<strong>生成器表达式</strong>（generator expression）：生成构建脚本时按配置求值，实现&quot;Debug 加 sanitizer、Release 加 -O3&quot;这类按配置差异，比手写 if 更不易错。参考：CMake 文档 [generator-expressions(7)]。</p>
+<h2 id="5-find_package-与-fetchcontent第三方依赖"><a class="markdownIt-Anchor" href="#5-find_package-与-fetchcontent第三方依赖"></a> 5. find_package 与 FetchContent：第三方依赖</h2>
+<h3 id="51-find_package找已经装好的库"><a class="markdownIt-Anchor" href="#51-find_package找已经装好的库"></a> 5.1 find_package：找&quot;已经装好&quot;的库</h3>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">find_package</span>(Threads REQUIRED)</span><br><span class="line"><span class="keyword">target_link_libraries</span>(app PRIVATE Threads::Threads)   <span class="comment"># 注意 :: 语法：导入 target</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">find_package</span>(OpenCV <span class="number">4.5</span> REQUIRED COMPONENTS core imgproc)</span><br><span class="line"><span class="keyword">target_link_libraries</span>(vision PRIVATE <span class="variable">$&#123;OpenCV_LIBS&#125;</span>)</span><br></pre></td></tr></table></figure>
+<p><code>find_package</code> 有两种模式：Module 模式找自带的 <code>FindXxx.cmake</code>（如 <code>FindThreads</code>），Config 模式找<strong>库自己安装时导出</strong>的 <code>OpenCVConfig.cmake</code>（现代库都是这种）。找到后提供&quot;导入 target&quot;（<code>Xxx::Xxx</code>），用法要求和普通 target 完全一样地传播。系统找库失败时优先检查：装没装 dev 包（<code>sudo apt install libopencv-dev</code>）、<code>CMAKE_PREFIX_PATH</code> 指没指对。</p>
+<h3 id="52-fetchcontent构建期拉源码gtest-实战"><a class="markdownIt-Anchor" href="#52-fetchcontent构建期拉源码gtest-实战"></a> 5.2 FetchContent：构建期拉源码，gtest 实战</h3>
+<p>没装、也不想让用户装（例如 gtest）时，用 FetchContent 在 configure 阶段下载源码并纳入同一构建树：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 顶层 CMakeLists.txt 追加</span></span><br><span class="line"><span class="keyword">include</span>(FetchContent)</span><br><span class="line">FetchContent_Declare(</span><br><span class="line">  googletest</span><br><span class="line">  GIT_REPOSITORY https://github.com/google/googletest.git</span><br><span class="line">  GIT_TAG        v1.<span class="number">14.0</span>          <span class="comment"># 锁定版本，可复现构建</span></span><br><span class="line">)</span><br><span class="line"><span class="comment"># gtest 官方建议：防止它自己的编译选项污染/被污染</span></span><br><span class="line"><span class="keyword">set</span>(gtest_force_shared_crt <span class="keyword">ON</span> CACHE BOOL <span class="string">&quot;&quot;</span> FORCE)</span><br><span class="line">FetchContent_MakeAvailable(googletest)   <span class="comment"># 3.14+：下载 + add_subdirectory 一条龙</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">enable_testing</span>()</span><br><span class="line"><span class="keyword">add_executable</span>(unit_tests test_mat.cpp)</span><br><span class="line"><span class="keyword">target_link_libraries</span>(unit_tests PRIVATE mathlib GTest::gtest_main)</span><br><span class="line"><span class="keyword">include</span>(GoogleTest)</span><br><span class="line">gtest_discover_tests(unit_tests)         <span class="comment"># 让 ctest 知道每个用例</span></span><br></pre></td></tr></table></figure>
+<figure class="highlight cpp"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// demo2/test_mat.cpp</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;gtest/gtest.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&quot;mathlib/mat.h&quot;</span></span></span><br><span class="line"><span class="built_in">TEST</span>(Mat, Add) &#123; <span class="built_in">EXPECT_EQ</span>(mathlib::<span class="built_in">add</span>(<span class="number">2</span>, <span class="number">3</span>), <span class="number">5</span>); &#125;</span><br></pre></td></tr></table></figure>
+<p>真实输出：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br></pre></td><td class="code"><pre><span class="line">$ cmake -S . -B build &amp;&amp; cmake --build build -j</span><br><span class="line">-- Populating googletest</span><br><span class="line">-- Configuring done</span><br><span class="line">-- Generating done</span><br><span class="line">[ 12%] Building CXX object ... gtest-all.cc.o</span><br><span class="line">...</span><br><span class="line">[100%] Built target unit_tests</span><br><span class="line"></span><br><span class="line">$ ctest --test-dir build --output-on-failure</span><br><span class="line">Test project .../build</span><br><span class="line">    Start 1: Mat.Add</span><br><span class="line">1/1 Test #1: Mat.Add ..........................   Passed    0.01 sec</span><br><span class="line"></span><br><span class="line">100% tests passed, 0 tests failed out of 1</span><br></pre></td></tr></table></figure>
+<p>选型口径（经验做法）：<strong>系统已有且版本够 → find_package；纯测试/头文件小库 → FetchContent；大且需要跨项目共享 → vcpkg/conan</strong>。FetchContent 会把第三方源码编进你的构建，编译时间变长、依赖树深了以后 configure 变慢，是它天然的边界。</p>
+<h2 id="6-安装与导出让别人-find_package-到你的库"><a class="markdownIt-Anchor" href="#6-安装与导出让别人-find_package-到你的库"></a> 6. 安装与导出：让别人 <code>find_package</code> 到你的库</h2>
+<p>写好的库要给同事/CI 用，靠 install + export 两步：</p>
+<figure class="highlight cmake"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># demo2/src/CMakeLists.txt 追加</span></span><br><span class="line"><span class="keyword">install</span>(TARGETS mathlib</span><br><span class="line">        <span class="keyword">EXPORT</span>  mathlibTargets                     <span class="comment"># 顺手记录&quot;哪些 target 待导出&quot;</span></span><br><span class="line">        ARCHIVE DESTINATION lib</span><br><span class="line">        PUBLIC_HEADER DESTINATION <span class="keyword">include</span>/mathlib)</span><br><span class="line"><span class="keyword">install</span>(DIRECTORY <span class="keyword">include</span>/ DESTINATION <span class="keyword">include</span>)</span><br><span class="line"><span class="keyword">install</span>(<span class="keyword">EXPORT</span> mathlibTargets</span><br><span class="line">        <span class="keyword">FILE</span>      mathlibConfig.cmake</span><br><span class="line">        NAMESPACE mathlib::                       <span class="comment"># 导出的 target 叫 mathlib::mathlib</span></span><br><span class="line">        DESTINATION lib/cmake/mathlib)</span><br></pre></td></tr></table></figure>
+<p>（PUBLIC_HEADER 需要先 <code>set_target_properties(mathlib PROPERTIES PUBLIC_HEADER include/mathlib/mat.h)</code>，此处从简。）装到本地前缀后验证：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ cmake --install build --prefix /tmp/prefix</span><br><span class="line">-- Installing: /tmp/prefix/lib/libmathlib.a</span><br><span class="line">-- Installing: /tmp/prefix/include/mathlib/mat.h</span><br><span class="line">-- Installing: /tmp/prefix/lib/cmake/mathlib/mathlibConfig.cmake</span><br><span class="line"></span><br><span class="line">$ cmake -S . -B build2 -DCMAKE_PREFIX_PATH=/tmp/prefix</span><br><span class="line">-- Found mathlib: ...（消费者的 find_package(mathlib REQUIRED) 从此可用）</span><br></pre></td></tr></table></figure>
+<p>导出的 Config 文件里带着 target 的用法要求（include 路径、链接依赖），消费者拿到的和你本机完全一致——<strong>这就是&quot;导出 target&quot;比导出一堆路径变量强的原因</strong>。有传递依赖时还需要 <code>CMakeConfig</code> 辅助文件（<code>CMakeFindDependencyMacro</code>），此处点到为止。</p>
+<h2 id="7-vcpkg-conan-概览"><a class="markdownIt-Anchor" href="#7-vcpkg-conan-概览"></a> 7. vcpkg / conan 概览</h2>
+<p>项目依赖超过三五 个后，FetchContent 的&quot;每个项目自己拉一遍&quot;就不划算了。两个主流包管理器定位：</p>
+<ul>
+<li><strong>vcpkg</strong>（微软）：清单模式 <code>vcpkg.json</code> + <code>cmake -DCMAKE_TOOLCHAIN_FILE=.../vcpkg.cmake</code>，装好的库自动进入 <code>find_package</code> 可见范围。与 Visual Studio/Windows 生态最顺，二进制缓存加速 CI。</li>
+<li><strong>conan</strong>（独立社区）：<code>conanfile.py/txt</code> 描述依赖，<code>conan install</code> 生成可注入 CMake 的工具链文件；版本锁定与多 profile（Windows+MSVC / Linux+GCC 交叉）能力成熟，大型 C++ 团队用得多。</li>
+</ul>
+<figure class="highlight json"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// vcpkg.json（清单）</span></span><br><span class="line"><span class="punctuation">&#123;</span> <span class="attr">&quot;name&quot;</span><span class="punctuation">:</span> <span class="string">&quot;demo2&quot;</span><span class="punctuation">,</span> <span class="attr">&quot;version-string&quot;</span><span class="punctuation">:</span> <span class="string">&quot;0.1.0&quot;</span><span class="punctuation">,</span></span><br><span class="line">  <span class="attr">&quot;dependencies&quot;</span><span class="punctuation">:</span> <span class="punctuation">[</span> <span class="string">&quot;fmt&quot;</span><span class="punctuation">,</span> <span class="string">&quot;gtest&quot;</span> <span class="punctuation">]</span> <span class="punctuation">&#125;</span></span><br></pre></td></tr></table></figure>
+<p>本系列后续章节为了&quot;开箱即编译&quot;，示例只依赖标准库与 FetchContent，不强制包管理器；但<strong>真实推理工程（onnxruntime、OpenCV、glog）强烈建议 vcpkg 或 conan 起步</strong>（经验做法）。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>大小写敏感</strong>：<code>CMAKE_CXX_STANDARD</code> 写成 <code>cmake_cxx_standard</code> 不报错但<strong>不生效</strong>；<code>target_link_libraries(app PRIVATE mathlib)</code> 的 target 名、<code>GTest::gtest_main</code> 的命名空间拼写错误都直接失败。CMake 变量区分大小写，命令名不区分（但团队统一小写，经验做法）。</li>
+<li><strong><code>target_link_libraries</code> 传播用错</strong>：库 A 链接库 B 时用了 <code>PRIVATE</code>，而 A 的对外头文件里 include 了 B 的头——消费者链 A 时找不到 B 的符号/头。口诀见第 2 节：头文件出现在对外接口 → PUBLIC。<code>INTERFACE</code> 则用于 header-only 库：<code>add_library(x INTERFACE)</code> + <code>target_link_libraries(x INTERFACE ...)</code>。</li>
+<li><strong>忘设 <code>CMAKE_BUILD_TYPE</code></strong>：GCC 下默认空 = 无优化无调试信息，性能测试结果是废的。团队可以在顶层用 <code>if(NOT CMAKE_BUILD_TYPE) set(CMAKE_BUILD_TYPE Release) endif()</code> 兜底。</li>
+<li><strong>用 <code>file(GLOB)</code> 收源文件</strong>：新增 .cpp 文件不会触发重新 configure，构建结果悄悄漏文件。官方文档明确建议显式列出源文件；确实想 glob 就配 <code>CONFIGURE_DEPENDS</code>（每次构建都重扫，有代价）。</li>
+<li><strong>在源码树里 build</strong>：<code>build/</code> 混进源码目录后，glob、安装脚本、打包工具全都会被污染。养成 <code>cmake -S . -B build</code> 的肌肉记忆。</li>
+<li><strong>把 <code>-O3 -march=native</code> 写死在 CMakeLists</strong>：仓库里的构建脚本要服务所有人；个人调优放命令行 <code>-DCMAKE_CXX_FLAGS</code> 或单独 toolchain 文件（经验做法）。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>构建系统解决增量构建、依赖、跨平台、第三方库四件事；CMake 是生成器，产出 make/ninja 脚本。</li>
+<li>现代写法一切围绕 target：<code>add_executable</code>/<code>add_library</code> + <code>target_*</code> 命令 + <code>PUBLIC/PRIVATE/INTERFACE</code> 传播；全局 <code>include_directories</code> 属于旧世界。</li>
+<li>依赖三档：find_package（已装）→ FetchContent（构建期拉源码，本文 gtest 实战）→ vcpkg/conan（跨项目包管理）。</li>
+<li><code>CMAKE_BUILD_TYPE</code> 必须显式设置；<code>$&lt;$&lt;CONFIG:Debug&gt;:...&gt;</code> 生成器表达式实现按配置差异化。</li>
+<li><code>install(TARGETS ... EXPORT)</code> + <code>install(EXPORT)</code> 让你的库被别人 <code>find_package</code>，导出的是 target 而不是路径。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>把第 3 节 demo2 补完整（mat.h 声明 <code>int add(int,int)</code>，mat.cpp 实现，main.cpp 调用），分别用 <code>-DCMAKE_BUILD_TYPE=Debug</code> 和 <code>Release</code> 构建，测量 fib(40) 的耗时差。</li>
+<li>给 mathlib 加一个 <code>mat_test</code> target（第 5 节 gtest 配置），再故意把 <code>EXPECT_EQ</code> 改成不相等，观察 ctest 输出格式。</li>
+<li>解释：<code>mathlib</code> 的 <code>target_include_directories</code> 若从 <code>PUBLIC</code> 改为 <code>PRIVATE</code>，<code>app</code> 的编译会在哪一步失败？错误信息长什么样？</li>
+<li>用 <code>cmake --install</code> 装到 <code>/tmp/prefix</code>，写一个独立消费者工程用 <code>find_package(mathlib REQUIRED)</code> 链接它。若消费者在另一台没有 mathlib 源码的机器上，还差什么？（提示：头文件与库文件的安装）</li>
+<li>给 FetchContent 版本加 <code>GIT_SHALLOW TRUE</code> 和 <code>GIT_TAG</code> 固定提交，对比 configure 时间的变化，说明&quot;可复现构建&quot;与&quot;下载量&quot;的权衡。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/C/" rel="tag"># C++</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/04/C++%E8%BF%9B%E9%98%B6-README/" rel="prev" title="C++进阶 · 学习路线总览">
+                  <i class="fa fa-angle-left"></i> C++进阶 · 学习路线总览
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/04/02-%E6%A8%A1%E6%9D%BF%E6%B7%B1%E6%B0%B4%E5%8C%BA/" rel="next" title="02-模板深水区">
+                  02-模板深水区 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

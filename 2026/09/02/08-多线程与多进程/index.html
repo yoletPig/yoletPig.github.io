@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="1. 掌握 threading 基础件：Thread&#x2F;Lock&#x2F;RLock&#x2F;Condition&#x2F;Semaphore 的语义与典型用法； 2. 用银行账户反例实测竞态条件，理解&#39;非原子复合操作&#39;与线程安全的本质； 3. 会写 queue.Qu…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="08-多线程与多进程">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/08-%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8E%E5%A4%9A%E8%BF%9B%E7%A8%8B/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="1. 掌握 threading 基础件：Thread&#x2F;Lock&#x2F;RLock&#x2F;Condition&#x2F;Semaphore 的语义与典型用法； 2. 用银行账户反例实测竞态条件，理解&#39;非原子复合操作&#39;与线程安全的本质； 3. 会写 queue.Qu…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-01T19:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.510Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Python">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/08-%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8E%E5%A4%9A%E8%BF%9B%E7%A8%8B/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/08-%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8E%E5%A4%9A%E8%BF%9B%E7%A8%8B/","path":"2026/09/02/08-多线程与多进程/","title":"08-多线程与多进程"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>08-多线程与多进程 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#08-%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8E%E5%A4%9A%E8%BF%9B%E7%A8%8B"><span class="nav-number">1.</span> <span class="nav-text"> 08 - 多线程与多进程</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-threading-%E5%9F%BA%E7%A1%80thread-%E4%B8%8E%E7%94%9F%E5%91%BD%E5%91%A8%E6%9C%9F"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. threading 基础：Thread 与生命周期</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E9%94%81%E5%AE%B6%E6%97%8F%E4%B8%8E%E7%AB%9E%E6%80%81%E9%93%B6%E8%A1%8C%E8%B4%A6%E6%88%B7%E5%AE%9E%E6%B5%8B"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 锁家族与竞态：银行账户实测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-queuequeue%E7%94%9F%E4%BA%A7%E8%80%85%E6%B6%88%E8%B4%B9%E8%80%85%E6%A0%87%E5%87%86%E8%A7%A3%E6%B3%95"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. queue.Queue：生产者消费者标准解法</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-multiprocessing%E7%BB%95%E5%BC%80-gil-%E7%9A%84%E4%BB%A3%E4%BB%B7%E4%B8%8E%E8%A7%84%E5%88%99"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. multiprocessing：绕开 GIL 的代价与规则</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-concurrentfutures%E7%BB%9F%E4%B8%80%E6%8E%A5%E5%8F%A3"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. concurrent.futures：统一接口</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E9%99%B7%E9%98%B1"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见陷阱</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.9.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/08-%E5%A4%9A%E7%BA%BF%E7%A8%8B%E4%B8%8E%E5%A4%9A%E8%BF%9B%E7%A8%8B/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="08-多线程与多进程 | Yoleen的博客">
+      <meta itemprop="description" content="1. 掌握 threading 基础件：Thread&#x2F;Lock&#x2F;RLock&#x2F;Condition&#x2F;Semaphore 的语义与典型用法； 2. 用银行账户反例实测竞态条件，理解&#39;非原子复合操作&#39;与线程安全的本质； 3. 会写 queue.Qu…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          08-多线程与多进程
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 03:00:00" itemprop="dateCreated datePublished" datetime="2026-09-02T03:00:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Python/" itemprop="url" rel="index"><span itemprop="name">Python</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>11 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">1. 掌握 threading 基础件：Thread/Lock/RLock/Condition/Semaphore 的语义与典型用法； 2. 用银行账户反例实测竞态条件，理解'非原子复合操作'与线程安全的本质； 3. 会写 queue.Qu…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="08-多线程与多进程"><a class="markdownIt-Anchor" href="#08-多线程与多进程"></a> 08 - 多线程与多进程</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ol>
+<li>掌握 threading 基础件：<code>Thread</code>/<code>Lock</code>/<code>RLock</code>/<code>Condition</code>/<code>Semaphore</code> 的语义与典型用法；</li>
+<li>用银行账户反例<strong>实测竞态条件</strong>，理解&quot;非原子复合操作&quot;与线程安全的本质；</li>
+<li>会写 <code>queue.Queue</code> 生产者消费者模型，掌握多进程的 <code>Process</code>/<code>Pool</code> 与 <strong>pickle 限制</strong>；</li>
+<li>统一到 <code>concurrent.futures</code> 接口，建立&quot;线程池/进程池一把抓&quot;的工程习惯。</li>
+</ol>
+<h2 id="1-threading-基础thread-与生命周期"><a class="markdownIt-Anchor" href="#1-threading-基础thread-与生命周期"></a> 1. threading 基础：Thread 与生命周期</h2>
+<p>线程是最小的 OS 调度单位。<code>threading.Thread(target=fn, args=(...))</code> 创建线程，<code>start()</code> 才真正启动（直接 <code>run()</code> 只是普通函数调用，不会并发）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> threading</span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">worker</span>(<span class="params">task_id: <span class="built_in">int</span></span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;[<span class="subst">&#123;task_id&#125;</span>] 开始, 线程名: <span class="subst">&#123;threading.current_thread().name&#125;</span>&quot;</span>)</span><br><span class="line">    time.sleep(<span class="number">0.1</span>)                  <span class="comment"># 模拟 IO 等待（07 篇：此时释放 GIL）</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;[<span class="subst">&#123;task_id&#125;</span>] 结束&quot;</span>)</span><br><span class="line"></span><br><span class="line">t1 = threading.Thread(target=worker, args=(<span class="number">1</span>,), name=<span class="string">&quot;worker-1&quot;</span>)</span><br><span class="line">t2 = threading.Thread(target=worker, args=(<span class="number">2</span>,), name=<span class="string">&quot;worker-2&quot;</span>)</span><br><span class="line"></span><br><span class="line">t1.start()</span><br><span class="line">t2.start()</span><br><span class="line">t1.join()          <span class="comment"># 等待 t1 结束（不 join 则主线程不等）</span></span><br><span class="line">t2.join()</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;全部完成&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>典型输出（交错顺序每次运行可能不同——这正是并发的本性）：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">[1] 开始, 线程名: worker-1</span><br><span class="line">[2] 开始, 线程名: worker-2</span><br><span class="line">[1] 结束</span><br><span class="line">[2] 结束</span><br><span class="line">全部完成</span><br></pre></td></tr></table></figure>
+<p>要点：<code>daemon=True</code> 的守护线程随主进程退出被强杀（<strong>不做清理</strong>，不适合管资源）；线程间<strong>共享同一个进程的内存</strong>——这是它快的一面，也是一切竞态的根源。线程局部变量 <code>threading.local()</code> 让每个线程各存一份（典型用途：DB 连接 per-thread），需要跨函数传递&quot;线程私有状态&quot;时用它。</p>
+<h2 id="2-锁家族与竞态银行账户实测"><a class="markdownIt-Anchor" href="#2-锁家族与竞态银行账户实测"></a> 2. 锁家族与竞态：银行账户实测</h2>
+<p><strong>竞态条件（race condition）</strong>：结果取决于线程交错时序的错误。用最经典的银行账户复现（07 篇练习 3 的正式版）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;bank_race.py：两个线程同时存款，总额不该丢，但丢了。&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> threading</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Account</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, balance: <span class="built_in">int</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>.balance = balance</span><br><span class="line">        <span class="variable language_">self</span>.lock = threading.Lock()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">deposit_unsafe</span>(<span class="params">self, amount: <span class="built_in">int</span></span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">        <span class="comment"># 复合操作：读 → 加 → 写，三步之间可被切换（GIL 只保证单条字节码原子）</span></span><br><span class="line">        b = <span class="variable language_">self</span>.balance          <span class="comment"># ① 读</span></span><br><span class="line">        b += amount               <span class="comment"># ② 算</span></span><br><span class="line">        <span class="variable language_">self</span>.balance = b          <span class="comment"># ③ 写</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">deposit_safe</span>(<span class="params">self, amount: <span class="built_in">int</span></span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">        <span class="keyword">with</span> <span class="variable language_">self</span>.lock:           <span class="comment"># 临界区：同一时刻只有一个线程进入（05 篇 with 锁）</span></span><br><span class="line">            b = <span class="variable language_">self</span>.balance</span><br><span class="line">            b += amount</span><br><span class="line">            <span class="variable language_">self</span>.balance = b</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    <span class="comment"># ---------- 无锁：实测丢失更新 ----------</span></span><br><span class="line">    acc = Account(<span class="number">0</span>)</span><br><span class="line">    threads = [threading.Thread(target=<span class="keyword">lambda</span>: [acc.deposit_unsafe(<span class="number">1</span>) <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">100_000</span>)])</span><br><span class="line">               <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">4</span>)]</span><br><span class="line">    <span class="keyword">for</span> t <span class="keyword">in</span> threads: t.start()</span><br><span class="line">    <span class="keyword">for</span> t <span class="keyword">in</span> threads: t.join()</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;无锁:   balance = <span class="subst">&#123;acc.balance&#125;</span> (期望 400000)&quot;</span>)   <span class="comment"># 典型 25 万上下，每次不同</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---------- 有锁 ----------</span></span><br><span class="line">    acc2 = Account(<span class="number">0</span>)</span><br><span class="line">    threads = [threading.Thread(target=<span class="keyword">lambda</span>: [acc2.deposit_safe(<span class="number">1</span>) <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">100_000</span>)])</span><br><span class="line">               <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">4</span>)]</span><br><span class="line">    <span class="keyword">for</span> t <span class="keyword">in</span> threads: t.start()</span><br><span class="line">    <span class="keyword">for</span> t <span class="keyword">in</span> threads: t.join()</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;有锁:   balance = <span class="subst">&#123;acc2.balance&#125;</span> (期望 400000)&quot;</span>)  <span class="comment"># 恒为 400000</span></span><br></pre></td></tr></table></figure>
+<p>典型输出：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">无锁:   balance = 231437 (期望 400000)</span><br><span class="line">有锁:   balance = 400000 (期望 400000)</span><br></pre></td></tr></table></figure>
+<p>丢失更新的机理：线程 A 读到 100，还没写回就被切到线程 B 也读到 100，两者各写回 101——两次存款只生效一次。<strong>锁保证的是&quot;临界区互斥&quot;</strong>，而正确性要求你先圈对临界区（读-改-写必须整体在锁内）。</p>
+<p>锁家族速查（文档：threading）：</p>
+<ul>
+<li><strong><code>Lock</code></strong>：基础互斥锁，不可重入。谁加锁谁释放，重复 acquire 死锁自己；</li>
+<li><strong><code>RLock</code></strong>：可重入锁——同一线程可多次 acquire（计数释放），适合&quot;持锁方法调用另一个持锁方法&quot;（递归或类内部组合）；</li>
+<li><strong><code>Semaphore(n)</code></strong>：计数信号量，最多 n 个线程同时进入——限制并发连接数的标准件；</li>
+<li><strong><code>Condition</code></strong>：等待/通知原语（<code>wait()</code>/<code>notify()</code>/<code>notify_all()</code>）——生产者消费者、线程间状态同步的地基（<code>queue.Queue</code> 内部就是它）；</li>
+<li><strong><code>Event</code></strong>：布尔开关，<code>set()</code>/<code>wait()</code>——&quot;准备好了吗&quot;型一次性通知。</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> threading</span><br><span class="line"></span><br><span class="line">sem = threading.Semaphore(<span class="number">3</span>)         <span class="comment"># 最多 3 个并发</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">limited</span>(<span class="params">task_id</span>):</span><br><span class="line">    <span class="keyword">with</span> sem:                        <span class="comment"># 第 4 个线程在此排队</span></span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;任务 <span class="subst">&#123;task_id&#125;</span> 获得许可&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="comment"># RLock 场景：内部方法也要加锁</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">SafeList</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="variable language_">self</span>._items = []</span><br><span class="line">        <span class="variable language_">self</span>._lock = threading.RLock()      <span class="comment"># 用 Lock 会死锁：append 调 size 都持锁</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">append</span>(<span class="params">self, x</span>):</span><br><span class="line">        <span class="keyword">with</span> <span class="variable language_">self</span>._lock:</span><br><span class="line">            <span class="variable language_">self</span>._items.append(x)</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">size</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">with</span> <span class="variable language_">self</span>._lock:</span><br><span class="line">            <span class="keyword">return</span> <span class="built_in">len</span>(<span class="variable language_">self</span>._items)</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">append_and_report</span>(<span class="params">self, x</span>):</span><br><span class="line">        <span class="keyword">with</span> <span class="variable language_">self</span>._lock:                    <span class="comment"># 外层已持 RLock，内层可重入</span></span><br><span class="line">            <span class="variable language_">self</span>.append(x)</span><br><span class="line">            <span class="keyword">return</span> <span class="variable language_">self</span>.size()</span><br></pre></td></tr></table></figure>
+<h2 id="3-queuequeue生产者消费者标准解法"><a class="markdownIt-Anchor" href="#3-queuequeue生产者消费者标准解法"></a> 3. queue.Queue：生产者消费者标准解法</h2>
+<p><strong><code>queue.Queue</code> 是线程安全的队列</strong>（内部用 Condition 实现），自带阻塞语义：<code>put()</code> 满了阻塞、<code>get()</code> 空了阻塞。它让你<strong>不碰锁就能写出线程安全的生产者消费者</strong>——共享状态被封装在队列内部：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> queue</span><br><span class="line"><span class="keyword">import</span> threading</span><br><span class="line"><span class="keyword">import</span> time</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">producer</span>(<span class="params">q: queue.Queue, n: <span class="built_in">int</span></span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">    <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n):</span><br><span class="line">        time.sleep(<span class="number">0.01</span>)</span><br><span class="line">        q.put(<span class="string">f&quot;任务-<span class="subst">&#123;i&#125;</span>&quot;</span>)            <span class="comment"># 队列有界(maxsize)时：满则阻塞，天然限流</span></span><br><span class="line">    q.put(<span class="literal">None</span>)                       <span class="comment"># 结束哨兵</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">consumer</span>(<span class="params">q: queue.Queue, name: <span class="built_in">str</span></span>) -&gt; <span class="literal">None</span>:</span><br><span class="line">    <span class="keyword">while</span> <span class="literal">True</span>:</span><br><span class="line">        item = q.get()                <span class="comment"># 空则阻塞，不空转</span></span><br><span class="line">        <span class="keyword">if</span> item <span class="keyword">is</span> <span class="literal">None</span>:              <span class="comment"># 哨兵：收工（一个消费者一个哨兵）</span></span><br><span class="line">            q.task_done()</span><br><span class="line">            <span class="keyword">break</span></span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;  <span class="subst">&#123;name&#125;</span> 处理 <span class="subst">&#123;item&#125;</span>&quot;</span>)</span><br><span class="line">        time.sleep(<span class="number">0.03</span>)              <span class="comment"># 模拟处理耗时</span></span><br><span class="line">        q.task_done()                 <span class="comment"># 告知完成（配合 join 统计）</span></span><br><span class="line"></span><br><span class="line">q: queue.Queue = queue.Queue(maxsize=<span class="number">10</span>)</span><br><span class="line">threads = [threading.Thread(target=producer, args=(q, <span class="number">6</span>)),</span><br><span class="line">           threading.Thread(target=consumer, args=(q, <span class="string">&quot;C1&quot;</span>), daemon=<span class="literal">True</span>),</span><br><span class="line">           threading.Thread(target=consumer, args=(q, <span class="string">&quot;C2&quot;</span>), daemon=<span class="literal">True</span>)]</span><br><span class="line"><span class="keyword">for</span> t <span class="keyword">in</span> threads: t.start()</span><br><span class="line">q.join()                              <span class="comment"># 等所有 task_done</span></span><br><span class="line">q.put(<span class="literal">None</span>); q.put(<span class="literal">None</span>)              <span class="comment"># 再发两个哨兵放倒两个消费者</span></span><br><span class="line"><span class="keyword">for</span> t <span class="keyword">in</span> threads: t.join()</span><br><span class="line"><span class="built_in">print</span>(<span class="string">&quot;全部处理完毕&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：线程间传数据用 Queue，<strong>不要</strong>用 list/dict + 自己加锁（容易圈错临界区）；有界队列（maxsize）是天然的背压机制——生产过快时生产者被阻塞，内存不爆。多进程对应物是 <code>multiprocessing.Queue</code>（第 4 节）。</p>
+<h2 id="4-multiprocessing绕开-gil-的代价与规则"><a class="markdownIt-Anchor" href="#4-multiprocessing绕开-gil-的代价与规则"></a> 4. multiprocessing：绕开 GIL 的代价与规则</h2>
+<p>每个子进程有<strong>独立的解释器与 GIL</strong>（07 篇 CPU 密集的正解），代价是：进程启动慢、<strong>数据不共享</strong>——传参和返回值都要经过**序列化（pickle）**跨进程传输。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"><span class="string">&quot;&quot;&quot;mp_demo.py&quot;&quot;&quot;</span></span><br><span class="line"><span class="keyword">import</span> multiprocessing <span class="keyword">as</span> mp</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">square</span>(<span class="params">n: <span class="built_in">int</span></span>) -&gt; <span class="built_in">int</span>:</span><br><span class="line">    <span class="keyword">return</span> n * n</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:            <span class="comment"># ★ 必须有：spawn 方式子进程会重新 import 本模块</span></span><br><span class="line">    <span class="comment"># ---------- Process 手工管理 ----------</span></span><br><span class="line">    p = mp.Process(target=square, args=(<span class="number">8</span>,))</span><br><span class="line">    p.start()</span><br><span class="line">    p.join()</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---------- Pool 进程池（日常主力）----------</span></span><br><span class="line">    <span class="keyword">with</span> mp.Pool(processes=<span class="number">4</span>) <span class="keyword">as</span> pool:</span><br><span class="line">        <span class="built_in">print</span>(pool.<span class="built_in">map</span>(square, <span class="built_in">range</span>(<span class="number">10</span>)))          <span class="comment"># 并行 map</span></span><br><span class="line">        <span class="built_in">print</span>(pool.apply_async(square, (<span class="number">99</span>,)).get())  <span class="comment"># 单个异步任务</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># ---------- 进程间通信：Queue / Pipe ----------</span></span><br><span class="line">    q = mp.Queue()</span><br><span class="line">    p2 = mp.Process(target=<span class="keyword">lambda</span> qq: qq.put(<span class="string">&quot;来自子进程&quot;</span>), args=(q,))</span><br><span class="line">    p2.start()</span><br><span class="line">    <span class="built_in">print</span>(q.get())</span><br><span class="line">    p2.join()</span><br></pre></td></tr></table></figure>
+<p>输出：</p>
+<figure class="highlight text"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">[0, 1, 4, 9, 16, 25, 36, 49, 64, 81]</span><br><span class="line">9801</span><br><span class="line">来自子进程</span><br></pre></td></tr></table></figure>
+<p>三条铁律：</p>
+<ol>
+<li><strong><code>if __name__ == &quot;__main__&quot;:</code> 必须有</strong>。Windows/macOS（3.8+ 默认）spawn 方式启动子进程时会<strong>重新 import 主模块</strong>，没有保护就无限创建进程；Linux 默认 fork（子进程复制父进程内存，不重跑 import），但为可移植性也一律写保护。3.14 起 Linux 默认也改为 forkserver/spawn 系（PEP 保留意见详见官方 changelog，趋势是更安全）；</li>
+<li><strong>能 pickle 才能传</strong>：args/返回值/Queue 里的对象都要可 pickle（01 篇的对象模型）。<strong>lambda、嵌套函数、局部函数、打开的文件句柄、数据库连接、torch 的部分大对象（建议专用的共享机制）不可 pickle</strong>，报错形如 <code>PicklingError: Can't pickle &lt;function &lt;lambda&gt;...</code>。报错的正解是把函数提到模块顶层；</li>
+<li><strong>进程间不共享内存</strong>：子进程里改一个全局变量，父进程看不见。真要共享用 <code>mp.Value</code>/<code>mp.Array</code>（配合锁）或 Manager，但优先想&quot;能不能只用 Queue 传消息&quot;——<strong>共享内存是万恶之源，消息传递是正道</strong>。</li>
+</ol>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">def</span> <span class="title function_">process_data</span>(<span class="params">df_chunk</span>):            <span class="comment"># ❌ 若 df_chunk 在主进程的函数里闭包创建</span></span><br><span class="line">    ...</span><br><span class="line"><span class="comment"># ✅ 正解：把&quot;创建数据&quot;也放进子进程，或只传可 pickle 的引用（文件路径/URI）</span></span><br></pre></td></tr></table></figure>
+<p><strong>经验做法</strong>：进程池任务粒度要&quot;粗&quot;——每次跨进程传输都有 pickle 成本，传 1 万个小任务不如传 100 个大块（分块 map）；GPU 训练场景的多进程数据加载（DataLoader num_workers）正是&quot;队列传索引、子进程自己读数据&quot;的同一思想。</p>
+<h2 id="5-concurrentfutures统一接口"><a class="markdownIt-Anchor" href="#5-concurrentfutures统一接口"></a> 5. concurrent.futures：统一接口</h2>
+<p><code>ThreadPoolExecutor</code> 与 <code>ProcessPoolExecutor</code> 提供<strong>完全一致的 API</strong>（文档：concurrent.futures），换并发模型只改一行构造参数——工程上应默认用它而不是裸 Thread/Pool：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> time</span><br><span class="line"><span class="keyword">from</span> concurrent.futures <span class="keyword">import</span> ThreadPoolExecutor, ProcessPoolExecutor, as_completed</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">fetch</span>(<span class="params">url_id: <span class="built_in">int</span></span>) -&gt; <span class="built_in">str</span>:</span><br><span class="line">    time.sleep(<span class="number">0.1</span>)                   <span class="comment"># 模拟 IO</span></span><br><span class="line">    <span class="keyword">return</span> <span class="string">f&quot;resp-<span class="subst">&#123;url_id&#125;</span>&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">main</span>() -&gt; <span class="literal">None</span>:</span><br><span class="line">    <span class="comment"># IO 密集：线程池</span></span><br><span class="line">    <span class="keyword">with</span> ThreadPoolExecutor(max_workers=<span class="number">5</span>) <span class="keyword">as</span> ex:</span><br><span class="line">        futs = &#123;ex.submit(fetch, i): i <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">5</span>)&#125;   <span class="comment"># submit 立即返回 Future</span></span><br><span class="line">        <span class="keyword">for</span> fut <span class="keyword">in</span> as_completed(futs):                      <span class="comment"># 谁先完成先处理谁</span></span><br><span class="line">            <span class="built_in">print</span>(futs[fut], <span class="string">&quot;-&gt;&quot;</span>, fut.result())            <span class="comment"># result() 取值（会重新抛异常）</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># CPU 密集：只换一行 → 进程池</span></span><br><span class="line">    <span class="keyword">with</span> ProcessPoolExecutor(max_workers=<span class="number">4</span>) <span class="keyword">as</span> ex:</span><br><span class="line">        results = <span class="built_in">list</span>(ex.<span class="built_in">map</span>(<span class="keyword">lambda</span> n: n * n, <span class="built_in">range</span>(<span class="number">5</span>)))   <span class="comment"># 注意 lambda 的 pickle 限制（见下）</span></span><br><span class="line"></span><br><span class="line">main()</span><br></pre></td></tr></table></figure>
+<p>要点：</p>
+<ul>
+<li><strong><code>Future</code></strong> 是&quot;未来才有值的票据&quot;：<code>result(timeout=...)</code> 阻塞取值并<strong>重新抛出工作线程的异常</strong>（异常不会静默丢）、<code>add_done_callback</code> 挂完成回调；</li>
+<li><code>as_completed(futs)</code> 按<strong>完成顺序</strong>迭代；<code>ex.map(fn, seq)</code> 按<strong>提交顺序</strong>返回；</li>
+<li><code>ProcessPoolExecutor</code> 走 spawn 语义，<strong>同样受 pickle 限制</strong>——<code>ex.map(lambda ...)</code> 会炸（lambda 不可 pickle），需改用模块顶层函数（<code>functools.partial</code> 也只 pickle 到&quot;部分应用一个顶层函数&quot;的程度）；</li>
+<li>3.9+ 的 <code>ThreadPoolExecutor(max_workers=None)</code> 默认 <code>min(32, cpu+4)</code>（官方文档默认值），进程池默认 CPU 核数。</li>
+</ul>
+<p><strong>经验做法</strong>：所有&quot;批量并发&quot;代码统一写成 executor 风格；需求升级到 asyncio 时，10 篇的 <code>loop.run_in_executor</code> 能让同一批函数无缝过渡。</p>
+<h2 id="常见陷阱"><a class="markdownIt-Anchor" href="#常见陷阱"></a> 常见陷阱</h2>
+<p><strong>陷阱一：临界区圈错</strong>——只把&quot;写&quot;放进锁里、把&quot;读&quot;放外面（本节银行账户：读-改-写三步必须整体在锁内）；或两个锁的加锁顺序不一致导致死锁（约定全局加锁顺序，或用 <code>lock.acquire(timeout=)</code> + 放弃重试）。</p>
+<p><strong>陷阱二：<code>t.run()</code> 而不是 <code>t.start()</code></strong>——没有并发，纯串行，还以为多线程生效了。</p>
+<p><strong>陷阱三：lambda/闭包传给进程池</strong>——<code>PicklingError</code>；函数必须定义在模块顶层。同样，<code>mp.Queue</code> 在 <code>with Pool</code> 的 initializer 之外被父子进程乱用会出诡异死锁，进程间队列只在主进程创建、传给子进程。</p>
+<p><strong>陷阱四：daemon 线程里管资源</strong>——主进程退出守护线程被硬杀，文件缓冲丢失、锁没释放；资源清理逻辑放非守护线程或主线程（05 篇 with 纪律）。</p>
+<p><strong>陷阱五：用 time.sleep 轮询代替 Condition/Queue</strong>——<code>while not ready: time.sleep(0.01)</code> 既浪费又不精确；等条件用 <code>Condition.wait()</code> / <code>Event.wait()</code> / <code>Queue.get()</code>（阻塞、被通知时才醒）。</p>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li><code>Thread</code>/<code>start</code>/<code>join</code> 是骨架；线程共享内存——<strong>竞态来自&quot;读-改-写&quot;被切断</strong>，银行账户实测丢失更新；</li>
+<li>锁家族：<code>Lock</code>（互斥）、<code>RLock</code>（可重入）、<code>Semaphore</code>（限并发）、<code>Condition</code>/<code>Event</code>（等待通知）；临界区要圈对、加锁顺序要一致；</li>
+<li><code>queue.Queue</code> 是线程间通信标准件：阻塞语义 + task_done/join + 有界背压，<strong>共享状态封装在队列里</strong>；</li>
+<li>多进程绕开 GIL：<code>if __name__ == &quot;__main__&quot;</code> 保护、一切跨进程皆 pickle、不共享内存传消息不共享状态；</li>
+<li><code>concurrent.futures</code> 统一线程/进程池接口，<code>Future.result</code> 会重抛异常、<code>as_completed</code> 按完成序——<strong>工程默认写法</strong>。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>把第 2 节的 <code>deposit_unsafe</code> 换成 <code>self.balance += amount</code>（一条语句），重跑竞态实验：还丢吗？用字节码（<code>dis.dis</code>）解释结论，并说明为什么&quot;一条语句&quot;不等于线程安全。</li>
+<li>用 <code>Condition</code> 实现有界缓冲区（容量 5）的生产者消费者（不使用 queue.Queue），要求缓冲满时生产者阻塞、空时消费者阻塞；再用 Queue 版实现并对比代码量。</li>
+<li>写一个 <code>Semaphore(3)</code> 限流的线程池爬虫原型：20 个&quot;URL&quot;（sleep 模拟），打印每个任务的开始/结束时间戳，验证同时最多 3 个在跑。</li>
+<li>写多进程版&quot;统计多个大文件行数&quot;：文件路径列表 → <code>ProcessPoolExecutor.map</code> → 汇总；故意传入一个 lambda 触发 PicklingError，然后把函数提到模块顶层修复；记录两种写法的报错/成功过程。</li>
+<li>（思考题）Agent 框架里&quot;并发调用 10 个工具，每个工具可能调用 requests（阻塞库）&quot;：按 07 篇决策树给出线程池/异步化两种方案，并用本篇 executor 写出线程池版本骨架（异步版本留到 10 篇练习对答案）。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/Python/" rel="tag"># Python</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/07-GIL%E4%B8%8E%E5%B9%B6%E5%8F%91%E6%A8%A1%E5%9E%8B/" rel="prev" title="07-GIL与并发模型">
+                  <i class="fa fa-angle-left"></i> 07-GIL与并发模型
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/09-asyncio%E5%9F%BA%E7%A1%80/" rel="next" title="09-asyncio基础">
+                  09-asyncio基础 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

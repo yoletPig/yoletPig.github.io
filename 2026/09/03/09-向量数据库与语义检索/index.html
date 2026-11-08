@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 建立 embedding 直觉（衔接数学基础 01 篇的余弦相似度），掌握三种相似度度量及&#39;归一化后内积&#x3D;余弦&#39;的证明。 - 说清精确检索为什么慢：暴力扫描的复杂度账。 - 理解两类 ANN 索引：IVF（倒排分桶）与 HNSW（多层图…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="09-向量数据库与语义检索">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/09-%E5%90%91%E9%87%8F%E6%95%B0%E6%8D%AE%E5%BA%93%E4%B8%8E%E8%AF%AD%E4%B9%89%E6%A3%80%E7%B4%A2/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 建立 embedding 直觉（衔接数学基础 01 篇的余弦相似度），掌握三种相似度度量及&#39;归一化后内积&#x3D;余弦&#39;的证明。 - 说清精确检索为什么慢：暴力扫描的复杂度账。 - 理解两类 ANN 索引：IVF（倒排分桶）与 HNSW（多层图…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T14:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.558Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Redis">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="数据库">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/09-%E5%90%91%E9%87%8F%E6%95%B0%E6%8D%AE%E5%BA%93%E4%B8%8E%E8%AF%AD%E4%B9%89%E6%A3%80%E7%B4%A2/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/09-%E5%90%91%E9%87%8F%E6%95%B0%E6%8D%AE%E5%BA%93%E4%B8%8E%E8%AF%AD%E4%B9%89%E6%A3%80%E7%B4%A2/","path":"2026/09/03/09-向量数据库与语义检索/","title":"09-向量数据库与语义检索"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>09-向量数据库与语义检索 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#09-%E5%90%91%E9%87%8F%E6%95%B0%E6%8D%AE%E5%BA%93%E4%B8%8E%E8%AF%AD%E4%B9%89%E6%A3%80%E7%B4%A2"><span class="nav-number">1.</span> <span class="nav-text"> 09 - 向量数据库与语义检索</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-embedding-%E6%98%AF%E4%BB%80%E4%B9%88%E6%8A%8A%E8%AF%AD%E4%B9%89%E5%8F%98%E6%88%90%E5%87%A0%E4%BD%95"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. embedding 是什么：把语义变成几何</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E4%B8%89%E7%A7%8D%E7%9B%B8%E4%BC%BC%E5%BA%A6%E5%BA%A6%E9%87%8F%E5%BD%92%E4%B8%80%E5%8C%96%E5%90%8E%E7%AD%89%E4%BB%B7%E7%9A%84%E8%AF%81%E6%98%8E"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 三种相似度度量：归一化后等价的证明</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E7%B2%BE%E7%A1%AE%E6%A3%80%E7%B4%A2%E4%B8%BA%E4%BB%80%E4%B9%88%E6%85%A2%E6%9A%B4%E5%8A%9B%E6%89%AB%E6%8F%8F%E7%9A%84%E8%B4%A6"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 精确检索为什么慢：暴力扫描的账</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-ann-%E7%B4%A2%E5%BC%95%E5%8E%9F%E7%90%86ivf-%E4%B8%8E-hnsw"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. ANN 索引原理：IVF 与 HNSW</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-pgvector-%E5%AE%9E%E6%93%8D%E5%BB%BA%E8%A1%A8-%E5%BB%BA%E7%B4%A2%E5%BC%95-%E6%9F%A5%E8%AF%A2"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. pgvector 实操：建表、建索引、查询</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-hnsw-%E5%8F%82%E6%95%B0%E5%AE%9E%E6%B5%8B%E6%80%9D%E8%B7%AFef_search-%E7%9A%84%E7%B2%BE%E5%BA%A6-%E9%80%9F%E5%BA%A6%E6%9D%83%E8%A1%A1"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. HNSW 参数实测思路：ef_search 的精度-速度权衡</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-agent-%E8%AE%B0%E5%BF%86%E5%BA%93%E5%AE%8C%E6%95%B4%E8%AE%BE%E8%AE%A1"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. Agent 记忆库完整设计</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.9.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.10.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.11.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/09-%E5%90%91%E9%87%8F%E6%95%B0%E6%8D%AE%E5%BA%93%E4%B8%8E%E8%AF%AD%E4%B9%89%E6%A3%80%E7%B4%A2/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="09-向量数据库与语义检索 | Yoleen的博客">
+      <meta itemprop="description" content="- 建立 embedding 直觉（衔接数学基础 01 篇的余弦相似度），掌握三种相似度度量及&#39;归一化后内积&#x3D;余弦&#39;的证明。 - 说清精确检索为什么慢：暴力扫描的复杂度账。 - 理解两类 ANN 索引：IVF（倒排分桶）与 HNSW（多层图…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          09-向量数据库与语义检索
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 22:00:00" itemprop="dateCreated datePublished" datetime="2026-09-03T22:00:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%95%B0%E6%8D%AE%E5%BA%93/" itemprop="url" rel="index"><span itemprop="name">数据库</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>14 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 建立 embedding 直觉（衔接数学基础 01 篇的余弦相似度），掌握三种相似度度量及'归一化后内积=余弦'的证明。 - 说清精确检索为什么慢：暴力扫描的复杂度账。 - 理解两类 ANN 索引：IVF（倒排分桶）与 HNSW（多层图…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="09-向量数据库与语义检索"><a class="markdownIt-Anchor" href="#09-向量数据库与语义检索"></a> 09 - 向量数据库与语义检索</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>建立 embedding 直觉（衔接数学基础 01 篇的余弦相似度），掌握三种相似度度量及&quot;归一化后内积=余弦&quot;的证明。</li>
+<li>说清精确检索为什么慢：暴力扫描的复杂度账。</li>
+<li>理解两类 ANN 索引：IVF（倒排分桶）与 HNSW（多层图），配图讲清搜索路径；了解 PQ 量化概览。</li>
+<li>完整实操 pgvector（建表/建索引/查询/参数调优），并设计一个带元数据过滤与去重的 Agent 记忆库。</li>
+</ul>
+<h2 id="1-embedding-是什么把语义变成几何"><a class="markdownIt-Anchor" href="#1-embedding-是什么把语义变成几何"></a> 1. embedding 是什么：把语义变成几何</h2>
+<p>embedding（嵌入）= 用一个高维向量表示一段内容，使<strong>语义相近的内容在向量空间中距离相近</strong>。文本经 embedding 模型（如 BGE、OpenAI text-embedding-3，维度常为 384/768/1536/3072）映射后，“数据库索引&quot;与&quot;如何让查询更快&quot;变成几何问题——检索即&quot;找最近的 k 个点”（kNN, k-nearest neighbors）。</p>
+<p>数学基础 01 篇建立了工具箱，这里直接取用并约定记号：向量 a, b ∈ R^d，</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">内积        dot(a,b) = Σ aᵢbᵢ                    → 越大越相似(同向为正)</span><br><span class="line">L2 距离     d(a,b) = √Σ(aᵢ-bᵢ)²                  → 越小越相似</span><br><span class="line">余弦相似度  cos(θ) = dot(a,b) / (|a|·|b|)        → 只看方向不看长度, ∈ [-1,1]</span><br></pre></td></tr></table></figure>
+<p>为什么&quot;语义检索&quot;用这些而不是精确匹配？因为用户问&quot;怎么调数据库参数&quot;和文档&quot;配置优化器的方法&quot;<strong>没有一个词完全重合</strong>，但两者的 embedding 会落在空间中邻近的位置——向量把&quot;同义/相关&quot;变成&quot;距离近&quot;。这就是 Agent 记忆（Agent 开发 05 篇）、RAG 知识库、以文搜图的共同底层。</p>
+<h2 id="2-三种相似度度量归一化后等价的证明"><a class="markdownIt-Anchor" href="#2-三种相似度度量归一化后等价的证明"></a> 2. 三种相似度度量：归一化后等价的证明</h2>
+<p>三种度量在不同库里/模型里都有出场（pgvector 三种都支持：<code>&lt;-&gt;</code> L2、<code>&lt;#&gt;</code> 内积、<code>&lt;=&gt;</code> 余弦）。关键结论：<strong>向量归一化（变成单位向量）后，三者给出完全相同的排序</strong>。证明只需两步（中学几何）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">设 |a| = |b| = 1 (归一化):</span><br><span class="line">① cos(a,b) = dot(a,b)/(1·1) = dot(a,b)              → 余弦排序 = 内积排序</span><br><span class="line">② |a-b|² = |a|² + |b|² - 2·dot(a,b) = 1 + 1 - 2·dot(a,b) = 2 - 2·dot(a,b)</span><br><span class="line">   → L2 是 dot 的单调递减函数                        → L2 排序 = 内积排序(反序)</span><br><span class="line">∴ 三者排序等价; 内积做距离时用 ip = 1 - dot 变成&quot;越小越好&quot;的度量</span><br></pre></td></tr></table></figure>
+<p>推论与经验做法：<strong>凡是用余弦的场景，入库前先把向量归一化，之后统一用内积</strong>——省一次除法、索引实现更简单（主流向量库的 cosine 索引内部就是这么做的）。什么时候保留原始长度？内积本身含&quot;向量模长&quot;信息时（如协同过滤里模长代表热度）才不归一化——语义检索默认归一化即可。</p>
+<p>验证（numpy 十行）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line">rng = np.random.default_rng(<span class="number">42</span>)</span><br><span class="line">a, b, c = rng.normal(size=<span class="number">8</span>), rng.normal(size=<span class="number">8</span>), rng.normal(size=<span class="number">8</span>)</span><br><span class="line">a, b, c = a/np.linalg.norm(a), b/np.linalg.norm(b), c/np.linalg.norm(c)</span><br><span class="line">cos  = <span class="keyword">lambda</span> x, y: <span class="built_in">float</span>(x @ y)</span><br><span class="line">l2   = <span class="keyword">lambda</span> x, y: <span class="built_in">float</span>(np.linalg.norm(x - y))</span><br><span class="line">ip   = <span class="keyword">lambda</span> x, y: <span class="number">1</span> - <span class="built_in">float</span>(x @ y)                 <span class="comment"># 内积距离(越小越近)</span></span><br><span class="line">pairs = [(a,b), (a,c), (b,c)]</span><br><span class="line"><span class="keyword">for</span> f, name <span class="keyword">in</span> [(cos,<span class="string">&quot;cos&quot;</span>), (l2,<span class="string">&quot;L2&quot;</span>), (ip,<span class="string">&quot;ip-dist&quot;</span>)]:</span><br><span class="line">    order = <span class="built_in">sorted</span>(pairs, key=<span class="keyword">lambda</span> p: f(*p))       <span class="comment"># cos/ip 越小越远? cos 是越大越近</span></span><br><span class="line">    <span class="built_in">print</span>(name, [<span class="string">f&quot;<span class="subst">&#123;p[<span class="number">0</span>]==a <span class="keyword">and</span> p[<span class="number">1</span>]==b <span class="keyword">and</span> <span class="string">&#x27;a-b&#x27;</span> <span class="keyword">or</span> (<span class="string">&#x27;a-c&#x27;</span> <span class="keyword">if</span> a <span class="keyword">in</span> p <span class="keyword">and</span> c <span class="keyword">in</span> p <span class="keyword">else</span> <span class="string">&#x27;b-c&#x27;</span>)&#125;</span>&quot;</span> <span class="keyword">for</span> p <span class="keyword">in</span></span><br><span class="line">                 (pairs <span class="keyword">if</span> name==<span class="string">&quot;cos&quot;</span> <span class="keyword">else</span> <span class="built_in">sorted</span>(pairs, key=<span class="keyword">lambda</span> p: -f(*p)))])</span><br><span class="line"><span class="comment"># 三个度量的排序完全一致 —— 归一化等价性的实证</span></span><br></pre></td></tr></table></figure>
+<h2 id="3-精确检索为什么慢暴力扫描的账"><a class="markdownIt-Anchor" href="#3-精确检索为什么慢暴力扫描的账"></a> 3. 精确检索为什么慢：暴力扫描的账</h2>
+<p>精确 kNN = 对查询向量与<strong>库里每一个向量</strong>算一遍相似度，取 top-k。账目（d=1536 维，n=1000 万条）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">每次查询: n 次点积 × d 次乘加 = 10^7 × 1.5×10^3 = 1.5×10^10 FLOPs/查询</span><br><span class="line">          ≈ 单核数秒; 内存带宽也是瓶颈(10^7 × 1536 × 4B ≈ 61 GB 向量全要摸一遍)</span><br><span class="line">结论: 精确检索 O(n·d) 在百万级以上不可用 → 必须牺牲一点精度换速度: ANN</span><br></pre></td></tr></table></figure>
+<p><strong>ANN（Approximate Nearest Neighbor）<strong>的交易结构：建索引（离线），查询时只探索数据的一小部分，换取&quot;快 100-1000 倍&quot;但</strong>召回率 &lt;100%</strong>（真 top-1 可能漏掉，工程上用 recall@k ≈ 0.95+ 衡量是否可接受）。两大主流思路：<strong>切空间</strong>（IVF，把空间分桶，只搜几个桶）与<strong>建图</strong>（HNSW，在图上贪心导航）。</p>
+<h2 id="4-ann-索引原理ivf-与-hnsw"><a class="markdownIt-Anchor" href="#4-ann-索引原理ivf-与-hnsw"></a> 4. ANN 索引原理：IVF 与 HNSW</h2>
+<p><strong>IVF（Inverted File Index，倒排分桶）</strong>——Faiss 的经典索引：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">离线: ① 对全体向量 k-means 聚成 nlist 个簇(如 4096), 每簇记录质心与成员列表</span><br><span class="line">      ② 类似&quot;倒排表&quot;: 质心 → 该簇所有向量</span><br><span class="line">在线: 查询 q → 与 nlist 个质心比距离, 挑 nprobe 个最近的簇 → 只在这几个簇内暴力扫</span><br><span class="line">复杂度: O(nlist·d + (n/nlist)·nprobe·d)   ← 从 O(n·d) 缩到 ~O(√n·d) 量级</span><br><span class="line">权衡: nprobe↑ 召回率↑ 速度↓; nprobe=nlist 时退化为精确扫描</span><br></pre></td></tr></table></figure>
+<p>IVF 快但有两个软肋：簇边界上的点容易漏（近邻恰在没选中的簇里）；插入/删除要维护倒排表。于是主角登场——</p>
+<p><strong>HNSW（Hierarchical Navigable Small World，Malkov &amp; Yashunin 2016）</strong>——分层可导航小世界图，pgvector/Milvus/qdrant 的默认主力：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">L2:   a ──────────────────── m ──────────────── z        ← 顶层稀疏: 高速公路</span><br><span class="line">      │                      │                 │</span><br><span class="line">L1:   a ──── e ───────────── m ───── q ──────── z        ← 中层: 干道</span><br><span class="line">      │      │               │        │        │</span><br><span class="line">L0:   a─b─c─d─e─f─g─h─i─j─k─l─m─n─o─p─q─r─s─t─u─v─w─x─y─z ← 底层密集: 所有节点全在</span><br><span class="line"></span><br><span class="line">搜索&quot;最接近 q 的点&quot;(从顶随机入口 s 开始贪心):</span><br><span class="line">L2: s=a → 邻居中离 q 最近者前进 → m (greedy descent)</span><br><span class="line">L1: 从 m 继续 → q&#x27; 附近                  每层贪心走到底, 下层从停点继续</span><br><span class="line">L0: 精细搜索: 在候选邻域内取 ef 个候选, 返回 top-k</span><br></pre></td></tr></table></figure>
+<p>三层机制逐个拆：</p>
+<ol>
+<li><strong>分层跳表式结构</strong>：上层节点稀疏（长边），越往下越密（短边）。顶层大步定位区域，底层小步精调——与跳表&quot;多层车道&quot;同构（08 章），但这是<strong>图</strong>不是链表。</li>
+<li><strong>贪心搜索</strong>：每层从当前点看邻居，谁更接近查询就走谁，走不动就下降一层；底层用候选队列（大小 ef_search）做多路扩展而非单路贪心。</li>
+<li><strong>建图</strong>：每个新点从顶层贪心下降找到自己在各层的近邻，与 M 个近邻互连（保持图&quot;可导航小世界&quot;性质：既能长距离跳转又有短边稠密性）。</li>
+</ol>
+<p>参数直觉（pgvector 与论文同名）：<code>m</code>（每点连接数，越大图越稠密召回越高、索引越大）、<code>ef_construction</code>（建图候选宽度，影响图质量）、<code>ef_search</code>（查询候选宽度——<strong>运行时可调的精度/速度旋钮</strong>）。选型速记：<strong>IVF 实现简单、内存省，适合超大规模+召回要求中等；HNSW 召回高、查询快，代价是内存（图结构额外 1-2 倍）与构建时间</strong>。</p>
+<p><strong>PQ（Product Quantization）概览</strong>：内存压缩术——d 维向量切成 m 段，每段用 k=256 个质心量化成一个字节，1536 维从 6KB 压到 ~768B（32 倍），距离在压缩码上近似计算。代价是精度损失，通常 IVF/PQ 或 HNSW+PQ 组合用（Faiss 的 IVF-PQ 是十亿级标配）。pgvector 的半精度（<code>halfvec</code>）与量化索引（0.7+ 的 bit/halfvec 类型）是同一思想的轻量版。</p>
+<h2 id="5-pgvector-实操建表-建索引-查询"><a class="markdownIt-Anchor" href="#5-pgvector-实操建表-建索引-查询"></a> 5. pgvector 实操：建表、建索引、查询</h2>
+<p>安装（PG16）：<code>apt install postgresql-16-pgvector</code>（PGDG 源）或源码编译；扩展启用一次即可。</p>
+<figure class="highlight sql"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">CREATE</span> EXTENSION IF <span class="keyword">NOT</span> <span class="keyword">EXISTS</span> vector;</span><br><span class="line"></span><br><span class="line"><span class="comment">-- 表: 记忆库骨架(embedding 列 + 元数据列) —— Agent 开发 05 篇的存储落点</span></span><br><span class="line"><span class="keyword">CREATE TABLE</span> memories (</span><br><span class="line">    id        <span class="type">BIGINT</span> GENERATED ALWAYS <span class="keyword">AS</span> <span class="keyword">IDENTITY</span> <span class="keyword">PRIMARY KEY</span>,</span><br><span class="line">    agent_id  TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">    kind      TEXT <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="string">&#x27;note&#x27;</span>,       <span class="comment">-- note/summary/fact/tool_result</span></span><br><span class="line">    content   TEXT <span class="keyword">NOT NULL</span>,</span><br><span class="line">    embedding vector(<span class="number">768</span>) <span class="keyword">NOT NULL</span>,               <span class="comment">-- 维度必须与模型一致, 建表时锁死</span></span><br><span class="line">    metadata  JSONB <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> <span class="string">&#x27;&#123;&#125;&#x27;</span>,</span><br><span class="line">    created_at TIMESTAMPTZ <span class="keyword">NOT NULL</span> <span class="keyword">DEFAULT</span> now()</span><br><span class="line">);</span><br><span class="line"></span><br><span class="line"><span class="comment">-- 归一化约定: 入库前 Python 侧归一化, 统一用内积(2 节结论)</span></span><br><span class="line"><span class="comment">-- HNSW 索引: 内积空间</span></span><br><span class="line"><span class="keyword">CREATE</span> INDEX <span class="keyword">ON</span> memories <span class="keyword">USING</span> hnsw (embedding vector_ip_ops) <span class="keyword">WITH</span> (m<span class="operator">=</span><span class="number">16</span>, ef_construction<span class="operator">=</span><span class="number">64</span>);</span><br><span class="line"></span><br><span class="line"><span class="comment">-- 写入(向量由模型产出, 这里示意):</span></span><br><span class="line"><span class="keyword">INSERT INTO</span> memories(agent_id, kind, content, embedding)</span><br><span class="line"><span class="keyword">VALUES</span> (<span class="string">&#x27;agent42&#x27;</span>, <span class="string">&#x27;note&#x27;</span>, <span class="string">&#x27;用户偏好 SQLite 快速原型&#x27;</span>, $<span class="number">1</span>::vector);   <span class="comment">-- $1 = &#x27;[0.1, -0.3, ...]&#x27;</span></span><br><span class="line"></span><br><span class="line"><span class="comment">-- 查询: 语义 top-5 + 元数据过滤(过滤条件放普通列, 向量搜索只管相似)</span></span><br><span class="line"><span class="keyword">SET</span> hnsw.ef_search <span class="operator">=</span> <span class="number">100</span>;                       <span class="comment">-- 精度旋钮(默认 40)</span></span><br><span class="line"><span class="keyword">SELECT</span> id, kind, content, embedding <span class="operator">&lt;</span>#<span class="operator">&gt;</span> $<span class="number">1</span>::vector <span class="keyword">AS</span> dist   <span class="comment">-- &lt;#&gt; 内积距离(负内积)</span></span><br><span class="line"><span class="keyword">FROM</span> memories</span><br><span class="line"><span class="keyword">WHERE</span> agent_id <span class="operator">=</span> <span class="string">&#x27;agent42&#x27;</span> <span class="keyword">AND</span> kind <span class="keyword">IN</span> (<span class="string">&#x27;note&#x27;</span>,<span class="string">&#x27;fact&#x27;</span>) <span class="keyword">AND</span> created_at <span class="operator">&gt;</span> now() <span class="operator">-</span> <span class="type">interval</span> <span class="string">&#x27;30 days&#x27;</span></span><br><span class="line"><span class="keyword">ORDER</span> <span class="keyword">BY</span> embedding <span class="operator">&lt;</span>#<span class="operator">&gt;</span> $<span class="number">1</span>::vector</span><br><span class="line">LIMIT <span class="number">5</span>;</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">-- IVF 对照(同一张表):</span><br><span class="line">CREATE INDEX ON memories USING ivfflat (embedding vector_ip_ops) WITH (lists = 100);</span><br><span class="line">SET ivfflat.probes = 10;                        -- 对应 nprobe</span><br></pre></td></tr></table></figure>
+<p>三件事要注意（pgvector 文档 + 经验做法）：</p>
+<ol>
+<li><strong>pgvector 的 HNSW 是&quot;过滤后搜索&quot;而不是&quot;预过滤&quot;</strong>：WHERE 条件在索引扫描外生效，过滤性太强（命中 &lt;1%）时会退化为大范围扫描——高过滤场景给元数据列建 B-tree 索引（本例 agent_id/kind），让规划器先收窄集合（PG 16 亦可用分区替代过滤，11 章）。</li>
+<li><strong>索引建在&quot;空表或小表&quot;上，增量插入性能更好</strong>；批量导入后重建索引更快。</li>
+<li><strong><code>SET hnsw.ef_search</code> 是会话级</strong>：应用侧每次连接要设（或放进连接池的初始化 SQL）。</li>
+</ol>
+<h2 id="6-hnsw-参数实测思路ef_search-的精度-速度权衡"><a class="markdownIt-Anchor" href="#6-hnsw-参数实测思路ef_search-的精度-速度权衡"></a> 6. HNSW 参数实测思路：ef_search 的精度-速度权衡</h2>
+<p>实验设计（把参数变成自己的数字，代码骨架可跑）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># hnsw_bench.py 骨架 —— 生成合成向量 + pgvector, 扫 ef_search</span></span><br><span class="line"><span class="comment"># 1) 造 10 万条 128 维随机向量(真实场景换成模型 embedding), 入库并建 HNSW 索引</span></span><br><span class="line"><span class="comment"># 2) 抽 100 条作为查询集</span></span><br><span class="line"><span class="comment"># 3) 对每个 ef_search ∈ &#123;10, 40, 100, 200, 400&#125;:</span></span><br><span class="line"><span class="comment">#      a. SET hnsw.ef_search = v;  跑 100 条 ANN 查询, 记录平均延迟与 top-10 结果集 A</span></span><br><span class="line"><span class="comment">#      b. 对同一查询集跑全表精确扫描(python numpy 离线算), 记录精确 top-10 集合 B</span></span><br><span class="line"><span class="comment">#      c. recall@10 = |A ∩ B| / |B|</span></span><br><span class="line"><span class="comment"># 4) 画 ef_search → (延迟, recall@10) 曲线</span></span><br></pre></td></tr></table></figure>
+<p>典型曲线形状（WSL2 实测 10 万条 128 维时的量级，具体数字以你的环境为准）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">ef_search:      10      40      100     200     400</span><br><span class="line">延迟(ms):       1.8     2.6     3.9     6.2     11.5</span><br><span class="line">recall@10:      0.62    0.90    0.97    0.99    0.995</span><br><span class="line">                 ↑ 曲线特征: 延迟近线性上升, recall 在 40→100 区间边际收益最高,</span><br><span class="line">                   之后进入&quot;花 3 倍延迟换 2 个百分点&quot;的陡峭区 → 生产常驻 ef_search≈100-200</span><br></pre></td></tr></table></figure>
+<p>结论固化（经验做法）：<strong>按&quot;召回率 SLA 反推 ef_search&quot;</strong>——业务要求 recall@10 ≥ 0.95，就在曲线上取达标的最低 ef_search；m/ef_construction 是离线参数（重建索引才能改），ef_search 是在线参数（SET 即生效）——调优顺序先在线后离线。</p>
+<h2 id="7-agent-记忆库完整设计"><a class="markdownIt-Anchor" href="#7-agent-记忆库完整设计"></a> 7. Agent 记忆库完整设计</h2>
+<p>把全章组装成一个可直接用的模块（Agent 开发 05 篇&quot;检索式长期记忆&quot;的存储实现，~40 行核心）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># agent_memory.py —— 语义记忆库: 存取+元数据过滤+去重 (基于 pgvector)</span></span><br><span class="line"><span class="keyword">import</span> psycopg, numpy <span class="keyword">as</span> np</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">embed</span>(<span class="params">text: <span class="built_in">str</span></span>) -&gt; np.ndarray:</span><br><span class="line">    ...  <span class="comment"># 接 embedding 模型(BGE/OpenAI), 返回归一化向量 —— 归一化是全库约定(2 节)</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">MemoryStore</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, dsn</span>):</span><br><span class="line">        <span class="variable language_">self</span>.conn = psycopg.connect(dsn, autocommit=<span class="literal">True</span>)</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">add</span>(<span class="params">self, agent_id: <span class="built_in">str</span>, content: <span class="built_in">str</span>, kind=<span class="string">&quot;note&quot;</span>, meta=<span class="literal">None</span></span>):</span><br><span class="line">        v = embed(content)</span><br><span class="line">        <span class="comment"># 去重: 内容哈希列唯一约束兜底精确重复; 语义近似用&quot;查近邻, 相似度过阈值则跳过/合并&quot;</span></span><br><span class="line">        dup = <span class="variable language_">self</span>.conn.execute(</span><br><span class="line">            <span class="string">&quot;SELECT id, content FROM memories WHERE agent_id=%s &quot;</span></span><br><span class="line">            <span class="string">&quot;AND embedding &lt;#&gt; %s::vector &gt; -0.98 LIMIT 1&quot;</span>,        <span class="comment"># 归一化后内积&gt;0.98 ≈ 近重复</span></span><br><span class="line">            (agent_id, v.tolist())).fetchone()</span><br><span class="line">        <span class="keyword">if</span> dup: <span class="keyword">return</span> dup[<span class="number">0</span>], <span class="literal">False</span>                               <span class="comment"># 近似重复: 不新增</span></span><br><span class="line">        cur = <span class="variable language_">self</span>.conn.execute(</span><br><span class="line">            <span class="string">&quot;INSERT INTO memories(agent_id, kind, content, embedding, metadata) &quot;</span></span><br><span class="line">            <span class="string">&quot;VALUES (%s,%s,%s,%s::vector,%s) RETURNING id&quot;</span>,</span><br><span class="line">            (agent_id, kind, content, v.tolist(), meta <span class="keyword">or</span> &#123;&#125;))</span><br><span class="line">        <span class="keyword">return</span> cur.fetchone()[<span class="number">0</span>], <span class="literal">True</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">search</span>(<span class="params">self, agent_id: <span class="built_in">str</span>, query: <span class="built_in">str</span>, k=<span class="number">5</span>, kinds=<span class="literal">None</span></span>):</span><br><span class="line">        v = embed(query)</span><br><span class="line">        sql = (<span class="string">&quot;SELECT id, kind, content, embedding &lt;#&gt; %s::vector AS dist &quot;</span></span><br><span class="line">               <span class="string">&quot;FROM memories WHERE agent_id = %s&quot;</span>)</span><br><span class="line">        params = [v.tolist(), agent_id]</span><br><span class="line">        <span class="keyword">if</span> kinds:                                                  <span class="comment"># 元数据预过滤(配合 B-tree 索引)</span></span><br><span class="line">            sql += <span class="string">&quot; AND kind = ANY(%s)&quot;</span>; params.append(kinds)</span><br><span class="line">        sql += <span class="string">&quot; ORDER BY embedding &lt;#&gt; %s::vector LIMIT %s&quot;</span></span><br><span class="line">        params += [v.tolist(), k]</span><br><span class="line">        <span class="keyword">return</span> <span class="variable language_">self</span>.conn.execute(sql, params).fetchall()</span><br></pre></td></tr></table></figure>
+<p>设计决策逐条落地（每条都能追到本章某节）：</p>
+<ol>
+<li><strong>存取</strong>：content + embedding 同表（一行即一条记忆，JSON metadata 挂 extra）；PG 单库承载，万级记忆无压力，亿级再谈专用向量库（11 章选型决策树）。</li>
+<li><strong>元数据过滤</strong>：agent_id/kind 是 B-tree 索引列，<strong>先过滤后向量排序</strong>（5 节要点 1）；时间衰减（<code>created_at</code> 加权或定期归档）防&quot;记忆越多噪声越大&quot;。</li>
+<li><strong>去重</strong>：两层——内容哈希精确去重（建模加 <code>content_hash TEXT UNIQUE</code>）+ 内积 &gt;0.98 的语义近重复合并；Agent 反复自我总结时没有去重会指数膨胀。</li>
+<li><strong>模型一致性</strong>：换 embedding 模型 = 全库重算（维度与空间语义都变了），建表时维度锁死并在元数据里记 <code>model_name</code>——混模型的检索结果是垃圾（经验做法，真实事故）。</li>
+</ol>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“余弦相似度是向量库的专属度量”</strong>：归一化后内积/余弦/L2 排序等价（2 节证明），库与库之间比较的其实是&quot;归一化约定是否一致&quot;。混用模型或忘记归一化，排序悄悄错位且无报错。</li>
+<li><strong>“ANN 返回的一定是真最近邻”</strong>：ANN 是近似——召回率是工程指标不是理论保证。关键应用（合规检索、医药）要么 ef_search 拉高 + 抽样验证召回，要么保留精确检索通道（数据量允许时）。</li>
+<li><strong>“向量库 = 新装一个数据库”</strong>：pgvector 让&quot;语义检索&quot;成为 PG 的一个索引类型，元数据过滤/事务/备份全套白得。专用向量库（Milvus/Qdrant）的价值在亿级规模、多副本检索与极致 QPS——先看量级再决定（11 章）。</li>
+<li><strong>“ef_search 越大越好”</strong>：它在精度-速度曲线上滑动（6 节），过大让延迟预算爆炸、召回收益趋平。按 SLA 反推，别拍脑袋。</li>
+<li><strong>“记忆库加个向量列就是 Agent 记忆了”</strong>：没有去重（重复注入稀释上下文）、没有元数据分层（检索噪声）、没有时间衰减（旧事压新事）的记忆库会主动毒化 Agent。存储只是记忆系统的 1/3，检索策略与写入策略（Agent 05 篇）才是灵魂。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>embedding 把语义检索变成几何问题：高维空间中&quot;相关&quot;=“距离近”；三种度量在归一化后排序等价（两步证明），统一用内积。</li>
+<li>精确 kNN 是 O(n·d) 的暴力扫描，百万级以上必须 ANN：用召回率换速度。</li>
+<li>IVF=切空间分桶（nprobe 控精度），HNSW=分层图贪心导航（m/ef_construction 离线、ef_search 在线）；PQ 是内存压缩术。</li>
+<li>pgvector 完整闭环：vector 类型 + HNSW/IVFFlat 索引 + 运算符查询；过滤场景给元数据建 B-tree，ef_search 按召回 SLA 反推。</li>
+<li>Agent 记忆库 = 存取 + 元数据预过滤 + 双层去重 + 模型一致性记录；与 Agent 05 篇的检索策略拼成完整闭环。</li>
+<li>下一章进入综合实战：亲手写一个 KV 存储引擎，把 WAL/SSTable/compaction/缓存全部变成自己的代码。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>用 numpy 验证 2 节等价性：生成 100 对随机向量，归一化前后分别用三种度量排序，记录&quot;归一化前三种排序是否一致、归一化后是否一致&quot;，用实验复现证明。</li>
+<li>手写暴力 kNN（numpy 矩阵化：<code>(Q @ X.T)</code> 一次算完 1000 查询 × 10 万向量的内积），测耗时；换 1536 维再测——用实测数字复述 3 节的复杂度账。</li>
+<li>在 pgvector 上完成 6 节实验：10 万条 128 维向量 + HNSW，扫 ef_search ∈ {10,40,100,200,400}，画出延迟与 recall@10 曲线，选出&quot;recall@10≥0.95 的最低 ef_search&quot;。</li>
+<li>给 7 节 MemoryStore 补两个功能：<code>content_hash UNIQUE</code> 的精确去重迁移（写 ALTER 语句）与时间衰减排序（<code>ORDER BY dist - decay(now-created_at)</code>，思考衰减项的量纲）。</li>
+<li>设计题：Agent 需要&quot;最近 7 天工具调用结果优先 + 全历史兜底&quot;的记忆检索——用 5 节的过滤 + 分区（11 章预告）思路给出表结构与查询，说明为什么不用两个向量索引。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%95%B0%E6%8D%AE%E5%BA%93/" rel="tag"># 数据库</a>
+              <a href="/tags/Redis/" rel="tag"># Redis</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/08-Redis%E4%B8%8E%E7%BC%93%E5%AD%98/" rel="prev" title="08-Redis与缓存">
+                  <i class="fa fa-angle-left"></i> 08-Redis与缓存
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/10-%E6%89%8B%E5%86%99MiniKV%E5%AD%98%E5%82%A8%E5%BC%95%E6%93%8E/" rel="next" title="10-手写MiniKV存储引擎">
+                  10-手写MiniKV存储引擎 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

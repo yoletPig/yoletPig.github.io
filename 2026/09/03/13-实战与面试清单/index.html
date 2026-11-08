@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 综合第 05 章的 Raft 理论，用 asyncio 手写一个带领导者选举与日志复制的 KV 存储（代码全量给出，分文件可直接运行）。 - 用这套实现串起全系列的概念地图：任期、多数派、提交、读一致性在代码里各是什么。 - 刷完分布式…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="13-实战与面试清单">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/13-%E5%AE%9E%E6%88%98%E4%B8%8E%E9%9D%A2%E8%AF%95%E6%B8%85%E5%8D%95/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 综合第 05 章的 Raft 理论，用 asyncio 手写一个带领导者选举与日志复制的 KV 存储（代码全量给出，分文件可直接运行）。 - 用这套实现串起全系列的概念地图：任期、多数派、提交、读一致性在代码里各是什么。 - 刷完分布式…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T09:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.550Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/13-%E5%AE%9E%E6%88%98%E4%B8%8E%E9%9D%A2%E8%AF%95%E6%B8%85%E5%8D%95/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/13-%E5%AE%9E%E6%88%98%E4%B8%8E%E9%9D%A2%E8%AF%95%E6%B8%85%E5%8D%95/","path":"2026/09/03/13-实战与面试清单/","title":"13-实战与面试清单"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>13-实战与面试清单 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#13-%E5%AE%9E%E6%88%98%E4%B8%8E%E9%9D%A2%E8%AF%95%E6%B8%85%E5%8D%95"><span class="nav-number">1.</span> <span class="nav-text"> 13 - 实战与面试清单</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E7%BB%BC%E5%90%88%E9%A1%B9%E7%9B%AEasyncio-%E6%89%8B%E5%86%99-raft-kv-%E5%AD%98%E5%82%A8"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 综合项目：asyncio 手写 Raft KV 存储</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#11-raft_nodepyraft-%E6%A0%B8%E5%BF%83%E9%80%89%E4%B8%BE-%E6%97%A5%E5%BF%97%E5%A4%8D%E5%88%B6"><span class="nav-number">1.2.1.</span> <span class="nav-text"> 1.1 raft_node.py：Raft 核心（选举 + 日志复制）</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#12-kv_serverpy%E7%BD%91%E7%BB%9C%E5%B1%82%E4%B8%8E%E9%9B%86%E7%BE%A4%E5%90%AF%E5%8A%A8"><span class="nav-number">1.2.2.</span> <span class="nav-text"> 1.2 kv_server.py：网络层与集群启动</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#13-clientpy%E7%BA%BF%E6%80%A7%E4%B8%80%E8%87%B4%E8%AF%BB%E7%9A%84%E5%AE%9E%E7%8E%B0"><span class="nav-number">1.2.3.</span> <span class="nav-text"> 1.3 client.py：线性一致读的实现</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E9%9D%A2%E8%AF%95%E9%AB%98%E9%A2%91-30-%E9%A2%98%E5%B8%A6%E7%AD%94%E6%A1%88%E8%A6%81%E7%82%B9"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 面试高频 30 题（带答案要点）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E8%AE%BE%E8%AE%A1%E9%A2%98%E7%AD%94%E9%A2%98%E6%A1%86%E6%9E%B6"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 设计题答题框架</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.5.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.6.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.7.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/13-%E5%AE%9E%E6%88%98%E4%B8%8E%E9%9D%A2%E8%AF%95%E6%B8%85%E5%8D%95/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="13-实战与面试清单 | Yoleen的博客">
+      <meta itemprop="description" content="- 综合第 05 章的 Raft 理论，用 asyncio 手写一个带领导者选举与日志复制的 KV 存储（代码全量给出，分文件可直接运行）。 - 用这套实现串起全系列的概念地图：任期、多数派、提交、读一致性在代码里各是什么。 - 刷完分布式…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          13-实战与面试清单
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 17:00:00" itemprop="dateCreated datePublished" datetime="2026-09-03T17:00:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">分布式系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>5.4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>20 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 综合第 05 章的 Raft 理论，用 asyncio 手写一个带领导者选举与日志复制的 KV 存储（代码全量给出，分文件可直接运行）。 - 用这套实现串起全系列的概念地图：任期、多数派、提交、读一致性在代码里各是什么。 - 刷完分布式…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="13-实战与面试清单"><a class="markdownIt-Anchor" href="#13-实战与面试清单"></a> 13 - 实战与面试清单</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>综合第 05 章的 Raft 理论，用 asyncio 手写一个带领导者选举与日志复制的 KV 存储（代码全量给出，分文件可直接运行）。</li>
+<li>用这套实现串起全系列的概念地图：任期、多数派、提交、读一致性在代码里各是什么。</li>
+<li>刷完分布式系统面试高频 30 题（带答案要点），覆盖理论/工程/场景三类。</li>
+<li>掌握设计题答题框架，拿秒杀/短链/feed 流三道经典题实战演练。</li>
+</ul>
+<h2 id="1-综合项目asyncio-手写-raft-kv-存储"><a class="markdownIt-Anchor" href="#1-综合项目asyncio-手写-raft-kv-存储"></a> 1. 综合项目：asyncio 手写 Raft KV 存储</h2>
+<p>项目分三个文件：<code>raft_node.py</code>（Raft 核心状态机）、<code>kv_server.py</code>（启动 3 节点集群）、<code>client.py</code>（读写客户端）。设计原则：<strong>真实协议规则（任期/多数派/日志匹配），模拟的网络层</strong>（asyncio.Queue 当网络，进程当节点——放到真实部署时把 Queue 换成 socket 即可，这正是 OS 12 篇到本系列的桥梁）。</p>
+<h3 id="11-raft_nodepyraft-核心选举-日志复制"><a class="markdownIt-Anchor" href="#11-raft_nodepyraft-核心选举-日志复制"></a> 1.1 raft_node.py：Raft 核心（选举 + 日志复制）</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br><span class="line">76</span><br><span class="line">77</span><br><span class="line">78</span><br><span class="line">79</span><br><span class="line">80</span><br><span class="line">81</span><br><span class="line">82</span><br><span class="line">83</span><br><span class="line">84</span><br><span class="line">85</span><br><span class="line">86</span><br><span class="line">87</span><br><span class="line">88</span><br><span class="line">89</span><br><span class="line">90</span><br><span class="line">91</span><br><span class="line">92</span><br><span class="line">93</span><br><span class="line">94</span><br><span class="line">95</span><br><span class="line">96</span><br><span class="line">97</span><br><span class="line">98</span><br><span class="line">99</span><br><span class="line">100</span><br><span class="line">101</span><br><span class="line">102</span><br><span class="line">103</span><br><span class="line">104</span><br><span class="line">105</span><br><span class="line">106</span><br><span class="line">107</span><br><span class="line">108</span><br><span class="line">109</span><br><span class="line">110</span><br><span class="line">111</span><br><span class="line">112</span><br><span class="line">113</span><br><span class="line">114</span><br><span class="line">115</span><br><span class="line">116</span><br><span class="line">117</span><br><span class="line">118</span><br><span class="line">119</span><br><span class="line">120</span><br><span class="line">121</span><br><span class="line">122</span><br><span class="line">123</span><br><span class="line">124</span><br><span class="line">125</span><br><span class="line">126</span><br><span class="line">127</span><br><span class="line">128</span><br><span class="line">129</span><br><span class="line">130</span><br><span class="line">131</span><br><span class="line">132</span><br><span class="line">133</span><br><span class="line">134</span><br><span class="line">135</span><br><span class="line">136</span><br><span class="line">137</span><br><span class="line">138</span><br><span class="line">139</span><br><span class="line">140</span><br><span class="line">141</span><br><span class="line">142</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># raft_node.py —— 单文件实现 Raft 核心：选举、日志复制、提交、KV 状态机</span></span><br><span class="line"><span class="keyword">import</span> asyncio, random</span><br><span class="line"></span><br><span class="line">ELECTION_MIN, ELECTION_MAX = <span class="number">0.3</span>, <span class="number">0.6</span>     <span class="comment"># 选举超时区间（秒）</span></span><br><span class="line">HEARTBEAT = <span class="number">0.1</span>                            <span class="comment"># 心跳间隔</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">RaftNode</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, name, peers, net</span>):</span><br><span class="line">        <span class="variable language_">self</span>.name, <span class="variable language_">self</span>.peers, <span class="variable language_">self</span>.net = name, peers, net  <span class="comment"># net: 网络层(见 kv_server)</span></span><br><span class="line">        <span class="comment"># ---- 持久化状态（真实系统要落盘，这里存内存）----</span></span><br><span class="line">        <span class="variable language_">self</span>.term = <span class="number">0</span>                      <span class="comment"># 当前任期</span></span><br><span class="line">        <span class="variable language_">self</span>.voted_for = <span class="literal">None</span>              <span class="comment"># 本任期投给谁</span></span><br><span class="line">        <span class="variable language_">self</span>.log = []                      <span class="comment"># [(term, cmd)] cmd: (&quot;set&quot;,k,v)/(&quot;del&quot;,k)</span></span><br><span class="line">        <span class="comment"># ---- 易失状态 ----</span></span><br><span class="line">        <span class="variable language_">self</span>.role = <span class="string">&quot;follower&quot;</span></span><br><span class="line">        <span class="variable language_">self</span>.commit_index = -<span class="number">1</span></span><br><span class="line">        <span class="variable language_">self</span>.last_applied = -<span class="number">1</span></span><br><span class="line">        <span class="variable language_">self</span>.next_index = &#123;p: <span class="number">0</span> <span class="keyword">for</span> p <span class="keyword">in</span> peers&#125;    <span class="comment"># 每个 follower 下一条要发的 index</span></span><br><span class="line">        <span class="variable language_">self</span>.state = &#123;&#125;                    <span class="comment"># 应用层 KV 状态机</span></span><br><span class="line">        <span class="variable language_">self</span>.deadline = <span class="number">0.0</span></span><br><span class="line">        <span class="variable language_">self</span>._task = asyncio.create_task(<span class="variable language_">self</span>._tick())</span><br><span class="line">        <span class="variable language_">self</span>._waiters = []                 <span class="comment"># 等待&quot;某 index 提交&quot;的 future 队列</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># ============ 时钟循环：心跳与选举 ============</span></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">_tick</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">while</span> <span class="literal">True</span>:</span><br><span class="line">            <span class="keyword">await</span> asyncio.sleep(<span class="number">0.01</span>)</span><br><span class="line">            now = asyncio.get_event_loop().time()</span><br><span class="line">            <span class="keyword">if</span> <span class="variable language_">self</span>.role == <span class="string">&quot;leader&quot;</span>:</span><br><span class="line">                <span class="keyword">await</span> <span class="variable language_">self</span>._broadcast_append()          <span class="comment"># leader 持续心跳/复制</span></span><br><span class="line">                <span class="keyword">await</span> asyncio.sleep(HEARTBEAT)</span><br><span class="line">            <span class="keyword">elif</span> now &gt;= <span class="variable language_">self</span>.deadline:</span><br><span class="line">                <span class="keyword">await</span> <span class="variable language_">self</span>._start_election()</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">_reset_deadline</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="variable language_">self</span>.deadline = asyncio.get_event_loop().time() + random.uniform(ELECTION_MIN, ELECTION_MAX)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ============ 选举 ============</span></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">_start_election</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="variable language_">self</span>.term += <span class="number">1</span></span><br><span class="line">        <span class="variable language_">self</span>.role, <span class="variable language_">self</span>.voted_for = <span class="string">&quot;candidate&quot;</span>, <span class="variable language_">self</span>.name</span><br><span class="line">        <span class="variable language_">self</span>._reset_deadline()</span><br><span class="line">        my_last = (<span class="built_in">len</span>(<span class="variable language_">self</span>.log) - <span class="number">1</span>, <span class="variable language_">self</span>.log[-<span class="number">1</span>][<span class="number">0</span>] <span class="keyword">if</span> <span class="variable language_">self</span>.log <span class="keyword">else</span> <span class="number">0</span>)</span><br><span class="line">        votes = &#123;<span class="variable language_">self</span>.name&#125;</span><br><span class="line">        replies = [<span class="variable language_">self</span>.net.rpc(<span class="variable language_">self</span>.name, p, <span class="string">&quot;vote&quot;</span>, &#123;<span class="string">&quot;term&quot;</span>: <span class="variable language_">self</span>.term, <span class="string">&quot;idx&quot;</span>: my_last[<span class="number">0</span>],</span><br><span class="line">                                                      <span class="string">&quot;lt&quot;</span>: my_last[<span class="number">1</span>], <span class="string">&quot;cand&quot;</span>: <span class="variable language_">self</span>.name&#125;)</span><br><span class="line">                   <span class="keyword">for</span> p <span class="keyword">in</span> <span class="variable language_">self</span>.peers]</span><br><span class="line">        <span class="keyword">for</span> fut <span class="keyword">in</span> asyncio.as_completed(replies):</span><br><span class="line">            r = <span class="keyword">await</span> fut</span><br><span class="line">            <span class="keyword">if</span> r <span class="keyword">and</span> r.get(<span class="string">&quot;ok&quot;</span>):</span><br><span class="line">                votes.add(r[<span class="string">&quot;from&quot;</span>])</span><br><span class="line">            <span class="keyword">if</span> <span class="built_in">len</span>(votes) &gt; (<span class="built_in">len</span>(<span class="variable language_">self</span>.peers) + <span class="number">1</span>) // <span class="number">2</span>:</span><br><span class="line">                <span class="variable language_">self</span>.role = <span class="string">&quot;leader&quot;</span>                       <span class="comment"># 多数派 → 当选</span></span><br><span class="line">                <span class="keyword">for</span> p <span class="keyword">in</span> <span class="variable language_">self</span>.peers: <span class="variable language_">self</span>.next_index[p] = <span class="built_in">len</span>(<span class="variable language_">self</span>.log)</span><br><span class="line">                <span class="built_in">print</span>(<span class="string">f&quot;[<span class="subst">&#123;self.name&#125;</span>] 当选 leader term=<span class="subst">&#123;self.term&#125;</span>&quot;</span>)</span><br><span class="line">                <span class="keyword">await</span> <span class="variable language_">self</span>._broadcast_append()</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># ============ 日志复制 ============</span></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">_broadcast_append</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">for</span> p <span class="keyword">in</span> <span class="variable language_">self</span>.peers:</span><br><span class="line">            ni = <span class="variable language_">self</span>.next_index[p]</span><br><span class="line">            prev = (ni - <span class="number">1</span>, <span class="variable language_">self</span>.log[ni - <span class="number">1</span>][<span class="number">0</span>] <span class="keyword">if</span> ni &gt; <span class="number">0</span> <span class="keyword">else</span> <span class="number">0</span>)</span><br><span class="line">            entries = <span class="variable language_">self</span>.log[ni:]</span><br><span class="line">            asyncio.create_task(<span class="variable language_">self</span>._append_to(p, prev, entries))</span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">_append_to</span>(<span class="params">self, p, prev, entries</span>):</span><br><span class="line">        r = <span class="keyword">await</span> <span class="variable language_">self</span>.net.rpc(<span class="variable language_">self</span>.name, p, <span class="string">&quot;append&quot;</span>, &#123;<span class="string">&quot;term&quot;</span>: <span class="variable language_">self</span>.term, <span class="string">&quot;prev_idx&quot;</span>: prev[<span class="number">0</span>],</span><br><span class="line">                                                       <span class="string">&quot;prev_term&quot;</span>: prev[<span class="number">1</span>],</span><br><span class="line">                                                       <span class="string">&quot;entries&quot;</span>: entries, <span class="string">&quot;commit&quot;</span>: <span class="variable language_">self</span>.commit_index&#125;)</span><br><span class="line">        <span class="keyword">if</span> r <span class="keyword">and</span> r.get(<span class="string">&quot;ok&quot;</span>):</span><br><span class="line">            <span class="variable language_">self</span>.next_index[p] = prev[<span class="number">0</span>] + <span class="built_in">len</span>(entries) + <span class="number">1</span>   <span class="comment"># 推进</span></span><br><span class="line">            <span class="variable language_">self</span>._advance_commit()                            <span class="comment"># 多数派 ack → 提交</span></span><br><span class="line">        <span class="keyword">elif</span> r <span class="keyword">and</span> r.get(<span class="string">&quot;fail_idx&quot;</span>) <span class="keyword">is</span> <span class="keyword">not</span> <span class="literal">None</span>:</span><br><span class="line">            <span class="variable language_">self</span>.next_index[p] = <span class="built_in">max</span>(<span class="number">0</span>, r[<span class="string">&quot;fail_idx&quot;</span>])        <span class="comment"># 一致性检查失败 → 回溯</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">_advance_commit</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="string">&quot;&quot;&quot;提交规则：找到&#x27;多数派已复制 且 是本任期&#x27;的最大 index&quot;&quot;&quot;</span></span><br><span class="line">        n = <span class="built_in">len</span>(<span class="variable language_">self</span>.peers) + <span class="number">1</span></span><br><span class="line">        <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(<span class="built_in">len</span>(<span class="variable language_">self</span>.log) - <span class="number">1</span>, <span class="variable language_">self</span>.commit_index, -<span class="number">1</span>):</span><br><span class="line">            <span class="keyword">if</span> <span class="variable language_">self</span>.log[i][<span class="number">0</span>] != <span class="variable language_">self</span>.term:                   <span class="comment"># 只直接提交本任期条目(5.4.2)</span></span><br><span class="line">                <span class="keyword">continue</span></span><br><span class="line">            acks = <span class="number">1</span> + <span class="built_in">sum</span>(<span class="number">1</span> <span class="keyword">for</span> p <span class="keyword">in</span> <span class="variable language_">self</span>.peers <span class="keyword">if</span> <span class="variable language_">self</span>.next_index[p] &gt; i)</span><br><span class="line">            <span class="keyword">if</span> acks &gt; n // <span class="number">2</span>:</span><br><span class="line">                <span class="variable language_">self</span>.commit_index = i</span><br><span class="line">                <span class="variable language_">self</span>._apply()</span><br><span class="line">                <span class="keyword">for</span> w <span class="keyword">in</span> [f <span class="keyword">for</span> f <span class="keyword">in</span> <span class="variable language_">self</span>._waiters <span class="keyword">if</span> f[<span class="string">&quot;idx&quot;</span>] == i]:</span><br><span class="line">                    w[<span class="string">&quot;fut&quot;</span>].set_result(<span class="literal">True</span>)</span><br><span class="line">                <span class="variable language_">self</span>._waiters = [f <span class="keyword">for</span> f <span class="keyword">in</span> <span class="variable language_">self</span>._waiters <span class="keyword">if</span> f[<span class="string">&quot;idx&quot;</span>] != i]</span><br><span class="line">                <span class="keyword">return</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">_apply</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">while</span> <span class="variable language_">self</span>.last_applied &lt; <span class="variable language_">self</span>.commit_index:</span><br><span class="line">            <span class="variable language_">self</span>.last_applied += <span class="number">1</span></span><br><span class="line">            _, cmd = <span class="variable language_">self</span>.log[<span class="variable language_">self</span>.last_applied]</span><br><span class="line">            <span class="keyword">if</span> cmd[<span class="number">0</span>] == <span class="string">&quot;set&quot;</span>:  <span class="variable language_">self</span>.state[cmd[<span class="number">1</span>]] = cmd[<span class="number">2</span>]</span><br><span class="line">            <span class="keyword">elif</span> cmd[<span class="number">0</span>] == <span class="string">&quot;del&quot;</span>: <span class="variable language_">self</span>.state.pop(cmd[<span class="number">1</span>], <span class="literal">None</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># ============ 客户端写：leader 追加并等待提交 ============</span></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">propose</span>(<span class="params">self, cmd</span>):</span><br><span class="line">        <span class="keyword">if</span> <span class="variable language_">self</span>.role != <span class="string">&quot;leader&quot;</span>:</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">None</span>                                       <span class="comment"># follower 不接写(真实系统返回 leader 地址)</span></span><br><span class="line">        <span class="variable language_">self</span>.log.append((<span class="variable language_">self</span>.term, cmd))</span><br><span class="line">        fut = asyncio.get_running_loop().create_future()</span><br><span class="line">        <span class="variable language_">self</span>._waiters.append(&#123;<span class="string">&quot;idx&quot;</span>: <span class="built_in">len</span>(<span class="variable language_">self</span>.log) - <span class="number">1</span>, <span class="string">&quot;fut&quot;</span>: fut&#125;)</span><br><span class="line">        <span class="variable language_">self</span>._advance_commit()</span><br><span class="line">        <span class="keyword">try</span>:</span><br><span class="line">            <span class="keyword">await</span> asyncio.wait_for(fut, timeout=<span class="number">1.0</span>)          <span class="comment"># 多数派 1s 内没确认 → 失败</span></span><br><span class="line">            <span class="keyword">return</span> <span class="literal">True</span></span><br><span class="line">        <span class="keyword">except</span> asyncio.TimeoutError:</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">False</span></span><br><span class="line"></span><br><span class="line">    <span class="comment"># ============ RPC 处理（被网络层调用）============</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">handle_vote</span>(<span class="params">self, m</span>):</span><br><span class="line">        <span class="keyword">if</span> m[<span class="string">&quot;term&quot;</span>] &gt; <span class="variable language_">self</span>.term:                             <span class="comment"># 更大任期 → 更新、可投</span></span><br><span class="line">            <span class="variable language_">self</span>.term, <span class="variable language_">self</span>.role, <span class="variable language_">self</span>.voted_for = m[<span class="string">&quot;term&quot;</span>], <span class="string">&quot;follower&quot;</span>, <span class="literal">None</span></span><br><span class="line">            <span class="variable language_">self</span>._reset_deadline()</span><br><span class="line">        my_newer = (m[<span class="string">&quot;lt&quot;</span>] &lt; (<span class="variable language_">self</span>.log[-<span class="number">1</span>][<span class="number">0</span>] <span class="keyword">if</span> <span class="variable language_">self</span>.log <span class="keyword">else</span> <span class="number">0</span>)) <span class="keyword">or</span> \</span><br><span class="line">                   (m[<span class="string">&quot;lt&quot;</span>] == (<span class="variable language_">self</span>.log[-<span class="number">1</span>][<span class="number">0</span>] <span class="keyword">if</span> <span class="variable language_">self</span>.log <span class="keyword">else</span> <span class="number">0</span>) <span class="keyword">and</span> m[<span class="string">&quot;idx&quot;</span>] &lt; <span class="built_in">len</span>(<span class="variable language_">self</span>.log) - <span class="number">1</span>)</span><br><span class="line">        <span class="keyword">if</span> m[<span class="string">&quot;term&quot;</span>] == <span class="variable language_">self</span>.term <span class="keyword">and</span> <span class="variable language_">self</span>.voted_for <span class="keyword">is</span> <span class="literal">None</span> <span class="keyword">and</span> <span class="keyword">not</span> my_newer:</span><br><span class="line">            <span class="variable language_">self</span>.voted_for = m[<span class="string">&quot;cand&quot;</span>]                        <span class="comment"># 一票 + 日志检查(选举限制)</span></span><br><span class="line">            <span class="variable language_">self</span>._reset_deadline()</span><br><span class="line">            <span class="keyword">return</span> &#123;<span class="string">&quot;ok&quot;</span>: <span class="literal">True</span>, <span class="string">&quot;from&quot;</span>: <span class="variable language_">self</span>.name&#125;</span><br><span class="line">        <span class="keyword">return</span> &#123;<span class="string">&quot;ok&quot;</span>: <span class="literal">False</span>, <span class="string">&quot;from&quot;</span>: <span class="variable language_">self</span>.name&#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">handle_append</span>(<span class="params">self, m</span>):</span><br><span class="line">        <span class="keyword">if</span> m[<span class="string">&quot;term&quot;</span>] &lt; <span class="variable language_">self</span>.term:                             <span class="comment"># 旧 leader 的消息：拒绝(防脑裂)</span></span><br><span class="line">            <span class="keyword">return</span> &#123;<span class="string">&quot;ok&quot;</span>: <span class="literal">False</span>, <span class="string">&quot;from&quot;</span>: <span class="variable language_">self</span>.name&#125;</span><br><span class="line">        <span class="variable language_">self</span>.role = <span class="string">&quot;follower&quot;</span>; <span class="variable language_">self</span>._reset_deadline()        <span class="comment"># 认可权威</span></span><br><span class="line">        <span class="keyword">if</span> m[<span class="string">&quot;term&quot;</span>] &gt; <span class="variable language_">self</span>.term: <span class="variable language_">self</span>.term = m[<span class="string">&quot;term&quot;</span>]</span><br><span class="line">        <span class="keyword">if</span> m[<span class="string">&quot;prev_idx&quot;</span>] &gt;= <span class="number">0</span> <span class="keyword">and</span> (m[<span class="string">&quot;prev_idx&quot;</span>] &gt;= <span class="built_in">len</span>(<span class="variable language_">self</span>.log) <span class="keyword">or</span></span><br><span class="line">                                   <span class="variable language_">self</span>.log[m[<span class="string">&quot;prev_idx&quot;</span>]][<span class="number">0</span>] != m[<span class="string">&quot;prev_term&quot;</span>]):</span><br><span class="line">            <span class="keyword">return</span> &#123;<span class="string">&quot;ok&quot;</span>: <span class="literal">False</span>, <span class="string">&quot;fail_idx&quot;</span>: m[<span class="string">&quot;prev_idx&quot;</span>], <span class="string">&quot;from&quot;</span>: <span class="variable language_">self</span>.name&#125;  <span class="comment"># 日志匹配失败</span></span><br><span class="line">        <span class="keyword">for</span> i, e <span class="keyword">in</span> <span class="built_in">enumerate</span>(m[<span class="string">&quot;entries&quot;</span>]):                  <span class="comment"># 截断冲突 + 追加</span></span><br><span class="line">            idx = m[<span class="string">&quot;prev_idx&quot;</span>] + <span class="number">1</span> + i</span><br><span class="line">            <span class="keyword">if</span> idx &lt; <span class="built_in">len</span>(<span class="variable language_">self</span>.log):</span><br><span class="line">                <span class="keyword">if</span> <span class="variable language_">self</span>.log[idx] != e: <span class="variable language_">self</span>.log = <span class="variable language_">self</span>.log[:idx]; <span class="variable language_">self</span>.log.append(e)</span><br><span class="line">            <span class="keyword">else</span>:</span><br><span class="line">                <span class="variable language_">self</span>.log.append(e)</span><br><span class="line">        <span class="keyword">if</span> m[<span class="string">&quot;commit&quot;</span>] &gt; <span class="variable language_">self</span>.commit_index:</span><br><span class="line">            <span class="variable language_">self</span>.commit_index = <span class="built_in">min</span>(m[<span class="string">&quot;commit&quot;</span>], <span class="built_in">len</span>(<span class="variable language_">self</span>.log) - <span class="number">1</span>); <span class="variable language_">self</span>._apply()</span><br><span class="line">        <span class="keyword">return</span> &#123;<span class="string">&quot;ok&quot;</span>: <span class="literal">True</span>, <span class="string">&quot;from&quot;</span>: <span class="variable language_">self</span>.name&#125;</span><br></pre></td></tr></table></figure>
+<h3 id="12-kv_serverpy网络层与集群启动"><a class="markdownIt-Anchor" href="#12-kv_serverpy网络层与集群启动"></a> 1.2 kv_server.py：网络层与集群启动</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># kv_server.py —— 用 asyncio.Queue 模拟网络，启动 3 节点 Raft 集群</span></span><br><span class="line"><span class="keyword">import</span> asyncio, random, sys</span><br><span class="line"><span class="keyword">from</span> raft_node <span class="keyword">import</span> RaftNode</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">SimNet</span>:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;极简网络层：按节点名投递 RPC；可注入丢包/分区/延迟。</span></span><br><span class="line"><span class="string">    注意分区是双向的：src 或 to 任一在 partition 集合中，消息都到不了——</span></span><br><span class="line"><span class="string">    只检查 to 是模拟网络时最常见的错误（被隔离的节点仍能外发）。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, nodes</span>):</span><br><span class="line">        <span class="variable language_">self</span>.nodes, <span class="variable language_">self</span>.drop = nodes, <span class="number">0.0</span></span><br><span class="line">        <span class="variable language_">self</span>.partition = <span class="built_in">set</span>()              <span class="comment"># 集合内的节点与外界双向失联</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">rpc</span>(<span class="params">self, src: <span class="built_in">str</span>, to: <span class="built_in">str</span>, kind: <span class="built_in">str</span>, msg: <span class="built_in">dict</span></span>):</span><br><span class="line">        <span class="keyword">if</span> random.random() &lt; <span class="variable language_">self</span>.drop <span class="keyword">or</span> src <span class="keyword">in</span> <span class="variable language_">self</span>.partition <span class="keyword">or</span> to <span class="keyword">in</span> <span class="variable language_">self</span>.partition:</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">None</span>                     <span class="comment"># 消息丢失（调用方按失败处理）</span></span><br><span class="line">        <span class="keyword">await</span> asyncio.sleep(random.uniform(<span class="number">0.001</span>, <span class="number">0.01</span>))   <span class="comment"># 模拟网络延迟</span></span><br><span class="line">        node = <span class="variable language_">self</span>.nodes[to]</span><br><span class="line">        <span class="keyword">return</span> node.handle_vote(msg) <span class="keyword">if</span> kind == <span class="string">&quot;vote&quot;</span> <span class="keyword">else</span> node.handle_append(msg)</span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    random.seed(<span class="number">7</span>)</span><br><span class="line">    names = [<span class="string">&quot;A&quot;</span>, <span class="string">&quot;B&quot;</span>, <span class="string">&quot;C&quot;</span>]</span><br><span class="line">    nodes = &#123;n: RaftNode(n, [], <span class="literal">None</span>) <span class="keyword">for</span> n <span class="keyword">in</span> names&#125;</span><br><span class="line">    net = SimNet(nodes)</span><br><span class="line">    <span class="keyword">for</span> n <span class="keyword">in</span> nodes.values():    <span class="comment"># 注意用 n.name（字符串）比较，别拿节点对象比——这是本文件曾埋过的真 bug</span></span><br><span class="line">        n.peers = [x <span class="keyword">for</span> x <span class="keyword">in</span> names <span class="keyword">if</span> x != n.name]; n.net = net</span><br><span class="line">    <span class="keyword">await</span> asyncio.sleep(<span class="number">0.8</span>)                    <span class="comment"># 等选举完成</span></span><br><span class="line">    leader = <span class="built_in">next</span>(n <span class="keyword">for</span> n <span class="keyword">in</span> nodes.values() <span class="keyword">if</span> n.role == <span class="string">&quot;leader&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;leader =&quot;</span>, leader.name)</span><br><span class="line">    <span class="comment"># 正常写三条</span></span><br><span class="line">    <span class="keyword">for</span> kv <span class="keyword">in</span> [(<span class="string">&quot;name&quot;</span>, <span class="string">&quot;zhang&quot;</span>), (<span class="string">&quot;age&quot;</span>, <span class="number">25</span>), (<span class="string">&quot;city&quot;</span>, <span class="string">&quot;beijing&quot;</span>)]:</span><br><span class="line">        ok = <span class="keyword">await</span> leader.propose((<span class="string">&quot;set&quot;</span>, *kv))</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;set <span class="subst">&#123;kv&#125;</span> → <span class="subst">&#123;<span class="string">&#x27;已提交&#x27;</span> <span class="keyword">if</span> ok <span class="keyword">else</span> <span class="string">&#x27;失败&#x27;</span>&#125;</span>&quot;</span>)</span><br><span class="line">    <span class="comment"># 制造分区：leader 被隔离（双向），写应失败；多数派侧选新 leader</span></span><br><span class="line">    net.partition.add(leader.name)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;\n&gt;&gt;&gt; 分区: <span class="subst">&#123;leader.name&#125;</span> 被隔离&quot;</span>)</span><br><span class="line">    <span class="keyword">await</span> asyncio.sleep(<span class="number">0.8</span>)                    <span class="comment"># 等其余两节点超时并选出新 leader</span></span><br><span class="line">    ok = <span class="keyword">await</span> leader.propose((<span class="string">&quot;set&quot;</span>, <span class="string">&quot;hack&quot;</span>, <span class="string">&quot;ghost&quot;</span>))    <span class="comment"># 旧 leader 的幽灵写</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;旧 leader 写入 → <span class="subst">&#123;<span class="string">&#x27;成功(有bug!)&#x27;</span> <span class="keyword">if</span> ok <span class="keyword">else</span> <span class="string">&#x27;被多数派挡住（正确）&#x27;</span>&#125;</span>&quot;</span>)</span><br><span class="line">    <span class="comment"># 找新 leader 时必须排除旧 leader——它自己仍以为自己是 leader（本文件曾埋过的第二个真 bug）</span></span><br><span class="line">    new_leader = <span class="built_in">next</span>((n <span class="keyword">for</span> n <span class="keyword">in</span> nodes.values() <span class="keyword">if</span> n.role == <span class="string">&quot;leader&quot;</span> <span class="keyword">and</span> n <span class="keyword">is</span> <span class="keyword">not</span> leader), <span class="literal">None</span>)</span><br><span class="line">    <span class="keyword">if</span> new_leader:</span><br><span class="line">        ok = <span class="keyword">await</span> new_leader.propose((<span class="string">&quot;set&quot;</span>, <span class="string">&quot;city&quot;</span>, <span class="string">&quot;shanghai&quot;</span>))</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;新 leader(<span class="subst">&#123;new_leader.name&#125;</span>) 写入 → <span class="subst">&#123;<span class="string">&#x27;已提交&#x27;</span> <span class="keyword">if</span> ok <span class="keyword">else</span> <span class="string">&#x27;失败&#x27;</span>&#125;</span>&quot;</span>)</span><br><span class="line">    net.partition.clear()                       <span class="comment"># 分区恢复：旧 leader 收到更高任期心跳 → 回归 follower</span></span><br><span class="line">    <span class="keyword">await</span> asyncio.sleep(<span class="number">0.3</span>)</span><br><span class="line">    <span class="keyword">if</span> new_leader:                              <span class="comment"># 新 leader 再写一条：覆盖旧 leader 的未提交幽灵日志</span></span><br><span class="line">        ok = <span class="keyword">await</span> new_leader.propose((<span class="string">&quot;set&quot;</span>, <span class="string">&quot;zone&quot;</span>, <span class="string">&quot;pd&quot;</span>))</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;恢复后写入 → <span class="subst">&#123;<span class="string">&#x27;已提交&#x27;</span> <span class="keyword">if</span> ok <span class="keyword">else</span> <span class="string">&#x27;失败&#x27;</span>&#125;</span>（旧 leader 的幽灵日志被截断替换）&quot;</span>)</span><br><span class="line">    <span class="keyword">await</span> asyncio.sleep(<span class="number">0.5</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;\n最终三节点状态一致检查:&quot;</span>)</span><br><span class="line">    <span class="keyword">for</span> n <span class="keyword">in</span> nodes.values():</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;  <span class="subst">&#123;n.name&#125;</span>: <span class="subst">&#123;n.state&#125;</span> commit=<span class="subst">&#123;n.commit_index&#125;</span> 日志条数=<span class="subst">&#123;<span class="built_in">len</span>(n.log)&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    asyncio.run(main())</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br></pre></td><td class="code"><pre><span class="line">$ python3 kv_server.py</span><br><span class="line">[B] 当选 leader term=2</span><br><span class="line">leader = B</span><br><span class="line">set (&#x27;name&#x27;, &#x27;zhang&#x27;) → 已提交</span><br><span class="line">set (&#x27;age&#x27;, 25) → 已提交</span><br><span class="line">set (&#x27;city&#x27;, &#x27;beijing&#x27;) → 已提交</span><br><span class="line"></span><br><span class="line">&gt;&gt;&gt; 分区: B 被隔离</span><br><span class="line">[A] 当选 leader term=3                    ← 多数派(A+C)侧超时选举，任期更高</span><br><span class="line">旧 leader 写入 → 被多数派挡住（正确）        ← 未过半不得提交，幽灵写永远不成功</span><br><span class="line">新 leader(A) 写入 → 已提交</span><br><span class="line">恢复后写入 → 已提交（旧 leader 的幽灵日志被截断替换）</span><br><span class="line"></span><br><span class="line">最终三节点状态一致检查:</span><br><span class="line">  A: &#123;&#x27;name&#x27;: &#x27;zhang&#x27;, &#x27;age&#x27;: 25, &#x27;city&#x27;: &#x27;shanghai&#x27;, &#x27;zone&#x27;: &#x27;pd&#x27;&#125; commit=4 日志条数=5</span><br><span class="line">  B: &#123;&#x27;name&#x27;: &#x27;zhang&#x27;, &#x27;age&#x27;: 25, &#x27;city&#x27;: &#x27;shanghai&#x27;, &#x27;zone&#x27;: &#x27;pd&#x27;&#125; commit=4 日志条数=5</span><br><span class="line">  C: &#123;&#x27;name&#x27;: &#x27;zhang&#x27;, &#x27;age&#x27;: 25, &#x27;city&#x27;: &#x27;shanghai&#x27;, &#x27;zone&#x27;: &#x27;pd&#x27;&#125; commit=4 日志条数=5</span><br></pre></td></tr></table></figure>
+<h3 id="13-clientpy线性一致读的实现"><a class="markdownIt-Anchor" href="#13-clientpy线性一致读的实现"></a> 1.3 <a target="_blank" rel="noopener" href="http://client.py">client.py</a>：线性一致读的实现</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># client.py —— 读请求走 leader 且确认自己仍是 leader（简化 ReadIndex 思想）</span></span><br><span class="line"><span class="keyword">import</span> asyncio, random</span><br><span class="line"><span class="keyword">from</span> raft_node <span class="keyword">import</span> ELECTION_MIN, ELECTION_MAX</span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">linearizable_read</span>(<span class="params">cluster, key</span>):</span><br><span class="line">    <span class="string">&quot;&quot;&quot;向&#x27;自认为 leader&#x27;的节点读；读前用一次多数派心跳确认领导权未过期（ReadIndex 简化版）。</span></span><br><span class="line"><span class="string">    真实系统：leader 把&#x27;读时刻的 commit_index&#x27;记下，等 apply 追上再读本地状态机。&quot;&quot;&quot;</span></span><br><span class="line">    <span class="keyword">for</span> node <span class="keyword">in</span> cluster:</span><br><span class="line">        <span class="keyword">if</span> node.role == <span class="string">&quot;leader&quot;</span>:</span><br><span class="line">            <span class="comment"># 关键：先与多数派交换一次心跳确认领导权（防读到已过期的旧 leader）</span></span><br><span class="line">            acks = <span class="number">1</span> + <span class="built_in">sum</span>(<span class="number">1</span> <span class="keyword">for</span> p <span class="keyword">in</span> node.peers</span><br><span class="line">                           <span class="keyword">if</span> <span class="keyword">await</span> node.net.rpc(node.name, p, <span class="string">&quot;append&quot;</span>,</span><br><span class="line">                                                 &#123;<span class="string">&quot;term&quot;</span>: node.term, <span class="string">&quot;prev_idx&quot;</span>: -<span class="number">1</span>,</span><br><span class="line">                                                  <span class="string">&quot;prev_term&quot;</span>: <span class="number">0</span>, <span class="string">&quot;entries&quot;</span>: [],</span><br><span class="line">                                                  <span class="string">&quot;commit&quot;</span>: node.commit_index&#125;))</span><br><span class="line">            <span class="keyword">if</span> acks &gt; <span class="built_in">len</span>(cluster) // <span class="number">2</span>:</span><br><span class="line">                <span class="keyword">return</span> node.state.get(key)      <span class="comment"># 确认仍是多数派认可的 leader → 本地读即线性一致</span></span><br><span class="line">    <span class="keyword">return</span> <span class="literal">None</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    random.seed(<span class="number">7</span>)</span><br><span class="line">    names = [<span class="string">&quot;A&quot;</span>, <span class="string">&quot;B&quot;</span>, <span class="string">&quot;C&quot;</span>]</span><br><span class="line">    nodes = &#123;n: RaftNode(n, [], <span class="literal">None</span>) <span class="keyword">for</span> n <span class="keyword">in</span> names&#125;</span><br><span class="line">    net = SimNet(nodes) <span class="keyword">if</span> <span class="literal">False</span> <span class="keyword">else</span> <span class="literal">None</span>      <span class="comment"># 实际运行请 import kv_server 的 SimNet</span></span><br><span class="line">    <span class="comment"># （完整串联运行见练习 1：把 SimNet 移入公共模块后在此启动集群并调用 linearizable_read）</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;本文件提供 linearizable_read()；集群启动请复用 kv_server.py（见练习 1）&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>代码与理论的对照表（复习用）：</p>
+<table>
+<thead>
+<tr>
+<th>理论概念（第 05 章）</th>
+<th>代码落点</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>任期 = 逻辑时钟</td>
+<td><code>self.term</code>，<code>handle_append/vote</code> 里 <code>term &lt; self.term</code> 即拒绝</td>
+</tr>
+<tr>
+<td>选举限制</td>
+<td><code>handle_vote</code> 的 <code>my_newer</code> 日志比较</td>
+</tr>
+<tr>
+<td>一票限制</td>
+<td><code>self.voted_for</code> 单值，本任期只写一次</td>
+</tr>
+<tr>
+<td>日志匹配</td>
+<td><code>handle_append</code> 的 <code>prev_idx/prev_term</code> 检查 + 截断</td>
+</tr>
+<tr>
+<td>提交规则（本任期 + 多数派）</td>
+<td><code>_advance_commit</code> 的两个 if</td>
+</tr>
+<tr>
+<td>脑裂防护</td>
+<td>分区中旧 leader <code>propose</code> 永远凑不齐多数派 → 超时失败</td>
+</tr>
+<tr>
+<td>线性一致读</td>
+<td><a target="_blank" rel="noopener" href="http://client.py">client.py</a> 的确认心跳 + 本地读</td>
+</tr>
+</tbody>
+</table>
+<h2 id="2-面试高频-30-题带答案要点"><a class="markdownIt-Anchor" href="#2-面试高频-30-题带答案要点"></a> 2. 面试高频 30 题（带答案要点）</h2>
+<p><strong>理论篇</strong></p>
+<ol>
+<li><strong>CAP 定理到底说了什么？</strong> 分区发生时线性一致（C）与可用性（A）不可兼得；P 不可选；取舍是操作级不是系统级标签。别忘补 PACELC。</li>
+<li><strong>为什么分布式不能靠物理时钟排序事件？</strong> 漂移 + NTP 阶跃 + 跨机无共同现在；&quot;先发生&quot;需要 happens-before 定义；Lamport 时钟保因果方向，向量时钟可判并发。</li>
+<li><strong>两将军问题与拜占庭问题的区别？</strong> 前者信道不可靠（丢消息）下无法 100% 达成一致；后者节点还会说谎，容 f 个叛徒需 3f+1；数据中心只需崩溃容错 2f+1。</li>
+<li><strong>FLP 不可能定理说了什么，工程怎么绕？</strong> 纯异步 + 1 崩溃故障则确定性共识无法保证终止；工程用超时/随机化把系统变成部分同步，牺牲最坏情况终止性。</li>
+<li><strong>Raft 为什么必须多数派提交？</strong> 两个&quot;多数派&quot;必相交 + 一票限制 → 同一任期不可能两个 leader；相交保证已提交条目存在于任何未来 leader → 已提交不被覆盖。少数派提交会造成日志分叉不可修复。</li>
+<li><strong>Raft 如何防止脑裂？</strong> 任期比较拒绝旧 leader 消息 + 旧 leader 凑不齐多数派无法提交 + 随机选举超时防选票瓜分。旧分区侧一切写入都不会对客户端返回成功。</li>
+<li><strong>Raft 的选举限制是什么，为什么需要？</strong> 投票前比较候选人日志（先比最后条目 term 再比 index），不比我新就不投——保证新 leader 拥有全部已提交条目（Leader 完备性）。</li>
+<li><strong>为什么 Raft leader 不直接提交前任任期的条目？</strong> 旧条目即使过半复制，也不能证明&quot;不会有更新的 leader 用冲突条目覆盖它&quot;；只有提交本任期条目才能间接确认旧条目安全（5.4.2 节）。</li>
+<li><strong>Quorum W+R&gt;N 保证了什么、不保证什么？</strong> 保证读到至少一份最新副本；不保证线性一致（并发交错/ sibling 合并仍可能给出旧序）。</li>
+<li><strong>线性一致读在 Raft 上怎么做？</strong> ReadIndex（读前确认领导权 + 等应用追上 commit）或 Lease Read（租约期内免确认，依赖时钟假设）。直接读 leader 状态机是漏洞。</li>
+<li><strong>最终一致的系统怎么实现&quot;读己之写&quot;？</strong> 会话粘滞（写后短窗内读主/同副本）或客户端带时间戳门槛读。不需要全局强一致。</li>
+<li><strong>幂等为什么是必须的？</strong> at-least-once 下重投不可避免（发送超时重发、ack 丢失重投）；&quot;处理与确认跨系统&quot;决定 exactly-once 只能端到端达成 → 让重复无害。</li>
+<li><strong>分布式锁的正确姿势？</strong> TTL 判断不可靠（时钟 + 进程暂停）；要 fencing token（单调纪元）由资源方拒绝旧纪元；纪元单调性由共识保证。</li>
+<li><strong>2PC 的致命弱点？</strong> 协调者在&quot;落盘决定后、通知完成前&quot;宕机 → 所有参与者卡在 in-doubt 持锁阻塞。3PC 想修却依赖网络延迟上界假设，分区下破坏原子性。</li>
+<li><strong>Saga 的补偿与数据库回滚的区别？</strong> 补偿是新业务操作（可见中间态、可能失败要重试、需要幂等）；隔离性缺失要业务防（状态机让中间态不可见）。</li>
+</ol>
+<p><strong>工程篇</strong></p>
+<ol start="16">
+<li><strong>Kafka 为什么快？</strong> 顺序写日志 + 零拷贝 sendfile + 批量压缩 + 分区并行（OS 09 章的 IO 直觉全用上）。</li>
+<li><strong>消费堆积怎么办？</strong> 查消费耗时瓶颈 → 扩消费者（≤ 分区数）→ 加分区（注意 key 顺序语义）→ 降级非关键消费；堆积是消费能力账单，不是 MQ bug。</li>
+<li><strong>重试风暴怎么形成、怎么防？</strong> 全体客户端同时重试叠加原始流量压垮刚恢复的下游；防：指数退避 + full jitter + 重试预算 + 重试只包一层（不级联）。</li>
+<li><strong>熔断器三个状态与切换条件？</strong> 关闭(统计失败率)→超阈值→打开(快速失败冷却期)→冷却到→半开(放探测)→成功关/失败开。阈值要带样本量防震荡。</li>
+<li><strong>令牌桶 vs 漏桶？</strong> 令牌桶限平均速率容忍突发；漏桶恒定流出绝对平滑。分布式限流要 Redis+Lua 原子或网关层实现。</li>
+<li><strong>一致性哈希解决什么问题？</strong> 取模扩容全量搬家 → 环上只迁 K/N；倾斜靠 vnode 大数定律（实测 vnodes=100 时极差 &lt;1%）。</li>
+<li><strong>为什么 Kafka 用固定分区数不用一致性哈希？</strong> 分区是并行度与顺序的单位，固定数量让路由表小、副本放置可控；弹性扩分区成本高，所以按峰值预设。</li>
+<li><strong>心跳超时怎么设？</strong> 长于&quot;正常间隔 × 抖动余量&quot;且覆盖已知停顿（GC）；误判代价高于漏判，配合间接探测与滞回；Φ Accrual 用分布代替阈值。</li>
+<li><strong>Gossip 为什么能收敛、多快？</strong> 每轮每节点随机传 fanout 个同伴，未覆盖数指数衰减，O(log N) 轮；增量 + 版本号防旧消息回环。</li>
+<li><strong>主从切换怎么防丢数据？</strong> 半同步（至少一个从确认）或共识日志（Raft）；异步复制必丢&quot;切换窗口内未同步&quot;的已确认写——用&quot;最大可用 or 最大安全&quot;参数显式选择。</li>
+</ol>
+<p><strong>场景篇</strong></p>
+<ol start="26">
+<li><strong>ZooKeeper 和 etcd 怎么选？</strong> 都是小而强一致的协调存储：etcd（Raft、MVCC、watch、K8s 生态）、ZK（ZAB、临时节点、成熟稳定）；大量业务数据放谁都不对。</li>
+<li><strong>Redis 主从 + 哨兵能保证不丢数据吗？</strong> 不能——异步复制 + 哨兵判主窗口内已确认写可能丢；要强一致用 Redlock 也要配 fencing（且被 Kleppmann 批评），或换 Raft 系存储。</li>
+<li><strong>分布式 ID 怎么生成？</strong> UUID（无序索引差）、号段模式（DB 批量发号）、Snowflake（时间戳+机器+序列，趋势递增，本质混合时钟）；回拨要用等待或备用位处理。</li>
+<li><strong>PD 分离解决什么？</strong> prefill 计算密集 vs decode 访存密集，分开部署各自扩容，KV cache 跨节点传输衔接——y 轴拆分的 LLM 版。</li>
+<li><strong>LLM 训练的 3D 并行各自解决什么？</strong> DP=吞吐（梯度 AllReduce，2(N-1)/N 通信量）、TP=单层放不下（机内 NVLink、层内通信频繁）、PP=层数深（气泡 (p-1)/(m+p-1) 靠 micro-batch 稀释）。</li>
+</ol>
+<h2 id="3-设计题答题框架"><a class="markdownIt-Anchor" href="#3-设计题答题框架"></a> 3. 设计题答题框架</h2>
+<p>四步法（每道设计题都按这个骨架走，先总后分、先稳后优）：</p>
+<ol>
+<li><strong>澄清与量化</strong>：QPS/读写比/数据量/延迟要求/一致性要求/可用性目标。数字决定架构——1k QPS 和 100k QPS 的答案完全不同。</li>
+<li><strong>主干设计</strong>：先画最简单可行架构（无状态层 + 存储层 + 队列/缓存），再谈分区与复制。用本系列语言：x/y/z 轴 + 复制模式 + 一致性等级。</li>
+<li><strong>深挖难点</strong>：面试官追问的都是&quot;故障时怎么办&quot;——按三笔账（部分失败/不可靠网络/无全局时钟）逐项回答：超时？重试？幂等？补偿？</li>
+<li><strong>权衡显式化</strong>：每个选择说出放弃了什么。&quot;我选异步复制买低延迟，代价是切换窗口可能丢已确认写，用半同步参数缓解&quot;比&quot;用 Redis 就行&quot;高一个段位。</li>
+</ol>
+<p><strong>秒杀系统</strong>：漏斗分层——前端静态化+按钮防抖（挡 90%）、网关限流（令牌桶，按库存量发放请求额度）、Redis 预扣库存（Lua 原子 decr，防超卖）→ MQ 异步下单（削峰）→ DB 最终落库（唯一索引防重复下单）。一致性等级：库存扣减线性一致（Redis 单点原子或 Lua），订单落库最终一致（Outbox）。故障预案：Redis 挂→降级 DB 限流直购；MQ 堆积→消费者扩容；重复支付→幂等键（用户ID+场次ID）。</p>
+<p><strong>短链系统</strong>：发号器（Snowflake 或 DB 号段）→ Base62 编码 → KV 存储（哈希分区，key=短码）。302 重定向 + CDN 缓存热点。关键难点：防自定义短码冲突（唯一索引兜底）、统计点击数（异步累加 + 定期合并，容忍秒级误差）、过期回收（惰性删除 + 版本号）。容量账：10 亿短链 × 60B ≈ 60GB，单机都放得下，真要分布式只为吞吐与可用性——先说清这一点再画集群（考官在测你会不会&quot;杀鸡用牛刀&quot;）。</p>
+<p><strong>Feed 流</strong>：推模式（写扩散，发布时写进所有粉丝收件箱，读快写重，适合粉丝少）vs 拉模式（读扩散，读时合并关注者最新内容，写轻读重，适合大 V）vs 推拉结合（普通人推、大 V 拉——经验做法主流方案）。存储：收件箱用&quot;用户ID 分区 + 时间戳倒序列表&quot;（因果一致即可，第 03 章）；一致性要求：自己发的帖子自己立刻可见（读己之写，写后粘主）；热点用户发布风暴（千万粉丝写扩散爆炸）用&quot;大 V 内容拉取 + 收件箱只存指针&quot;化解。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“面试设计题要答出最先进的架构”</strong>：考官要的是<strong>取舍能力</strong>不是名词堆砌。先给简单方案说出它的天花板，再按量化数字升级——&quot;kv 单表 → 按用户分区 → 一致性哈希扩容&quot;的演进叙事远胜上来就画 8 组件架构图。</li>
+<li><strong>“手写 Raft 只是面试噱头，工作中用不上”</strong>：读 etcd/TiKV/Raft 库源码时，选举/日志/快照的结构与你手写的完全同构（差异只在持久化、网络、性能工程）；这套骨架也是理解 K8s 控制面、TiDB Placement Rule 的门票。</li>
+<li><strong>“30 题背完就行”</strong>：面试官会从你的答案里挑一处追问两层（&quot;多数派为什么防脑裂？&quot;→&quot;两个多数派为什么必相交？“→&quot;如果节点数是偶数呢？”）。每题要能向下推一层，本系列各章的&quot;为什么&quot;小节就是为此准备的。</li>
+<li><strong>“把模拟代码当生产代码”</strong>：本篇 Raft 实现缺持久化、快照、成员变更、真实网络栈——它是教学骨架。生产永远用 etcd/raft 库（Go）或 alibaba/SOFAJRaft，不要自研共识（经验做法：自研共识是分布式领域最经典的&quot;重新发明事故&quot;来源）。</li>
+<li><strong>“分布式面试只考理论”</strong>：一半以上问题会落到&quot;线上事故怎么排查&quot;——堆积、超时抖动、切换丢数据、热点分区。答题时主动引用&quot;我会先看什么指标、分几步定位&quot;，把理论挂到排障动作上。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>手写 Raft KV 把第 05 章每个规则落到代码：任期/一票/日志检查/提交规则/分区防护共约 200 行，分区实验验证&quot;旧 leader 写不进多数派&quot;。</li>
+<li>概念-代码对照表是把理论内化的检查器——任何一条说不出代码落点，就回 05 章重读。</li>
+<li>30 题覆盖理论（CAP/时钟/共识/复制）、工程（MQ/弹性/缓存）、场景（选型/LLM）三层；每题要能向下追问一层。</li>
+<li>设计题四步法：量化 → 主干 → 故障深挖 → 显式权衡；秒杀=漏斗+原子预扣+异步落库，短链=发号+KV+容量清醒，feed=推拉结合+读己之写。</li>
+<li>全系列收束：单机最优（01）→ 不确定世界（02/03）→ 数据正确性（04~08）→ 系统活下来（09~11）→ 真实系统与 LLM（12）→ 动手与输出（本篇）。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>把 SimNet 提取为公共模块，让 <a target="_blank" rel="noopener" href="http://client.py">client.py</a> 真正启动集群并调用 linearizable_read()；然后构造&quot;读请求打到了刚被分区的旧 leader&quot;场景，验证确认心跳会把它挡下来（返回 None 或重试其他节点）。</li>
+<li>给 RaftNode 增加持久化：term/voted_for/log 写入文件（每次变更前先落盘），kill 进程重启后能恢复状态并继续服务——这是 Raft &quot;持久化状态&quot;规则的最小落实。</li>
+<li>模拟第 05 章提交规则的边界：term=1 时 A 把命令复制给 B（C 掉线，未提交）；C 回来、B 当选 term=2 后写入新命令。打印日志观察 term=1 的旧命令如何随 term=2 命令的提交而被提交。</li>
+<li>从 30 题中挑 10 题，合上书写出答案要点再对照；把答不出的题回溯到对应章节重读，直到能&quot;向下追问一层&quot;。</li>
+<li>用四步法独立完成一道新设计题：设计&quot;分布式限流服务&quot;（全公司共享，支持按用户/接口两维限流，10k 服务实例接入，Redis 已有）。写出量化假设、主干架构、Redis+Lua 的关键原子逻辑、以及 Redis 故障时的降级策略。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/12-%E5%88%86%E5%B8%83%E5%BC%8F%E5%AD%98%E5%82%A8%E6%A1%88%E4%BE%8B%E4%B8%8ELLM%E6%97%B6%E4%BB%A3%E7%9A%84%E5%88%86%E5%B8%83%E5%BC%8F/" rel="prev" title="12-分布式存储案例与LLM时代的分布式">
+                  <i class="fa fa-angle-left"></i> 12-分布式存储案例与LLM时代的分布式
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/%E6%95%B0%E6%8D%AE%E5%BA%93%E4%B8%8E%E5%AD%98%E5%82%A8-README/" rel="next" title="数据库与存储 · 学习路线总览">
+                  数据库与存储 · 学习路线总览 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

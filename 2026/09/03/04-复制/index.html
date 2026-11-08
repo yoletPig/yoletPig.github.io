@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 掌握三种复制模式：主从（同步&#x2F;半同步&#x2F;异步）、多主、无主，并能说出各自的故障语义。 - 系统分析复制滞后引发的三类问题（读己之写&#x2F;单调读&#x2F;一致前缀读）与对应修复手段。 - 推导无主复制的 Quorum 交集条件 W+RN，理解读修复与反…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="04-复制">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/04-%E5%A4%8D%E5%88%B6/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 掌握三种复制模式：主从（同步&#x2F;半同步&#x2F;异步）、多主、无主，并能说出各自的故障语义。 - 系统分析复制滞后引发的三类问题（读己之写&#x2F;单调读&#x2F;一致前缀读）与对应修复手段。 - 推导无主复制的 Quorum 交集条件 W+RN，理解读修复与反…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-03T04:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.546Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="分布式">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/04-%E5%A4%8D%E5%88%B6/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/04-%E5%A4%8D%E5%88%B6/","path":"2026/09/03/04-复制/","title":"04-复制"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>04-复制 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#04-%E5%A4%8D%E5%88%B6"><span class="nav-number">1.</span> <span class="nav-text"> 04 - 复制</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%B8%BA%E4%BB%80%E4%B9%88%E8%A6%81%E5%A4%8D%E5%88%B6%E4%B8%89%E4%BB%B6%E4%BA%8B"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 为什么要复制：三件事</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E4%B8%BB%E4%BB%8E%E5%A4%8D%E5%88%B6%E5%90%8C%E6%AD%A5-%E5%8D%8A%E5%90%8C%E6%AD%A5-%E5%BC%82%E6%AD%A5"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. 主从复制：同步、半同步、异步</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E5%A4%8D%E5%88%B6%E6%BB%9E%E5%90%8E%E4%B8%89%E7%B1%BB%E9%97%AE%E9%A2%98%E4%B8%8E%E4%BF%AE%E5%A4%8D"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 复制滞后：三类问题与修复</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E5%A4%9A%E4%B8%BB%E5%A4%8D%E5%88%B6%E5%86%B2%E7%AA%81%E6%98%AF%E5%B8%B8%E6%80%81"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. 多主复制：冲突是常态</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E6%97%A0%E4%B8%BB%E5%A4%8D%E5%88%B6quorum-%E8%AF%BB%E5%86%99%E4%B8%8E%E4%BF%AE%E5%A4%8D"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 无主复制：Quorum 读写与修复</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E6%89%8B%E5%86%99%E4%B8%BB%E4%BB%8E%E5%A4%8D%E5%88%B6-%E6%95%85%E9%9A%9C%E5%88%87%E6%8D%A2"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 手写主从复制 + 故障切换</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.8.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.9.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.10.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/04-%E5%A4%8D%E5%88%B6/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="04-复制 | Yoleen的博客">
+      <meta itemprop="description" content="- 掌握三种复制模式：主从（同步&#x2F;半同步&#x2F;异步）、多主、无主，并能说出各自的故障语义。 - 系统分析复制滞后引发的三类问题（读己之写&#x2F;单调读&#x2F;一致前缀读）与对应修复手段。 - 推导无主复制的 Quorum 交集条件 W+RN，理解读修复与反…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          04-复制
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 12:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T12:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E5%88%86%E5%B8%83%E5%BC%8F%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">分布式系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.9k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>14 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 掌握三种复制模式：主从（同步/半同步/异步）、多主、无主，并能说出各自的故障语义。 - 系统分析复制滞后引发的三类问题（读己之写/单调读/一致前缀读）与对应修复手段。 - 推导无主复制的 Quorum 交集条件 W+RN，理解读修复与反…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="04-复制"><a class="markdownIt-Anchor" href="#04-复制"></a> 04 - 复制</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>掌握三种复制模式：主从（同步/半同步/异步）、多主、无主，并能说出各自的故障语义。</li>
+<li>系统分析复制滞后引发的三类问题（读己之写/单调读/一致前缀读）与对应修复手段。</li>
+<li>推导无主复制的 Quorum 交集条件 W+R&gt;N，理解读修复与反熵如何最终收敛。</li>
+<li>手写一个带故障切换的主从复制模拟，亲眼看到&quot;异步复制 + 主宕机&quot;的数据丢失。</li>
+</ul>
+<h2 id="1-为什么要复制三件事"><a class="markdownIt-Anchor" href="#1-为什么要复制三件事"></a> 1. 为什么要复制：三件事</h2>
+<p>复制（replication）= 在多台机器上保留同一份数据的副本。动机有三（DDIA 第 5 章开篇）：</p>
+<ol>
+<li><strong>数据离用户更近</strong>（地理复制，降低读延迟）。</li>
+<li><strong>部分机器故障时系统仍可用</strong>（冗余，提高可用性）。</li>
+<li><strong>读请求分摊到多副本</strong>（提高读吞吐，第 01 章 x 轴）。</li>
+</ol>
+<p>副本一多，核心难题立刻出现：<strong>怎么让 N 个副本保持一致</strong>。一切方案都是对&quot;写操作如何在副本间传播&quot;的回答。三大变量：谁接收写（单主/多主/无主）、什么时候确认（同步/半同步/异步）、冲突怎么办（修主/合并）。</p>
+<h2 id="2-主从复制同步-半同步-异步"><a class="markdownIt-Anchor" href="#2-主从复制同步-半同步-异步"></a> 2. 主从复制：同步、半同步、异步</h2>
+<p>主从复制（leader-based replication，也叫 master/slave、primary/secondary）的分工：<strong>主副本</strong>（leader）接收全部写，把变更记入日志（binlog/WAL），从副本（follower）消费日志追平；<strong>读</strong>可以走主也可以走从（读写分离）。</p>
+<p>按&quot;主副本何时向客户端确认&quot;，分三档：</p>
+<table>
+<thead>
+<tr>
+<th>模式</th>
+<th>确认时机</th>
+<th>主宕机时</th>
+<th>延迟</th>
+<th>现实代表</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>完全同步</td>
+<td>等<strong>全部</strong>从副本落盘确认</td>
+<td>最少丢数据</td>
+<td>最高；任何一个从挂了，写全停</td>
+<td>几乎没人用（可用性太差）</td>
+</tr>
+<tr>
+<td><strong>半同步</strong></td>
+<td>等<strong>一个</strong>从确认 + 主自己落盘</td>
+<td>最多丢 0 条（那一个从有全量）</td>
+<td>中</td>
+<td>MySQL semi-sync、Raft 日志提交（等多数派）</td>
+</tr>
+<tr>
+<td>完全异步</td>
+<td>主自己落盘即返回</td>
+<td>可能丢已确认写</td>
+<td>最低</td>
+<td>MySQL 默认异步、Redis 主从、PG 流复制默认</td>
+</tr>
+</tbody>
+</table>
+<p>推导半同步为什么是&quot;甜点&quot;：设主副本 + n 个从。完全同步的写延迟 = max(所有副本的网络+落盘)，可用性 = 所有从都活着；异步的丢数据窗口 = 主宕机瞬间未传输的日志。半同步只要求&quot;有一个从跟上了&quot;，主宕机后可以无损切换到它——<strong>用一个从的延迟代价，买断了&quot;确认过的写不丢&quot;</strong>。Raft 的&quot;提交需多数派日志匹配&quot;（第 05 章）本质是半同步思想的多数派版：3 副本半同步等 1 个从 ≈ 等 2 个节点确认（含主）。</p>
+<p>故障切换（failover）的完整流程与三个坑：</p>
+<ol>
+<li><strong>检测</strong>：主超时（02 章：超时≠死亡，误判是常态）。</li>
+<li><strong>选举/提升</strong>：选新主。坑一——<strong>数据丢失</strong>：异步复制下旧主有未同步的写，切换后丢失。</li>
+<li><strong>重配置</strong>：客户端与剩余从感知新主。坑二——<strong>脑裂（split brain）</strong>：旧主没死透（只是 GC 停顿），与新主同时接收写；必须用<strong>纪元/ fencing token</strong> 强制旧主下台（第 11 章租约）。坑三——<strong>风暴</strong>：新主切换瞬间大量写涌入 + 所有从重建同步。</li>
+</ol>
+<h2 id="3-复制滞后三类问题与修复"><a class="markdownIt-Anchor" href="#3-复制滞后三类问题与修复"></a> 3. 复制滞后：三类问题与修复</h2>
+<p>异步复制下，从副本落后主副本若干毫秒到若干秒，这段时间内读到旧值（复制滞后，replication lag）。三个经典场景（DDIA 第 5.2 节；第 03 章已提，这里给完整对策）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">读己之写违反：                       单调读违反：</span><br><span class="line"> 用户: 写头像(x) → 主               用户: 读(x) → 主副本 → 看到 v2</span><br><span class="line"> 随后: 读头像 → 从(还停在 v1)        随后: 读(y) → 从副本 → 只到 v1（倒流）</span><br><span class="line"> 一句话：自己写的看不见               一句话：越读越旧</span><br><span class="line"></span><br><span class="line">一致前缀读违反（分片版）：</span><br><span class="line"> 分片1: 帖子&quot;P&quot;（复制慢）   分片2: 回复&quot;R&quot;（复制快）</span><br><span class="line"> 用户先看到 R（回复），后看到 P（帖子）→ 因果乱序</span><br></pre></td></tr></table></figure>
+<p>修复手段（都是&quot;弱一致系统上做会话保证&quot;的路由层技巧，经验做法）：</p>
+<ul>
+<li><strong>读己之写</strong>：写后 N 秒内该用户的读强制走主；或客户端记录最后写入时间戳，从副本滞后于该戳就换副本/等待。</li>
+<li><strong>单调读</strong>：按用户 ID 粘住同一副本（同一从）或记录&quot;该副本已服务到的水位&quot;。</li>
+<li><strong>一致前缀读</strong>：把因果相关对象放同一分片（第 06 章的分区设计题），或由中件层校验版本顺序。</li>
+<li><strong>降低滞后本身</strong>：从副本并行应用日志（MySQL 5.7+ 的多线程复制）、写操作分组提交、监控 <code>Seconds_Behind_Master</code> 并告警。</li>
+</ul>
+<h2 id="4-多主复制冲突是常态"><a class="markdownIt-Anchor" href="#4-多主复制冲突是常态"></a> 4. 多主复制：冲突是常态</h2>
+<p>多主（multi-leader）：多个副本都接收写，互相复制。动机：跨数据中心（每个机房一个主，本地写低延迟）、离线操作（手机端本地库是&quot;主&quot;，联网时同步）、协作编辑（Google Docs）。</p>
+<p>代价：<strong>同样的数据可能被两个主同时改</strong>（写冲突）。经典例子：两个机房同时把某商品标题改成不同值。冲突处理策略：</p>
+<ol>
+<li><strong>避免冲突</strong>（最好）：把同一记录的&quot;所有权&quot;固定给某个主（如按用户分区），从根上让两个主不写同一行（经验做法优先级最高）。</li>
+<li><strong>LWW（last-write-wins）</strong>：带时间戳比较，新的赢。简单，但丢数据（先到的写被静默覆盖），且依赖 02 章&quot;不可靠的物理时钟&quot;。</li>
+<li><strong>保留所有版本，应用层合并</strong>：用版本向量（02 章）识别并发写，交给应用决定怎么合（Dynamo 的兄弟值 sibling，CouchDB 的冲突文档）。</li>
+<li><strong>CRDT（收敛数据类型）</strong>：为&quot;加法计数器&quot;“集合”&quot;序&quot;等特定结构设计可交换的合并算子，数学上保证收敛（Shapiro et al., <em>Conflict-free Replicated Data Types</em>, SSS 2011）。</li>
+<li><strong>自动解决算法</strong>：操作转换 OT（Google Docs 文本）等。</li>
+</ol>
+<h2 id="5-无主复制quorum-读写与修复"><a class="markdownIt-Anchor" href="#5-无主复制quorum-读写与修复"></a> 5. 无主复制：Quorum 读写与修复</h2>
+<p>无主（leaderless，Dynamo 风格，出处：DeCandia et al., <em>Dynamo: Amazon’s Highly Available Key-value Store</em>, SOSP 2007）：<strong>没有主副本</strong>，写发给任意副本集合，读也发给多个副本比版本。</p>
+<p>参数 N = 副本总数，W = 写成功的副本数，R = 读需要的副本数（N=3, W=2, R=2 是常见起步）。</p>
+<p><strong>Quorum 交集推导</strong>（必须会证明）：</p>
+<ul>
+<li>读到至少一个&quot;最新写入&quot;的条件：<strong>W + R &gt; N</strong>。证明：写集合大小 W，读集合大小 R，两者都在 N 个副本中；若 W + R &gt; N，则 |写∩读| ≥ W + R - N ≥ 1，读集合至少含一个写成功的副本 → 只要该副本保留&quot;最新&quot;值即可读到。</li>
+<li>保证写入成功的交集（防两个并发写都&quot;成功&quot;却互不知晓）：<strong>W &gt; N/2</strong>，即写集合过半（两个过半集合必相交，同 Raft 多数派逻辑）。</li>
+<li>极端取值：W=1, R=N → 写快读慢（Dynamo 可配置）；W=N, R=1 → 读强写慢；W+R&gt;N 只保证&quot;读到至少一份最新副本&quot;，<strong>不等于线性一致</strong>（DDIA 第 5.3 节明确指出：quorum 不是万能，时序交错下仍可能读到旧值，比如写还没开始读就完成了的场景）。</li>
+</ul>
+<p>读后写、写前读的版本管理靠<strong>向量时钟</strong>（02 章）：并发写产生 sibling，读时合并。两个收敛机制：</p>
+<ul>
+<li><strong>读修复（read repair）</strong>：读时发现某副本版本旧，顺手把新值写回去。</li>
+<li><strong>反熵（anti-entropy / hinted handoff）</strong>：后台进程比对副本间差异（Merkle 树高效比对，Cassandra 实现），慢慢补齐——这是&quot;最终一致&quot;里&quot;最终&quot;的执行者。</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># leaderless_quorum.py —— 无主复制的 Quorum 读、读写修复与反熵</span></span><br><span class="line"><span class="keyword">import</span> asyncio, random</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">DynamoNode</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, name</span>):</span><br><span class="line">        <span class="variable language_">self</span>.name = name</span><br><span class="line">        <span class="variable language_">self</span>.data = &#123;&#125;           <span class="comment"># key -&gt; (value, version向量简化为单调版本号)</span></span><br><span class="line">        <span class="variable language_">self</span>.online = <span class="literal">True</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">DynamoCluster</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, n=<span class="number">3</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>.nodes = [DynamoNode(<span class="string">f&quot;N<span class="subst">&#123;i&#125;</span>&quot;</span>) <span class="keyword">for</span> i <span class="keyword">in</span> <span class="built_in">range</span>(n)]</span><br><span class="line">        <span class="variable language_">self</span>.N, <span class="variable language_">self</span>.W, <span class="variable language_">self</span>.R = n, n // <span class="number">2</span> + <span class="number">1</span>, n // <span class="number">2</span> + <span class="number">1</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">_alive</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">return</span> [x <span class="keyword">for</span> x <span class="keyword">in</span> <span class="variable language_">self</span>.nodes <span class="keyword">if</span> x.online]</span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">put</span>(<span class="params">self, key, value</span>):</span><br><span class="line">        <span class="string">&quot;&quot;&quot;写：向 W 个活副本写（Dynamo 实际按 preference list 选，这里简化为随机）&quot;&quot;&quot;</span></span><br><span class="line">        targets = random.sample(<span class="variable language_">self</span>._alive(), <span class="built_in">min</span>(<span class="variable language_">self</span>.W, <span class="built_in">len</span>(<span class="variable language_">self</span>._alive())))</span><br><span class="line">        ver = <span class="built_in">max</span>((v <span class="keyword">for</span> x <span class="keyword">in</span> <span class="variable language_">self</span>.nodes <span class="keyword">for</span> _, v <span class="keyword">in</span> x.data.get(key, [(<span class="literal">None</span>, <span class="number">0</span>)])),</span><br><span class="line">                  default=<span class="number">0</span>) + <span class="number">1</span></span><br><span class="line">        <span class="keyword">for</span> t <span class="keyword">in</span> targets:</span><br><span class="line">            <span class="keyword">await</span> asyncio.sleep(random.uniform(<span class="number">0.005</span>, <span class="number">0.02</span>))   <span class="comment"># 网络延迟</span></span><br><span class="line">            t.data[key] = (value, ver)</span><br><span class="line">        <span class="keyword">return</span> ver</span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">get</span>(<span class="params">self, key</span>):</span><br><span class="line">        <span class="string">&quot;&quot;&quot;读：向 R 个副本读，取版本最高者；顺便做读修复&quot;&quot;&quot;</span></span><br><span class="line">        targets = random.sample(<span class="variable language_">self</span>._alive(), <span class="built_in">min</span>(<span class="variable language_">self</span>.R, <span class="built_in">len</span>(<span class="variable language_">self</span>._alive())))</span><br><span class="line">        results = []</span><br><span class="line">        <span class="keyword">for</span> t <span class="keyword">in</span> targets:</span><br><span class="line">            <span class="keyword">await</span> asyncio.sleep(random.uniform(<span class="number">0.005</span>, <span class="number">0.02</span>))</span><br><span class="line">            <span class="keyword">if</span> key <span class="keyword">in</span> t.data:</span><br><span class="line">                results.append((t, t.data[key]))</span><br><span class="line">        <span class="keyword">if</span> <span class="keyword">not</span> results:</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">None</span></span><br><span class="line">        best_node, (best_val, best_ver) = <span class="built_in">max</span>(results, key=<span class="keyword">lambda</span> p: p[<span class="number">1</span>][<span class="number">1</span>])</span><br><span class="line">        <span class="comment"># ---- 读修复：把落后副本补到最新（异步，不阻塞读）----</span></span><br><span class="line">        <span class="keyword">for</span> node <span class="keyword">in</span> targets:</span><br><span class="line">            <span class="keyword">if</span> key <span class="keyword">not</span> <span class="keyword">in</span> node.data <span class="keyword">or</span> node.data[key][<span class="number">1</span>] &lt; best_ver:</span><br><span class="line">                node.data[key] = (best_val, best_ver)</span><br><span class="line">                <span class="built_in">print</span>(<span class="string">f&quot;  [读修复] <span class="subst">&#123;node.name&#125;</span> 补齐 <span class="subst">&#123;key&#125;</span>=<span class="subst">&#123;best_val&#125;</span>@v<span class="subst">&#123;best_ver&#125;</span>&quot;</span>)</span><br><span class="line">        <span class="keyword">return</span> best_val, best_ver</span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">anti_entropy</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="string">&quot;&quot;&quot;后台反熵：两两比对，落后者补齐（真实系统用 Merkle 树，这里直接全量）&quot;&quot;&quot;</span></span><br><span class="line">        changed = <span class="number">0</span></span><br><span class="line">        <span class="keyword">for</span> key <span class="keyword">in</span> &#123;k <span class="keyword">for</span> x <span class="keyword">in</span> <span class="variable language_">self</span>.nodes <span class="keyword">for</span> k <span class="keyword">in</span> x.data&#125;:</span><br><span class="line">            versions = [(x, x.data.get(key)) <span class="keyword">for</span> x <span class="keyword">in</span> <span class="variable language_">self</span>.nodes <span class="keyword">if</span> key <span class="keyword">in</span> x.data]</span><br><span class="line">            _, (val, ver) = <span class="built_in">max</span>(versions, key=<span class="keyword">lambda</span> p: p[<span class="number">1</span>][<span class="number">1</span>])</span><br><span class="line">            <span class="keyword">for</span> node, pair <span class="keyword">in</span> versions:</span><br><span class="line">                <span class="keyword">if</span> pair[<span class="number">1</span>] &lt; ver:</span><br><span class="line">                    node.data[key] = (val, ver)</span><br><span class="line">                    changed += <span class="number">1</span></span><br><span class="line">        <span class="keyword">return</span> changed</span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    random.seed(<span class="number">7</span>)</span><br><span class="line">    c = DynamoCluster()</span><br><span class="line">    <span class="comment"># 场景1：一个副本掉线时写入（W=2 仍成功），恢复后靠读修复/反熵追平</span></span><br><span class="line">    c.nodes[<span class="number">2</span>].online = <span class="literal">False</span></span><br><span class="line">    ver = <span class="keyword">await</span> c.put(<span class="string">&quot;sku:1&quot;</span>, <span class="string">&quot;99元&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;写成功 v<span class="subst">&#123;ver&#125;</span>（副本2 掉线，只写到 2 个副本）&quot;</span>)</span><br><span class="line">    c.nodes[<span class="number">2</span>].online = <span class="literal">True</span></span><br><span class="line">    val, v = <span class="keyword">await</span> c.get(<span class="string">&quot;sku:1&quot;</span>)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;quorum 读: <span class="subst">&#123;val&#125;</span>@v<span class="subst">&#123;v&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line">    <span class="comment"># 场景2：掉线副本上根本没有该数据 —— 反熵把它补齐</span></span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;反熵修复数:&quot;</span>, <span class="keyword">await</span> c.anti_entropy())</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;副本2 现在的数据:&quot;</span>, c.nodes[<span class="number">2</span>].data)</span><br><span class="line"></span><br><span class="line">asyncio.run(main())</span><br></pre></td></tr></table></figure>
+<h2 id="6-手写主从复制-故障切换"><a class="markdownIt-Anchor" href="#6-手写主从复制-故障切换"></a> 6. 手写主从复制 + 故障切换</h2>
+<p>把第 2 节的模式写成可运行代码，重点观察<strong>异步复制下主宕机的丢数据</strong>与<strong>纪元号防脑裂</strong>：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br><span class="line">61</span><br><span class="line">62</span><br><span class="line">63</span><br><span class="line">64</span><br><span class="line">65</span><br><span class="line">66</span><br><span class="line">67</span><br><span class="line">68</span><br><span class="line">69</span><br><span class="line">70</span><br><span class="line">71</span><br><span class="line">72</span><br><span class="line">73</span><br><span class="line">74</span><br><span class="line">75</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># master_slave.py —— 主从复制：同步/半同步/异步 + 宕机切换 + 纪元防脑裂</span></span><br><span class="line"><span class="keyword">import</span> asyncio, random</span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Replica</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, name, epoch=-<span class="number">1</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>.name = name</span><br><span class="line">        <span class="variable language_">self</span>.data = &#123;&#125;</span><br><span class="line">        <span class="variable language_">self</span>.log = []                 <span class="comment"># 已应用的操作日志</span></span><br><span class="line">        <span class="variable language_">self</span>.online = <span class="literal">True</span></span><br><span class="line">        <span class="variable language_">self</span>.epoch = epoch            <span class="comment"># 纪元：第几任主（fencing token 的雏形）</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__repr__</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="keyword">return</span> <span class="string">f&quot;<span class="subst">&#123;self.name&#125;</span>(epoch=<span class="subst">&#123;self.epoch&#125;</span>, data=<span class="subst">&#123;self.data&#125;</span>)&quot;</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Cluster</span>:</span><br><span class="line">    <span class="keyword">def</span> <span class="title function_">__init__</span>(<span class="params">self, mode=<span class="string">&quot;async&quot;</span></span>):</span><br><span class="line">        <span class="variable language_">self</span>.mode = mode              <span class="comment"># &quot;sync&quot; / &quot;semi&quot; / &quot;async&quot;</span></span><br><span class="line">        <span class="variable language_">self</span>.nodes = [Replica(<span class="string">&quot;M&quot;</span>), Replica(<span class="string">&quot;F1&quot;</span>), Replica(<span class="string">&quot;F2&quot;</span>)]</span><br><span class="line">        <span class="variable language_">self</span>.leader = <span class="variable language_">self</span>.nodes[<span class="number">0</span>]</span><br><span class="line">        <span class="variable language_">self</span>.epoch = <span class="number">0</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">write</span>(<span class="params">self, key, value</span>):</span><br><span class="line">        <span class="string">&quot;&quot;&quot;主副本写，按模式决定等谁；返回成功与否&quot;&quot;&quot;</span></span><br><span class="line">        <span class="variable language_">self</span>.leader.data[key] = value</span><br><span class="line">        <span class="variable language_">self</span>.leader.log.append((<span class="string">&quot;W&quot;</span>, key, value, <span class="variable language_">self</span>.epoch))</span><br><span class="line">        acks = <span class="number">1</span></span><br><span class="line">        tasks = [asyncio.create_task(<span class="variable language_">self</span>._replicate(f, key, value))</span><br><span class="line">                 <span class="keyword">for</span> f <span class="keyword">in</span> <span class="variable language_">self</span>.nodes <span class="keyword">if</span> f <span class="keyword">is</span> <span class="keyword">not</span> <span class="variable language_">self</span>.leader <span class="keyword">and</span> f.online]</span><br><span class="line">        results = <span class="keyword">await</span> asyncio.gather(*tasks, return_exceptions=<span class="literal">True</span>)</span><br><span class="line">        acks += <span class="built_in">sum</span>(<span class="number">1</span> <span class="keyword">for</span> r <span class="keyword">in</span> results <span class="keyword">if</span> r <span class="keyword">is</span> <span class="literal">True</span>)</span><br><span class="line">        <span class="keyword">if</span> <span class="variable language_">self</span>.mode == <span class="string">&quot;sync&quot;</span> <span class="keyword">and</span> acks &lt; <span class="built_in">len</span>(<span class="variable language_">self</span>.nodes):</span><br><span class="line">            <span class="keyword">raise</span> RuntimeError(<span class="string">&quot;完全同步：有从副本未确认，写失败（可用性差）&quot;</span>)</span><br><span class="line">        <span class="keyword">if</span> <span class="variable language_">self</span>.mode == <span class="string">&quot;semi&quot;</span> <span class="keyword">and</span> acks &lt; <span class="number">2</span>:</span><br><span class="line">            <span class="keyword">raise</span> RuntimeError(<span class="string">&quot;半同步：无任何从副本确认，写失败&quot;</span>)</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">True</span>                   <span class="comment"># 异步模式：主落盘即成功（可能丢数据）</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">_replicate</span>(<span class="params">self, f, key, value</span>):</span><br><span class="line">        <span class="keyword">await</span> asyncio.sleep(random.uniform(<span class="number">0.01</span>, <span class="number">0.08</span>))   <span class="comment"># 复制延迟（异步的丢数据窗口）</span></span><br><span class="line">        f.data[key] = value</span><br><span class="line">        f.log.append((<span class="string">&quot;W&quot;</span>, key, value, <span class="variable language_">self</span>.epoch))</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">True</span></span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">failover</span>(<span class="params">self</span>):</span><br><span class="line">        <span class="string">&quot;&quot;&quot;主宕机 → 提升&#x27;日志最长&#x27;的从为新主，纪元+1&quot;&quot;&quot;</span></span><br><span class="line">        <span class="variable language_">self</span>.epoch += <span class="number">1</span></span><br><span class="line">        <span class="variable language_">self</span>.leader.online = <span class="literal">False</span>                      <span class="comment"># 旧主&quot;死&quot;了（可能只是 GC 停顿）</span></span><br><span class="line">        alive = [x <span class="keyword">for</span> x <span class="keyword">in</span> <span class="variable language_">self</span>.nodes <span class="keyword">if</span> x.online]</span><br><span class="line">        new_leader = <span class="built_in">max</span>(alive, key=<span class="keyword">lambda</span> x: <span class="built_in">len</span>(x.log))  <span class="comment"># 选日志最长的从（数据最全）</span></span><br><span class="line">        new_leader.epoch = <span class="variable language_">self</span>.epoch</span><br><span class="line">        old, <span class="variable language_">self</span>.leader = <span class="variable language_">self</span>.leader, new_leader</span><br><span class="line">        <span class="comment"># 纪元防脑裂：旧主若&#x27;复活&#x27;，其纪号已落后，写操作会被拒绝（见 guarded_write）</span></span><br><span class="line">        <span class="keyword">return</span> old, new_leader</span><br><span class="line"></span><br><span class="line">    <span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">guarded_write</span>(<span class="params">self, key, value, claimed_epoch</span>):</span><br><span class="line">        <span class="string">&quot;&quot;&quot;带纪元检查的写：旧主复活后携带旧纪元来写 → 拒绝（fencing）&quot;&quot;&quot;</span></span><br><span class="line">        <span class="keyword">if</span> claimed_epoch &lt; <span class="variable language_">self</span>.epoch:</span><br><span class="line">            <span class="keyword">raise</span> PermissionError(<span class="string">f&quot;纪元过期(<span class="subst">&#123;claimed_epoch&#125;</span>&lt;<span class="subst">&#123;self.epoch&#125;</span>)，拒绝旧主写入&quot;</span>)</span><br><span class="line">        <span class="keyword">return</span> <span class="keyword">await</span> <span class="variable language_">self</span>.write(key, value)</span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    random.seed(<span class="number">3</span>)</span><br><span class="line">    <span class="keyword">for</span> mode <span class="keyword">in</span> (<span class="string">&quot;sync&quot;</span>, <span class="string">&quot;semi&quot;</span>, <span class="string">&quot;async&quot;</span>):</span><br><span class="line">        c = Cluster(mode)</span><br><span class="line">        <span class="keyword">await</span> c.write(<span class="string">&quot;k&quot;</span>, mode + <span class="string">&quot;-v1&quot;</span>)          <span class="comment"># 正常写</span></span><br><span class="line">        <span class="keyword">await</span> asyncio.sleep(<span class="number">0.1</span>)                  <span class="comment"># 等异步复制传播</span></span><br><span class="line">        old, new = <span class="keyword">await</span> c.failover()</span><br><span class="line">        lost = <span class="built_in">set</span>(old.data.items()) - <span class="built_in">set</span>(new.data.items())</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;[<span class="subst">&#123;mode&#125;</span>] 切换 <span class="subst">&#123;old.name&#125;</span>-&gt;<span class="subst">&#123;new.name&#125;</span>，旧主独有数据(即丢失): <span class="subst">&#123;<span class="built_in">dict</span>(lost) <span class="keyword">or</span> <span class="string">&#x27;无&#x27;</span>&#125;</span>&quot;</span>)</span><br><span class="line">        <span class="comment"># 旧主复活试图继续写（脑裂场景）</span></span><br><span class="line">        <span class="keyword">try</span>:</span><br><span class="line">            <span class="keyword">await</span> c.guarded_write(<span class="string">&quot;k&quot;</span>, <span class="string">&quot;ghost-write&quot;</span>, claimed_epoch=old.epoch)</span><br><span class="line">        <span class="keyword">except</span> PermissionError <span class="keyword">as</span> e:</span><br><span class="line">            <span class="built_in">print</span>(<span class="string">f&quot;[<span class="subst">&#123;mode&#125;</span>] 脑裂防护: <span class="subst">&#123;e&#125;</span>&quot;</span>)</span><br><span class="line"></span><br><span class="line">asyncio.run(main())</span><br></pre></td></tr></table></figure>
+<p>运行会看到：sync 模式旧主与从完全一致（不丢）；async 模式旧主有未复制的独有数据——<strong>这些已确认写入在切换后直接消失</strong>，这就是异步复制丢失数据的全过程。而 guarded_write 展示的纪元检查，就是 Raft 任期（term）做同类防护的雏形。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“读写分离能提升写性能”</strong>：不能。所有写仍走主（单主架构），读写分离只扩读吞吐；写瓶颈要靠分区（第 06 章）或换无主/多主。</li>
+<li><strong>“半同步复制 = 数据零丢失”</strong>：MySQL 半同步在&quot;等待 ACK 超时&quot;时会自动降级回异步（rpl_semi_sync_master_timeout），降级瞬间等于异步——所谓零丢失只在&quot;降级未发生&quot;的时间窗内成立。要无丢失得靠多数派共识（Raft/Paxos 系存储）。</li>
+<li><strong>“Quorum 配置了就是强一致”</strong>：W+R&gt;N 只保证读到&quot;至少一份最新&quot;，不保证读到的是<strong>这份</strong>（并发交错、sibling 合并都可能给出旧序结果）。DDIA 第 5 章给了具体反例；要线性一致还得加读时读修复强制 + 写前读确认（Dynamo 的做法）或干脆用共识系统。</li>
+<li><strong>“故障切换是瞬间且无损的”</strong>：切换全程（检测超时 + 选举 + 客户端重连）通常秒级，期间服务降级；异步复制还有丢数据窗口。可用性目标（几个 9）要按&quot;切换时间 × 频率&quot;核算，而不是假设永远不切。</li>
+<li><strong>“LWW 是无害的冲突解决”</strong>：它按墙钟时间戳丢写，而墙钟恰恰不可靠（02 章）。两个并发写里&quot;先执行&quot;的那个可能因为时钟慢被判旧而消失——计数器、余额类数据用 LWW 会直接丢更新，CRDT 或应用层合并才是正解。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>复制的三个动机（就近/冗余/读扩展）与一个核心难题（写传播）；同步/半同步/异步的取舍 = 数据安全 ↔ 延迟与可用性。</li>
+<li>半同步是工程甜点；Raft 多数派提交是其多数派版；故障切换三坑：丢数据、脑裂（用纪元/fencing 防）、切换风暴。</li>
+<li>复制滞后三类问题各有路由层解法；优先做会话保证而不是上强一致（经验做法）。</li>
+<li>多主的本质是&quot;引入冲突&quot;，最好的处理是避免（所有权分区），其次 CRDT/应用层合并，LWW 会静默丢数据。</li>
+<li>无主复制：W+R&gt;N 保证读到最新副本（可推导），W&gt;N/2 保证写集合相交；读修复 + 反熵负责最终收敛；Quorum ≠ 线性一致。</li>
+<li>手写模拟确认了两个关键事实：异步复制丢数据是机制性的，纪元检查能挡住脑裂写。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>跑通 master_slave.py，把 <code>random.uniform(0.01, 0.08)</code> 的复制延迟上限调大到 0.5s，对比 async 模式下&quot;切换丢失数据量&quot;的变化；再在 failover 前加一个 <code>await asyncio.sleep(0.6)</code>，确认数据不再丢——写下&quot;复制延迟与丢数据窗口&quot;的关系。</li>
+<li>在 DynamoCluster 里把 W 改成 1、R 改成 1（违反 W+R&gt;N），构造一个&quot;写成功后立刻读却读到 None 或旧值&quot;的执行序列，验证 Quorum 条件不是装饰。</li>
+<li>实现 hinted handoff：场景 1 中副本 2 掉线期间的写，由其他副本暂存提示，副本 2 恢复后投递。对比它与反熵的修复时机差异。</li>
+<li>多主冲突实验：两个节点并发把 <code>title</code> 写成不同值，分别用 LWW（用 <code>time.time()</code> 戳）与&quot;应用层合并（拼接标题+标记冲突）&quot;处理，各运行 20 次统计 LWW 覆盖了哪一侧——说明为什么计数类数据不能 LWW。</li>
+<li>设计题：社交 App 的&quot;用户资料&quot;（低冲突）与&quot;关注关系&quot;（高并发修改）要复制，你会分别选哪种复制模式与冲突策略？给出理由并指出每种选择在故障切换时的数据丢失期望。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E5%88%86%E5%B8%83%E5%BC%8F/" rel="tag"># 分布式</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/03-CAP%E4%B8%8E%E4%B8%80%E8%87%B4%E6%80%A7%E8%B0%B1%E7%B3%BB/" rel="prev" title="03-CAP与一致性谱系">
+                  <i class="fa fa-angle-left"></i> 03-CAP与一致性谱系
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/05-%E5%85%B1%E8%AF%86-Raft%E8%AF%A6%E8%A7%A3/" rel="next" title="05-共识-Raft详解">
+                  05-共识-Raft详解 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

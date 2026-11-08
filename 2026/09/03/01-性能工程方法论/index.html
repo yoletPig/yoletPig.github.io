@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 准确说出延迟、吞吐、利用率三者的定义与关系，并能用 Little&#39;s Law 做定量推算（并发数、排队等待）。 - 把&#39;慢&#39;从一句抱怨变成一个可测量的命题：P50&#x2F;P99&#x2F;P99.9 分布、长尾为什么致命、SLO 怎么写。 - 掌握两套…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="01-性能工程方法论">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/03/01-%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B%E6%96%B9%E6%B3%95%E8%AE%BA/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 准确说出延迟、吞吐、利用率三者的定义与关系，并能用 Little&#39;s Law 做定量推算（并发数、排队等待）。 - 把&#39;慢&#39;从一句抱怨变成一个可测量的命题：P50&#x2F;P99&#x2F;P99.9 分布、长尾为什么致命、SLO 怎么写。 - 掌握两套…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T20:30:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.538Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="Linux">
+<meta property="article:tag" content="性能优化">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/03/01-%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B%E6%96%B9%E6%B3%95%E8%AE%BA/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/03/01-%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B%E6%96%B9%E6%B3%95%E8%AE%BA/","path":"2026/09/03/01-性能工程方法论/","title":"01-性能工程方法论"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>01-性能工程方法论 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#01-%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B%E6%96%B9%E6%B3%95%E8%AE%BA"><span class="nav-number">1.</span> <span class="nav-text"> 01 - 性能工程方法论</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E5%BB%B6%E8%BF%9F-%E5%90%9E%E5%90%90-%E5%88%A9%E7%94%A8%E7%8E%87%E4%B8%89%E4%B8%AA%E8%A2%AB%E6%B7%B7%E7%94%A8%E7%9A%84%E8%AF%8D"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 延迟、吞吐、利用率：三个被混用的词</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-littles-law%E4%B8%80%E4%B8%AA%E5%85%AC%E5%BC%8F%E4%B8%89%E5%88%86%E9%92%9F%E6%8E%A8%E5%AF%BC%E4%B8%80%E8%BE%88%E5%AD%90%E5%A5%BD%E7%94%A8"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. Little’s Law：一个公式，三分钟推导，一辈子好用</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E6%80%8E%E4%B9%88%E5%AE%9A%E4%B9%89%E6%85%A2%E5%88%86%E5%B8%83%E4%B8%8D%E6%98%AF%E5%9D%87%E5%80%BC"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. 怎么定义&quot;慢&quot;：分布不是均值</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-use-%E6%96%B9%E6%B3%95%E6%AF%8F%E8%B5%84%E6%BA%90%E6%9F%A5%E9%94%99%E8%AF%AF-%E9%A5%B1%E5%92%8C-%E5%88%A9%E7%94%A8%E7%8E%87"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. USE 方法：每资源查错误、饱和、利用率</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-red-%E6%96%B9%E6%B3%95%E9%9D%A2%E5%90%91%E6%9C%8D%E5%8A%A1%E7%9A%84%E4%B8%89%E4%B8%AA%E6%AF%94%E7%8E%87"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. RED 方法：面向服务的三个比率</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E8%B4%9F%E8%BD%BD%E9%97%AE%E9%A2%98-vs-%E6%9E%B6%E6%9E%84%E9%97%AE%E9%A2%98%E5%85%88%E5%88%86%E8%AF%8A%E5%86%8D%E5%BC%80%E5%88%80"><span class="nav-number">1.7.</span> <span class="nav-text"> 6. 负载问题 vs 架构问题：先分诊，再开刀</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#7-%E6%80%A7%E8%83%BD%E9%A2%84%E7%AE%97%E6%8A%8A%E5%BF%AB%E6%8B%86%E6%88%90%E5%8F%AF%E4%BB%A5%E5%88%86%E9%85%8D%E7%9A%84%E9%92%B1"><span class="nav-number">1.8.</span> <span class="nav-text"> 7. 性能预算：把&quot;快&quot;拆成可以分配的钱</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#8-%E8%A7%82%E5%AF%9F%E8%80%85%E6%95%88%E5%BA%94%E6%B5%8B%E9%87%8F%E4%BC%9A%E6%94%B9%E5%8F%98%E8%A2%AB%E6%B5%8B%E7%B3%BB%E7%BB%9F"><span class="nav-number">1.9.</span> <span class="nav-text"> 8. 观察者效应：测量会改变被测系统</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#9-%E5%8A%A8%E6%89%8B%E5%AE%9E%E9%AA%8C%E4%B8%BA%E4%B8%80%E4%B8%AA%E6%9C%89%E9%97%AE%E9%A2%98%E7%9A%84%E6%9C%8D%E5%8A%A1%E5%BB%BA%E7%AB%8B%E5%AE%8C%E6%95%B4%E7%9A%84%E5%BA%A6%E9%87%8F"><span class="nav-number">1.10.</span> <span class="nav-text"> 9. 动手实验：为一个&quot;有问题的服务&quot;建立完整的度量</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.11.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.12.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.13.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/03/01-%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B%E6%96%B9%E6%B3%95%E8%AE%BA/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="01-性能工程方法论 | Yoleen的博客">
+      <meta itemprop="description" content="- 准确说出延迟、吞吐、利用率三者的定义与关系，并能用 Little&#39;s Law 做定量推算（并发数、排队等待）。 - 把&#39;慢&#39;从一句抱怨变成一个可测量的命题：P50&#x2F;P99&#x2F;P99.9 分布、长尾为什么致命、SLO 怎么写。 - 掌握两套…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          01-性能工程方法论
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-03 04:30:00" itemprop="dateCreated datePublished" datetime="2026-09-03T04:30:00+08:00">2026-09-03</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/Linux%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B/" itemprop="url" rel="index"><span itemprop="name">Linux性能工程</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>4.8k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>17 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 准确说出延迟、吞吐、利用率三者的定义与关系，并能用 Little's Law 做定量推算（并发数、排队等待）。 - 把'慢'从一句抱怨变成一个可测量的命题：P50/P99/P99.9 分布、长尾为什么致命、SLO 怎么写。 - 掌握两套…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="01-性能工程方法论"><a class="markdownIt-Anchor" href="#01-性能工程方法论"></a> 01 - 性能工程方法论</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>准确说出延迟、吞吐、利用率三者的定义与关系，并能用 Little’s Law 做定量推算（并发数、排队等待）。</li>
+<li>把&quot;慢&quot;从一句抱怨变成一个可测量的命题：P50/P99/P99.9 分布、长尾为什么致命、SLO 怎么写。</li>
+<li>掌握两套系统化排查框架：USE 方法（面向资源）与 RED 方法（面向服务），从此排查不再靠灵感。</li>
+<li>理解性能预算、负载问题 vs 架构问题的区分，以及&quot;测量本身会改变被测系统&quot;的观察者效应。</li>
+</ul>
+<p>前置：无硬性前置，但读过操作系统系列 02（进程）会让&quot;并发数&quot;一词有画面感。本篇是全系列的&quot;宪法&quot;：后面 11 章的所有工具和案例，都在执行本篇定下的方法论。</p>
+<h2 id="1-延迟-吞吐-利用率三个被混用的词"><a class="markdownIt-Anchor" href="#1-延迟-吞吐-利用率三个被混用的词"></a> 1. 延迟、吞吐、利用率：三个被混用的词</h2>
+<p>性能讨论里最常见的混乱，是把三个不同的度量当一回事。先把定义钉死（《Systems Performance》第 2 章 “Methodology”，术语部分）：</p>
+<ul>
+<li><strong>延迟（latency）</strong>：完成一个操作所花费的时间。对推理服务是&quot;一个请求从发出到收完最后一个 token&quot;，对磁盘是&quot;一次 read() 从发起到返回&quot;，单位 ms/μs。延迟是<strong>每个请求的属性</strong>。</li>
+<li><strong>吞吐（throughput）</strong>：单位时间内完成的工作量。对服务是 QPS/RPS（请求数/秒），对磁盘是 MB/s 或 IOPS，对网络是 Gb/s。吞吐是<strong>系统的属性</strong>。</li>
+<li><strong>利用率（utilization）</strong>：资源被使用的时间占比。CPU 利用率 80% = 观测窗口内 80% 时间在忙。利用率是<strong>资源的属性</strong>，且只回答&quot;忙不忙&quot;，不回答&quot;忙得有没有效&quot;。</li>
+</ul>
+<p>三者的关系可以用一条最反直觉的曲线概括：<strong>利用率逼近 100% 时，延迟急剧上升</strong>。原因不是玄学，是排队论——利用率越高，到达的请求越可能撞上&quot;前面还有人在排队&quot;。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">延迟</span><br><span class="line"> │                          ╭──────────  指数级飙升区</span><br><span class="line"> │                     ╭────╯</span><br><span class="line"> │                ╭────╯</span><br><span class="line"> │           ╭────╯</span><br><span class="line"> │      ╭────╯</span><br><span class="line"> │  ────╯</span><br><span class="line"> └──────┬──────────┬────────┬──────► 利用率</span><br><span class="line">        50%        80%      95~100%</span><br><span class="line">        （低利用率区延迟≈服务时间，高利用率区延迟=服务时间+排队时间）</span><br></pre></td></tr></table></figure>
+<p>这条曲线的直接推论（<strong>经验做法</strong>）：线上服务的平均利用率要留余量（常留 30%~50%），不是&quot;用满才赚到&quot;——用满的那一刻，延迟开始失控，抖动先于崩溃到来。</p>
+<h2 id="2-littles-law一个公式三分钟推导一辈子好用"><a class="markdownIt-Anchor" href="#2-littles-law一个公式三分钟推导一辈子好用"></a> 2. Little’s Law：一个公式，三分钟推导，一辈子好用</h2>
+<p>排队系统里最实用的定律只有一个：<strong>L = λW</strong>。</p>
+<ul>
+<li>L：系统内平均请求数（正在处理的 + 在排队的）；</li>
+<li>λ：平均到达率（如 100 req/s）；</li>
+<li>W：平均每个请求在系统里停留的时间（延迟）。</li>
+</ul>
+<p><strong>推导</strong>（Little &amp; Graves, “Building Intuition: Insights from Basic Operations Management Models and Principles”，也见《Systems Performance》2.6 节）：设观测窗口 [0, T] 内共到达 N 个请求，第 i 个请求在系统里停留 Wi。把&quot;系统内人数 L(t)&quot;画成时间函数曲线，它随请求到达跳升、随离开下降。这条曲线下的面积，恰好等于每个请求&quot;停留时长&quot;的累加：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">L(t)</span><br><span class="line"> │   ┌─┐        ∫₀ᵀ L(t)dt = Σᵢ Wᵢ   （每个请求停留 Wi，</span><br><span class="line"> │ ┌─┘ └─┐                          就给曲线贡献一块 Wi 的面积）</span><br><span class="line"> │─┘     └──┐</span><br><span class="line"> └───────────┴──► t</span><br><span class="line"> 0           T</span><br></pre></td></tr></table></figure>
+<p>于是有两个读法：</p>
+<ul>
+<li>平均停留：ΣᵢWᵢ = N × W（平均延迟 × 人数）</li>
+<li>曲线下面积：∫L(t)dt = L × T（平均高度 × 宽度）</li>
+</ul>
+<p>两式相等：<strong>N × W = L × T</strong>，而 λ = N/T，移项即得 <strong>L = λW</strong>。推导只用了&quot;面积两种算法&quot;，无任何分布假设——不管请求是突发还是均匀、服务时间方差多大，都成立。这是它好用且可信的原因。</p>
+<p><strong>实战用法一：推算并发数。</strong> 目标延迟 200ms、到达率 100 req/s 的服务，L = 0.2 × 100 = 20——稳态下系统里平均只有 20 个请求。如果你的线程池配了 200 个 worker，说明 180 个在空转；反过来，压测时给 200 并发、延迟 5s，说明系统在硬扛 1000 个在制品。</p>
+<p><strong>实战用法二：算排队等待。</strong> 推理服务 GPU 上单请求推理 40ms（服务时间 S），到达率 20 req/s。平均并发 L = λW 里藏着排队：W = S + W排队。利用 02 篇将测量的方式，先量出 W，再减出排队时间。经验做法：<strong>把延迟拆成&quot;服务时间 + 等待时间&quot;，等待时间是吞吐压力的直接函数，服务时间是算法/实现的函数——两者要分开治</strong>。</p>
+<p><strong>实战用法三：容量规划。</strong> 显存里每个请求占 2GB、预算 40GB，L 上限 20；若 P99 要求延迟 &lt; 500ms、单请求服务时间 100ms，则 λ ≤ L/W = 20/0.5 = 40 req/s。三个数互相锁死，改任何一个都会撞到另外两个——性能工程的大部分&quot;取舍&quot;本质上是这个公式的三个变量在打架。</p>
+<h2 id="3-怎么定义慢分布不是均值"><a class="markdownIt-Anchor" href="#3-怎么定义慢分布不是均值"></a> 3. 怎么定义&quot;慢&quot;：分布不是均值</h2>
+<p>“我们接口平均延迟 50ms”——这句话几乎不含信息量。延迟从来不是单一数字，是<strong>分布</strong>。同一个接口，P50 = 20ms、P99 = 800ms 的服务，平均可能正好 50ms，但用户体验和事故风险天差地别。</p>
+<ul>
+<li><strong>P50（中位数）</strong>：一半请求比它快。代表&quot;典型用户&quot;。</li>
+<li><strong>P99</strong>：99% 的请求比它快，最慢的 1% 比它慢。代表&quot;尾部用户&quot;。</li>
+<li><strong>P99.9</strong>：千分之一的请求比它慢。高并发服务的 SLO 常常管到这里。</li>
+</ul>
+<p>为什么长尾如此重要？两个原因。</p>
+<p><strong>原因一：高并发下尾部不是小概率事件。</strong> 一个页面/一次交易背后往往有几十上百个后端调用，它们并行或串行发生。用户拿到的延迟是&quot;最慢的那个&quot;。假设单请求 P99=100ms（即 1% 概率超时），一次调用 100 个后端，至少一个进入尾部的概率是 1 − 0.99¹⁰⁰ ≈ 63%。这不是边缘案例，这是常态——出自 Google 的经典论文 Dean &amp; Barroso, “The Tail at Scale”（CACM 2013）。</p>
+<p><strong>原因二：尾部的成因和主体不同。</strong> P50 由代码主路径决定，P99.9 常由另一类事件决定：GC 停顿、缺页、锁竞争、后台回写抢 IO、cgroup 节流（11 篇）、TCP 重传（07 篇）。<strong>只优化主路径的代码，P50 会好，P99 纹丝不动</strong>——这是&quot;明明优化了却没变化&quot;的高发原因。</p>
+<p>怎么测量分布？两个硬性经验做法：</p>
+<ol>
+<li><strong>永远用直方图/分位数，不要用平均数</strong>。计数器累加出平均值会抹掉一切形状：10 个 10ms + 1 个 1s 的平均是 127ms，但没有任何一个请求是 127ms。</li>
+<li><strong>分位数要在客户端/入口处测</strong>，并在<strong>固定的时间窗</strong>内统计。只测服务端会漏掉排队前的时间；只看全天聚合会抹掉高峰时段的尾部。</li>
+</ol>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># p99_demo.py —— 同样的均值，两种完全不同的世界</span></span><br><span class="line"><span class="keyword">import</span> random, statistics <span class="keyword">as</span> st</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">make_latencies</span>(<span class="params">kind</span>):</span><br><span class="line">    <span class="keyword">if</span> kind == <span class="string">&quot;stable&quot;</span>:      <span class="comment"># 世界 A：延迟稳定，偶有抖动</span></span><br><span class="line">        <span class="keyword">return</span> [random.gauss(<span class="number">50</span>, <span class="number">5</span>) <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">10000</span>)]</span><br><span class="line">    <span class="keyword">else</span>:                     <span class="comment"># 世界 B：主体快，但 1% 请求慢 20 倍（尾部）</span></span><br><span class="line">        <span class="keyword">return</span> [random.gauss(<span class="number">50</span>, <span class="number">5</span>) <span class="keyword">if</span> random.random() &gt; <span class="number">0.01</span> <span class="keyword">else</span> random.gauss(<span class="number">1000</span>, <span class="number">100</span>)</span><br><span class="line">                <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">10000</span>)]</span><br><span class="line"></span><br><span class="line"><span class="keyword">for</span> kind <span class="keyword">in</span> (<span class="string">&quot;stable&quot;</span>, <span class="string">&quot;tail&quot;</span>):</span><br><span class="line">    lat = <span class="built_in">sorted</span>(make_latencies(kind))</span><br><span class="line">    n = <span class="built_in">len</span>(lat)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;<span class="subst">&#123;kind:<span class="number">7</span>&#125;</span> mean=<span class="subst">&#123;st.mean(lat):<span class="number">7.1</span>f&#125;</span>  &quot;</span></span><br><span class="line">          <span class="string">f&quot;P50=<span class="subst">&#123;lat[n//<span class="number">2</span>]:<span class="number">7.1</span>f&#125;</span>  P90=<span class="subst">&#123;lat[<span class="built_in">int</span>(n*<span class="number">0.9</span>)]:<span class="number">7.1</span>f&#125;</span>  &quot;</span></span><br><span class="line">          <span class="string">f&quot;P99=<span class="subst">&#123;lat[<span class="built_in">int</span>(n*<span class="number">0.99</span>)]:<span class="number">7.1</span>f&#125;</span>  max=<span class="subst">&#123;lat[-<span class="number">1</span>]:<span class="number">7.1</span>f&#125;</span>&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p>输出（形状示意，随机种子不同数值略异）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">stable  mean=   50.0  P50=   50.0  P90=   56.4  P99=   61.5  max=   78.6</span><br><span class="line">tail    mean=   59.4  P50=   50.0  P90=   57.2  P99=  937.4  max= 1352.6</span><br></pre></td></tr></table></figure>
+<p>两个世界的均值只差 19%，P99 差 15 倍。如果你只看均值监控，世界 B 会以&quot;偶发投诉&quot;的形式反复出现且无法复现。SLO 的正确写法是分位数承诺，例如&quot;P99 延迟 &lt; 300ms（按 1 分钟窗口统计）&quot;。</p>
+<h2 id="4-use-方法每资源查错误-饱和-利用率"><a class="markdownIt-Anchor" href="#4-use-方法每资源查错误-饱和-利用率"></a> 4. USE 方法：每资源查错误、饱和、利用率</h2>
+<p>排查性能问题时最怕两件事：漏查、乱查。USE 方法（Utilization, Saturation, Errors，Brendan Gregg 提出，<a target="_blank" rel="noopener" href="http://brendangregg.com/USEmethod%EF%BC%89%E7%BB%99%E5%87%BA%E4%B8%80%E4%B8%AA%E5%AE%8C%E5%A4%87%E6%80%A7%E6%A3%80%E6%9F%A5%E8%A1%A8%EF%BC%9A">brendangregg.com/USEmethod）给出一个完备性检查表：</a><strong>对每一种资源，依次问三个问题</strong>：</p>
+<ul>
+<li><strong>U（Utilization 利用率）</strong>：资源忙的时间占比。CPU 90%？磁盘 100%？内存用了多少？</li>
+<li><strong>S（Saturation 饱和度）</strong>：超出容量的排队量。可运行队列长度、IO 队列深度、内存的换页压力、TCP 重传。</li>
+<li><strong>E（Errors 错误）</strong>：错误计数。ECC 错误、失败的系统调用、丢包、OOM。</li>
+</ul>
+<p>顺序也有讲究：<strong>先查 Errors，再查 Saturation，最后看 Utilization</strong>（<strong>经验做法</strong>）。因为错误往往直接指向根因（一块报错的盘），饱和度排队是&quot;慢&quot;的直接原因，而利用率高只是线索不是结论——CPU 100% 未必是瓶颈，可能是它在替一块慢盘 spin-wait。</p>
+<p>把检查表落到 Linux 常见资源上（具体命令读法在 02 篇展开）：</p>
+<table>
+<thead>
+<tr>
+<th>资源</th>
+<th>利用率</th>
+<th>饱和度</th>
+<th>错误</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>CPU</td>
+<td><code>mpstat 1</code> 的 %usr+%sys</td>
+<td><code>vmstat 1</code> 的 r 列 &gt; 核数、调度延迟</td>
+<td><code>dmesg</code> 里的 MCE/硬件告警</td>
+</tr>
+<tr>
+<td>内存</td>
+<td><code>free</code> 的 available 低于水位</td>
+<td>换页：<code>vmstat 1</code> 的 si/so 持续非零</td>
+<td>OOM：`dmesg</td>
+</tr>
+<tr>
+<td>磁盘 IO</td>
+<td><code>iostat -x 1</code> 的 %util</td>
+<td>await 上升、aqu-sz 堆积</td>
+<td>dmesg 的 I/O error、SMART</td>
+</tr>
+<tr>
+<td>网络</td>
+<td>带宽 / 链路速率</td>
+<td>发送队列堆积 <code>ss -tin</code>、重传</td>
+<td><code>netstat -s</code> 的 dropped、<code>ethtool -S</code></td>
+</tr>
+<tr>
+<td>文件系统</td>
+<td>已用 inode/空间</td>
+<td>每操作延迟上升</td>
+<td><code>dmesg</code> 文件系统报错</td>
+</tr>
+<tr>
+<td>GPU（09 篇）</td>
+<td>nvidia-smi GPU-Util</td>
+<td>显存不足、队列等待</td>
+<td>Xid 错误（dmesg）</td>
+</tr>
+</tbody>
+</table>
+<p>USE 的价值在&quot;完备&quot;：一遍过完，常见瓶颈不会漏。它的局限是<strong>只面向资源</strong>，如果你排查的是&quot;这个接口慢&quot;，要配合下面的 RED 方法。</p>
+<h2 id="5-red-方法面向服务的三个比率"><a class="markdownIt-Anchor" href="#5-red-方法面向服务的三个比率"></a> 5. RED 方法：面向服务的三个比率</h2>
+<p>RED 方法（Tom Wilkie，Weaveworks 2015 年博客 “The RED method: monitoring microservices”）面向每一个服务/端点，监控三个量：</p>
+<ul>
+<li><strong>R（Rate）</strong>：每秒请求数。</li>
+<li><strong>E（Errors）</strong>：每秒失败请求数。</li>
+<li><strong>D（Duration）</strong>：每个请求的耗时<strong>分布</strong>（分位数，不是均值）。</li>
+</ul>
+<p>USE 和 RED 是正交的两半：<strong>USE 从资源往下保护机器，RED 从服务往上保证体验</strong>。一次完整排查 = 对服务跑 RED（哪个指标先劣化？Rate 涨了是流量问题，Duration 涨了是容量/代码问题）+ 对主机跑 USE（资源哪一层饱和？）。12 篇的综合实战会完整执行这个组合。</p>
+<h2 id="6-负载问题-vs-架构问题先分诊再开刀"><a class="markdownIt-Anchor" href="#6-负载问题-vs-架构问题先分诊再开刀"></a> 6. 负载问题 vs 架构问题：先分诊，再开刀</h2>
+<p>&quot;系统变慢了&quot;有两种完全不同的病：</p>
+<ul>
+<li><strong>负载问题（load problem）</strong>：同样的活，来的人多了。特征：延迟随并发/流量上升，单请求在低并发下依然快。治法：扩容、限流、排队、缓存削峰。</li>
+<li><strong>架构问题（efficiency/architecture problem）</strong>：人没变多，单个请求自己变慢了。特征：低负载下延迟也高；同样流量下 CPU/IO 消耗比过去大。治法：剖析热点、改实现。</li>
+</ul>
+<p>分诊的手法非常朴素（<strong>经验做法</strong>）：<strong>固定小并发（比如 c=1）压一遍，看单请求延迟</strong>。</p>
+<ul>
+<li>c=1 时延迟正常，c=100 时爆炸 → 负载/容量问题（查排队：Little’s Law、线程池、连接池、锁竞争）。</li>
+<li>c=1 时延迟已经超标 → 架构/实现问题（直接进入 03/10 篇的剖析流程）。</li>
+</ul>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br></pre></td><td class="code"><pre><span class="line">    c=1 延迟正常? ──否──► 架构问题：剖析热点、改算法/实现</span><br><span class="line">         │是</span><br><span class="line">         ▼</span><br><span class="line">    c=N 延迟超 SLO? ──否──► 不是性能问题，检查测量方法</span><br><span class="line">         │是</span><br><span class="line">         ▼</span><br><span class="line">资源饱和了吗(USE)? ──是──► 负载问题：扩容/限流/削峰</span><br><span class="line">         │否</span><br><span class="line">         ▼</span><br><span class="line">锁/排队/GC 等内部串行点（04 篇 off-CPU 分析的主场）</span><br></pre></td></tr></table></figure>
+<p>一个容易踩的坑：<strong>&quot;加机器&quot;对负载问题有效，对架构问题只是推迟爆炸</strong>——如果单请求本身要 800ms，复制十份依然是 800ms，只是同时能背 10 个。</p>
+<h2 id="7-性能预算把快拆成可以分配的钱"><a class="markdownIt-Anchor" href="#7-性能预算把快拆成可以分配的钱"></a> 7. 性能预算：把&quot;快&quot;拆成可以分配的钱</h2>
+<p>优化前先回答：<strong>这 300ms 的总延迟，每一层各占多少？允许多少？</strong> 这就是性能预算（latency budget，《Systems Performance》第 2 章 latency budget 一节）。做法是把端到端延迟逐层拆开，每层记账：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">端到端 300ms 预算示例（一个典型的 LLM 问答请求）</span><br><span class="line">├── 网络 RTT（客户端→网关）            预算  20ms   实测  18ms  ✓</span><br><span class="line">├── 网关/鉴权                          预算  10ms   实测   9ms  ✓</span><br><span class="line">├── 预处理（分词/图像解码）             预算  30ms   实测 142ms  ✗ ←超支</span><br><span class="line">├── 模型推理（TTFT）                   预算 180ms   实测 110ms  ✓</span><br><span class="line">├── 后处理/序列化                      预算  10ms   实测   8ms  ✓</span><br><span class="line">└── 网络 RTT（返回）                   预算  20ms   实测  19ms  ✓</span><br><span class="line">                                     ───────────────────────</span><br><span class="line">                              合计    预算 270ms   实测 306ms</span><br></pre></td></tr></table></figure>
+<p>预算表的威力在于<strong>否定式</strong>：它一眼揭穿&quot;优化推理 kernel&quot;这类听上去专业的提议——推理只占预算的 1/3 且没超支，超支的是预处理。把优化火力对准超支行，而不是对准最炫技的那层。经验做法：每层预算之和要小于总预算（留 buffer），每层实测用 02 篇的工具落到系统层面（线程、syscall、IO），别只停留在应用埋点。</p>
+<h2 id="8-观察者效应测量会改变被测系统"><a class="markdownIt-Anchor" href="#8-观察者效应测量会改变被测系统"></a> 8. 观察者效应：测量会改变被测系统</h2>
+<p>观测本身有成本，而且不同观测手段的成本差 3~4 个数量级。这条物理课上的老原则在性能工程里随处可见：</p>
+<ul>
+<li><strong>strace</strong>（02 篇详述）：每次系统调用都要让目标进程暂停、陷入 ptrace 机制，对 syscall 密集的进程可以带来 10 倍以上的减速（《Systems Performance》4.2.3 节明确警告 strace 开销高）。生产上对高 QPS 进程直接 strace，可能把服务挂掉。</li>
+<li><strong>perf/bpftrace</strong>（02/08 篇）：基于内核计数器和 eBPF，正常配置下开销在百分之几以内，适合生产。</li>
+<li><strong>valgrind/callgrind</strong>（10 篇）：模拟执行，慢 20~100 倍，只用于离线小负载。</li>
+</ul>
+<p>经验做法有三条：</p>
+<ol>
+<li>生产环境优先&quot;采样&quot;而非&quot;全量记录&quot;（perf -F 99 就是每秒 99 次采样，而不是记录每次事件）。</li>
+<li>观测时<strong>同时跑一个不开启观测的对照组</strong>，确认观测没有显著改变延迟形状。</li>
+<li>对延迟敏感的路径，避免每个请求都写日志/打点文件——日志 IO 本身会成为 06 篇里的瓶颈。</li>
+</ol>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">┌────────────────────────────────────────────────────────┐</span><br><span class="line">│ 观测手段     开销量级        能不能用在线上              │</span><br><span class="line">├────────────────────────────────────────────────────────┤</span><br><span class="line">│ 计数器读取   ~0             随便用（/proc, mpstat）     │</span><br><span class="line">│ perf 采样    &lt;5%            可以                        │</span><br><span class="line">│ eBPF         &lt;5~10%         可以                        │</span><br><span class="line">│ strace       10x+ 慢        只对单进程小负载排查用      │</span><br><span class="line">│ valgrind     20~100x 慢     只能离线                    │</span><br><span class="line">└────────────────────────────────────────────────────────┘</span><br></pre></td></tr></table></figure>
+<h2 id="9-动手实验为一个有问题的服务建立完整的度量"><a class="markdownIt-Anchor" href="#9-动手实验为一个有问题的服务建立完整的度量"></a> 9. 动手实验：为一个&quot;有问题的服务&quot;建立完整的度量</h2>
+<p>实验对象是一个模拟的服务 worker：90% 的请求 10ms 完成，10% 的请求因为一个&quot;定时 GC&quot;被拖到 200ms。我们假装不知道缺陷，只用方法论把它逼出来。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># worker_sim.py —— 模拟一个有长尾缺陷的服务</span></span><br><span class="line"><span class="keyword">import</span> time, random, statistics <span class="keyword">as</span> st</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">handle_request</span>():</span><br><span class="line">    t0 = time.perf_counter()</span><br><span class="line">    <span class="keyword">if</span> random.random() &lt; <span class="number">0.10</span>:          <span class="comment"># 缺陷：10% 请求进入&quot;慢路径&quot;</span></span><br><span class="line">        time.sleep(<span class="number">0.2</span>)                 <span class="comment"># 模拟 GC/锁等待</span></span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        time.sleep(<span class="number">0.01</span>)                <span class="comment"># 正常路径 10ms</span></span><br><span class="line">    <span class="keyword">return</span> (time.perf_counter() - t0) * <span class="number">1000</span></span><br><span class="line"></span><br><span class="line"><span class="keyword">if</span> __name__ == <span class="string">&quot;__main__&quot;</span>:</span><br><span class="line">    random.seed(<span class="number">7</span>)</span><br><span class="line">    lat = [handle_request() <span class="keyword">for</span> _ <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">2000</span>)]</span><br><span class="line">    lat.sort(); n = <span class="built_in">len</span>(lat)</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">f&quot;mean = <span class="subst">&#123;st.mean(lat):<span class="number">7.1</span>f&#125;</span> ms&quot;</span>)</span><br><span class="line">    <span class="keyword">for</span> p <span class="keyword">in</span> (<span class="number">50</span>, <span class="number">90</span>, <span class="number">99</span>, <span class="number">99.9</span>):</span><br><span class="line">        <span class="built_in">print</span>(<span class="string">f&quot;P<span class="subst">&#123;p:&lt;<span class="number">5</span>&#125;</span> = <span class="subst">&#123;lat[<span class="built_in">int</span>(n*p/<span class="number">100</span>)]:<span class="number">7.1</span>f&#125;</span> ms&quot;</span>)</span><br></pre></td></tr></table></figure>
+<p><strong>第一步：观测。</strong> 运行它，看到均值&quot;看起来还行&quot;，但 P99 暴露异常：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">$ python3 worker_sim.py</span><br><span class="line">mean =    28.4 ms</span><br><span class="line">P50    =     9.9 ms</span><br><span class="line">P90    =    10.1 ms</span><br><span class="line">P99    =   203.9 ms</span><br><span class="line">P99.9  =   204.2 ms</span><br></pre></td></tr></table></figure>
+<p><strong>第二步：定位。</strong> 均值 28ms 介于 10 与 200 之间，而 P50/P90 都在 10ms——说明分布是双峰的：主体 10ms，一小撮 200ms。用 RED 的语言说：Duration 的分位数劣化，Rate 没变，Errors 没变。顺着&quot;谁被拖慢了&quot;去找代码里唯一能产生 200ms 量级差异的分支（真实系统里这一步用 03 篇火焰图/10 篇 py-spy 完成）。</p>
+<p><strong>第三步：修复。</strong> 假设&quot;GC&quot;可以异步化或分摊（真实案例里对应：定时任务挪出请求路径）：</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">    <span class="keyword">if</span> random.random() &lt; <span class="number">0.10</span>:</span><br><span class="line">        time.sleep(<span class="number">0.2</span>)     <span class="comment"># 修复前：慢路径在请求内</span></span><br><span class="line">    <span class="keyword">else</span>:</span><br><span class="line">        ...</span><br><span class="line"><span class="comment"># 修复后：慢操作分摊，每个请求最多多付 2ms</span></span><br><span class="line">    time.sleep(<span class="number">0.01</span> + (<span class="number">0.002</span> <span class="keyword">if</span> random.random() &lt; <span class="number">0.10</span> <span class="keyword">else</span> <span class="number">0</span>))</span><br></pre></td></tr></table></figure>
+<p><strong>第四步：对比。</strong></p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">修复前: mean = 28.4 ms   P50 = 9.9   P99 = 203.9</span><br><span class="line">修复后: mean = 10.2 ms   P50 = 9.9   P99 = 10.6</span><br></pre></td></tr></table></figure>
+<p>P99 降 19 倍，均值降 2.8 倍，而 P50 几乎没动——注意这个细节：<strong>修复针对的是尾部，指标也只在尾部兑现</strong>。最后按 Little’s Law 复核收益：λ=100 req/s 时，L 从 2.84 降到 1.02，同样的线程池现在有大量余量，这就是把&quot;修复&quot;翻译成&quot;容量&quot;的语言。</p>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“平均延迟达标 = 服务健康”</strong>：均值对长尾失明。看分位数，且要看多个窗口（1 分钟/1 小时），高负载时段的 P99 才是真实水位。</li>
+<li><strong>“利用率 100% = 瓶颈在这”</strong>：利用率只说明忙，不说明慢在哪。100% CPU 可能是它替慢盘自旋，100% 磁盘 %util 在 SSD 上可能远未饱和（06 篇的 %util 陷阱）。利用率是线索，饱和度排队和错误才是证据。</li>
+<li><strong>“P99 优化到 P50 就算完成”</strong>：尾部成因（GC、节流、重传）和主体不同，验证修复要用修复前后的同口径 P99 对比，而不是换一个对自己有利的指标。</li>
+<li><strong>“先加机器再说”</strong>：对架构问题，扩容只推迟爆炸还烧钱；先用 c=1 分诊（第 6 节）确定病种。</li>
+<li><strong>“测量是免费的”</strong>：strace/全量日志打点可能把线上服务拖垮。选择观测手段先看开销等级（第 8 节的表）。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>延迟是每个请求的时间，吞吐是系统的速率，利用率是资源的忙闲；高利用率下延迟因排队而失控，所以要留水位。</li>
+<li>Little’s Law L = λW 用&quot;面积两种算法&quot;即可推导，无分布假设；用来推并发、算排队、锁容量三个变量。</li>
+<li>&quot;慢&quot;必须用分布定义：P50/P99/P99.9；高并发下尾部以 1−0.99ⁿ 的速度变成常态（The Tail at Scale）；均值会同时抹掉形状和事故。</li>
+<li>USE 面向资源（每资源查 错误→饱和→利用率），RED 面向服务（Rate/Errors/Duration）；排查 = 两者组合。</li>
+<li>先用&quot;低并发下还慢不慢&quot;分诊负载问题与架构问题；用性能预算表决定优化火力对准哪层。</li>
+<li>观察者效应真实存在且跨 4 个数量级：计数器≈免费，perf/eBPF&lt;10%，strace 10 倍+，valgrind 只能离线。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>修改 worker_sim.py 的慢路径比例为 1% 和 0.1%，分别算出 P99 与 P99.9，验证&quot;尾部比例小到千分之一时，P99.9 才看得见它&quot;。</li>
+<li>你的推理服务目标 P99 ≤ 500ms，压测得 λ=30 req/s 时 P99 恰好 500ms。用 Little’s Law 估算系统内平均并发 L；再假设单请求服务时间 120ms，估算平均排队时间占延迟的比例，写一句话说明&quot;该扩容还是该优化代码&quot;。</li>
+<li>给一个你自己项目的接口（或 FastAPI demo）加直方图打点，分别以 1 分钟和 1 小时窗口统计 P99，观察&quot;聚合窗口越大，尾部越被抹平&quot;的现象，记录两组数字。</li>
+<li>用时间模块测量 <code>strace -c -f python3 -c &quot;pass&quot;</code> 与不带 strace 的运行时间差 5 次取平均，估算本机 strace 的观察者效应量级。</li>
+<li>画一张你自己系统的延迟预算表（总延迟拆成网络/网关/业务/存储/返回），标出每层的预算与&quot;你猜的实测值&quot;，下次实测后回来核对——练习&quot;先定预算后测量&quot;的工作方式。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/Linux/" rel="tag"># Linux</a>
+              <a href="/tags/%E6%80%A7%E8%83%BD%E4%BC%98%E5%8C%96/" rel="tag"># 性能优化</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/03/Linux%E6%80%A7%E8%83%BD%E5%B7%A5%E7%A8%8B-README/" rel="prev" title="Linux性能工程 · 学习路线总览">
+                  <i class="fa fa-angle-left"></i> Linux性能工程 · 学习路线总览
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/03/02-%E5%B7%A5%E5%85%B7%E5%85%A8%E6%99%AF%E4%B8%8E%E8%A7%82%E6%B5%8B%E5%B1%82%E6%AC%A1/" rel="next" title="02-工具全景与观测层次">
+                  02-工具全景与观测层次 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

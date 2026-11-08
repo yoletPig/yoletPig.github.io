@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="- 按 POSIX 的口径分清五种 IO 模型：阻塞、非阻塞、IO 多路复用、信号驱动、异步，并理解它们在&#39;等待数据&#39;与&#39;拷贝数据&#39;两个阶段上的差别。 - 讲清 select → poll → epoll 的演进动机：fd 上限、每次全量拷…">
+<meta property="og:type" content="article">
+<meta property="og:title" content="09-IO模型与多路复用">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/02/09-IO%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="- 按 POSIX 的口径分清五种 IO 模型：阻塞、非阻塞、IO 多路复用、信号驱动、异步，并理解它们在&#39;等待数据&#39;与&#39;拷贝数据&#39;两个阶段上的差别。 - 讲清 select → poll → epoll 的演进动机：fd 上限、每次全量拷…">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-02T03:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.518Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="操作系统">
+<meta property="article:tag" content="教程">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/02/09-IO%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/02/09-IO%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8/","path":"2026/09/02/09-IO模型与多路复用/","title":"09-IO模型与多路复用"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>09-IO模型与多路复用 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#09-io%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8"><span class="nav-number">1.</span> <span class="nav-text"> 09 - IO模型与多路复用</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E4%BA%94%E7%A7%8D-io-%E6%A8%A1%E5%9E%8B%E4%B8%A4%E4%B8%AA%E9%98%B6%E6%AE%B5%E5%AE%9A%E4%B9%BE%E5%9D%A4"><span class="nav-number">1.2.</span> <span class="nav-text"> 1. 五种 IO 模型：两个阶段定乾坤</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-select-poll-epoll-%E6%BC%94%E8%BF%9B"><span class="nav-number">1.3.</span> <span class="nav-text"> 2. select &#x2F; poll &#x2F; epoll 演进</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-epoll-lt-vs-et%E6%89%8B%E5%86%99%E6%9C%80%E5%B0%8F-echo-server"><span class="nav-number">1.4.</span> <span class="nav-text"> 3. epoll LT vs ET：手写最小 echo server</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-reactor-%E6%A8%A1%E5%BC%8F"><span class="nav-number">1.5.</span> <span class="nav-text"> 4. Reactor 模式</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E4%B8%BA%E4%BB%80%E4%B9%88-noderedisasyncio-%E9%83%BD%E5%BB%BA%E5%9C%A8%E8%BF%99%E4%B8%8A%E9%9D%A2"><span class="nav-number">1.6.</span> <span class="nav-text"> 5. 为什么 Node&#x2F;Redis&#x2F;asyncio 都建在这上面</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%B8%B8%E8%A7%81%E8%AF%AF%E5%8C%BA"><span class="nav-number">1.7.</span> <span class="nav-text"> 常见误区</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E5%B0%8F%E7%BB%93"><span class="nav-number">1.8.</span> <span class="nav-text"> 本篇小结</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E7%BB%83%E4%B9%A0"><span class="nav-number">1.9.</span> <span class="nav-text"> 练习</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/02/09-IO%E6%A8%A1%E5%9E%8B%E4%B8%8E%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="09-IO模型与多路复用 | Yoleen的博客">
+      <meta itemprop="description" content="- 按 POSIX 的口径分清五种 IO 模型：阻塞、非阻塞、IO 多路复用、信号驱动、异步，并理解它们在&#39;等待数据&#39;与&#39;拷贝数据&#39;两个阶段上的差别。 - 讲清 select → poll → epoll 的演进动机：fd 上限、每次全量拷…">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          09-IO模型与多路复用
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-02 11:00:00" itemprop="dateCreated datePublished" datetime="2026-09-02T11:00:00+08:00">2026-09-02</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" itemprop="url" rel="index"><span itemprop="name">操作系统</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>3.4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>12 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">- 按 POSIX 的口径分清五种 IO 模型：阻塞、非阻塞、IO 多路复用、信号驱动、异步，并理解它们在'等待数据'与'拷贝数据'两个阶段上的差别。 - 讲清 select → poll → epoll 的演进动机：fd 上限、每次全量拷…</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="09-io模型与多路复用"><a class="markdownIt-Anchor" href="#09-io模型与多路复用"></a> 09 - IO模型与多路复用</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<ul>
+<li>按 POSIX 的口径分清五种 IO 模型：阻塞、非阻塞、IO 多路复用、信号驱动、异步，并理解它们在&quot;等待数据&quot;与&quot;拷贝数据&quot;两个阶段上的差别。</li>
+<li>讲清 select → poll → epoll 的演进动机：fd 上限、每次全量拷贝、O(n) 扫描这三个坑是怎么被逐个填掉的。</li>
+<li>手写一个最小的 epoll echo server（C，~80 行），搞懂水平触发（LT）与边缘触发（ET）的行为差异与 ET 的正确写法。</li>
+<li>掌握 Reactor 模式的结构，明白 Redis、Node、asyncio 的并发能力全部源自同一个 OS 机制。</li>
+</ul>
+<p>前置：第 07 篇的上下文切换成本、第 08 篇的 fd；环境 Ubuntu 22.04 / WSL2，gcc。</p>
+<h2 id="1-五种-io-模型两个阶段定乾坤"><a class="markdownIt-Anchor" href="#1-五种-io-模型两个阶段定乾坤"></a> 1. 五种 IO 模型：两个阶段定乾坤</h2>
+<p>一次网络读（recv）从发起拿到数据，内部有两个阶段（POSIX 对同步/异步 IO 的定义见 POSIX.1-2008 <code>aio_read</code> 相关章节；经典两阶段框架出自 Stevens《UNIX 网络编程 卷1》第 6.2 节，五种模型图源出于此）：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">阶段1: 等数据到达（包在网络走，进内核 socket 缓冲区）</span><br><span class="line">阶段2: 把数据从内核缓冲区拷到用户缓冲区</span><br></pre></td></tr></table></figure>
+<p>五种模型按&quot;谁在等、怎么等&quot;划分：</p>
+<table>
+<thead>
+<tr>
+<th>模型</th>
+<th>阶段 1（等数据）</th>
+<th>阶段 2（拷数据）</th>
+<th>谁阻塞</th>
+<th>POSIX 分类</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>阻塞 IO</td>
+<td>一直阻塞等待</td>
+<td>阻塞拷贝</td>
+<td>调用线程全程阻塞</td>
+<td>同步</td>
+</tr>
+<tr>
+<td>非阻塞 IO</td>
+<td>立即返回 EWOULDBLOCK，反复轮询</td>
+<td>阻塞拷贝</td>
+<td>不等数据但拷贝时阻塞</td>
+<td>同步</td>
+</tr>
+<tr>
+<td>IO 多路复用</td>
+<td>select/poll/epoll 阻塞等&quot;任一就绪&quot;</td>
+<td>阻塞拷贝</td>
+<td>阻塞在多路复用调用上</td>
+<td>同步</td>
+</tr>
+<tr>
+<td>信号驱动 IO</td>
+<td>SIGIO 通知&quot;数据到了&quot;</td>
+<td>阻塞拷贝</td>
+<td>不阻塞，靠信号</td>
+<td>同步</td>
+</tr>
+<tr>
+<td>异步 IO（AIO/io_uring）</td>
+<td>内核全包，完成后通知</td>
+<td><strong>内核完成拷贝</strong></td>
+<td>全程不阻塞</td>
+<td><strong>异步</strong></td>
+</tr>
+</tbody>
+</table>
+<p>关键区分（面试与选型都吃这口）：<strong>前四种在阶段 2 都要自己拷贝</strong>，所以 POSIX 意义上都算<strong>同步 IO</strong>；只有异步 IO 连拷贝都不用你管（Linux 传统 AIO 支持面窄，现代方案是 io_uring，本文不展开，记住它是&quot;第五种的正统实现&quot;）。IO 多路复用的本质是<strong>用一次系统调用同时监视大量 fd</strong>，让&quot;等&quot;这件事集中化——它是本篇绝对主角。</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">阻塞IO:   recv ────────────────阻塞────────────────► 拿到数据</span><br><span class="line">多路复用:  epoll_wait ──阻塞──► 某fd就绪返回 ──► recv（此刻立即返回）──► 拿到数据</span><br></pre></td></tr></table></figure>
+<p>为什么多路复用对服务端如此重要？一个 10000 连接的服务器：阻塞 IO 需要 10000 线程（07 篇算过切换成本）；非阻塞轮询烧 CPU；而 epoll 让<strong>一个线程</strong>盯着 10000 个 fd，只在有事的瞬间醒来。</p>
+<h2 id="2-select-poll-epoll-演进"><a class="markdownIt-Anchor" href="#2-select-poll-epoll-演进"></a> 2. select / poll / epoll 演进</h2>
+<p>三代接口的接力（<code>man 2 select</code>、<code>man 2 poll</code>、<code>man 7 epoll</code>）：</p>
+<p><strong>select（1983，BSD）</strong>——用 fd_set 位图传&quot;我关心哪些 fd&quot;：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">fd_set rfds; FD_ZERO(&amp;rfds); FD_SET(fd1, &amp;rfds); FD_SET(fd2, &amp;rfds);</span><br><span class="line"><span class="type">int</span> r = select(maxfd + <span class="number">1</span>, &amp;rfds, <span class="literal">NULL</span>, <span class="literal">NULL</span>, <span class="literal">NULL</span>);   <span class="comment">// 返回就绪个数，set 被就地改写</span></span><br><span class="line"><span class="keyword">for</span> (<span class="type">int</span> fd = <span class="number">0</span>; fd &lt;= maxfd; fd++)                    <span class="comment">// 必须全量扫一遍找就绪者</span></span><br><span class="line">    <span class="keyword">if</span> (FD_ISSET(fd, &amp;rfds)) handle(fd);</span><br></pre></td></tr></table></figure>
+<p>三大痛点：fd 数量上限 <strong>FD_SETSIZE=1024</strong>（硬编码位图长度）；每次调用要把整个 fd_set 从用户态<strong>拷进内核</strong>再拷回（就绪状态就地改写，每次还得重置）；返回后要<strong>O(n) 全量扫描</strong>找就绪 fd。连接一多，扫描开销压倒一切。</p>
+<p><strong>poll（1997）</strong>——改成 pollfd 数组，去掉 1024 上限与就地改写问题，但&quot;全量拷贝 + O(n) 扫描&quot;依旧。</p>
+<p><strong>epoll（2002，Linux 2.5.44，Davide Libenzi）</strong>——把&quot;注册&quot;与&quot;等待&quot;拆开：</p>
+<ul>
+<li><code>epoll_create1()</code>：内核建一个 epoll 实例（红黑树组织注册的 fd）；</li>
+<li><code>epoll_ctl()</code>：增/删/改注册的 fd（只做一次，不随等待重复）；</li>
+<li><code>epoll_wait()</code>：只返回<strong>就绪的 fd 列表</strong>，不是&quot;哪些有戏&quot;而是&quot;哪些有事&quot;。</li>
+</ul>
+<p>两个内核机制支撑 O(1)：<strong>回调注册</strong>——每个注册 fd 的就绪事件发生时，驱动回调把它挂进 epoll 实例的就绪链表（rdllist）；<code>epoll_wait</code> 只需检查这个链表是否非空，把链表内容返回给用户。于是：拷贝量 = 就绪数（不是总数），扫描量 = 就绪数（不是总数）。连接 10 万、活跃 100 的场景，epoll 干 100 的活，select/poll 干 10 万的活——这就是&quot;C10K 问题&quot;在 Linux 上的标准答案（C10K 术语出自 Dan Kegel 的著名文章）。</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>select</th>
+<th>poll</th>
+<th>epoll</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>fd 上限</td>
+<td>1024（FD_SETSIZE）</td>
+<td>无硬限</td>
+<td>无硬限</td>
+</tr>
+<tr>
+<td>每次等待的拷贝</td>
+<td>全量</td>
+<td>全量</td>
+<td>无（注册一次）</td>
+</tr>
+<tr>
+<td>就绪检测</td>
+<td>O(n) 扫描</td>
+<td>O(n) 扫描</td>
+<td>O(1) 就绪链表</td>
+</tr>
+<tr>
+<td>跨平台</td>
+<td>全平台</td>
+<td>全平台</td>
+<td>Linux 专属（macOS 是 kqueue）</td>
+</tr>
+</tbody>
+</table>
+<p><strong>经验做法</strong>：写跨平台库用 poll（或库内封装 kqueue/epoll/io_uring）；写 Linux 服务直接 epoll；连接数不过百、就绪率极高的场景，select/poll 的简单性反而占优——epoll 的收益来自&quot;连接多、活跃少&quot;的不对称性，没有不对称就没有收益。</p>
+<h2 id="3-epoll-lt-vs-et手写最小-echo-server"><a class="markdownIt-Anchor" href="#3-epoll-lt-vs-et手写最小-echo-server"></a> 3. epoll LT vs ET：手写最小 echo server</h2>
+<p>epoll 有两种触发模式（<code>man 7 epoll</code> 的 “Two levels of triggering”）：</p>
+<ul>
+<li><strong>水平触发（LT，默认）</strong>：只要缓冲区<strong>还有</strong>数据没读完，每次 <code>epoll_wait</code> 都持续报告。宽容：读到哪算哪，没读完下次再报。</li>
+<li><strong>边缘触发（ET，EPOLLET）</strong>：只在状态<strong>变化</strong>的瞬间报告一次（从无到有）。高效但苛刻：<strong>必须一次性把数据读到 EAGAIN</strong>，否则残留数据永远不会再通知你——漏读 = 连接假死。</li>
+</ul>
+<p>最小 echo server（LT 版主体 + ET 写法注释，tcp 套接字建立部分与 12 篇的完整教程呼应）：</p>
+<figure class="highlight c"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br><span class="line">50</span><br><span class="line">51</span><br><span class="line">52</span><br><span class="line">53</span><br><span class="line">54</span><br><span class="line">55</span><br><span class="line">56</span><br><span class="line">57</span><br><span class="line">58</span><br><span class="line">59</span><br><span class="line">60</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment">// epoll_echo.c —— 最小 epoll echo server（水平触发 LT）</span></span><br><span class="line"><span class="comment">// 编译：gcc epoll_echo.c -o epoll_echo</span></span><br><span class="line"><span class="comment">// 测试：./epoll_echo &amp;  然后  nc localhost 9000 （多个终端各开一个）</span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdio.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;stdlib.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;string.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;unistd.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;errno.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;fcntl.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/epoll.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;sys/socket.h&gt;</span></span></span><br><span class="line"><span class="meta">#<span class="keyword">include</span> <span class="string">&lt;netinet/in.h&gt;</span></span></span><br><span class="line"></span><br><span class="line"><span class="type">static</span> <span class="type">void</span> <span class="title function_">set_nonblock</span><span class="params">(<span class="type">int</span> fd)</span> &#123;              <span class="comment">// ET 必须配非阻塞（LT 也建议）</span></span><br><span class="line">    <span class="type">int</span> fl = fcntl(fd, F_GETFL);</span><br><span class="line">    fcntl(fd, F_SETFL, fl | O_NONBLOCK);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line"><span class="type">int</span> <span class="title function_">main</span><span class="params">(<span class="type">void</span>)</span> &#123;</span><br><span class="line">    <span class="type">int</span> lfd = socket(AF_INET, SOCK_STREAM, <span class="number">0</span>);</span><br><span class="line">    <span class="type">int</span> one = <span class="number">1</span>;</span><br><span class="line">    setsockopt(lfd, SOL_SOCKET, SO_REUSEADDR, &amp;one, <span class="keyword">sizeof</span>(one)); <span class="comment">// 免 TIME_WAIT 干扰重启</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">sockaddr_in</span> <span class="title">addr</span> =</span> &#123;<span class="number">0</span>&#125;;</span><br><span class="line">    addr.sin_family = AF_INET;</span><br><span class="line">    addr.sin_addr.s_addr = htonl(INADDR_ANY);</span><br><span class="line">    addr.sin_port = htons(<span class="number">9000</span>);</span><br><span class="line">    <span class="keyword">if</span> (bind(lfd, (<span class="keyword">struct</span> sockaddr *)&amp;addr, <span class="keyword">sizeof</span>(addr)) &lt; <span class="number">0</span>) &#123; perror(<span class="string">&quot;bind&quot;</span>); <span class="keyword">return</span> <span class="number">1</span>; &#125;</span><br><span class="line">    listen(lfd, <span class="number">128</span>);</span><br><span class="line"></span><br><span class="line">    <span class="type">int</span> ep = epoll_create1(<span class="number">0</span>);                  <span class="comment">// epoll 实例</span></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">epoll_event</span> <span class="title">ev</span> =</span> &#123; .events = EPOLLIN, .data.fd = lfd &#125;;</span><br><span class="line">    epoll_ctl(ep, EPOLL_CTL_ADD, lfd, &amp;ev);     <span class="comment">// 注册监听 socket</span></span><br><span class="line"></span><br><span class="line">    <span class="class"><span class="keyword">struct</span> <span class="title">epoll_event</span> <span class="title">out</span>[64];</span></span><br><span class="line">    <span class="keyword">while</span> (<span class="number">1</span>) &#123;</span><br><span class="line">        <span class="type">int</span> n = epoll_wait(ep, out, <span class="number">64</span>, <span class="number">-1</span>);    <span class="comment">// 只返回就绪者；-1 = 一直等</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> i = <span class="number">0</span>; i &lt; n; i++) &#123;</span><br><span class="line">            <span class="keyword">if</span> (out[i].data.fd == lfd) &#123;        <span class="comment">// 监听 socket 就绪 = 新连接</span></span><br><span class="line">                <span class="type">int</span> cfd = accept(lfd, <span class="literal">NULL</span>, <span class="literal">NULL</span>);</span><br><span class="line">                set_nonblock(cfd);</span><br><span class="line">                <span class="class"><span class="keyword">struct</span> <span class="title">epoll_event</span> <span class="title">cev</span> =</span> &#123; .events = EPOLLIN, .data.fd = cfd &#125;;</span><br><span class="line">                epoll_ctl(ep, EPOLL_CTL_ADD, cfd, &amp;cev);</span><br><span class="line">            &#125; <span class="keyword">else</span> &#123;                            <span class="comment">// 客户端 socket 可读</span></span><br><span class="line">                <span class="type">char</span> buf[<span class="number">4096</span>];</span><br><span class="line">                <span class="comment">/* ET 版本在这里的写法：循环 read 直到返回 -1 且 errno==EAGAIN，</span></span><br><span class="line"><span class="comment">                   否则残留数据不会再被通知（边缘触发只报一次）；</span></span><br><span class="line"><span class="comment">                   LT 版本无所谓——没读完下次 wait 还会报。 */</span></span><br><span class="line">                <span class="type">ssize_t</span> r = read(out[i].data.fd, buf, <span class="keyword">sizeof</span>(buf));</span><br><span class="line">                <span class="keyword">if</span> (r &lt;= <span class="number">0</span>) &#123;                   <span class="comment">// 0=对端关闭, -1=错误</span></span><br><span class="line">                    epoll_ctl(ep, EPOLL_CTL_DEL, out[i].data.fd, <span class="literal">NULL</span>);</span><br><span class="line">                    close(out[i].data.fd);</span><br><span class="line">                    <span class="keyword">continue</span>;</span><br><span class="line">                &#125;</span><br><span class="line">                <span class="type">ssize_t</span> w = <span class="number">0</span>;</span><br><span class="line">                <span class="keyword">while</span> (w &lt; r)                   <span class="comment">// echo 回去（半写循环：write 可能只写一半）</span></span><br><span class="line">                    w += write(out[i].data.fd, buf + w, r - w);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">$ gcc epoll_echo.c -o epoll_echo &amp;&amp; ./epoll_echo &amp;</span><br><span class="line">$ nc localhost 9000            <span class="comment"># 终端 1</span></span><br><span class="line">hello</span><br><span class="line">hello                          ← 原样返回：<span class="built_in">echo</span> 生效</span><br><span class="line">$ nc localhost 9000            <span class="comment"># 终端 2 可以再开一个连接，同时服务</span></span><br><span class="line">$ strace -c -f ./epoll_echo 2&gt;&amp;1 | grep epoll   <span class="comment"># 看事件驱动的调用形状</span></span><br><span class="line">epoll_wait  ← 每轮循环只有它 + 就绪 fd 的 <span class="built_in">read</span>/write，无多余扫描</span><br></pre></td></tr></table></figure>
+<p>LT/ET 的实测对比（把 <code>.events</code> 加上 <code>EPOLLET</code> 后重编译）：<strong>LT</strong> 下故意只读 1 字节、下次 wait 仍报就绪；<strong>ET</strong> 下同样写法则连接&quot;哑火&quot;——这就是 ET 的脾气。<strong>经验做法</strong>：除非经过压测确认瓶颈在 LT 的重复通知，新项目一律 LT；Redis 用的 LT（v1 起就是），Nginx 支持 ET 并为此写了完整的半包读写循环——ET 的正确性成本不低，别为了&quot;听说 ET 快&quot;上 ET。</p>
+<h2 id="4-reactor-模式"><a class="markdownIt-Anchor" href="#4-reactor-模式"></a> 4. Reactor 模式</h2>
+<p>epoll 是 OS 机制，Reactor 是用它搭出来的<strong>并发设计模式</strong>（名称出自 Douglas Schmidt 的 ACE 论文 “The Reactor: An Object Behavioral Pattern for Concurrent Multiplexing and Event Handler Demultiplexing”，POSA2 卷有完整章节）。结构一句话：<strong>一个事件循环 + 一组回调，fd 就绪哪个就调哪个的 handler</strong>：</p>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">         ┌─────────────────────────────┐</span><br><span class="line">         │        Event Loop            │</span><br><span class="line">         │  epoll_wait(events, timeout) │◄──── 循环</span><br><span class="line">         └──┬──────────┬──────────┬─────┘</span><br><span class="line">就绪 fd 分发 ▼          ▼          ▼</span><br><span class="line">      ┌─────────┐ ┌─────────┐ ┌─────────┐</span><br><span class="line">      │handler 1│ │handler 2│ │handler 3│   ← 每个 fd 一个回调</span><br><span class="line">      │(读请求)  │ │(读请求)  │ │(accept) │      处理要快、不阻塞</span><br><span class="line">      └─────────┘ └─────────┘ └─────────┘</span><br></pre></td></tr></table></figure>
+<p>三条纪律（违反任何一条都会毁掉单线程事件驱动的底线）：<strong>handler 绝不阻塞</strong>（不睡、不同步读磁盘、不调慢接口——一个阻塞调用冻结全部连接）；handler 快进快出（重活扔给线程池/GPU 队列）；状态机化（半包、半写都记录在连接对象里，下次事件接着处理）。这正是 12 篇&quot;事件驱动服务器&quot;的原型，Redis/Node/asyncio 的骨架由此复制。</p>
+<h2 id="5-为什么-noderedisasyncio-都建在这上面"><a class="markdownIt-Anchor" href="#5-为什么-noderedisasyncio-都建在这上面"></a> 5. 为什么 Node/Redis/asyncio 都建在这上面</h2>
+<p>三个你天天用的系统，扒开外衣是同一个 epoll 事件循环：</p>
+<ul>
+<li><strong>Redis</strong>：单线程事件循环 + epoll（源码 ae.c，aePoll.c 是 epoll 后端）——单线程无锁，命令天然原子，10 万 QPS 的底气是&quot;事件循环处理速度&quot;而不是多线程。这也解释了 Redis 的著名禁忌：*<em>一条慢命令（KEYS <em>、大 KEY）冻结所有连接</em></em>（Reactor 纪律第一条被违反）。</li>
+<li><strong>Node.js</strong>：libuv 事件循环封装 epoll（Linux）/kqueue（macOS）/IOCP（Windows）；JS 回调 = handler。所以 Node 的性能天花板与天花板陷阱和 epoll 完全同构——同步 CPU 密集代码阻塞整个循环。</li>
+<li><strong>asyncio</strong>：Python 标准库的事件循环，默认选择器封装 <code>selectors</code> 模块（Linux 上自动挑 epoll）。用 30 行验证它真的在你机器上跑 epoll：</li>
+</ul>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># asyncio_probe.py —— 亲眼确认 asyncio 底层是 epoll</span></span><br><span class="line"><span class="keyword">import</span> asyncio, selectors</span><br><span class="line"></span><br><span class="line"><span class="keyword">async</span> <span class="keyword">def</span> <span class="title function_">main</span>():</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;默认事件循环的选择器:&quot;</span>, <span class="built_in">type</span>(asyncio.get_event_loop()._selector).__name__)</span><br><span class="line">    reader, writer = <span class="keyword">await</span> asyncio.open_connection(<span class="string">&quot;127.0.0.1&quot;</span>, <span class="number">9000</span>)  <span class="comment"># 连上第 3 节的 echo server</span></span><br><span class="line">    writer.write(<span class="string">b&quot;ping\n&quot;</span>)</span><br><span class="line">    <span class="keyword">await</span> writer.drain()</span><br><span class="line">    data = <span class="keyword">await</span> reader.readline()</span><br><span class="line">    <span class="built_in">print</span>(<span class="string">&quot;echo 返回:&quot;</span>, data.decode().strip())</span><br><span class="line">    writer.close()</span><br><span class="line"></span><br><span class="line">asyncio.run(main())</span><br></pre></td></tr></table></figure>
+<figure class="highlight plaintext"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">$ python3 asyncio_probe.py</span><br><span class="line">默认事件循环的选择器: EpollSelector</span><br><span class="line">echo 返回: ping</span><br></pre></td></tr></table></figure>
+<p>一张总表收束本篇（选型视角，<strong>经验做法</strong>）：</p>
+<table>
+<thead>
+<tr>
+<th>场景</th>
+<th>推荐模型</th>
+<th>理由</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>万级连接、IO 密集（网关/代理/推理服务的 HTTP 层）</td>
+<td>epoll + Reactor</td>
+<td>不对称性收益最大</td>
+</tr>
+<tr>
+<td>少量连接、逻辑简单</td>
+<td>阻塞 + 每连接线程</td>
+<td>代码最简单，切换成本可承受</td>
+</tr>
+<tr>
+<td>磁盘文件 IO</td>
+<td>阻塞 + 线程池</td>
+<td>文件不进 epoll 就绪模型（普通 fd 无 O_NONBLOCK 语义），io_uring 除外</td>
+</tr>
+<tr>
+<td>CPU 密集</td>
+<td>事件循环没优势</td>
+<td>该并行的是计算（多进程/多线程/GPU）</td>
+</tr>
+</tbody>
+</table>
+<h2 id="常见误区"><a class="markdownIt-Anchor" href="#常见误区"></a> 常见误区</h2>
+<ol>
+<li><strong>“epoll 一定比 select/poll 快”</strong>：收益来自&quot;连接多、活跃少&quot;的不对称；几十个连接全活跃时三者相差无几，epoll 的红黑树维护反而添乱。先看连接规模再选接口。</li>
+<li><strong>“ET 更高级，应该默认用”</strong>：ET 把&quot;必须读干净 + 处理半包半写&quot;的正确性责任全推给你，Nginx/Redis 那样的团队写出的循环才配得上 ET；日常服务 LT 足够且稳（<code>man 7 epoll</code> 明确建议 LT 为默认心智模型）。</li>
+<li><strong>“异步 IO = aio_read 那几个函数”</strong>：Linux 传统 POSIX AIO（glibc 线程模拟版/内核 kaio）覆盖面与性能都不理想；真正改变格局的是 5.1+ 的 io_uring。面试说&quot;Linux 的异步 IO 生态以 io_uring 为现代主流&quot;更准确。</li>
+<li><strong>“普通文件 fd 也能塞进 epoll”</strong>：磁盘文件不参与 socket 那套就绪通知（读写基本总&quot;就绪&quot;），epoll_ctl 会报 EPERM；文件 IO 用线程池或 io_uring，这是事件循环里 handler 严禁同步读大文件的原因。</li>
+<li><strong>“事件循环是万能并发方案”</strong>：它解决&quot;大量 IO 等待&quot;不解决&quot;计算排队&quot;；CPU 密集任务进 Reactor 会把所有连接冻住（Redis 的 KEYS * 事故是标准案例）。混合架构（事件循环收包 + 工作池算活）才是生产形态。</li>
+</ol>
+<h2 id="本篇小结"><a class="markdownIt-Anchor" href="#本篇小结"></a> 本篇小结</h2>
+<ul>
+<li>五种 IO 模型按&quot;阶段 1 谁等、阶段 2 谁拷&quot;划分；前四种都是同步 IO（拷贝自己做），io_uring/异步 IO 才是全托管。</li>
+<li>select（1024 上限、全量拷贝、O(n) 扫描）→ poll（去上限）→ epoll（注册一次、就绪链表 O(1)）；收益本质 = 连接多/活跃少的不对称性。</li>
+<li>手写 echo server 的要点：epoll_create1/ctl/wait 三件套、accept 与 read 分流、非阻塞 + 半写循环；ET 必须读到 EAGAIN，LT 是默认正解（经验做法）。</li>
+<li>Reactor = 事件循环 + 回调分发的模式化封装，三条纪律：handler 不阻塞、快进快出、状态机化。</li>
+<li>Redis/Node/asyncio 同构于 Reactor；它们的天花板与陷阱（慢命令阻塞一切）也同构——IO 并发归事件循环，CPU 并行归并行单元。</li>
+</ul>
+<h2 id="练习"><a class="markdownIt-Anchor" href="#练习"></a> 练习</h2>
+<ol>
+<li>编译跑通 epoll_echo.c，用 3 个终端同时 nc 测试；把 <code>.events</code> 改成 <code>EPOLLIN | EPOLLET</code> 并把 read 循环改成&quot;只读 1 字节&quot;，观察连接行为差异，写下 LT/ET 的体感结论。</li>
+<li>补全 ET 正确写法：read 循环到 <code>r &lt;mark&gt; -1 &amp;&amp; errno &lt;/mark&gt; EAGAIN</code> 为止（注意 r==0 关闭连接的分支），重新验证；再给 write 也写半写循环（维护待发缓冲）。</li>
+<li>写一个 Python 的 select 版 echo server（<code>selectors.DefaultSelector</code> 也算），与 epoll 版对比 strace 系统调用形状（<code>strace -c -f</code>），数一数每接受 10 条消息两者各花多少次 syscall。</li>
+<li>压测对比：用 <code>ab -n 10000 -c 100 http://localhost:9000/</code>（echo server 改 HTTP 应答）或简单 TCP 压测脚本，比较 LT/ET 与 select 版的 QPS；解释&quot;不对称性&quot;在你机器上是否成立。</li>
+<li>读 Redis 源码 ae.c 的 <code>aeMain/aeProcessEvents</code>（约 100 行），画出它的主循环与第 4 节 Reactor 图的对应关系；找出它在 handler 里如何避免阻塞（提示：时间事件分片、lazyfree）。</li>
+</ol>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E6%93%8D%E4%BD%9C%E7%B3%BB%E7%BB%9F/" rel="tag"># 操作系统</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/02/08-%E6%96%87%E4%BB%B6%E7%B3%BB%E7%BB%9F/" rel="prev" title="08-文件系统">
+                  <i class="fa fa-angle-left"></i> 08-文件系统
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/02/10-%E8%BF%9B%E7%A8%8B%E9%97%B4%E9%80%9A%E4%BF%A1/" rel="next" title="10-进程间通信">
+                  10-进程间通信 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>

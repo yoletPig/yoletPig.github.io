@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#222" media="(prefers-color-scheme: dark)"><meta name="generator" content="Hexo 8.1.2">
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/square-yl2.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/square-yl2.png">
+  <link rel="mask-icon" href="/images/square-yl2.png" color="#222">
+
+<link rel="stylesheet" href="/css/main.css">
+
+
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.0/css/all.min.css" integrity="sha256-VHqXKFhhMxcpubYf9xiWdCiojEbY9NexQ4jh8AxbvcM=" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/3.1.1/animate.min.css" integrity="sha256-PR7ttpcvz8qrF57fur/yAx1qXMFJeJFiA6pSzWi0OIE=" crossorigin="anonymous">
+
+<script class="next-config" data-name="main" type="application/json">{"hostname":"yoletpig.github.io","root":"/","images":"/images","scheme":"Pisces","darkmode":true,"version":"8.29.0","exturl":false,"sidebar":{"position":"left","width_expanded":320,"width_dual_column":240,"display":"post","padding":18,"offset":12},"hljswrap":true,"codeblock":{"theme":{"light":"default","dark":"stackoverflow-dark"},"prism":{"light":"prism","dark":"prism-dark"},"copy_button":{"enable":false,"style":null},"fold":{"enable":false,"height":500},"language":false},"bookmark":{"enable":false,"color":"#222","save":"auto"},"mediumzoom":false,"pangu":false,"comments":{"style":"tabs","active":null,"storage":true,"lazyload":false,"nav":null},"stickytabs":false,"motion":{"enable":true,"async":false,"duration":200,"transition":{"menu_item":"fadeInDown","post_block":"fadeIn","post_header":"fadeInDown","post_body":"fadeInDown","coll_header":"fadeInLeft","sidebar":"fadeInUp"}},"i18n":{"placeholder":"搜索...","empty":"没有找到任何搜索结果：${query}","hits_time":"找到 ${hits} 个搜索结果（用时 ${time} 毫秒）","hits":"找到 ${hits} 个搜索结果"},"path":"/search.json","localsearch":{"enable":true,"top_n_per_article":5,"unescape":false,"preload":false}}</script><script src="/js/config.js" defer></script>
+
+    <meta name="description" content="回测是量化的&#39;实验方法&#39;。本篇先给出一个最小但诚实的回测引擎，然后逐个拆解五大偏差——每个偏差都配有&#39;检测方法&#39;。读完本篇，你应该能用&#39;作弊自查清单&#39;审查任何一份回测报告，包括你自己写的。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="05-回测方法与陷阱">
+<meta property="og:url" content="https://yoletpig.github.io/2026/09/10/05-%E5%9B%9E%E6%B5%8B%E6%96%B9%E6%B3%95%E4%B8%8E%E9%99%B7%E9%98%B1/index.html">
+<meta property="og:site_name" content="Yoleen的博客">
+<meta property="og:description" content="回测是量化的&#39;实验方法&#39;。本篇先给出一个最小但诚实的回测引擎，然后逐个拆解五大偏差——每个偏差都配有&#39;检测方法&#39;。读完本篇，你应该能用&#39;作弊自查清单&#39;审查任何一份回测报告，包括你自己写的。">
+<meta property="og:locale" content="zh_CN">
+<meta property="article:published_time" content="2026-09-09T18:00:00.000Z">
+<meta property="article:modified_time" content="2026-11-08T22:16:53.850Z">
+<meta property="article:author" content="Yoleen">
+<meta property="article:tag" content="教程">
+<meta property="article:tag" content="量化投资">
+<meta name="twitter:card" content="summary">
+
+
+<link rel="canonical" href="https://yoletpig.github.io/2026/09/10/05-%E5%9B%9E%E6%B5%8B%E6%96%B9%E6%B3%95%E4%B8%8E%E9%99%B7%E9%98%B1/">
+
+
+<script class="next-config" data-name="page" type="application/json">{"sidebar":"","isHome":false,"isPost":true,"lang":"zh-CN","comments":true,"permalink":"https://yoletpig.github.io/2026/09/10/05-%E5%9B%9E%E6%B5%8B%E6%96%B9%E6%B3%95%E4%B8%8E%E9%99%B7%E9%98%B1/","path":"2026/09/10/05-回测方法与陷阱/","title":"05-回测方法与陷阱"}</script>
+
+<script class="next-config" data-name="calendar" type="application/json">""</script>
+<title>05-回测方法与陷阱 | Yoleen的博客</title>
+  
+
+
+
+
+
+
+
+
+  
+<script src="/js/utils.js" defer></script><script src="/js/motion.js" defer></script><script src="/js/sidebar.js" defer></script><script src="/js/next-boot.js" defer></script>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/hexo-generator-searchdb/1.5.0/search.js" integrity="sha256-xFC6PJ82SL9b3WkGjFavNiA9gm5z6UBxWPiu4CYjptg=" crossorigin="anonymous" defer></script>
+<script src="/js/third-party/search/local-search.js" defer></script>
+
+
+
+
+
+
+
+  
+  <script async src="https://busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+
+
+
+
+<link rel="stylesheet" href="/css/katex/katex.min.css">
+
+  <noscript>
+    <link rel="stylesheet" href="/css/noscript.css">
+  </noscript>
+</head>
+
+<body itemscope itemtype="http://schema.org/WebPage" class="use-motion">
+  <div class="headband"></div>
+
+  <main class="main">
+    <div class="column">
+      <header class="header" itemscope itemtype="http://schema.org/WPHeader"><div class="site-brand-container">
+  <div class="site-nav-toggle">
+    <div class="toggle" aria-label="切换导航栏" role="button">
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+        <span class="toggle-line"></span>
+    </div>
+  </div>
+
+  <div class="site-meta">
+
+    <a href="/" class="brand" rel="start">
+      <i class="logo-line"></i>
+      <p class="site-title">Yoleen的博客</p>
+      <i class="logo-line"></i>
+    </a>
+  </div>
+
+  <div class="site-nav-right">
+    <div class="toggle popup-trigger" aria-label="搜索" role="button">
+        <i class="fa fa-search fa-fw fa-lg"></i>
+    </div>
+  </div>
+</div>
+
+
+
+<nav class="site-nav">
+  <ul class="main-menu menu"><li class="menu-item menu-item-home"><a href="/" rel="section"><i class="fa fa-home fa-fw"></i>首页</a></li><li class="menu-item menu-item-tags"><a href="/tags/" rel="section"><i class="fa fa-tags fa-fw"></i>标签</a></li><li class="menu-item menu-item-categories"><a href="/categories/" rel="section"><i class="fa fa-th fa-fw"></i>分类</a></li><li class="menu-item menu-item-archives"><a href="/archives/" rel="section"><i class="fa fa-archive fa-fw"></i>归档</a></li>
+      <li class="menu-item menu-item-search">
+        <a role="button" class="popup-trigger"><i class="fa fa-search fa-fw"></i>搜索
+        </a>
+      </li>
+  </ul>
+</nav>
+
+
+
+  <div class="search-pop-overlay">
+    <div class="popup search-popup">
+      <div class="search-header">
+        <span class="search-icon">
+          <i class="fa fa-search"></i>
+        </span>
+        <div class="search-input-container">
+          <input autocomplete="off" autocapitalize="off" maxlength="80"
+                placeholder="搜索..." spellcheck="false"
+                type="search" class="search-input">
+        </div>
+        <span class="popup-btn-close" role="button">
+          <i class="fa fa-times-circle"></i>
+        </span>
+      </div>
+      <div class="search-result-container">
+        <div class="search-result-icon">
+          <i class="fa fa-spinner fa-pulse fa-5x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</header>
+        
+  
+  <aside class="sidebar">
+
+    <div class="sidebar-inner sidebar-nav-active sidebar-toc-active">
+      <ul class="sidebar-nav">
+        <li class="sidebar-nav-toc">
+          文章目录
+        </li>
+        <li class="sidebar-nav-overview">
+          站点概览
+        </li>
+      </ul>
+
+      <div class="sidebar-panel-container">
+        <!--noindex-->
+        <div class="post-toc-wrap sidebar-panel">
+            <div class="post-toc animated"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#05-%E5%9B%9E%E6%B5%8B%E6%96%B9%E6%B3%95%E4%B8%8E%E9%99%B7%E9%98%B1"><span class="nav-number">1.</span> <span class="nav-text"> 05 - 回测：方法与陷阱</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#%E6%9C%AC%E7%AF%87%E7%9B%AE%E6%A0%87"><span class="nav-number">1.1.</span> <span class="nav-text"> 本篇目标</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#0-%E6%9C%80%E5%B0%8F%E5%9B%9E%E6%B5%8B%E5%BC%95%E6%93%8E%E5%90%91%E9%87%8F%E5%8C%96%E6%97%A0%E6%A1%86%E6%9E%B6%E4%BE%9D%E8%B5%96"><span class="nav-number">1.2.</span> <span class="nav-text"> 0. 最小回测引擎（向量化，无框架依赖）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#1-%E9%99%B7%E9%98%B1%E4%B8%80%E5%89%8D%E8%A7%86%E5%81%8F%E5%B7%AElook-ahead-bias"><span class="nav-number">1.3.</span> <span class="nav-text"> 1. 陷阱一：前视偏差（Look-ahead Bias）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#2-%E9%99%B7%E9%98%B1%E4%BA%8C%E5%B9%B8%E5%AD%98%E8%80%85%E5%81%8F%E5%B7%AEsurvivorship-bias"><span class="nav-number">1.4.</span> <span class="nav-text"> 2. 陷阱二：幸存者偏差（Survivorship Bias）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#3-%E9%99%B7%E9%98%B1%E4%B8%89%E8%BF%87%E6%8B%9F%E5%90%88overfitting"><span class="nav-number">1.5.</span> <span class="nav-text"> 3. 陷阱三：过拟合（Overfitting）</span></a><ol class="nav-child"><li class="nav-item nav-level-3"><a class="nav-link" href="#%E5%8F%82%E6%95%B0%E9%9D%A2%E5%AE%9E%E9%AA%8C%E4%BA%B2%E6%89%8B%E5%81%9A%E4%B8%80%E6%AC%A1"><span class="nav-number">1.5.1.</span> <span class="nav-text"> 参数面实验：亲手做一次</span></a></li><li class="nav-item nav-level-3"><a class="nav-link" href="#%E4%B8%80%E6%9D%A1%E8%91%97%E5%90%8D%E7%9A%84%E5%AE%9A%E9%87%8F%E8%AD%A6%E5%8F%A5"><span class="nav-number">1.5.2.</span> <span class="nav-text"> 一条著名的定量警句</span></a></li></ol></li><li class="nav-item nav-level-2"><a class="nav-link" href="#4-%E9%99%B7%E9%98%B1%E5%9B%9B%E6%88%90%E6%9C%AC%E4%B8%8E%E6%B5%81%E5%8A%A8%E6%80%A7%E4%BD%8E%E4%BC%B0"><span class="nav-number">1.6.</span> <span class="nav-text"> 4. 陷阱四：成本与流动性低估</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#5-%E9%99%B7%E9%98%B1%E4%BA%94%E6%95%B0%E6%8D%AE%E7%AA%A5%E6%8E%A2%E4%B8%8E%E5%8F%99%E4%BA%8B%E5%81%8F%E5%B7%AE"><span class="nav-number">1.7.</span> <span class="nav-text"> 5. 陷阱五：数据窥探与叙事偏差</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#6-%E4%BD%9C%E5%BC%8A%E8%87%AA%E6%9F%A5%E6%B8%85%E5%8D%95%E8%B4%B4%E5%9C%A8%E6%98%BE%E7%A4%BA%E5%99%A8%E4%B8%8A"><span class="nav-number">1.8.</span> <span class="nav-text"> 6. 作弊自查清单（贴在显示器上）</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E8%87%AA%E6%B5%8B"><span class="nav-number">1.9.</span> <span class="nav-text"> 自测</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E4%B8%8B%E4%B8%80%E7%AF%87"><span class="nav-number">1.10.</span> <span class="nav-text"> 下一篇</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#%E5%8F%82%E8%80%83%E6%9D%A5%E6%BA%90"><span class="nav-number">1.11.</span> <span class="nav-text"> 参考来源</span></a></li></ol></li></ol></div>
+        </div>
+        <!--/noindex-->
+
+        <div class="site-overview-wrap sidebar-panel">
+          <div class="site-author animated" itemprop="author" itemscope itemtype="http://schema.org/Person">
+    <img class="site-author-image" itemprop="image" alt="Yoleen"
+      src="/images/avatar.jpg">
+  <p class="site-author-name" itemprop="name">Yoleen</p>
+  <div class="site-description" itemprop="description">📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。</div>
+</div>
+<div class="site-state-wrap animated">
+  <nav class="site-state">
+      <div class="site-state-item site-state-posts">
+        <a href="/archives/">
+          <span class="site-state-item-count">424</span>
+          <span class="site-state-item-name">日志</span>
+        </a>
+      </div>
+      <div class="site-state-item site-state-categories">
+          <a href="/categories/">
+        <span class="site-state-item-count">53</span>
+        <span class="site-state-item-name">分类</span></a>
+      </div>
+      <div class="site-state-item site-state-tags">
+          <a href="/tags/">
+        <span class="site-state-item-count">27</span>
+        <span class="site-state-item-name">标签</span></a>
+      </div>
+  </nav>
+</div>
+  <div class="links-of-author animated">
+      <span class="links-of-author-item">
+        <a href="https://github.com/yoletPig" title="GitHub → https:&#x2F;&#x2F;github.com&#x2F;yoletPig" rel="noopener me" target="_blank"><i class="fab fa-github fa-fw"></i>GitHub</a>
+      </span>
+      <span class="links-of-author-item">
+        <a href="mailto:1248619300@qq.com" title="E-Mail → mailto:1248619300@qq.com" rel="noopener me" target="_blank"><i class="fa fa-envelope fa-fw"></i>E-Mail</a>
+      </span>
+  </div>
+
+        </div>
+      </div>
+    </div>
+
+    
+  </aside>
+
+
+    </div>
+
+    <div class="main-inner post posts-expand">
+
+
+  
+
+
+<div class="post-block">
+  
+  
+
+  <article itemscope itemtype="http://schema.org/Article" class="post-content" lang="zh-CN">
+    <link itemprop="mainEntityOfPage" href="https://yoletpig.github.io/2026/09/10/05-%E5%9B%9E%E6%B5%8B%E6%96%B9%E6%B3%95%E4%B8%8E%E9%99%B7%E9%98%B1/">
+
+    <span hidden itemprop="author" itemscope itemtype="http://schema.org/Person">
+      <meta itemprop="image" content="/images/avatar.jpg">
+      <meta itemprop="name" content="Yoleen">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="Yoleen的博客">
+      <meta itemprop="description" content="📌 双一流 CS 硕 | 语音技术 · 多模态大模型 · 自动驾驶感知 · 模型推理优化 <br>💡 记录前沿 AI 探索，分享硬核技术成长。">
+    </span>
+
+    <span hidden itemprop="post" itemscope itemtype="http://schema.org/CreativeWork">
+      <meta itemprop="name" content="05-回测方法与陷阱 | Yoleen的博客">
+      <meta itemprop="description" content="回测是量化的&#39;实验方法&#39;。本篇先给出一个最小但诚实的回测引擎，然后逐个拆解五大偏差——每个偏差都配有&#39;检测方法&#39;。读完本篇，你应该能用&#39;作弊自查清单&#39;审查任何一份回测报告，包括你自己写的。">
+    </span>
+      <header class="post-header">
+        <h1 class="post-title" itemprop="name headline">
+          05-回测方法与陷阱
+        </h1>
+
+        <div class="post-meta-container">
+          <div class="post-meta">
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar"></i>
+      </span>
+      <span class="post-meta-item-text">发表于</span>
+
+      <time title="创建时间：2026-09-10 02:00:00" itemprop="dateCreated datePublished" datetime="2026-09-10T02:00:00+08:00">2026-09-10</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-calendar-check"></i>
+      </span>
+      <span class="post-meta-item-text">更新于</span>
+      <time title="修改时间：2026-11-09 06:16:53" itemprop="dateModified" datetime="2026-11-09T06:16:53+08:00">2026-11-09</time>
+    </span>
+    <span class="post-meta-item">
+      <span class="post-meta-item-icon">
+        <i class="far fa-folder"></i>
+      </span>
+      <span class="post-meta-item-text">分类于</span>
+        <span itemprop="about" itemscope itemtype="http://schema.org/Thing">
+          <a href="/categories/%E9%87%8F%E5%8C%96%E6%8A%95%E8%B5%84/" itemprop="url" rel="index"><span itemprop="name">量化投资</span></a>
+        </span>
+    </span>
+
+  
+    <span class="post-meta-item" title="阅读次数" id="busuanzi_container_page_pv">
+      <span class="post-meta-item-icon">
+        <i class="far fa-eye"></i>
+      </span>
+      <span class="post-meta-item-text">阅读次数：</span>
+      <span id="busuanzi_value_page_pv"></span>
+    </span>
+    <span class="post-meta-break"></span>
+    <span class="post-meta-item" title="本文字数">
+      <span class="post-meta-item-icon">
+        <i class="far fa-file-word"></i>
+      </span>
+      <span class="post-meta-item-text">本文字数：</span>
+      <span>2.4k</span>
+    </span>
+    <span class="post-meta-item" title="阅读时长">
+      <span class="post-meta-item-icon">
+        <i class="far fa-clock"></i>
+      </span>
+      <span class="post-meta-item-text">阅读时长 &asymp;</span>
+      <span>9 分钟</span>
+    </span>
+</div>
+
+            <div class="post-description">回测是量化的'实验方法'。本篇先给出一个最小但诚实的回测引擎，然后逐个拆解五大偏差——每个偏差都配有'检测方法'。读完本篇，你应该能用'作弊自查清单'审查任何一份回测报告，包括你自己写的。</div>
+        </div>
+      </header>
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody"><h1 id="05-回测方法与陷阱"><a class="markdownIt-Anchor" href="#05-回测方法与陷阱"></a> 05 - 回测：方法与陷阱</h1>
+<h2 id="本篇目标"><a class="markdownIt-Anchor" href="#本篇目标"></a> 本篇目标</h2>
+<p>回测是量化的&quot;实验方法&quot;。本篇先给出一个最小但<strong>诚实</strong>的回测引擎，然后逐个拆解五大偏差——<strong>每个偏差都配有&quot;检测方法&quot;</strong>。读完本篇，你应该能用&quot;作弊自查清单&quot;审查任何一份回测报告，包括你自己写的。</p>
+<blockquote>
+<p>全系列的立场：<strong>回测的价值不在于产生收益数字，而在于产生&quot;可信度评级&quot;</strong>。一份年化 50% 但有前视偏差的回测，价值低于一份年化 5% 但干净的回测。</p>
+</blockquote>
+<h2 id="0-最小回测引擎向量化无框架依赖"><a class="markdownIt-Anchor" href="#0-最小回测引擎向量化无框架依赖"></a> 0. 最小回测引擎（向量化，无框架依赖）</h2>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br></pre></td><td class="code"><pre><span class="line"><span class="keyword">import</span> numpy <span class="keyword">as</span> np</span><br><span class="line"><span class="keyword">import</span> pandas <span class="keyword">as</span> pd</span><br><span class="line"></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">backtest</span>(<span class="params">close: pd.Series, signal: pd.Series,</span></span><br><span class="line"><span class="params">             cost_bps: <span class="built_in">float</span> = <span class="number">15.0</span></span>) -&gt; pd.DataFrame:</span><br><span class="line">    <span class="string">&quot;&quot;&quot;</span></span><br><span class="line"><span class="string">    close:  后复权收盘价</span></span><br><span class="line"><span class="string">    signal: 目标仓位（0 或 1），已按&quot;成交时刻可得&quot;对齐（见 02 篇 shift 纪律）</span></span><br><span class="line"><span class="string">    cost_bps: 单边成本（佣金+滑点+税），万 15 是 A 股单边的粗略量级：</span></span><br><span class="line"><span class="string">              佣金约万 2.5、印花税卖出万 5（2023-08 减半后）、滑点视流动性</span></span><br><span class="line"><span class="string">    &quot;&quot;&quot;</span></span><br><span class="line">    pos = signal.shift(<span class="number">1</span>).fillna(<span class="number">0</span>)          <span class="comment"># 今天的仓位 = 昨天收盘决定的信号</span></span><br><span class="line">    ret = close.pct_change().fillna(<span class="number">0</span>)       <span class="comment"># 简单收益（组合层面）</span></span><br><span class="line">    trades = pos.diff().<span class="built_in">abs</span>().fillna(<span class="number">0</span>)      <span class="comment"># 换手：仓位变动幅度</span></span><br><span class="line">    strat_ret = pos * ret - trades * cost_bps / <span class="number">1e4</span>   <span class="comment"># 扣成本</span></span><br><span class="line">    equity = (<span class="number">1</span> + strat_ret).cumprod()       <span class="comment"># 净值曲线（初始 1.0）</span></span><br><span class="line">    <span class="keyword">return</span> pd.DataFrame(&#123;</span><br><span class="line">        <span class="string">&quot;equity&quot;</span>: equity,</span><br><span class="line">        <span class="string">&quot;ret&quot;</span>: strat_ret,</span><br><span class="line">        <span class="string">&quot;dd&quot;</span>: equity / equity.cummax() - <span class="number">1</span>,</span><br><span class="line">    &#125;)</span><br><span class="line"></span><br><span class="line"><span class="comment"># 指标输出（03 篇的统一语言）</span></span><br><span class="line"><span class="keyword">def</span> <span class="title function_">report</span>(<span class="params">bt: pd.DataFrame, rf: <span class="built_in">float</span> = <span class="number">0.02</span></span>) -&gt; <span class="built_in">dict</span>:</span><br><span class="line">    n_years = <span class="built_in">len</span>(bt) / <span class="number">252</span></span><br><span class="line">    ann = bt[<span class="string">&quot;equity&quot;</span>].iloc[-<span class="number">1</span>] ** (<span class="number">1</span> / n_years) - <span class="number">1</span></span><br><span class="line">    vol = bt[<span class="string">&quot;ret&quot;</span>].std() * np.sqrt(<span class="number">252</span>)</span><br><span class="line">    <span class="keyword">return</span> &#123;<span class="string">&quot;年化&quot;</span>: <span class="string">f&quot;<span class="subst">&#123;ann:<span class="number">.1</span>%&#125;</span>&quot;</span>, <span class="string">&quot;波动&quot;</span>: <span class="string">f&quot;<span class="subst">&#123;vol:<span class="number">.1</span>%&#125;</span>&quot;</span>,</span><br><span class="line">            <span class="string">&quot;最大回撤&quot;</span>: <span class="string">f&quot;<span class="subst">&#123;bt[<span class="string">&#x27;dd&#x27;</span>].<span class="built_in">min</span>():<span class="number">.1</span>%&#125;</span>&quot;</span>,</span><br><span class="line">            <span class="string">&quot;夏普&quot;</span>: <span class="string">f&quot;<span class="subst">&#123;(ann - rf) / vol:<span class="number">.2</span>f&#125;</span>&quot;</span>&#125;</span><br></pre></td></tr></table></figure>
+<p>这个 20 行引擎刻意保持简单——它没有处理开盘价成交、停牌、涨跌停、T+1 等真实约束（09 篇实战会补）。<strong>引擎简单的好处是：作弊无处藏身</strong>。框架越复杂，&quot;框架替你做了什么&quot;越不透明。</p>
+<h2 id="1-陷阱一前视偏差look-ahead-bias"><a class="markdownIt-Anchor" href="#1-陷阱一前视偏差look-ahead-bias"></a> 1. 陷阱一：前视偏差（Look-ahead Bias）</h2>
+<p><strong>定义</strong>：决策用到了&quot;决策时刻不可能知道&quot;的数据。</p>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 作弊示例：用今天的收益决定今天的持仓</span></span><br><span class="line">pos = (ret &gt; <span class="number">0</span>).astype(<span class="built_in">int</span>)            <span class="comment"># 今天涨 → 今天持有。这不叫策略，叫时间机器</span></span><br><span class="line">correct = (ret &gt; <span class="number">0</span>).astype(<span class="built_in">int</span>).shift(<span class="number">1</span>).fillna(<span class="number">0</span>)   <span class="comment"># 正确：昨天的判断，今天执行</span></span><br></pre></td></tr></table></figure>
+<p><strong>三个隐蔽变种</strong>（比直接作弊更常见）：</p>
+<ol>
+<li><strong>用当天收盘价算指标、当天收盘买入</strong>：指标值在收盘那一刻才确定，你不可能以收盘价成交——至少要 shift 到次日执行；</li>
+<li><strong>前复权存档数据</strong>：前复权价按&quot;今天的除权信息&quot;改写了历史价格，等于把未来信息注入过去（02 篇）。用后复权，或确保复权因子按历史时点计算；</li>
+<li><strong>用&quot;修正后&quot;的基本面数据回测历史</strong>：财务数据是<strong>公告日</strong>才可得的（年报 4 月底才出，你 1 月就能在回测里用它的期末值）——必须把数据对齐到公告日。这是基本面量化的头号坑。</li>
+</ol>
+<p><strong>检测方法</strong>：把信号数据人为延迟一天再跑一遍回测——<strong>延迟一天后结果剧变，说明策略高度依赖&quot;时机精度&quot;，大概率有残余前视</strong>。真正的信号不应该对一天的延迟如此敏感。</p>
+<h2 id="2-陷阱二幸存者偏差survivorship-bias"><a class="markdownIt-Anchor" href="#2-陷阱二幸存者偏差survivorship-bias"></a> 2. 陷阱二：幸存者偏差（Survivorship Bias）</h2>
+<p><strong>定义</strong>：样本里只有&quot;活到今天的&quot;资产。</p>
+<p>选股回测只拉&quot;当前上市股票&quot;，等于把退市的乐视/康美们从历史中抹掉——<strong>回测收益系统性虚高</strong>。经典类比：二战轰炸机装甲加固（Abraham Wald 的幸存者偏差分析：应该加固&quot;返航机上没有弹孔的部位&quot;，因为那些部位中弹的飞机没能返航）。</p>
+<p><strong>检测/缓解</strong>：</p>
+<ul>
+<li>问一句：<strong>回测期开始时的股票全集，在数据源里能完整拿到吗？</strong>（含后来退市的）</li>
+<li>免费数据源（02 篇表格）通常拿不到退市股 → <strong>学习阶段接受这一局限，但明确声明&quot;本回测存在幸存者偏差，绝对收益不可信，只参考相对逻辑&quot;</strong>；</li>
+<li>更稳妥的替代：用<strong>指数成分股历史时点快照</strong>（当时的成分股名单）近似还原当时的市场全集。</li>
+</ul>
+<h2 id="3-陷阱三过拟合overfitting"><a class="markdownIt-Anchor" href="#3-陷阱三过拟合overfitting"></a> 3. 陷阱三：过拟合（Overfitting）</h2>
+<p><strong>定义</strong>：模型/参数记住了历史噪声，而非规律。金融数据信噪比极低，过拟合是回测的头号死因。</p>
+<h3 id="参数面实验亲手做一次"><a class="markdownIt-Anchor" href="#参数面实验亲手做一次"></a> 参数面实验：亲手做一次</h3>
+<figure class="highlight python"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line"><span class="comment"># 双均线：穷举参数组合，看&quot;最优参数&quot;有多可信</span></span><br><span class="line">results = &#123;&#125;</span><br><span class="line"><span class="keyword">for</span> s <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">5</span>, <span class="number">30</span>, <span class="number">5</span>):</span><br><span class="line">    <span class="keyword">for</span> l <span class="keyword">in</span> <span class="built_in">range</span>(<span class="number">40</span>, <span class="number">120</span>, <span class="number">10</span>):</span><br><span class="line">        sig = (price.rolling(s).mean() &gt; price.rolling(l).mean()).astype(<span class="built_in">int</span>)</span><br><span class="line">        bt = backtest(price, sig)</span><br><span class="line">        results[(s, l)] = bt[<span class="string">&quot;equity&quot;</span>].iloc[-<span class="number">1</span>]</span><br><span class="line">grid = pd.Series(results).unstack()</span><br><span class="line"><span class="built_in">print</span>(grid)   <span class="comment"># 参数面：行=短均线, 列=长均线，观察是&quot;孤峰&quot;还是&quot;高原&quot;</span></span><br></pre></td></tr></table></figure>
+<p>典型结果形态：参数面上<strong>孤峰耸立</strong>（某个 (s,l) 组合特别高，邻居都很差）——<strong>孤峰 = 过拟合</strong>。稳健策略的参数面应呈<strong>高原（plateau）</strong>：最优点的邻域参数都表现相近，说明结论不依赖精调的参数值。</p>
+<p><strong>缓解手段</strong>（组合使用）：</p>
+<ol>
+<li><strong>样本内/样本外切分</strong>：前 70% 数据选参数，后 30% 只验证一次。<strong>样本外只许看一次</strong>——反复&quot;看外测集再调参&quot;等于把外测集变成了训练集（这是机器学习同理、投资更严重的问题，08 篇再谈）；</li>
+<li><strong>Walk-forward（滚动前进验证）</strong>：模拟真实的&quot;用过去选参数、往后用一段时间、再滚动&quot;，是比单次切分更接近实盘的验证方式；</li>
+<li><strong>参数取中心而非最优点</strong>：选高原的中心参数，哪怕它样本内收益略低；</li>
+<li><strong>多重比较校正意识</strong>：你试了 100 个参数组合选最好的，相当于掷 100 次硬币挑&quot;最像正面&quot;的——Sullivan 等人的 White’s Reality Check（04 篇）就是校正这类数据窥探的方法。</li>
+</ol>
+<h3 id="一条著名的定量警句"><a class="markdownIt-Anchor" href="#一条著名的定量警句"></a> 一条著名的定量警句</h3>
+<p>回测中尝试的策略/参数组合越多，&quot;最好那个&quot;的虚高越严重。 quantitative 社区流传的经验校正是：<strong>对你的最优夏普打对折再打折</strong>（Bailey &amp; López de Prado 2014 年给出的 deflated Sharpe ratio 用试错次数、样本长度对夏普做统计折扣，属正式方法）。</p>
+<h2 id="4-陷阱四成本与流动性低估"><a class="markdownIt-Anchor" href="#4-陷阱四成本与流动性低估"></a> 4. 陷阱四：成本与流动性低估</h2>
+<ul>
+<li><strong>成本清单要完整</strong>：佣金 + 印花税（A 股卖出单边 0.05%，2023 年 8 月 28 日起）+ 滑点 + 冲击成本。高频换手策略对成本极端敏感：日换手 100% × 单边万 15 → 一年成本吃掉约 7.4%；</li>
+<li><strong>敏感性测试</strong>：把成本参数乘 2 再跑一遍——<strong>收益归零甚至转负的策略，本质是在赚&quot;回测里不存在的钱&quot;</strong>；</li>
+<li><strong>流动性现实</strong>：回测默认&quot;想买多少买多少&quot;，实盘小市值股票你根本买不到足量，或者你的单子自己把价格推上去（冲击成本）。</li>
+</ul>
+<h2 id="5-陷阱五数据窥探与叙事偏差"><a class="markdownIt-Anchor" href="#5-陷阱五数据窥探与叙事偏差"></a> 5. 陷阱五：数据窥探与叙事偏差</h2>
+<p><strong>定义</strong>：反复&quot;看数据→改策略→再看数据&quot;直到回测好看。它与过拟合的区别：过拟合发生在参数层面，数据窥探发生在<strong>策略选择层面</strong>——你无形中从 1000 个灵感里挑了回测最好的那个，而&quot;试过 1000 个&quot;这件事没有被记录。</p>
+<p><strong>对策</strong>：</p>
+<ul>
+<li><strong>研究日志</strong>：记录每个试过的想法与结果（包括失败的）——试错次数本身是统计校正的输入（deflated Sharpe 需要它）；</li>
+<li><strong>先有机制假说，再看数据</strong>：先写下&quot;这个策略为什么可能赚钱（赚谁的钱，01 篇）&quot;，再用数据验证；顺序反了（先看数据挖规律再编故事），几乎必然过拟合；</li>
+<li><strong>预注册精神</strong>：写好策略与验证标准后锁定，跑样本外前不回头改。</li>
+</ul>
+<h2 id="6-作弊自查清单贴在显示器上"><a class="markdownIt-Anchor" href="#6-作弊自查清单贴在显示器上"></a> 6. 作弊自查清单（贴在显示器上）</h2>
+<figure class="highlight markdown"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">□ 每个信号用到的数据，在成交时刻都已发生？（延迟一天测试）</span><br><span class="line">□ 用的是后复权价？基本面数据对齐到公告日？</span><br><span class="line">□ 样本里包含当时已退市的股票？（或已声明局限）</span><br><span class="line">□ 样本外只验证过一次？</span><br><span class="line">□ 参数面是高原还是孤峰？</span><br><span class="line">□ 成本完整（含税滑点）？成本×2 还赚钱吗？</span><br><span class="line">□ 研究日志记录了所有尝试过的策略？</span><br><span class="line">□ 结果&quot;好得不像话&quot;？（那是第一嫌疑信号）</span><br></pre></td></tr></table></figure>
+<h2 id="自测"><a class="markdownIt-Anchor" href="#自测"></a> 自测</h2>
+<ol>
+<li>为什么说&quot;延迟一天测试&quot;能检测前视偏差？</li>
+<li>幸存者偏差如何影响回测方向？Wald 的飞机故事说明什么？</li>
+<li>参数面孤峰和高原各说明什么？</li>
+<li>数据窥探和过拟合的区别？对策各是什么？</li>
+<li>把最小引擎的 cost_bps 从 15 改成 30，年化从 20% 变 2%——这策略该继续研究吗？</li>
+</ol>
+<h2 id="下一篇"><a class="markdownIt-Anchor" href="#下一篇"></a> 下一篇</h2>
+<p>06 - 多因子选股入门——从择时转向选股，学习量化的主流范式。</p>
+<h2 id="参考来源"><a class="markdownIt-Anchor" href="#参考来源"></a> 参考来源</h2>
+<ul>
+<li>Abraham Wald 的幸存者偏差弹孔分析（1943 年备忘录，Mangel &amp; Samaniego 1984 年重新整理发表于 Operations Research）</li>
+<li>White, H., <em>A Reality Check for Data Snooping</em>, Econometrica, 2000（White’s Reality Check 原文）；其在技术交易规则上的应用见 Sullivan, Timmermann &amp; White, Journal of Finance, 1999（04 篇已引）</li>
+<li>Bailey, D. &amp; López de Prado, M., <em>The Deflated Sharpe Ratio</em>, Journal of Portfolio Management, 2014</li>
+<li>Marcos López de Prado, <em>Advances in Financial Machine Learning</em>, Wiley, 2018（金融数据窥探与回测过拟合的系统论述）</li>
+<li>A 股印花税率：财政部/税务总局公告 2023 年第 39 号（2023-08-28 起卖出单边 0.05%）</li>
+</ul>
+
+    </div>
+
+    
+    
+    
+
+    <footer class="post-footer">
+          <div class="post-tags">
+              <a href="/tags/%E6%95%99%E7%A8%8B/" rel="tag"># 教程</a>
+              <a href="/tags/%E9%87%8F%E5%8C%96%E6%8A%95%E8%B5%84/" rel="tag"># 量化投资</a>
+          </div>
+
+        
+
+          <div class="post-nav">
+            <div class="post-nav-item">
+                <a href="/2026/09/10/04-%E6%8A%80%E6%9C%AF%E6%8C%87%E6%A0%87%E4%B8%8E%E4%BF%A1%E5%8F%B7/" rel="prev" title="04-技术指标与信号">
+                  <i class="fa fa-angle-left"></i> 04-技术指标与信号
+                </a>
+            </div>
+            <div class="post-nav-item">
+                <a href="/2026/09/10/06-%E5%A4%9A%E5%9B%A0%E5%AD%90%E9%80%89%E8%82%A1%E5%85%A5%E9%97%A8/" rel="next" title="06-多因子选股入门">
+                  06-多因子选股入门 <i class="fa fa-angle-right"></i>
+                </a>
+            </div>
+          </div>
+    </footer>
+  </article>
+</div>
+
+
+
+
+
+
+</div>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+
+  <div class="copyright">
+    &copy; 2023 – 
+    <span itemprop="copyrightYear">2026</span>
+    <span class="with-love">
+      <i class="fa fa-heart"></i>
+    </span>
+    <span class="author" itemprop="copyrightHolder">Yoleen</span>
+  </div>
+<div class="wordcount">
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-chart-line"></i>
+    </span>
+      <span>站点总字数：</span>
+    <span title="站点总字数">1.3m</span>
+  </span>
+  <span class="post-meta-item">
+    <span class="post-meta-item-icon">
+      <i class="fa fa-coffee"></i>
+    </span>
+      <span>站点阅读时长 &asymp;</span>
+    <span title="站点阅读时长">76:57</span>
+  </span>
+</div>
+<div class="busuanzi-count">
+    <span class="post-meta-item" id="busuanzi_container_site_uv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-user"></i>
+      </span>
+      <span class="site-uv" title="总访客量">
+        <span id="busuanzi_value_site_uv"></span>
+      </span>
+    </span>
+    <span class="post-meta-item" id="busuanzi_container_site_pv">
+      <span class="post-meta-item-icon">
+        <i class="fa fa-eye"></i>
+      </span>
+      <span class="site-pv" title="总访问量">
+        <span id="busuanzi_value_site_pv"></span>
+      </span>
+    </span>
+</div>
+  <div class="powered-by">由 <a href="https://hexo.io/" rel="noopener" target="_blank">Hexo</a> & <a href="https://theme-next.js.org/pisces/" rel="noopener" target="_blank">NexT.Pisces</a> 强力驱动
+  </div><div id="site-runtime" aria-live="polite"></div>
+
+<script>
+  (() => {
+    const startedAt = new Date('2023-05-11T00:00:00+08:00').getTime();
+    const element = document.getElementById('site-runtime');
+
+    if (!element) return;
+
+    const updateRuntime = () => {
+      const elapsed = Math.max(0, Date.now() - startedAt);
+      const days = Math.floor(elapsed / 86400000);
+      const hours = Math.floor(elapsed / 3600000) % 24;
+      const minutes = Math.floor(elapsed / 60000) % 60;
+      const seconds = Math.floor(elapsed / 1000) % 60;
+
+      element.textContent = `本站已运行 ${days} 天 ${hours} 小时 ${minutes} 分 ${seconds} 秒`;
+    };
+
+    updateRuntime();
+    setInterval(updateRuntime, 1000);
+  })();
+</script>
+
+
+    </div>
+  </footer>
+
+  
+  <div class="toggle sidebar-toggle" role="button">
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+    <span class="toggle-line"></span>
+  </div>
+  <div class="sidebar-dimmer"></div>
+  <div class="back-to-top" role="button" aria-label="返回顶部">
+    <i class="fa fa-arrow-up fa-lg"></i>
+    <span>0%</span>
+  </div>
+
+<noscript>
+  <div class="noscript-warning">Theme NexT works best with JavaScript enabled</div>
+</noscript>
+
+</body>
+</html>
